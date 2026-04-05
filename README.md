@@ -31,16 +31,9 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 ## Screenshots
 
-<table>
-<tr>
-<td><img src="assets/screenshot-dashboard.png" width="340" alt="Main dashboard — sessions, plan usage, and activity" /></td>
-<td><img src="assets/screenshot-stats.png" width="340" alt="Plan usage, Extra Usage budget, and model breakdown" /></td>
-</tr>
-<tr>
-<td align="center"><em>Session list with context &amp; tool bars</em></td>
-<td align="center"><em>Usage stats, rate limits, and activity heatmap</em></td>
-</tr>
-</table>
+<p align="center">
+  <img src="assets/screenshots.png" width="360" alt="WhereMyTokens — sessions, plan usage, activity heatmap, and model breakdown" />
+</p>
 
 ---
 
