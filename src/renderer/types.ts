@@ -109,6 +109,13 @@ export interface AutoLimits {
   source: 'api';
 }
 
+export interface ExtraUsage {
+  isEnabled: boolean;
+  monthlyLimit: number;  // cent 단위 (÷100 = USD)
+  usedCredits: number;   // cent 단위
+  utilization: number;   // 0-100
+}
+
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
@@ -119,6 +126,7 @@ export interface AppState {
   apiConnected: boolean;
   apiError?: string;
   bridgeActive: boolean;
+  extraUsage: ExtraUsage | null;
 }
 
 declare global {

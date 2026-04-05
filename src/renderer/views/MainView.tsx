@@ -6,6 +6,7 @@ import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
 import ModelBreakdown from '../components/ModelBreakdown';
 import ContextBar from '../components/ContextBar';
+import ExtraUsageCard from '../components/ExtraUsageCard';
 
 interface Props {
   state: AppState;
@@ -18,7 +19,7 @@ const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
 export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
-  const { sessions, usage, limits, settings, apiConnected, apiError } = state;
+  const { sessions, usage, limits, settings, apiConnected, apiError, extraUsage } = state;
   const { currency, usdToKrw } = settings;
   const hiddenProjects: string[] = settings.hiddenProjects ?? [];
   const excludedProjects: string[] = settings.excludedProjects ?? [];
@@ -254,6 +255,9 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0,
           }} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
+        )}
+        {extraUsage?.isEnabled && (
+          <ExtraUsageCard extraUsage={extraUsage} />
         )}
         <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
 

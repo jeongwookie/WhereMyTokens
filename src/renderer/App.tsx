@@ -31,6 +31,7 @@ const DEFAULT_STATE: AppState = {
   },
   autoLimits: null,
   lastUpdated: 0,
+  extraUsage: null,
 };
 
 export default function App() {

@@ -34,6 +34,7 @@ export interface AppState {
   apiConnected: boolean;
   apiError?: string;      // last API error message for debugging
   bridgeActive: boolean;  // whether the Claude Code statusLine bridge is connected
+  extraUsage: ApiUsagePct['extraUsage'];
 }
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
@@ -62,9 +63,11 @@ export class StateManager {
     this.store = store;
     this.onUpdate = onUpdate;
     this.state = this.emptyState();
-    // 재시작 후에도 마지막 성공값 유지
+    // 재시작 후에도 마지막 성공값 유지 (구버전 캐시에 extraUsage 없으면 null로 보정)
     const cached = (this.store as unknown as Store<Record<string, unknown>>).get('_cachedApiPct', null) as ApiUsagePct | null;
-    if (cached) this.apiUsagePct = cached;
+    if (cached) {
+      this.apiUsagePct = { ...cached, extraUsage: cached.extraUsage ?? null };
+    }
     this.bridgeWatcher = new BridgeWatcher((data) => {
       this.liveSession = data;
       const limits = this.buildLimits();
@@ -96,6 +99,7 @@ export class StateManager {
       lastUpdated: 0,
       apiConnected: false,
       bridgeActive: false,
+      extraUsage: null,
     };
   }
 
@@ -204,7 +208,8 @@ export class StateManager {
     void this.refreshApiUsagePct().then(() => {
       const limits = this.buildLimits();
       const bridgeActive = !!(this.liveSession?._ts && Date.now() - this.liveSession._ts < 300_000);
-      this.state = { ...this.state, limits, apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive };
+      const extraUsage = this.apiUsagePct?.extraUsage ?? null;
+      this.state = { ...this.state, limits, apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage };
       this.onUpdate(this.state);
     });
   }
@@ -222,7 +227,8 @@ export class StateManager {
     const sessions = this.buildSessionInfos();
 
     const bridgeActive = !!(this.liveSession?._ts && Date.now() - this.liveSession._ts < 300_000);
-    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive };
+    const extraUsage = this.apiUsagePct?.extraUsage ?? null;
+    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage };
     this.onUpdate(this.state);
 
     checkAlerts(limits, settings.alertThresholds, settings.enableAlerts);

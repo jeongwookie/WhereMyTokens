@@ -25,6 +25,12 @@ export interface ApiUsagePct {
   weekResetMs: number;
   soResetMs: number;
   plan: string;
+  extraUsage: {
+    isEnabled: boolean;
+    monthlyLimit: number;  // cent 단위 (÷100 = USD)
+    usedCredits: number;   // cent 단위
+    utilization: number;   // 0-100
+  } | null;
 }
 
 function readCredentials() {
@@ -81,6 +87,12 @@ export async function fetchApiUsagePct(): Promise<ApiUsagePct | null> {
       five_hour?: { utilization: number; resets_at: string } | null;
       seven_day?: { utilization: number; resets_at: string } | null;
       seven_day_sonnet?: { utilization: number; resets_at: string } | null;
+      extra_usage?: {
+        is_enabled: boolean;
+        monthly_limit: number;
+        used_credits: number;
+        utilization: number;
+      } | null;
     };
 
     const now = Date.now();
@@ -103,6 +115,12 @@ export async function fetchApiUsagePct(): Promise<ApiUsagePct | null> {
       weekResetMs: resetMs(data.seven_day?.resets_at),
       soResetMs: resetMs(data.seven_day_sonnet?.resets_at),
       plan,
+      extraUsage: data.extra_usage ? {
+        isEnabled: data.extra_usage.is_enabled,
+        monthlyLimit: data.extra_usage.monthly_limit,
+        usedCredits: data.extra_usage.used_credits,
+        utilization: data.extra_usage.utilization,
+      } : null,
     };
   } catch (e) {
     if (e instanceof RateLimitedError) throw e; // caller handles this
