@@ -117,6 +117,7 @@ export interface AppState {
   autoLimits: AutoLimits | null;
   lastUpdated: number;
   apiConnected: boolean;
+  apiError?: string;
   bridgeActive: boolean;
 }
 
