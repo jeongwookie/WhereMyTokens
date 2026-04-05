@@ -9,7 +9,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-[한국어](README.ko.md)
+[한국어](README.ko.md) · [日本語](README.ja.md)
 
 ---
 
@@ -34,7 +34,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshots.png" width="360" alt="WhereMyTokens — sessions, plan usage, activity heatmap, and model breakdown" />
+  <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — sessions, plan usage, activity heatmap, and model breakdown" />
 </p>
 
 ---

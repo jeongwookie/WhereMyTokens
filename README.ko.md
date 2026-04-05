@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-[English](README.md)
+[English](README.md) · [日本語](README.ja.md)
 
 ---
 
@@ -34,7 +34,7 @@
 ## 스크린샷
 
 <p align="center">
-  <img src="assets/screenshots.png" width="360" alt="WhereMyTokens — 세션, 플랜 사용량, 활동 히트맵, 모델별 분석" />
+  <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — 세션, 플랜 사용량, 활동 히트맵, 모델별 분석" />
 </p>
 
 ---
