@@ -18,7 +18,7 @@ const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
 export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
-  const { sessions, usage, limits, settings, apiConnected } = state;
+  const { sessions, usage, limits, settings, apiConnected, apiError } = state;
   const { currency, usdToKrw } = settings;
   const hiddenProjects: string[] = settings.hiddenProjects ?? [];
   const excludedProjects: string[] = settings.excludedProjects ?? [];
@@ -160,7 +160,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                 }}
               >↺</button>
               <span
-                title={apiConnected ? 'API connected' : 'API disconnected — using JSONL estimates'}
+                title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
                 style={{
                   width: 5, height: 5, borderRadius: '50%',
                   background: apiConnected ? '#4ade80' : '#f87171',

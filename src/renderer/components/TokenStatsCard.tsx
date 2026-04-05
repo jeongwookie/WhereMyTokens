@@ -62,23 +62,28 @@ export default function TokenStatsCard({
       </div>
 
       {/* limit progress bar */}
-      {showLimitBar && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ flex: 1, height: 5, background: '#0000000a', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{
-              width: `${barPct}%`, height: '100%',
-              background: barColor, borderRadius: 3,
-              transition: 'width 0.4s',
-            }} />
+      {showLimitBar && (() => {
+        const noData = apiConnected === false && barPct === 0;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ flex: 1, height: 5, background: '#0000000a', borderRadius: 3, overflow: 'hidden' }}>
+              {!noData && (
+                <div style={{
+                  width: `${barPct}%`, height: '100%',
+                  background: barColor, borderRadius: 3,
+                  transition: 'width 0.4s',
+                }} />
+              )}
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0 }}>
+              {noData ? '—' : `${Math.round(barPct)}%`}
+            </span>
+            {!noData && resetStr && (
+              <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
+            )}
           </div>
-          <span style={{ fontSize: 10, fontWeight: 600, color: barColor, width: 28, textAlign: 'right', flexShrink: 0 }}>
-            {Math.round(barPct)}%
-          </span>
-          {resetStr && (
-            <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
-          )}
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

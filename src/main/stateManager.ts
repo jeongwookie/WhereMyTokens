@@ -32,6 +32,7 @@ export interface AppState {
   autoLimits: AutoLimits | null;
   lastUpdated: number;
   apiConnected: boolean;
+  apiError?: string;      // last API error message for debugging
   bridgeActive: boolean;  // whether the Claude Code statusLine bridge is connected
 }
 
@@ -50,6 +51,7 @@ export class StateManager {
   private autoLimits: AutoLimits | null = null;
   private apiUsagePct: ApiUsagePct | null = null;
   private apiConnected = false;
+  private apiError = '';
   private lastApiCallMs = 0;
   private apiBackoffMs = 0;
   private bridgeWatcher: BridgeWatcher;
@@ -88,7 +90,7 @@ export class StateManager {
       },
       settings: this.getSettings(),
       autoLimits: null,
-      lastUpdated: Date.now(),
+      lastUpdated: 0,
       apiConnected: false,
       bridgeActive: false,
     };
@@ -108,7 +110,7 @@ export class StateManager {
     void Promise.all([this.refreshAutoLimits(), this.refreshApiUsagePct()])
       .then(() => {
         const limits = this.buildLimits();
-        this.state = { ...this.state, limits, autoLimits: this.autoLimits, apiConnected: this.apiConnected };
+        this.state = { ...this.state, limits, autoLimits: this.autoLimits, apiConnected: this.apiConnected, apiError: this.apiError };
         this.onUpdate(this.state);
       });
     // Refresh autoLimits every 5 minutes
@@ -142,22 +144,22 @@ export class StateManager {
       if (result) {
         this.apiUsagePct = result;
         this.apiConnected = true;
-        this.apiBackoffMs = 0; // reset backoff on success
+        this.apiError = '';
+        this.apiBackoffMs = 0;
       } else {
         this.apiConnected = false;
-        // apiUsagePct: retain last successful value
+        this.apiError = 'no credentials';
       }
     } catch (e) {
       if (e instanceof RateLimitedError) {
-        // 429: exponential backoff (2m → 4m → 8m → max 10m)
         this.apiBackoffMs = Math.min(
           this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2,
           600_000
         );
-        // apiUsagePct: retain last successful value
+        this.apiError = `429 rate limited (retry in ${Math.round(this.apiBackoffMs / 60000)}m)`;
       } else {
         this.apiConnected = false;
-        // apiUsagePct: retain last successful value
+        this.apiError = e instanceof Error ? e.message : String(e);
       }
     }
   }
@@ -197,7 +199,7 @@ export class StateManager {
     void this.refreshApiUsagePct().then(() => {
       const limits = this.buildLimits();
       const bridgeActive = !!(this.liveSession?._ts && Date.now() - this.liveSession._ts < 300_000);
-      this.state = { ...this.state, limits, apiConnected: this.apiConnected, bridgeActive };
+      this.state = { ...this.state, limits, apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive };
       this.onUpdate(this.state);
     });
   }
@@ -215,7 +217,7 @@ export class StateManager {
     const sessions = this.buildSessionInfos();
 
     const bridgeActive = !!(this.liveSession?._ts && Date.now() - this.liveSession._ts < 300_000);
-    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, bridgeActive };
+    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive };
     this.onUpdate(this.state);
 
     checkAlerts(limits, settings.alertThresholds, settings.enableAlerts);
