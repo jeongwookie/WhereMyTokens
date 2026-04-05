@@ -18,7 +18,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 - **Claude Code bridge** — register WhereMyTokens as a Claude Code `statusLine` plugin for live rate limit data without API polling
 - **Context window warnings** — per-session compact warnings at 50% / 80% / 95%+ inline in the session list
 - **Tool usage bars** — proportional color bar + top-3 tool names (Bash, Edit, Read, …) per session
-- **Activity heatmaps** — 7-day, 30-day, and 90-day heatmaps; hourly distribution; 4-week comparison chart
+- **Activity heatmaps** — 7-day heatmap (day × hour) and 5-month calendar grid (GitHub-style); hourly distribution; 4-week comparison chart
 - **Model breakdown** — per-model token and cost totals across all time
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
 - **Alerts** — Windows toast notifications at configurable usage thresholds (50% / 80% / 90%)
@@ -54,9 +54,11 @@ When bridge data is active (updated within the last 5 minutes), the rate limit b
 
 ### Option A — Pre-built executable
 
-Download `WhereMyTokens Setup x.x.x.exe` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases) and run the installer.
+1. Download `WhereMyTokens-vX.X.X-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
+2. Extract the zip
+3. Run `win-unpacked/WhereMyTokens.exe`
 
-After install, WhereMyTokens appears in your system tray.
+WhereMyTokens opens automatically on first launch and minimizes to your system tray.
 
 ### Option B — From source
 
@@ -105,7 +107,7 @@ Use **All / Active** to filter sessions. Hover a project header to:
 - `x` — hide from the UI (still tracked)
 - `⊘` — exclude from tracking entirely (no JSONL parsing, no session display)
 
-Hidden and excluded projects can be restored from the bottom of the session list.
+Hidden projects can be restored via the toggle at the bottom of the session list. Excluded projects must be re-enabled from the same area.
 
 ---
 
@@ -119,7 +121,7 @@ Two data sources, used in priority order:
 | 2nd | **Anthropic API** | `/api/oauth/usage` — exact % and reset times. Fetched every 60s; exponential backoff on 429. |
 | Fallback | **Last known value** | On API failure, the last successful value is kept. Rate limit bars never reset to zero due to a failed fetch. |
 
-The dot next to the refresh button shows API connectivity (green = connected, red = unreachable). A `(cached)` label appears on rate limit bars when the API is temporarily unavailable but a previous value exists.
+The dot next to the refresh button shows API connectivity (green = connected, red = unreachable). Hover the dot to see the last error message. A `(cached)` label appears on rate limit bars when the API is temporarily unavailable but a previous value exists. Rate limit bars show `—` when the API has not yet returned a successful value (e.g., on first launch or after a 429).
 
 ---
 
@@ -127,9 +129,8 @@ The dot next to the refresh button shows API connectivity (green = connected, re
 
 | Tab | Description |
 |-----|-------------|
-| 7d | 7-day heatmap (day-of-week x hour) |
-| 30d | 30-day activity (day cells, oldest to today) |
-| 90d | 90-day activity (10x9 grid, hover for date + tokens) |
+| 7d | 7-day heatmap (day-of-week × hour grid) |
+| 5mo | 5-month calendar grid (GitHub-style weeks × weekdays, hover for date + tokens) |
 | Hourly | Hourly token distribution across the last 30 days |
 | Weekly | Last 4 weeks horizontal bar chart |
 
@@ -179,9 +180,7 @@ src/
     bridgeWatcher.ts      Watches live-session.json from statusLine bridge
     ipc.ts                IPC handlers, integration setup
     preload.ts            contextBridge (window.wmt)
-    milestoneManager.ts   Badge checks
     usageAlertManager.ts  Threshold alerts
-    weeklyReportManager.ts Weekly summary notifications
   bridge/
     bridge.ts             statusLine plugin: stdin -> live-session.json
   renderer/
@@ -190,7 +189,6 @@ src/
       SettingsView.tsx     Settings
       NotificationsView.tsx
       HelpView.tsx
-      BadgesView.tsx
     components/
       SessionRow.tsx       Session row (context bar + tool bar)
       TokenStatsCard.tsx   Usage stats + rate limit bar
