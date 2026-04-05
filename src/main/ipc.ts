@@ -44,6 +44,7 @@ export function registerIpcHandlers(
   store: Store<AppSettings>,
   getState: () => AppState,
   forceRefresh: () => Promise<void>,
+  applySettingsChange: () => void,
 ) {
   ipcMain.handle('state:get', () => getState());
   ipcMain.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
@@ -57,6 +58,7 @@ export function registerIpcHandlers(
     if (partial.openAtLogin !== undefined) {
       app.setLoginItemSettings({ openAtLogin: partial.openAtLogin });
     }
+    applySettingsChange();
     return { ...DEFAULT_SETTINGS, ...store.store };
   });
 

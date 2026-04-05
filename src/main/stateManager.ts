@@ -302,4 +302,13 @@ export class StateManager {
   getState(): AppState {
     return this.state;
   }
+
+  // Lightweight rebuild: re-reads settings + sessions without API call.
+  // Called after settings change (hide/exclude/etc.) to reflect immediately.
+  applySettingsChange() {
+    const sessions = this.buildSessionInfos();
+    const settings = this.getSettings();
+    this.state = { ...this.state, sessions, settings, lastUpdated: Date.now() };
+    this.onUpdate(this.state);
+  }
 }

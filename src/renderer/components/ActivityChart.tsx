@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { HourlyBucket, WeeklyTotal } from '../types';
 import { C, fmtTokens } from '../theme';
 
-type ChartTab = '7d' | '30d' | '90d' | 'Hourly' | 'Weekly';
+type ChartTab = '7d' | '90d' | 'Hourly' | 'Weekly';
 
 function blueIntensity(i: number): string {
   const sat = Math.round(55 + i * 35);
@@ -180,15 +180,18 @@ function Heatmap30({ data }: { data: HourlyBucket[] }) {
   );
 }
 
-// --- 90-day heatmap: 90 cells, 10×9 grid ---
+// --- 90-day heatmap: same cell size as 7d (24 cols × 4 rows) ---
 function Heatmap90({ data }: { data: HourlyBucket[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; tokens: number } | null>(null);
 
   const now = new Date();
   const DAYS = 90;
-  const COLS = 10;
-  const ROWS = 9;
+  // Same layout constants as 7d heatmap
+  const LEFT = 18;
+  const TOP = 14;
+  const COLS = 24; // same as 7d — gives identical cell width
+  const ROWS = Math.ceil(DAYS / COLS); // 4 rows
 
   const dayTotals = new Map<number, { tokens: number; date: Date }>();
   for (const b of data) {
@@ -211,30 +214,43 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     if (!ctx) return;
 
     const W = canvas.width;
-    const PAD = 2;
-    const cw = Math.floor((W - PAD * (COLS + 1)) / COLS);
+    const cw = Math.floor((W - LEFT) / COLS); // identical formula to 7d
     const ch = cw;
-    canvas.height = PAD + ROWS * (ch + PAD);
+    canvas.height = TOP + ROWS * ch + 2;
 
     ctx.clearRect(0, 0, W, canvas.height);
+
+    // Empty background cells
+    ctx.fillStyle = '#dbeafe44';
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        ctx.fillRect(LEFT + c * cw + 1, TOP + r * ch + 1, cw - 2, ch - 2);
 
     for (let i = 0; i < DAYS; i++) {
       const col = i % COLS;
       const row = Math.floor(i / COLS);
-      const x = PAD + col * (cw + PAD);
-      const y = PAD + row * (ch + PAD);
-
       const cell = dayTotals.get(i);
       const tokens = cell?.tokens ?? 0;
+      if (tokens === 0) continue;
+      ctx.fillStyle = blueIntensity(tokens / maxTokens);
+      ctx.fillRect(LEFT + col * cw + 1, TOP + row * ch + 1, cw - 2, ch - 2);
+    }
 
-      ctx.fillStyle = tokens === 0 ? '#dbeafe44' : blueIntensity(tokens / maxTokens);
-      ctx.fillRect(x, y, cw, ch);
+    // Today border
+    const todayCol = (DAYS - 1) % COLS;
+    const todayRow = Math.floor((DAYS - 1) / COLS);
+    ctx.strokeStyle = blueIntensity(0.8);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(LEFT + todayCol * cw + 1.75, TOP + todayRow * ch + 1.75, cw - 3.5, ch - 3.5);
 
-      if (i === DAYS - 1) {
-        ctx.strokeStyle = blueIntensity(0.8);
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x + 0.75, y + 0.75, cw - 1.5, ch - 1.5);
-      }
+    // Row labels (week offset from today)
+    ctx.font = '7px sans-serif';
+    ctx.fillStyle = C.textMuted;
+    ctx.textAlign = 'right';
+    for (let r = 0; r < ROWS; r++) {
+      const daysFromStart = r * COLS;
+      const weeksAgo = Math.ceil((DAYS - daysFromStart) / 7);
+      ctx.fillText(`-${weeksAgo}w`, LEFT - 3, TOP + r * ch + ch / 2 + 3);
     }
   }, [data]);
 
@@ -245,12 +261,9 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const PAD = 2;
-    const cw = Math.floor((canvas.width - PAD * (COLS + 1)) / COLS);
-    const ch = cw;
-
-    const col = Math.floor((mx - PAD) / (cw + PAD));
-    const row = Math.floor((my - PAD) / (ch + PAD));
+    const cw = Math.floor((canvas.width - LEFT) / COLS);
+    const col = Math.floor((mx - LEFT) / cw);
+    const row = Math.floor((my - TOP) / cw);
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) { setTooltip(null); return; }
 
     const i = row * COLS + col;
@@ -510,7 +523,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
   const [tab, setTab] = useState<ChartTab>('7d');
   const [collapsed, setCollapsed] = useState(false);
 
-  const tabs: ChartTab[] = ['7d', '30d', '90d', 'Hourly', 'Weekly'];
+  const tabs: ChartTab[] = ['7d', '90d', 'Hourly', 'Weekly'];
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}`, padding: '8px 14px' }}>
@@ -546,13 +559,6 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
             <>
               <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>7-day heatmap (day × hour)</div>
               <Heatmap7 data={heatmap} />
-              <ColorLegend />
-            </>
-          )}
-          {tab === '30d' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>30-day activity (oldest → today)</div>
-              <Heatmap30 data={heatmap30} />
               <ColorLegend />
             </>
           )}

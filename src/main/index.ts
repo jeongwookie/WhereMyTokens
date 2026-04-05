@@ -112,7 +112,7 @@ app.whenReady().then(() => {
   app.setAppUserModelId('com.jeongwook.wheremytokens');
 
   const stateManager = new StateManager(store, (state) => updateTray(state));
-  registerIpcHandlers(store, () => stateManager.getState(), () => stateManager.forceRefresh());
+  registerIpcHandlers(store, () => stateManager.getState(), () => stateManager.forceRefresh(), () => stateManager.applySettingsChange());
 
   tray = createTray();
   popupWindow = createPopupWindow();
