@@ -216,6 +216,12 @@ Costs shown are **API-equivalent estimates**, not actual billing. Claude Max/Pro
 
 ---
 
+## Acknowledgements
+
+Inspired by [duckbar](https://github.com/rofeels/duckbar) — the macOS counterpart.
+
+---
+
 ## License
 
 MIT

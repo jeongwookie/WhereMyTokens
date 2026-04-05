@@ -216,6 +216,12 @@ src/
 
 ---
 
+## 감사의 말
+
+macOS 버전인 [duckbar](https://github.com/rofeels/duckbar)에서 영감을 받았습니다.
+
+---
+
 ## 라이선스
 
 MIT

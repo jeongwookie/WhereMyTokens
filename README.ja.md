@@ -216,6 +216,12 @@ src/
 
 ---
 
+## 謝辞
+
+macOS 版である [duckbar](https://github.com/rofeels/duckbar) にインスパイアされました。
+
+---
+
 ## ライセンス
 
 MIT
