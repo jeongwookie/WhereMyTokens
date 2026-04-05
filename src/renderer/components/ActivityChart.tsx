@@ -5,9 +5,9 @@ import { C, fmtTokens } from '../theme';
 type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly';
 
 function blueIntensity(i: number): string {
-  const sat = Math.round(55 + i * 35);
-  const lgt = Math.round(80 - i * 38);
-  return `hsl(213, ${sat}%, ${lgt}%)`;
+  const sat = Math.round(55 + i * 30);
+  const lgt = Math.round(88 - i * 45);
+  return `hsl(244, ${sat}%, ${lgt}%)`;
 }
 
 // --- 7-day heatmap (7 rows × 24 cols) ---
@@ -29,7 +29,7 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
 
     ctx.clearRect(0, 0, W, canvas.height);
 
-    ctx.fillStyle = '#dbeafe44';
+    ctx.fillStyle = '#5048b820';
     for (let d = 0; d < DAYS; d++)
       for (let h = 0; h < HOURS; h++)
         ctx.fillRect(LEFT + h * cw + 1, TOP + d * ch + 1, cw - 2, ch - 2);
@@ -58,126 +58,6 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
   }, [data]);
 
   return <canvas ref={canvasRef} width={330} style={{ width: '100%', display: 'block' }} />;
-}
-
-// --- 30-day heatmap: simple 30 cells (date order, oldest → today) ---
-function Heatmap30({ data }: { data: HourlyBucket[] }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; tokens: number } | null>(null);
-
-  const now = new Date();
-  const DAYS = 30;
-
-  // aggregate tokens per dayIndex
-  const dayTotals = new Map<number, { tokens: number; date: Date }>();
-  for (const b of data) {
-    const existing = dayTotals.get(b.dayIndex);
-    if (existing) {
-      existing.tokens += b.tokens;
-    } else {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (DAYS - 1 - b.dayIndex));
-      d.setHours(0, 0, 0, 0);
-      dayTotals.set(b.dayIndex, { tokens: b.tokens, date: d });
-    }
-  }
-  const maxTokens = Math.max(...Array.from(dayTotals.values()).map(v => v.tokens), 1);
-
-  // layout: 5 rows × 6 cols = 30 cells
-  const COLS = 6;
-  const ROWS = 5;
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const W = canvas.width;
-    const PAD = 2;
-    const cw = Math.floor((W - PAD * (COLS + 1)) / COLS);
-    const ch = cw;
-    canvas.height = PAD + ROWS * (ch + PAD);
-
-    ctx.clearRect(0, 0, W, canvas.height);
-
-    for (let i = 0; i < DAYS; i++) {
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const x = PAD + col * (cw + PAD);
-      const y = PAD + row * (ch + PAD);
-
-      const cell = dayTotals.get(i);
-      const tokens = cell?.tokens ?? 0;
-
-      if (tokens === 0) {
-        ctx.fillStyle = '#dbeafe44';
-      } else {
-        ctx.fillStyle = blueIntensity(tokens / maxTokens);
-      }
-      ctx.fillRect(x, y, cw, ch);
-
-      // today border
-      if (i === DAYS - 1) {
-        ctx.strokeStyle = blueIntensity(0.8);
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x + 0.75, y + 0.75, cw - 1.5, ch - 1.5);
-      }
-    }
-  }, [data]);
-
-  function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-
-    const PAD = 2;
-    const cw = Math.floor((canvas.width - PAD * (COLS + 1)) / COLS);
-    const ch = cw;
-
-    const col = Math.floor((mx - PAD) / (cw + PAD));
-    const row = Math.floor((my - PAD) / (ch + PAD));
-    if (col < 0 || col >= COLS || row < 0 || row >= ROWS) { setTooltip(null); return; }
-
-    const i = row * COLS + col;
-    if (i >= DAYS) { setTooltip(null); return; }
-
-    const cell = dayTotals.get(i);
-    const date = cell?.date ?? (() => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (DAYS - 1 - i));
-      return d;
-    })();
-
-    setTooltip({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      tokens: cell?.tokens ?? 0,
-    });
-  }
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <canvas ref={canvasRef} width={330}
-        style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
-        onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)} />
-      {tooltip && (
-        <div style={{
-          position: 'absolute', left: Math.min(tooltip.x + 4, 220), top: Math.max(tooltip.y - 32, 0),
-          background: C.bgCard, border: `1px solid ${C.border}`,
-          borderRadius: 4, padding: '3px 7px', fontSize: 10, pointerEvents: 'none', zIndex: 10,
-        }}>
-          <span style={{ color: C.textMuted }}>{tooltip.date} </span>
-          <span style={{ color: tooltip.tokens > 0 ? C.text : C.textMuted, fontWeight: 600 }}>
-            {tooltip.tokens > 0 ? fmtTokens(tooltip.tokens) + ' tok' : 'none'}
-          </span>
-        </div>
-      )}
-    </div>
-  );
 }
 
 // --- 90-day heatmap: GitHub-style calendar grid (weeks × weekdays) ---
@@ -244,7 +124,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
         const cell = dateMap.get(key);
         const tokens = cell?.tokens ?? 0;
 
-        ctx.fillStyle = tokens > 0 ? blueIntensity(tokens / maxTokens) : '#dbeafe44';
+        ctx.fillStyle = tokens > 0 ? blueIntensity(tokens / maxTokens) : '#5048b820';
         ctx.fillRect(x, y, cw - 2, ch - 2);
 
         // Today border
@@ -352,8 +232,8 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
     const TOP = 8;
     const slotW = W / 24;
     const barW = Math.max(3, slotW - 3);
-    const BAR_COLOR = 'hsl(213, 65%, 52%)';
-    const BAR_EMPTY = '#dbeafe22';
+    const BAR_COLOR = 'hsl(244, 55%, 52%)';
+    const BAR_EMPTY = '#5048b815';
 
     for (let h = 0; h < 24; h++) {
       const pct = hourlyTotals[h] / maxTokens;
@@ -440,7 +320,7 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
   const maxTokens = Math.max(...recent.map(d => d.tokens), 1);
   const totalTokens = recent.reduce((sum, d) => sum + d.tokens, 0);
   const peakEntry = recent.reduce((a, b) => a.tokens >= b.tokens ? a : b);
-  const BAR_COLOR = 'hsl(213, 65%, 52%)';
+  const BAR_COLOR = 'hsl(244, 55%, 52%)';
   const n = recent.length;
 
   function rowLabel(i: number): string {
@@ -550,7 +430,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           {!collapsed && (

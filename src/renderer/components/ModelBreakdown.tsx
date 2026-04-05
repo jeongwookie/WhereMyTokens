@@ -8,7 +8,7 @@ export default function ModelBreakdown({ models, currency, usdToKrw }: { models:
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Model Usage</span>
         <span style={{ fontSize: 9, color: C.textMuted }}>All time</span>
       </div>
