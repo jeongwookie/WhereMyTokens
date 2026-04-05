@@ -23,7 +23,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
 - **Alerts** — Windows toast notifications at configurable usage thresholds (50% / 80% / 90%)
 - **Project management** — hide projects from the UI, or fully exclude them from tracking
-- **Pin + global hotkey** — keep the window on top, open with a keyboard shortcut
+- **Always-on-top widget** — stays visible over other windows; minimize with the `−` button in the header or via the tray icon; global hotkey to toggle
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
 
 ---
@@ -54,9 +54,9 @@ When bridge data is active (updated within the last 5 minutes), the rate limit b
 
 ### Option A — Pre-built executable
 
-1. Download `WhereMyTokens-vX.X.X-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
+1. Download `WhereMyTokens-v1.2.0-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
 2. Extract the zip
-3. Run `win-unpacked/WhereMyTokens.exe`
+3. Run `WhereMyTokens.exe`
 
 WhereMyTokens opens automatically on first launch and minimizes to your system tray.
 
@@ -118,10 +118,10 @@ Two data sources, used in priority order:
 | Priority | Source | Description |
 |----------|--------|-------------|
 | 1st | **Bridge (stdin)** | Live data from Claude Code via `statusLine`. Updated each time Claude Code calls the API. |
-| 2nd | **Anthropic API** | `/api/oauth/usage` — exact % and reset times. Fetched every 60s; exponential backoff on 429. |
+| 2nd | **Anthropic API** | `/api/oauth/usage` — exact % and reset times. Fetched every 3 min; exponential backoff on 429. |
 | Fallback | **Last known value** | On API failure, the last successful value is kept. Rate limit bars never reset to zero due to a failed fetch. |
 
-The dot next to the refresh button shows API connectivity (green = connected, red = unreachable). Hover the dot to see the last error message. A `(cached)` label appears on rate limit bars when the API is temporarily unavailable but a previous value exists. Rate limit bars show `—` when the API has not yet returned a successful value (e.g., on first launch or after a 429).
+The dot in the header shows API connectivity (green = connected, red = unreachable). Hover the dot to see the last error message. A `(cached)` label appears on rate limit bars when the API is temporarily unavailable but a previous value exists. Rate limit bars show `—` when the API has not yet returned a successful value (e.g., on first launch or after a 429).
 
 ---
 
