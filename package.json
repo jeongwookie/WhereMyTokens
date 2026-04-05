@@ -1,0 +1,64 @@
+{
+  "name": "wheremytokens-win",
+  "version": "1.0.0",
+  "description": "Windows system tray monitor for Claude Code token usage",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "build:main": "tsc",
+    "build:renderer": "node scripts/build-renderer.mjs",
+    "build": "node scripts/make-icons.mjs && npm run build:main && npm run build:renderer",
+    "start": "npm run build && electron .",
+    "dev": "concurrently \"tsc -w\" \"wait-on dist/main/index.js && npm run build:renderer && electron .\"",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "keywords": [],
+  "author": "jeongwook",
+  "license": "MIT",
+  "type": "commonjs",
+  "build": {
+    "appId": "com.jeongwook.wheremytokens",
+    "productName": "WhereMyTokens",
+    "icon": "assets/icon.ico",
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "runAfterFinish": true
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ]
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "electron-store": "^8.2.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "concurrently": "^9.2.1",
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.0",
+    "jimp": "^0.22.12",
+    "typescript": "^6.0.2",
+    "wait-on": "^9.0.4"
+  }
+}
