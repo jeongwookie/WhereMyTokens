@@ -7,11 +7,12 @@ export default function ModelBreakdown({ models, currency, usdToKrw }: { models:
   const maxT = Math.max(...models.map(m => m.tokens), 1);
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}`, padding: '8px 14px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-        <span style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Model Usage</span>
+    <div style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}` }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Model Usage</span>
         <span style={{ fontSize: 9, color: C.textMuted }}>All time</span>
       </div>
+      <div style={{ padding: '6px 14px 8px' }}>
       {models.slice(0, 4).map(m => {
         const color = modelColor(m.model);
         return (
@@ -29,6 +30,7 @@ export default function ModelBreakdown({ models, currency, usdToKrw }: { models:
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

@@ -5,7 +5,6 @@ import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
 import ModelBreakdown from '../components/ModelBreakdown';
-import ContextBar from '../components/ContextBar';
 import ExtraUsageCard from '../components/ExtraUsageCard';
 
 interface Props {
@@ -31,12 +30,18 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
   useEffect(() => {
     if (state.lastUpdated === 0) return;
-    setLastRefreshLabel('just now');
-    const t = setTimeout(() => {
-      const ago = Math.round((Date.now() - state.lastUpdated) / 1000);
-      setLastRefreshLabel(`${ago}s ago`);
-    }, 3000);
-    return () => clearTimeout(t);
+
+    function tick() {
+      const elapsed = Math.round((Date.now() - state.lastUpdated) / 1000);
+      if (elapsed < 5) setLastRefreshLabel('just now');
+      else if (elapsed < 60) setLastRefreshLabel(`${elapsed}s ago`);
+      else if (elapsed < 3600) setLastRefreshLabel(`${Math.floor(elapsed / 60)}m ago`);
+      else setLastRefreshLabel(`${Math.floor(elapsed / 3600)}h ago`);
+    }
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
   }, [state.lastUpdated]);
 
   async function handleRefresh() {
@@ -96,61 +101,34 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
       {/* draggable header */}
-      <div style={{ ...drag, padding: '10px 14px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: C.accent, letterSpacing: -0.5 }}>WhereMyTokens</span>
-          {state.autoLimits && (
-            <span style={{ fontSize: 9, color: C.accent, background: C.accent + '22', borderRadius: 3, padding: '1px 5px', fontWeight: 600 }}>
-              {state.autoLimits.plan}
-            </span>
-          )}
-        </div>
-        <div style={{ ...noDrag, display: 'flex', gap: 10, alignItems: 'center' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: C.textMuted }}>Today</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{fmtTokens(usage.todayTokens)}<span style={{ fontSize: 9, color: C.textMuted, marginLeft: 2 }}>tok</span></div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, color: C.textMuted }}>Cost</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{fmtCost(usage.todayCost, currency, usdToKrw)}</div>
-          </div>
+      <div style={{ ...drag, padding: '10px 14px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: C.accent, letterSpacing: -0.5 }}>WhereMyTokens</span>
 
-          {/* API 상태 dot */}
-          <span
-            title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
-            style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: apiConnected ? '#4ade80' : '#f87171',
-              display: 'inline-block', flexShrink: 0,
-            }}
-          />
+        <div style={{ ...noDrag, display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* 오늘 토큰 · 비용 */}
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
+            {fmtTokens(usage.todayTokens)}<span style={{ fontSize: 9, color: C.textMuted, marginLeft: 2 }}>tok</span>
+            <span style={{ color: C.border, margin: '0 5px' }}>·</span>
+            <span style={{ color: C.accent }}>{fmtCost(usage.todayCost, currency, usdToKrw)}</span>
+          </span>
+
+          {/* 플랜 + API 상태 클러스터 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {state.autoLimits && (
+              <span style={{ fontSize: 9, color: C.textMuted, background: C.bgRow, borderRadius: 3, padding: '1px 5px', fontWeight: 600, border: `1px solid ${C.border}` }}>
+                {state.autoLimits.plan}
+              </span>
+            )}
+            <span
+              title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
+              style={{ width: 6, height: 6, borderRadius: '50%', background: apiConnected ? '#4ade80' : '#f87171', display: 'inline-block', flexShrink: 0 }}
+            />
+          </div>
 
           {/* 윈도우 컨트롤 */}
-          <div style={{ display: 'flex', gap: 2, marginLeft: 2 }}>
-            <button
-              onClick={() => window.wmt.minimize().catch(() => {})}
-              title="최소화"
-              style={{
-                ...noDrag,
-                width: 28, height: 22,
-                background: 'none', border: 'none',
-                color: C.textDim, cursor: 'pointer',
-                fontSize: 16, borderRadius: 4, lineHeight: 1,
-                fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >−</button>
-            <button
-              onClick={onQuit}
-              title="종료"
-              style={{
-                ...noDrag,
-                width: 28, height: 22,
-                background: 'none', border: 'none',
-                color: C.textDim, cursor: 'pointer',
-                fontSize: 14, borderRadius: 4, lineHeight: 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >×</button>
+          <div style={{ display: 'flex', gap: 2 }}>
+            <button onClick={() => window.wmt.minimize().catch(() => {})} title="최소화" style={{ ...noDrag, width: 28, height: 22, background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+            <button onClick={onQuit} title="종료" style={{ ...noDrag, width: 28, height: 22, background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
         </div>
       </div>
@@ -158,22 +136,25 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       {/* scroll area */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
 
-        {/* session filter toggle */}
-        <div style={{ display: 'flex', gap: 4, padding: '6px 14px 2px', borderBottom: `1px solid ${C.border}` }}>
-          {(['all', 'active'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => setActiveFilter(f)}
-              style={{
-                background: activeFilter === f ? C.accent + '22' : 'none',
-                border: `1px solid ${activeFilter === f ? C.accent + '66' : C.border}`,
-                color: activeFilter === f ? C.accent : C.textMuted,
-                borderRadius: 3, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: activeFilter === f ? 700 : 400,
-              }}
-            >
-              {f === 'all' ? 'All' : 'Active'}
-            </button>
-          ))}
+        {/* Sessions 섹션 헤더 + 필터 inline */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderLeft: `3px solid ${C.accent}` }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['all', 'active'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setActiveFilter(f)}
+                style={{
+                  background: activeFilter === f ? C.accent + '22' : 'none',
+                  border: `1px solid ${activeFilter === f ? C.accent + '66' : C.border}`,
+                  color: activeFilter === f ? C.accent : C.textMuted,
+                  borderRadius: 3, padding: '1px 7px', fontSize: 9, cursor: 'pointer', fontWeight: activeFilter === f ? 700 : 400,
+                }}
+              >
+                {f === 'all' ? 'All' : 'Active'}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* sessions */}
@@ -183,8 +164,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               onMouseEnter={() => setHoveredGroup(groupName)}
               onMouseLeave={() => setHoveredGroup(null)}
             >
-              <div style={{ display: 'flex', alignItems: 'center', padding: '4px 14px 2px', background: C.bgCard }}>
-                <span style={{ fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '3px 14px 2px', background: C.bg, borderTop: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 9, fontWeight: 400, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.0, flex: 1 }}>
                   {groupName}
                 </span>
                 {hoveredGroup === groupName && (
@@ -241,6 +222,11 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           </div>
         )}
 
+        {/* Plan Usage 섹션 헤더 */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}` }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
+        </div>
+
         {/* Claude 5h / Codex 5h */}
         <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
           limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} />
@@ -273,9 +259,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
         {/* model breakdown */}
         <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
-
-        {/* context bar */}
-        <ContextBar sessions={sessions} />
 
       </div>
 

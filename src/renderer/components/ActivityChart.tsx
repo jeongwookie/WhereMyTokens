@@ -549,9 +549,9 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
   const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly'];
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}`, padding: '8px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : 6 }}>
-        <span style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>Activity</span>
+    <div style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `1px solid ${C.border}`, borderLeft: `3px solid ${C.accent}` }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           {!collapsed && (
             <div style={{ display: 'flex', gap: 2 }}>
@@ -577,7 +577,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
       </div>
 
       {!collapsed && (
-        <>
+        <div style={{ padding: '8px 14px' }}>
           {tab === '7d' && (
             <>
               <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>7-day heatmap (day × hour)</div>
@@ -604,7 +604,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
               <WeeklyGrowthChart data={weeklyTimeline} />
             </>
           )}
-        </>
+        </div>
       )}
     </div>
   );
