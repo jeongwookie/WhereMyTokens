@@ -36,6 +36,9 @@
       "createDesktopShortcut": false,
       "runAfterFinish": true
     },
+    "extraResources": [
+      { "from": "dist/bridge", "to": "bridge" }
+    ],
     "files": [
       "dist/**/*",
       "assets/**/*",
