@@ -23,6 +23,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
 - **Alerts** — Windows toast notifications at configurable usage thresholds (50% / 80% / 90%)
 - **Project management** — hide projects from the UI, or fully exclude them from tracking
+- **Extra Usage budget** — monthly extra usage card showing credits used / limit and utilization % (shown when extra usage is enabled on your account)
 - **Always-on-top widget** — stays visible over other windows; minimize with the `−` button in the header or via the tray icon; global hotkey to toggle
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
 
@@ -54,7 +55,7 @@ When bridge data is active (updated within the last 5 minutes), the rate limit b
 
 ### Option A — Pre-built executable
 
-1. Download `WhereMyTokens-v1.2.0-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
+1. Download `WhereMyTokens-v1.3.0-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
 2. Extract the zip
 3. Run `WhereMyTokens.exe`
 
