@@ -56,12 +56,15 @@ export class StateManager {
   private apiBackoffMs = 0;
   private bridgeWatcher: BridgeWatcher;
   private liveSession: LiveSessionData | null = null;
-  private static readonly API_MIN_INTERVAL_MS = 60_000; // minimum 60-second interval
+  private static readonly API_MIN_INTERVAL_MS = 180_000; // 3분 간격 (429 방지)
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
     this.store = store;
     this.onUpdate = onUpdate;
     this.state = this.emptyState();
+    // 재시작 후에도 마지막 성공값 유지
+    const cached = (this.store as unknown as Store<Record<string, unknown>>).get('_cachedApiPct', null) as ApiUsagePct | null;
+    if (cached) this.apiUsagePct = cached;
     this.bridgeWatcher = new BridgeWatcher((data) => {
       this.liveSession = data;
       const limits = this.buildLimits();
@@ -146,6 +149,8 @@ export class StateManager {
         this.apiConnected = true;
         this.apiError = '';
         this.apiBackoffMs = 0;
+        // 마지막 성공값 캐시 — 재시작/429 시에도 표시
+        (this.store as unknown as Store<Record<string, unknown>>).set('_cachedApiPct', result);
       } else {
         this.apiConnected = false;
         this.apiError = 'no credentials';
