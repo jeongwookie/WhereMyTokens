@@ -55,7 +55,7 @@ When bridge data is active (updated within the last 5 minutes), the rate limit b
 
 ### Option A — Pre-built executable
 
-1. Download `WhereMyTokens-v1.3.0-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
+1. Download `WhereMyTokens-v1.3.1-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
 2. Extract the zip
 3. Run `WhereMyTokens.exe`
 

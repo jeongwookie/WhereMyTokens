@@ -98,9 +98,9 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
             </div>
             <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{totalTools}×</span>
           </div>
-          {/* Top 3 tool names + counts */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-            {toolEntries.slice(0, 3).map(([name, count], i) => (
+          {/* 전체 툴 이름 + 횟수 (바 색상과 동일 순서) */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+            {toolEntries.map(([name, count], i) => (
               <span key={name} style={{ fontSize: 9, color: TOOL_COLORS[i % TOOL_COLORS.length] }}>
                 {name} {count}
               </span>
