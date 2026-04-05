@@ -11,6 +11,7 @@ interface Props {
   limitPct?: number;   // 0-100
   resetMs?: number;    // ms until reset
   apiConnected?: boolean;
+  hideCost?: boolean;
 }
 
 function pctBarColor(pct: number): string {
@@ -22,7 +23,7 @@ function pctBarColor(pct: number): string {
 
 export default function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
-  limitPct, resetMs, apiConnected,
+  limitPct, resetMs, apiConnected, hideCost,
 }: Props) {
   if (stats.totalTokens === 0 && stats.requestCount === 0) return null;
 
@@ -54,7 +55,9 @@ export default function TokenStatsCard({
           {stats.requestCount > 0 && (
             <span style={{ fontSize: 10, color: C.textMuted }}>{stats.requestCount} req</span>
           )}
-          <span style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
+          {!hideCost && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
+          )}
         </div>
       </div>
 

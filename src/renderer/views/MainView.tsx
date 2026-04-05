@@ -276,7 +276,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
             totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0,
           }} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} />
+            limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
         )}
         <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
 
