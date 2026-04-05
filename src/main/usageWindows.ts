@@ -97,12 +97,14 @@ export function computeUsage(
   const weekStart = getWeekStart().getTime();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
+  // 자정 기준 시작점 — 오늘 항목이 오늘 셀에 정확히 들어가도록
+  const todayMidnight = todayStart.getTime();
   // 7-day heatmap range
-  const day7Start = now - 6 * dayMs;
+  const day7Start = todayMidnight - 6 * dayMs;
   // 30-day heatmap range
-  const day30Start = now - 29 * dayMs;
+  const day30Start = todayMidnight - 29 * dayMs;
   // 150-day heatmap range (~5 months)
-  const day90Start = now - 149 * dayMs;
+  const day90Start = todayMidnight - 149 * dayMs;
   // Timeline range (20 weeks)
   const timelineStart = now - 19 * weekMs;
 
