@@ -118,6 +118,9 @@ app.whenReady().then(() => {
   popupWindow = createPopupWindow();
   stateManager.start();
 
+  // Show popup on first launch (after renderer is ready)
+  popupWindow.once('ready-to-show', () => showPopup());
+
   // Global shortcut
   const settings = { ...DEFAULT_SETTINGS, ...store.store };
   try {

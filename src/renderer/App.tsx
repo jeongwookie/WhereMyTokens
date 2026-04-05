@@ -49,6 +49,15 @@ export default function App() {
     return cleanup;
   }, [refresh]);
 
+  // Hide HTML splash and reveal app only when data is ready
+  useEffect(() => {
+    if (state.lastUpdated === 0) return;
+    const splash = document.getElementById('splash');
+    const root = document.getElementById('root');
+    if (splash) splash.style.display = 'none';
+    if (root) root.style.display = '';
+  }, [state.lastUpdated]);
+
   async function handleSaveSettings(partial: Partial<AppSettings>) {
     const updated = await window.wmt.setSettings(partial);
     setState(prev => ({ ...prev, settings: updated }));
@@ -59,15 +68,6 @@ export default function App() {
   }
 
   const bgStyle: React.CSSProperties = { background: C.bg, height: '100vh', color: C.text };
-
-  if (state.lastUpdated === 0) {
-    return (
-      <div style={{ ...bgStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: C.accent, letterSpacing: -0.5 }}>WhereMyTokens</span>
-        <span style={{ fontSize: 11, color: C.textMuted }}>Loading usage data…</span>
-      </div>
-    );
-  }
 
   if (view === 'settings') {
     return (
