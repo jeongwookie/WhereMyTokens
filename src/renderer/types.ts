@@ -133,8 +133,7 @@ declare global {
       setupIntegration:     () => Promise<{ ok: boolean; command?: string; error?: string }>;
       getIntegrationStatus: () => Promise<{ configured: boolean; command?: string }>;
       quit:               () => Promise<void>;
-      setPinned:          (v: boolean) => Promise<boolean>;
-      getPinned:          () => Promise<boolean>;
+      minimize:           () => Promise<void>;
       onUpdated:          (cb: () => void) => () => void;
     };
   }

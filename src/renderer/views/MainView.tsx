@@ -22,16 +22,11 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const { currency, usdToKrw } = settings;
   const hiddenProjects: string[] = settings.hiddenProjects ?? [];
   const excludedProjects: string[] = settings.excludedProjects ?? [];
-  const [pinned, setPinned] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshLabel, setLastRefreshLabel] = useState('');
   const [showHiddenManager, setShowHiddenManager] = useState(false);
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('all');
-
-  useEffect(() => {
-    window.wmt.getPinned().then(setPinned).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (state.lastUpdated === 0) return;
@@ -42,12 +37,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
     }, 3000);
     return () => clearTimeout(t);
   }, [state.lastUpdated]);
-
-  function togglePin() {
-    const next = !pinned;
-    setPinned(next);
-    window.wmt.setPinned(next).catch(() => {});
-  }
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -125,23 +114,18 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{fmtCost(usage.todayCost, currency, usdToKrw)}</div>
           </div>
 
-          {/* pin button */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-            <button
-              onClick={togglePin}
-              title={pinned ? 'Unpin window' : 'Pin on top'}
-              style={{
-                ...noDrag,
-                background: pinned ? C.accent + '22' : 'none',
-                border: pinned ? `1px solid ${C.accent}55` : '1px solid transparent',
-                color: pinned ? C.accent : C.textDim,
-                cursor: 'pointer', fontSize: 12, padding: '2px 5px', borderRadius: 4, lineHeight: 1,
-              }}
-            >📌</button>
-            {pinned && (
-              <span style={{ fontSize: 8, color: C.accent, fontWeight: 600, letterSpacing: 0.2 }}>pinned</span>
-            )}
-          </div>
+          {/* 최소화 버튼 */}
+          <button
+            onClick={() => window.wmt.minimize().catch(() => {})}
+            title="최소화 (숨기기)"
+            style={{
+              ...noDrag,
+              background: 'none', border: '1px solid transparent',
+              color: C.textDim, cursor: 'pointer',
+              fontSize: 16, padding: '0px 6px', borderRadius: 4, lineHeight: 1,
+              fontWeight: 300,
+            }}
+          >−</button>
 
           {/* refresh + API status */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>

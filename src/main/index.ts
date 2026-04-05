@@ -9,7 +9,6 @@ if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let tray: Tray | null = null;
 let popupWindow: BrowserWindow | null = null;
-let isPinned = false;
 const store = new Store<AppSettings>() as Store<AppSettings>;
 
 function createTray(): Tray {
@@ -49,9 +48,7 @@ function createPopupWindow(): BrowserWindow {
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath);
 
-  win.on('blur', () => {
-    if (!isPinned && !win.webContents.isDevToolsOpened()) win.hide();
-  });
+  // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
 
   return win;
 }
@@ -136,12 +133,8 @@ app.whenReady().then(() => {
   // App quit IPC
   ipcMain.handle('app:quit', () => { app.exit(0); });
 
-  // Pin toggle IPC
-  ipcMain.handle('window:setPinned', (_e, pinned: boolean) => {
-    isPinned = pinned;
-    return isPinned;
-  });
-  ipcMain.handle('window:getPinned', () => isPinned);
+  // 최소화(숨김) IPC
+  ipcMain.handle('window:minimize', () => { popupWindow?.hide(); });
 
   // nativeTheme.updated not needed — light mode is fixed
 });

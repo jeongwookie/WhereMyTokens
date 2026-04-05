@@ -10,8 +10,7 @@ contextBridge.exposeInMainWorld('wmt', {
 setupIntegration:     () => ipcRenderer.invoke('integration:setup'),
   getIntegrationStatus: () => ipcRenderer.invoke('integration:status'),
   quit:                 () => ipcRenderer.invoke('app:quit'),
-  setPinned:            (v: boolean) => ipcRenderer.invoke('window:setPinned', v),
-  getPinned:            () => ipcRenderer.invoke('window:getPinned'),
+  minimize:             () => ipcRenderer.invoke('window:minimize'),
   onUpdated:            (cb: () => void) => {
     ipcRenderer.on('state:updated', cb);
     return () => ipcRenderer.removeListener('state:updated', cb);
