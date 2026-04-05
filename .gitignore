@@ -7,3 +7,7 @@ assets/icon-256.png
 *.log
 .DS_Store
 Thumbs.db
+
+# 로컬 협업 문서 (Claude + 정욱)
+CLAUDE.md
+RELEASE.md
