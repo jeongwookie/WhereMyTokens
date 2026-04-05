@@ -29,6 +29,21 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 ---
 
+## Screenshots
+
+<table>
+<tr>
+<td><img src="assets/screenshot-dashboard.png" width="340" alt="Main dashboard — sessions, plan usage, and activity" /></td>
+<td><img src="assets/screenshot-stats.png" width="340" alt="Plan usage, Extra Usage budget, and model breakdown" /></td>
+</tr>
+<tr>
+<td align="center"><em>Session list with context &amp; tool bars</em></td>
+<td align="center"><em>Usage stats, rate limits, and activity heatmap</em></td>
+</tr>
+</table>
+
+---
+
 ## Claude Code Integration (Bridge)
 
 WhereMyTokens can receive live rate limit data from Claude Code via the official `statusLine` plugin mechanism — no API polling required.
@@ -101,7 +116,7 @@ npm run dist
 Each row shows:
 - Project name, model tag, worktree branch (if applicable)
 - Session state badge and last activity time
-- **Context bar** — appears at 50%+, turns orange at 80%, red at 95%
+- **Context bar** — always visible per session; turns amber at 50%, orange at 80%, red at 95%+
 - **Tool bar** — proportional color bar + top-3 tool names with call counts
 
 Use **All / Active** to filter sessions. Hover a project header to:
@@ -195,7 +210,7 @@ src/
       TokenStatsCard.tsx   Usage stats + rate limit bar
       ActivityChart.tsx    Heatmaps + charts
       ModelBreakdown.tsx   Per-model totals
-      ContextBar.tsx       Context window overview
+      ExtraUsageCard.tsx   Extra Usage monthly budget card
 ```
 
 ---
