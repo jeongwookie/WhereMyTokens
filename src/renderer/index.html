@@ -23,11 +23,10 @@
       height: 100vh; gap: 16px;
     }
     #splash-logo {
-      width: 48px; height: 48px; border-radius: 12px;
-      background: linear-gradient(135deg, #5048b8, #7b6fd4);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 24px;
-      animation: logoPulse 2s ease-in-out infinite;
+      width: 72px; height: 72px;
+    }
+    #splash-logo img {
+      width: 100%; height: 100%; object-fit: contain;
     }
     #splash-title {
       font-size: 15px; font-weight: 800;
@@ -42,12 +41,11 @@
       flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes logoPulse { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 #5048b833} 50%{transform:scale(1.06);box-shadow:0 0 0 8px #5048b800} }
   </style>
 </head>
 <body>
   <div id="splash">
-    <div id="splash-logo">📊</div>
+    <div id="splash-logo"><img src="../../assets/source-icon.png" alt="WhereMyTokens" /></div>
     <div id="splash-title">WhereMyTokens</div>
     <div id="splash-sub"><div class="spinner"></div>Loading usage data…</div>
   </div>

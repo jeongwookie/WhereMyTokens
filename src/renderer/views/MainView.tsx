@@ -114,49 +114,42 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             <div style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>{fmtCost(usage.todayCost, currency, usdToKrw)}</div>
           </div>
 
-          {/* 최소화 버튼 */}
-          <button
-            onClick={() => window.wmt.minimize().catch(() => {})}
-            title="최소화 (숨기기)"
+          {/* API 상태 dot */}
+          <span
+            title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
             style={{
-              ...noDrag,
-              background: 'none', border: '1px solid transparent',
-              color: C.textDim, cursor: 'pointer',
-              fontSize: 16, padding: '0px 6px', borderRadius: 4, lineHeight: 1,
-              fontWeight: 300,
+              width: 6, height: 6, borderRadius: '50%',
+              background: apiConnected ? '#4ade80' : '#f87171',
+              display: 'inline-block', flexShrink: 0,
             }}
-          >−</button>
+          />
 
-          {/* refresh + API status */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <button
-                onClick={handleRefresh}
-                title="Refresh now (API + JSONL)"
-                style={{
-                  ...noDrag,
-                  background: 'none', border: 'none',
-                  color: refreshing ? C.accent : C.textDim,
-                  cursor: refreshing ? 'wait' : 'pointer',
-                  fontSize: 14, padding: '2px 4px', lineHeight: 1,
-                  transition: 'color 0.2s, transform 0.4s',
-                  transform: refreshing ? 'rotate(360deg)' : 'none',
-                }}
-              >↺</button>
-              <span
-                title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
-                style={{
-                  width: 5, height: 5, borderRadius: '50%',
-                  background: apiConnected ? '#4ade80' : '#f87171',
-                  display: 'inline-block', flexShrink: 0,
-                }}
-              />
-            </div>
-            {lastRefreshLabel && (
-              <span style={{ fontSize: 8, color: refreshing ? C.accent : C.textMuted, fontWeight: refreshing ? 600 : 400, letterSpacing: 0.1, whiteSpace: 'nowrap' }}>
-                {lastRefreshLabel}
-              </span>
-            )}
+          {/* 윈도우 컨트롤 */}
+          <div style={{ display: 'flex', gap: 2, marginLeft: 2 }}>
+            <button
+              onClick={() => window.wmt.minimize().catch(() => {})}
+              title="최소화"
+              style={{
+                ...noDrag,
+                width: 28, height: 22,
+                background: 'none', border: 'none',
+                color: C.textDim, cursor: 'pointer',
+                fontSize: 16, borderRadius: 4, lineHeight: 1,
+                fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >−</button>
+            <button
+              onClick={onQuit}
+              title="종료"
+              style={{
+                ...noDrag,
+                width: 28, height: 22,
+                background: 'none', border: 'none',
+                color: C.textDim, cursor: 'pointer',
+                fontSize: 14, borderRadius: 4, lineHeight: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >×</button>
           </div>
         </div>
       </div>
@@ -288,14 +281,24 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           { key: 'settings',      icon: '⚙',  label: 'Settings' },
           { key: 'notifications', icon: '🔔', label: 'Alerts' },
           { key: 'help',          icon: '?',  label: 'Help' },
-          { key: 'quit',          icon: '✕',  label: 'Quit' },
+          { key: 'refresh',       icon: '↺',  label: lastRefreshLabel || 'Refresh' },
         ].map(({ key, icon, label }) => (
           <button
             key={key}
-            onClick={() => key === 'quit' ? onQuit() : onNav(key as 'settings' | 'notifications' | 'help')}
-            style={{ flex: 1, padding: '7px 0', background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+            onClick={() => key === 'refresh' ? handleRefresh() : onNav(key as 'settings' | 'notifications' | 'help')}
+            style={{
+              flex: 1, padding: '7px 0', background: 'none', border: 'none',
+              color: key === 'refresh' && refreshing ? C.accent : C.textDim,
+              cursor: key === 'refresh' && refreshing ? 'wait' : 'pointer',
+              fontSize: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            }}
           >
-            <span style={{ fontSize: 13 }}>{icon}</span>
+            <span style={{
+              fontSize: 13,
+              display: 'inline-block',
+              transition: 'transform 0.4s',
+              transform: key === 'refresh' && refreshing ? 'rotate(360deg)' : 'none',
+            }}>{icon}</span>
             <span>{label}</span>
           </button>
         ))}
