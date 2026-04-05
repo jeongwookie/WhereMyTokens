@@ -10,7 +10,7 @@ function pctBarColor(pct: number): string {
   if (pct >= 90) return '#c0392b';
   if (pct >= 75) return '#e67e22';
   if (pct >= 50) return '#d4a017';
-  return C.accent;
+  return '#b07a20';  // 추가 사용 구간 — 기본도 amber 계열로 구분
 }
 
 // 월 단위 남은 시간 포맷 (최대 31일)
@@ -38,10 +38,13 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}`, padding: '7px 14px' }}>
-      {/* 헤더 */}
+      {/* 헤더: 레이블 왼쪽, 금액+% 오른쪽 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
         <span style={{ fontSize: 11, color: C.textMuted }}>Extra Usage · monthly</span>
-        <span style={{ fontSize: 10, color: C.textMuted }}>${usedUSD} / ${limitUSD}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+          <span style={{ fontSize: 10, color: C.textMuted }}>${usedUSD} / ${limitUSD}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: barColor }}>{Math.round(barPct)}%</span>
+        </div>
       </div>
 
       {/* 프로그레스 바 */}
@@ -53,9 +56,6 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
             transition: 'width 0.4s',
           }} />
         </div>
-        <span style={{ fontSize: 10, fontWeight: 600, color: barColor, width: 28, textAlign: 'right', flexShrink: 0 }}>
-          {barPct.toFixed(1)}%
-        </span>
         {resetStr && (
           <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
         )}
