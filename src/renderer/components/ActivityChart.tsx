@@ -190,8 +190,8 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
   // Same layout constants as 7d heatmap
   const LEFT = 18;
   const TOP = 14;
-  const COLS = 24; // same as 7d — gives identical cell width
-  const ROWS = Math.ceil(DAYS / COLS); // 4 rows
+  const COLS = 24; // same as 7d — identical cell width
+  const ROWS = 7;  // same as 7d — identical overall height (168 slots, first 90 filled)
 
   const dayTotals = new Map<number, { tokens: number; date: Date }>();
   for (const b of data) {
@@ -243,14 +243,15 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     ctx.lineWidth = 1.5;
     ctx.strokeRect(LEFT + todayCol * cw + 1.75, TOP + todayRow * ch + 1.75, cw - 3.5, ch - 3.5);
 
-    // Row labels (week offset from today)
+    // Row labels — only label rows that contain actual data (rows 0-3 for 90 days)
     ctx.font = '7px sans-serif';
     ctx.fillStyle = C.textMuted;
     ctx.textAlign = 'right';
-    for (let r = 0; r < ROWS; r++) {
+    const dataRows = Math.ceil(DAYS / COLS); // 4 rows with data
+    for (let r = 0; r < dataRows; r++) {
       const daysFromStart = r * COLS;
-      const weeksAgo = Math.ceil((DAYS - daysFromStart) / 7);
-      ctx.fillText(`-${weeksAgo}w`, LEFT - 3, TOP + r * ch + ch / 2 + 3);
+      const weeksAgo = Math.round((DAYS - daysFromStart) / 7);
+      ctx.fillText(weeksAgo > 0 ? `-${weeksAgo}w` : 'now', LEFT - 3, TOP + r * ch + ch / 2 + 3);
     }
   }, [data]);
 

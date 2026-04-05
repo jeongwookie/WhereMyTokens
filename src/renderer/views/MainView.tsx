@@ -26,7 +26,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshLabel, setLastRefreshLabel] = useState('');
   const [showHiddenManager, setShowHiddenManager] = useState(false);
-  const [showExcludedManager, setShowExcludedManager] = useState(false);
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('all');
 
@@ -257,31 +256,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                       onClick={() => unhideProject(name)}
                       style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3 }}
                     >show</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* excluded projects indicator */}
-        {excludedProjects.length > 0 && (
-          <div style={{ padding: '4px 14px', borderBottom: `1px solid ${C.border}` }}>
-            <button
-              onClick={() => setShowExcludedManager(v => !v)}
-              style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: 0 }}
-            >
-              {showExcludedManager ? '▲' : '▼'} {excludedProjects.length} excluded project{excludedProjects.length > 1 ? 's' : ''}
-            </button>
-            {showExcludedManager && (
-              <div style={{ marginTop: 4 }}>
-                {excludedProjects.map(name => (
-                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
-                    <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{name}</span>
-                    <button
-                      onClick={() => unexcludeProject(name)}
-                      style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3 }}
-                    >re-enable</button>
                   </div>
                 ))}
               </div>

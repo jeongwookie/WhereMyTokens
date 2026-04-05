@@ -100,16 +100,21 @@ export class StateManager {
 
   start() {
     this.bridgeWatcher.start();
-    // Fetch API usage rate + autoLimits first, then heavyRefresh
-    Promise.all([this.refreshAutoLimits(), this.refreshApiUsagePct()])
-      .then(() => this.heavyRefresh());
+    // Parse JSONL immediately so UI shows data right away
+    void this.heavyRefresh();
     this.startTimers();
     this.startWatcher();
-    // Refresh autoLimits every 5 minutes (autoLimitTimer is dedicated to autoLimits)
+    // Fetch API limits in background — non-blocking, updates limits when ready
+    void Promise.all([this.refreshAutoLimits(), this.refreshApiUsagePct()])
+      .then(() => {
+        const limits = this.buildLimits();
+        this.state = { ...this.state, limits, autoLimits: this.autoLimits, apiConnected: this.apiConnected };
+        this.onUpdate(this.state);
+      });
+    // Refresh autoLimits every 5 minutes
     this.autoLimitTimer = setInterval(() => {
       this.refreshAutoLimits();
     }, 5 * 60 * 1000);
-    // API usage rate is included in the heavyRefresh cycle (tied to refreshInterval)
   }
 
   stop() {
@@ -303,11 +308,15 @@ export class StateManager {
     return this.state;
   }
 
-  // Lightweight rebuild: re-reads settings + sessions without API call.
-  // Called after settings change (hide/exclude/etc.) to reflect immediately.
+  // Instant settings update: filters cached sessions without re-parsing JSONL.
+  // Called after hide/exclude changes so the UI reflects immediately.
   applySettingsChange() {
-    const sessions = this.buildSessionInfos();
     const settings = this.getSettings();
+    const excluded = new Set(settings.excludedProjects ?? []);
+    const sessions = this.state.sessions.filter(s => {
+      const key = s.mainRepoName ?? s.projectName;
+      return !excluded.has(key) && !excluded.has(s.projectName);
+    });
     this.state = { ...this.state, sessions, settings, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
