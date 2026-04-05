@@ -101,8 +101,8 @@ export function computeUsage(
   const day7Start = now - 6 * dayMs;
   // 30-day heatmap range
   const day30Start = now - 29 * dayMs;
-  // 90-day heatmap range
-  const day90Start = now - 89 * dayMs;
+  // 150-day heatmap range (~5 months)
+  const day90Start = now - 149 * dayMs;
   // Timeline range (20 weeks)
   const timelineStart = now - 19 * weekMs;
 
@@ -139,7 +139,7 @@ export function computeUsage(
       else heatMap30.set(k, { dayIndex, hour, tokens });
     }
 
-    // 90-day heatmap
+    // 120-day heatmap
     if (ts >= day90Start) {
       const dayIndex = Math.floor((ts - day90Start) / dayMs);
       const hour = e.timestamp.getHours();

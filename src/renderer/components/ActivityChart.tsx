@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { HourlyBucket, WeeklyTotal } from '../types';
 import { C, fmtTokens } from '../theme';
 
-type ChartTab = '7d' | '90d' | 'Hourly' | 'Weekly';
+type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly';
 
 function blueIntensity(i: number): string {
   const sat = Math.round(55 + i * 35);
@@ -180,32 +180,38 @@ function Heatmap30({ data }: { data: HourlyBucket[] }) {
   );
 }
 
-// --- 90-day heatmap: same cell size as 7d (24 cols × 4 rows) ---
+// --- 90-day heatmap: GitHub-style calendar grid (weeks × weekdays) ---
 function Heatmap90({ data }: { data: HourlyBucket[] }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; tokens: number } | null>(null);
 
-  const now = new Date();
-  const DAYS = 90;
-  // Same layout constants as 7d heatmap
-  const LEFT = 18;
-  const TOP = 14;
-  const COLS = 24; // same as 7d — identical cell width
-  const ROWS = 7;  // same as 7d — identical overall height (168 slots, first 90 filled)
+  const DAYS = 150;
+  const ROWS = 7;   // days of week (0=Sun ... 6=Sat)
+  const LEFT = 24;  // space for day labels (Sun/Mon/... all shown)
+  const TOP = 14;   // space for month labels (same as 7d)
 
-  const dayTotals = new Map<number, { tokens: number; date: Date }>();
+  // Build date→tokens map (absolute dates)
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dateMap = new Map<string, { tokens: number; dayIndex: number }>();
   for (const b of data) {
-    const existing = dayTotals.get(b.dayIndex);
-    if (existing) {
-      existing.tokens += b.tokens;
-    } else {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (DAYS - 1 - b.dayIndex));
-      d.setHours(0, 0, 0, 0);
-      dayTotals.set(b.dayIndex, { tokens: b.tokens, date: d });
-    }
+    const d = new Date(today);
+    d.setDate(today.getDate() - (DAYS - 1 - b.dayIndex));
+    const key = d.toISOString().slice(0, 10);
+    const existing = dateMap.get(key);
+    if (existing) existing.tokens += b.tokens;
+    else dateMap.set(key, { tokens: b.tokens, dayIndex: b.dayIndex });
   }
-  const maxTokens = Math.max(...Array.from(dayTotals.values()).map(v => v.tokens), 1);
+  const maxTokens = Math.max(...Array.from(dateMap.values()).map(v => v.tokens), 1);
+
+  // Compute grid dimensions
+  // startDate = today - 89 days
+  const startDate = new Date(today); startDate.setDate(today.getDate() - (DAYS - 1));
+  // first Sunday on or before startDate
+  const gridStart = new Date(startDate);
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay()); // back to Sunday
+  // total columns = ceil((DAYS + startDate.getDay()) / 7) + 1 to ensure today is included
+  const daySpan = Math.floor((today.getTime() - gridStart.getTime()) / 86400000) + 1;
+  const COLS = Math.ceil(daySpan / 7);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -214,46 +220,64 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     if (!ctx) return;
 
     const W = canvas.width;
-    const cw = Math.floor((W - LEFT) / COLS); // identical formula to 7d
+    // Use same cell size as 7d heatmap (7d: LEFT=18, HOURS=24)
+    const cw = Math.floor((W - 18) / 24);
     const ch = cw;
     canvas.height = TOP + ROWS * ch + 2;
-
     ctx.clearRect(0, 0, W, canvas.height);
 
-    // Empty background cells
-    ctx.fillStyle = '#dbeafe44';
-    for (let r = 0; r < ROWS; r++)
-      for (let c = 0; c < COLS; c++)
-        ctx.fillRect(LEFT + c * cw + 1, TOP + r * ch + 1, cw - 2, ch - 2);
+    let lastMonth = -1;
 
-    for (let i = 0; i < DAYS; i++) {
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const cell = dayTotals.get(i);
-      const tokens = cell?.tokens ?? 0;
-      if (tokens === 0) continue;
-      ctx.fillStyle = blueIntensity(tokens / maxTokens);
-      ctx.fillRect(LEFT + col * cw + 1, TOP + row * ch + 1, cw - 2, ch - 2);
+    for (let col = 0; col < COLS; col++) {
+      for (let row = 0; row < ROWS; row++) {
+        const cellDate = new Date(gridStart);
+        cellDate.setDate(gridStart.getDate() + col * 7 + row);
+        const daysFromToday = Math.round((today.getTime() - cellDate.getTime()) / 86400000);
+        const inRange = daysFromToday >= 0 && daysFromToday < DAYS;
+
+        const x = LEFT + col * cw + 1;
+        const y = TOP + row * ch + 1;
+
+        if (!inRange) continue;
+
+        const key = cellDate.toISOString().slice(0, 10);
+        const cell = dateMap.get(key);
+        const tokens = cell?.tokens ?? 0;
+
+        ctx.fillStyle = tokens > 0 ? blueIntensity(tokens / maxTokens) : '#dbeafe44';
+        ctx.fillRect(x, y, cw - 2, ch - 2);
+
+        // Today border
+        if (daysFromToday === 0) {
+          ctx.strokeStyle = blueIntensity(0.8);
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(x + 0.75, y + 0.75, cw - 3.5, ch - 3.5);
+        }
+
+        // Month label at top of column when month changes (only on row 0)
+        if (row === 0) {
+          const m = cellDate.getMonth();
+          if (m !== lastMonth) {
+            lastMonth = m;
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            ctx.font = '7px sans-serif';
+            ctx.fillStyle = C.textMuted;
+            ctx.textAlign = 'left';
+            ctx.fillText(months[m], LEFT + col * cw, TOP - 4);
+          }
+        }
+      }
     }
 
-    // Today border
-    const todayCol = (DAYS - 1) % COLS;
-    const todayRow = Math.floor((DAYS - 1) / COLS);
-    ctx.strokeStyle = blueIntensity(0.8);
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(LEFT + todayCol * cw + 1.75, TOP + todayRow * ch + 1.75, cw - 3.5, ch - 3.5);
-
-    // Row labels — only label rows that contain actual data (rows 0-3 for 90 days)
+    // Day-of-week labels — all 7 days
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     ctx.font = '7px sans-serif';
     ctx.fillStyle = C.textMuted;
     ctx.textAlign = 'right';
-    const dataRows = Math.ceil(DAYS / COLS); // 4 rows with data
-    for (let r = 0; r < dataRows; r++) {
-      const daysFromStart = r * COLS;
-      const weeksAgo = Math.round((DAYS - daysFromStart) / 7);
-      ctx.fillText(weeksAgo > 0 ? `-${weeksAgo}w` : 'now', LEFT - 3, TOP + r * ch + ch / 2 + 3);
+    for (let row = 0; row < ROWS; row++) {
+      ctx.fillText(dayNames[row], LEFT - 3, TOP + row * ch + ch / 2 + 3);
     }
-  }, [data]);
+  }, [data, COLS]);
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
@@ -262,25 +286,23 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const cw = Math.floor((canvas.width - LEFT) / COLS);
+    const cw = Math.floor((canvas.width - 18) / 24); // same as draw
     const col = Math.floor((mx - LEFT) / cw);
     const row = Math.floor((my - TOP) / cw);
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) { setTooltip(null); return; }
 
-    const i = row * COLS + col;
-    if (i >= DAYS) { setTooltip(null); return; }
+    const cellDate = new Date(gridStart);
+    cellDate.setDate(gridStart.getDate() + col * 7 + row);
+    const daysFromToday = Math.round((today.getTime() - cellDate.getTime()) / 86400000);
+    if (daysFromToday < 0 || daysFromToday >= DAYS) { setTooltip(null); return; }
 
-    const cell = dayTotals.get(i);
-    const date = cell?.date ?? (() => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (DAYS - 1 - i));
-      return d;
-    })();
+    const key = cellDate.toISOString().slice(0, 10);
+    const cell = dateMap.get(key);
 
     setTooltip({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      date: cellDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       tokens: cell?.tokens ?? 0,
     });
   }
@@ -524,7 +546,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
   const [tab, setTab] = useState<ChartTab>('7d');
   const [collapsed, setCollapsed] = useState(false);
 
-  const tabs: ChartTab[] = ['7d', '90d', 'Hourly', 'Weekly'];
+  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly'];
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}`, padding: '8px 14px' }}>
@@ -563,9 +585,9 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
               <ColorLegend />
             </>
           )}
-          {tab === '90d' && (
+          {tab === '5mo' && (
             <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>90-day activity (oldest → today, 10×9 grid)</div>
+              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5-month activity (calendar grid, oldest → today)</div>
               <Heatmap90 data={heatmap90} />
               <ColorLegend />
             </>
