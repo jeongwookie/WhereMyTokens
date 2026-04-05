@@ -29,7 +29,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
   let ctxLabel = '';
   if (ctxPct >= 95) ctxLabel = '⚠ near limit';
   else if (ctxPct >= 80) ctxLabel = 'compact soon';
-  else if (ctxPct >= 50) ctxLabel = `${fmtTokens(ctxRemaining)} left`;
+  else ctxLabel = `${fmtTokens(ctxRemaining)} left`;
 
   return (
     <div style={{ padding: '7px 14px', borderBottom: `1px solid ${C.borderSub}` }}>
@@ -62,8 +62,8 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
         {session.source}
       </div>
 
-      {/* Context usage (only when >= 50%) */}
-      {showCtx && ctxPct >= 50 && (
+      {/* Context usage */}
+      {showCtx && (
         <div style={{ marginTop: 5, marginLeft: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ flex: 1, height: 3, background: '#0000000a', borderRadius: 2, overflow: 'hidden' }}>
