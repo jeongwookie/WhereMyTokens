@@ -63,10 +63,22 @@ export class StateManager {
     this.store = store;
     this.onUpdate = onUpdate;
     this.state = this.emptyState();
-    // 재시작 후에도 마지막 성공값 유지 (구버전 캐시에 extraUsage 없으면 null로 보정)
-    const cached = (this.store as unknown as Store<Record<string, unknown>>).get('_cachedApiPct', null) as ApiUsagePct | null;
+    // 재시작 후에도 마지막 성공값 유지 — storedAt 기준으로 만료된 창은 pct/resetMs 보정
+    const cached = (this.store as unknown as Store<Record<string, unknown>>).get('_cachedApiPct', null) as (ApiUsagePct & { storedAt?: number }) | null;
     if (cached) {
-      this.apiUsagePct = { ...cached, extraUsage: cached.extraUsage ?? null };
+      const elapsed = cached.storedAt ? Date.now() - cached.storedAt : Infinity;
+      this.apiUsagePct = {
+        ...cached,
+        // 저장 당시 resetMs보다 더 많은 시간이 지났으면 해당 창은 이미 리셋됨
+        h5Pct:    elapsed > cached.h5ResetMs   ? 0 : cached.h5Pct,
+        weekPct:  elapsed > cached.weekResetMs ? 0 : cached.weekPct,
+        soPct:    elapsed > cached.soResetMs   ? 0 : cached.soPct,
+        // resetMs도 현재 기준으로 보정 (음수 방지)
+        h5ResetMs:   Math.max(0, cached.h5ResetMs   - elapsed),
+        weekResetMs: Math.max(0, cached.weekResetMs - elapsed),
+        soResetMs:   Math.max(0, cached.soResetMs   - elapsed),
+        extraUsage: cached.extraUsage ?? null,
+      };
     }
     this.bridgeWatcher = new BridgeWatcher((data) => {
       this.liveSession = data;
@@ -153,8 +165,8 @@ export class StateManager {
         this.apiConnected = true;
         this.apiError = '';
         this.apiBackoffMs = 0;
-        // 마지막 성공값 캐시 — 재시작/429 시에도 표시
-        (this.store as unknown as Store<Record<string, unknown>>).set('_cachedApiPct', result);
+        // 마지막 성공값 캐시 — 재시작/429 시에도 표시 (storedAt으로 만료 감지)
+        (this.store as unknown as Store<Record<string, unknown>>).set('_cachedApiPct', { ...result, storedAt: Date.now() });
       } else {
         this.apiConnected = false;
         this.apiError = 'no credentials';
@@ -222,14 +234,15 @@ export class StateManager {
     const effectiveLimits = this.autoLimits
       ? { h5: this.autoLimits.h5, week: this.autoLimits.week, sonnetWeek: this.autoLimits.sonnetWeek }
       : settings.usageLimits;
-    // API의 실제 billing 주기 기준으로 week 윈도우 정렬 (bridge > API > calendar fallback)
+    // API 기준으로 각 창의 실제 시작 시각 역산 (API 우선, bridge fallback, calendar 최후)
     const now = Date.now();
     const rl = this.liveSession?.rate_limits;
     const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
-    const weekResetMs = bridgeActive && rl?.seven_day?.resets_at
-      ? rl.seven_day.resets_at - now
-      : (this.apiUsagePct?.weekResetMs ?? 0);
-    const usage = computeUsage(this.allEntries, effectiveLimits, weekResetMs);
+    const h5ResetMs = this.apiUsagePct?.h5ResetMs
+      ?? (bridgeActive && rl?.five_hour?.resets_at ? rl.five_hour.resets_at - now : 0);
+    const weekResetMs = this.apiUsagePct?.weekResetMs
+      ?? (bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : 0);
+    const usage = computeUsage(this.allEntries, effectiveLimits, weekResetMs, h5ResetMs);
     const limits = this.buildLimits();
     const sessions = this.buildSessionInfos();
 

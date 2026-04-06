@@ -89,12 +89,17 @@ export function computeUsage(
   allEntries: ParsedEntry[],
   _userLimits: { h5: number; week: number; sonnetWeek: number },
   weekResetMs = 0,  // API에서 받은 week 리셋까지 남은 ms (0이면 calendar 기준 fallback)
+  h5ResetMs = 0,   // API에서 받은 5h 리셋까지 남은 ms (0이면 rolling 5h fallback)
 ): UsageData {
   const now = Date.now();
   const dayMs = 24 * 3600 * 1000;
   const weekMs = 7 * dayMs;
+  const h5Ms = 5 * 3600 * 1000;
 
-  const h5Start = now - 5 * 3600 * 1000;
+  // API reset 정보가 있으면 실제 창 시작 시각 역산, 없으면 rolling fallback
+  const h5Start = h5ResetMs > 0
+    ? now - (h5Ms - h5ResetMs)
+    : now - h5Ms;
   // API reset 정보가 있으면 실제 billing 주기 시작 시각, 없으면 calendar 월요일 자정 fallback
   const weekStart = weekResetMs > 0
     ? now - (weekMs - weekResetMs)
