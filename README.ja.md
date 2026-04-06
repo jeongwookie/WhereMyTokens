@@ -35,13 +35,17 @@
 
 <table align="center">
   <tr>
-    <td align="center" width="340">
-      <img src="assets/screenshots.png" width="220" alt="セッション、プラン使用量バー、7日ヒートマップ、モデル別分析" /><br/>
+    <td align="center" width="230">
+      <img src="assets/screenshot-main.png" width="190" alt="セッション、プラン使用量バー、7日ヒートマップ、モデル別分析" /><br/>
       <sub><b>セッション · プラン使用量 · 7日ヒートマップ</b></sub>
     </td>
-    <td align="center" width="340">
-      <img src="assets/screenshot-hourly.png" width="220" alt="過去30日間の時間帯別トークン使用量チャート" /><br/>
+    <td align="center" width="230">
+      <img src="assets/screenshot-hourly.png" width="190" alt="過去30日間の時間帯別トークン使用量チャート" /><br/>
       <sub><b>時間帯別トークン使用量（過去30日間）</b></sub>
+    </td>
+    <td align="center" width="230">
+      <img src="assets/screenshot-help.png" width="190" alt="Help画面 — 数値・アクティビティ・データソースの説明" /><br/>
+      <sub><b>Help — 数値 · アクティビティ · データソース</b></sub>
     </td>
   </tr>
 </table>

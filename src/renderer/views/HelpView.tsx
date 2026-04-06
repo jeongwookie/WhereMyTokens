@@ -1,267 +1,309 @@
 import React, { useState } from 'react';
+import { Hash, Activity, Signal } from 'lucide-react';
 import { C } from '../theme';
 import ViewHeader from '../components/ViewHeader';
 
 interface Props { onBack: () => void }
-type Lang = 'en' | 'ko';
-type CardId = 'numbers' | 'plan' | 'bridge' | 'sessions' | 'cost' | 'activity' | 'alerts' | 'projects' | 'models';
-
-interface Card {
-  id: CardId;
-  icon: string;
-  en: { title: string; sub: string; detail: React.ReactNode };
-  ko: { title: string; sub: string; detail: React.ReactNode };
-}
+type Lang = 'en' | 'ko' | 'ja';
 
 const B = ({ children }: { children: React.ReactNode }) => (
   <span style={{ color: C.text, fontWeight: 600 }}>{children}</span>
 );
 
-const CARDS: Card[] = [
-  {
-    id: 'numbers',
-    icon: '🔢',
-    en: {
-      title: 'Numbers',
-      sub: 'tok · $ · what they mean',
-      detail: (
-        <>
-          <div><B>tok</B> = input + output + cache creation + cache reads. All token types Anthropic charges for.</div>
-          <div style={{ marginTop: 5 }}><B>Header tok / $</B> — today since midnight. tok and $ both include cache.</div>
-          <div style={{ marginTop: 5 }}><B>Plan Usage tok / $</B> — within the 5h or 1w billing window. Same counting.</div>
-          <div style={{ marginTop: 5 }}><B>Model Usage tok / $</B> — <B>all-time</B> cumulative per model. Same counting.</div>
-          <div style={{ marginTop: 5 }}><B>$</B> is always an API-equivalent estimate — not your actual bill. Max/Pro subscriptions are flat monthly fees.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '수치 의미',
-      sub: 'tok · $ · 계산 기준',
-      detail: (
-        <>
-          <div><B>tok</B> = input + output + 캐시 생성 + 캐시 읽기. Anthropic이 과금하는 모든 토큰 유형 포함.</div>
-          <div style={{ marginTop: 5 }}><B>헤더 tok / $</B> — 오늘 자정 이후 누계. tok과 $ 모두 캐시 포함.</div>
-          <div style={{ marginTop: 5 }}><B>Plan Usage tok / $</B> — 5h 또는 1w 빌링 창 내 합계. 동일한 계산 기준.</div>
-          <div style={{ marginTop: 5 }}><B>Model Usage tok / $</B> — <B>전체 기간</B> 모델별 누적. 동일한 계산 기준.</div>
-          <div style={{ marginTop: 5 }}><B>$</B>는 항상 API 환산 추정값 — 실제 청구액이 아님. Max/Pro는 월정액.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'plan',
-    icon: '📊',
-    en: {
-      title: 'Plan Usage',
-      sub: '5h · 1w · Sonnet',
-      detail: (
-        <>
-          <div><B>5h</B> window aligned to Anthropic's API schedule · <B>1w</B> resets on billing cycle · <B>Sonnet</B> separate weekly cap.</div>
-          <div style={{ marginTop: 5 }}>Bar colors: purple → amber (50%) → orange (75%) → red (90%). Reset timer shown next to bar.</div>
-          <div style={{ marginTop: 5 }}><B>Extra Usage</B> card appears if monthly add-on credits are enabled on your account.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '플랜 사용량',
-      sub: '5h · 1w · Sonnet',
-      detail: (
-        <>
-          <div><B>5h</B> Anthropic API 스케줄 기준 윈도우 · <B>1w</B> 빌링 주기 리셋 · <B>Sonnet</B> 독립 주간 상한.</div>
-          <div style={{ marginTop: 5 }}>바 색상: 보라 → 황(50%) → 주황(75%) → 적(90%). 옆에 리셋 타이머 표시.</div>
-          <div style={{ marginTop: 5 }}><B>Extra Usage</B> 카드는 계정에 월간 추가 크레딧이 활성화된 경우에만 표시.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'bridge',
-    icon: '🔗',
-    en: {
-      title: 'Bridge',
-      sub: 'Live data from Claude Code',
-      detail: (
-        <>
-          <div>Registers a <B>statusLine</B> plugin so Claude Code pipes rate limit data in real time — no polling needed.</div>
-          <div style={{ marginTop: 5 }}><B>Setup:</B> Settings → Claude Code Integration → Setup.</div>
-          <div style={{ marginTop: 5 }}>Header dot: <span style={{ color: '#4ade80', fontWeight: 600 }}>●</span> connected · <span style={{ color: '#f87171', fontWeight: 600 }}>●</span> API unreachable. Hover for error detail.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: 'Bridge',
-      sub: 'Claude Code 실시간 연동',
-      detail: (
-        <>
-          <div><B>statusLine</B> 플러그인으로 등록 — Claude Code가 실행될 때마다 제한량 데이터를 직접 전달.</div>
-          <div style={{ marginTop: 5 }}><B>설정:</B> Settings → Claude Code Integration → Setup.</div>
-          <div style={{ marginTop: 5 }}>헤더 점: <span style={{ color: '#4ade80', fontWeight: 600 }}>●</span> 연결됨 · <span style={{ color: '#f87171', fontWeight: 600 }}>●</span> API 불가. 호버 시 오류 메시지.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'sessions',
-    icon: '🖥',
-    en: {
-      title: 'Sessions',
-      sub: 'State · Context · Tools',
-      detail: (
-        <>
-          <div>States: <B style={{ color: '#2a7a48' }}>active</B> · <B style={{ color: '#a06010' }}>waiting</B> · <B style={{ color: '#9090a8' }}>idle</B> · <B style={{ color: '#1a62a0' }}>compacting</B></div>
-          <div style={{ marginTop: 5 }}><B>Context bar</B> — shown per session. Amber ≥50%, orange ≥80%, red ≥95%.</div>
-          <div style={{ marginTop: 5 }}><B>Tool bar</B> — color-coded proportional bar + top tool names.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '세션',
-      sub: '상태 · 컨텍스트 · 툴',
-      detail: (
-        <>
-          <div>상태: <B style={{ color: '#2a7a48' }}>active</B> · <B style={{ color: '#a06010' }}>waiting</B> · <B style={{ color: '#9090a8' }}>idle</B> · <B style={{ color: '#1a62a0' }}>compacting</B></div>
-          <div style={{ marginTop: 5 }}><B>컨텍스트 바</B> — 세션별 인라인 표시. 황 ≥50%, 주황 ≥80%, 적 ≥95%.</div>
-          <div style={{ marginTop: 5 }}><B>툴 바</B> — 비례 색상 바 + 상위 툴 이름 표시.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'cost',
-    icon: '💰',
-    en: {
-      title: 'Cost',
-      sub: 'API-equivalent estimate',
-      detail: (
-        <>
-          <div>The cost shown is <B>not your actual bill.</B></div>
-          <div style={{ marginTop: 5 }}>Max / Pro subscriptions are flat monthly fees. This shows the API-equivalent value of your usage — useful for comparing models.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '비용',
-      sub: 'API 환산 추정값',
-      detail: (
-        <>
-          <div>표시된 비용은 <B>실제 청구액이 아닙니다.</B></div>
-          <div style={{ marginTop: 5 }}>Max / Pro는 월정액. 여기서 보이는 건 동일한 사용량을 API로 구매했을 때의 가격 — 모델 비교에 유용.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'activity',
-    icon: '🟩',
-    en: {
-      title: 'Activity',
-      sub: '7d · 5mo · Hourly · Weekly',
-      detail: (
-        <>
-          <div><B>7d</B> — 7-day × 24-hour heatmap.</div>
-          <div style={{ marginTop: 4 }}><B>5mo</B> — 5-month GitHub-style calendar. Hover for date + tokens.</div>
-          <div style={{ marginTop: 4 }}><B>Hourly</B> — token distribution by hour (last 30 days).</div>
-          <div style={{ marginTop: 4 }}><B>Weekly</B> — last 4 weeks bar chart.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: 'Activity',
-      sub: '7d · 5mo · Hourly · Weekly',
-      detail: (
-        <>
-          <div><B>7d</B> — 7일 × 24시간 히트맵.</div>
-          <div style={{ marginTop: 4 }}><B>5mo</B> — 5개월 GitHub 스타일 캘린더. 날짜+토큰 호버.</div>
-          <div style={{ marginTop: 4 }}><B>Hourly</B> — 시간대별 토큰 분포 (최근 30일).</div>
-          <div style={{ marginTop: 4 }}><B>Weekly</B> — 최근 4주 바 차트.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'alerts',
-    icon: '🔔',
-    en: {
-      title: 'Alerts',
-      sub: 'Threshold notifications',
-      detail: (
-        <>
-          <div>Windows toast when <B>5h / weekly / Sonnet</B> usage reaches 50%, 80%, or 90%.</div>
-          <div style={{ marginTop: 5 }}>1-hour cooldown per alert. Re-arms after the limit resets. Configure in the <B>Alerts</B> tab.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '알림',
-      sub: '임계값 도달 시 토스트',
-      detail: (
-        <>
-          <div><B>5h / 주간 / Sonnet</B> 사용량이 50%, 80%, 90% 도달 시 Windows 알림.</div>
-          <div style={{ marginTop: 5 }}>알림당 1시간 쿨다운. 리셋 후 자동 재활성화. 하단 <B>Alerts</B> 탭에서 설정.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'projects',
-    icon: '👁',
-    en: {
-      title: 'Projects',
-      sub: 'Hide · Exclude',
-      detail: (
-        <>
-          <div>Hover a project name in the session list to reveal two controls:</div>
-          <div style={{ marginTop: 5 }}><B>✕</B> Hide — removes from UI. Data still tracked.</div>
-          <div style={{ marginTop: 4 }}><B>⊘</B> Exclude — stops all tracking. Restore from the same area.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '프로젝트',
-      sub: '숨기기 · 제외',
-      detail: (
-        <>
-          <div>세션 목록에서 프로젝트 이름 호버 시 두 가지 컨트롤 표시:</div>
-          <div style={{ marginTop: 5 }}><B>✕</B> 숨기기 — UI에서만 제거. 데이터는 계속 추적.</div>
-          <div style={{ marginTop: 4 }}><B>⊘</B> 제외 — 모든 추적 중단. 동일한 위치에서 복원.</div>
-        </>
-      ),
-    },
-  },
-  {
-    id: 'models',
-    icon: '🤖',
-    en: {
-      title: 'Model Usage',
-      sub: 'All-time breakdown',
-      detail: (
-        <>
-          <div><B>All-time</B> cumulative token usage and cost per model — not limited to a window.</div>
-          <div style={{ marginTop: 5 }}>tok includes input, output, and cache tokens. $ is the API-equivalent cost.</div>
-          <div style={{ marginTop: 5 }}>Shown as a bar chart in the <B>Model Usage</B> section on the main screen.</div>
-        </>
-      ),
-    },
-    ko: {
-      title: '모델 사용량',
-      sub: '전체 기간 집계',
-      detail: (
-        <>
-          <div>창(5h/1w)과 무관하게 <B>전체 기간</B>의 모델별 누적 토큰·비용.</div>
-          <div style={{ marginTop: 5 }}>tok = input + output + 캐시 포함. $ = API 환산 누적 비용.</div>
-          <div style={{ marginTop: 5 }}>메인 화면 <B>Model Usage</B> 섹션에 바 차트로 표시.</div>
-        </>
-      ),
-    },
-  },
-];
+const Note = ({ children }: { children: React.ReactNode }) => (
+  <div style={{
+    fontSize: 11, color: C.textMuted, marginTop: 6,
+    padding: '6px 9px', background: C.bgRow, borderRadius: 5,
+    lineHeight: 1.65,
+  }}>
+    {children}
+  </div>
+);
+
+function Section({ icon, title, children }: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+        <span style={{ display: 'flex', alignItems: 'center', color: C.accent }}>{icon}</span>
+        <span style={{
+          fontSize: 11.5, fontWeight: 700, color: C.accent,
+          letterSpacing: '0.06em', textTransform: 'uppercase' as const,
+        }}>
+          {title}
+        </span>
+      </div>
+      <div style={{ fontSize: 12.5, color: C.textDim, lineHeight: 1.75 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div style={{ height: 1, background: C.border, margin: '18px 0' }} />;
+}
+
+const SRC_BADGE_STYLES: Record<string, { bg: string; color: string }> = {
+  '1st': { bg: C.accent + '14', color: C.accent },
+  '2nd': { bg: C.waiting + '14', color: C.waiting },
+  'FB':  { bg: C.textMuted + '20', color: C.textMuted },
+};
+
+function InfoRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'flex', gap: 8, alignItems: 'flex-start',
+      padding: '5px 8px', background: C.bgRow, borderRadius: 5,
+    }}>
+      <span style={{ fontWeight: 700, color: C.text, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>{label}</span>
+      <span style={{ color: C.textDim }}>{children}</span>
+    </div>
+  );
+}
+
+function SrcRow({ badge, children }: { badge: '1st' | '2nd' | 'FB'; children: React.ReactNode }) {
+  const s = SRC_BADGE_STYLES[badge];
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, padding: '2px 6px',
+        borderRadius: 3, whiteSpace: 'nowrap' as const, marginTop: 1, flexShrink: 0,
+        background: s.bg, color: s.color,
+      }}>
+        {badge}
+      </span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+const TH: React.CSSProperties = {
+  textAlign: 'left', fontSize: 10.5, fontWeight: 600,
+  color: C.textMuted, paddingBottom: 5, paddingRight: 8,
+  borderBottom: `1px solid ${C.borderSub}`,
+};
+
+const TD_LABEL: React.CSSProperties = {
+  fontSize: 11.5, fontWeight: 600, color: C.text,
+  padding: '4px 8px 4px 0', verticalAlign: 'top',
+};
+
+const TD: React.CSSProperties = {
+  fontSize: 11.5, color: C.textDim,
+  padding: '4px 8px 4px 0', verticalAlign: 'top',
+};
+
+function UsageTable({ rows, headers }: {
+  headers: [string, string, string, string];
+  rows: [string, string, string, string][];
+}) {
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', margin: '8px 0 6px' }}>
+      <thead>
+        <tr>
+          {headers.map(h => <th key={h} style={TH}>{h}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            <td style={{ ...TD_LABEL, borderBottom: i < rows.length - 1 ? `1px solid ${C.borderSub}` : 'none' }}>{row[0]}</td>
+            {row.slice(1).map((cell, j) => (
+              <td key={j} style={{ ...TD, borderBottom: i < rows.length - 1 ? `1px solid ${C.borderSub}` : 'none' }}>{cell}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ContentEN() {
+  return (
+    <>
+      <Section icon={<Hash size={15} />} title="Numbers & Cost">
+        <div style={{ marginBottom: 6 }}>
+          <B>tok</B> = input + output + cache creation + cache reads — every token type Anthropic charges for.
+        </div>
+        <UsageTable
+          headers={['Display', 'Scope', 'tok', '$']}
+          rows={[
+            ['Header', 'Today since midnight', 'All types', 'API-equiv'],
+            ['Plan Usage', 'Current billing window', 'All types', 'API-equiv'],
+            ['Model Usage', 'All time, per model', 'All types', 'API-equiv'],
+          ]}
+        />
+        <Note>
+          <B>$</B> is an API-equivalent estimate — not your actual bill. Max/Pro subscriptions are flat monthly fees.
+        </Note>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Activity size={15} />} title="Activity">
+        <div style={{ marginBottom: 5 }}><B>7d</B> — 7-day × 24-hour heatmap grid.</div>
+        <div style={{ marginBottom: 5 }}><B>5mo</B> — 5-month GitHub-style calendar. Hover for date + tokens.</div>
+        <div style={{ marginBottom: 5 }}><B>Hourly</B> — Token distribution by hour across the last 30 days.</div>
+        <div><B>Weekly</B> — Last 4 weeks horizontal bar chart.</div>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Signal size={15} />} title="Data Sources">
+        <SrcRow badge="1st">
+          <B>Anthropic API</B> — authoritative %, same source as the web dashboard. Fetched every 3 min; exponential backoff on 429.
+        </SrcRow>
+        <SrcRow badge="2nd">
+          <B>Bridge</B> — Claude Code pipes rate limit data via stdin (statusLine plugin). Used as fallback when the API is unavailable.
+        </SrcRow>
+        <SrcRow badge="FB">
+          <B>Last cached value</B> — kept on API failure. Stale data past its reset window is auto-cleared on startup.
+        </SrcRow>
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label={<><span style={{ color: C.active }}>●</span> / <span style={{ color: C.barRed }}>●</span></>}>
+            Header dot — green: connected, red: unreachable. Hover for error message.
+          </InfoRow>
+          <InfoRow label="(cached)">
+            Shown on rate limit bar when API is temporarily down but a prior value exists.
+          </InfoRow>
+          <InfoRow label="—">
+            No successful API response yet (first launch or after a 429).
+          </InfoRow>
+          <InfoRow label="Bridge">
+            Settings → Claude Code Integration → Setup.
+          </InfoRow>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+function ContentKO() {
+  return (
+    <>
+      <Section icon={<Hash size={15} />} title="수치 & 비용">
+        <div style={{ marginBottom: 6 }}>
+          <B>tok</B> = input + output + 캐시 생성 + 캐시 읽기 — Anthropic이 과금하는 모든 토큰 유형.
+        </div>
+        <UsageTable
+          headers={['표시 위치', '범위', 'tok', '$']}
+          rows={[
+            ['헤더', '오늘 자정 이후', '전체', 'API 환산'],
+            ['Plan Usage', '현재 빌링 창', '전체', 'API 환산'],
+            ['Model Usage', '전체 기간, 모델별', '전체', 'API 환산'],
+          ]}
+        />
+        <Note>
+          <B>$</B>는 API 환산 추정값입니다 — 실제 청구액이 아닙니다. Max/Pro 구독은 월정액.
+        </Note>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Activity size={15} />} title="활동 탭">
+        <div style={{ marginBottom: 5 }}><B>7d</B> — 7일 × 24시간 히트맵 그리드.</div>
+        <div style={{ marginBottom: 5 }}><B>5mo</B> — 5개월 GitHub 스타일 캘린더. 날짜+토큰 호버.</div>
+        <div style={{ marginBottom: 5 }}><B>Hourly</B> — 시간대별 토큰 분포 (최근 30일).</div>
+        <div><B>Weekly</B> — 최근 4주 가로 바 차트.</div>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Signal size={15} />} title="데이터 소스">
+        <SrcRow badge="1st">
+          <B>Anthropic API</B> — 웹 대시보드와 동일한 권위 있는 수치. 3분마다 갱신, 429 발생 시 지수 백오프.
+        </SrcRow>
+        <SrcRow badge="2nd">
+          <B>Bridge</B> — Claude Code가 stdin으로 실시간 데이터 전달 (statusLine 플러그인). API 불가 시 폴백.
+        </SrcRow>
+        <SrcRow badge="FB">
+          <B>마지막 캐시값</B> — API 실패 시 직전 성공값 유지. 리셋 시각이 지난 stale 데이터는 시작 시 자동 초기화.
+        </SrcRow>
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label={<><span style={{ color: C.active }}>●</span> / <span style={{ color: C.barRed }}>●</span></>}>
+            헤더 점 — 초록: 연결됨, 빨강: 연결 불가. 호버 시 오류 메시지 표시.
+          </InfoRow>
+          <InfoRow label="(cached)">
+            API 임시 불가지만 이전 값이 있을 때 속도 제한 바에 표시.
+          </InfoRow>
+          <InfoRow label="—">
+            아직 성공한 API 응답 없음 (첫 실행 또는 429 직후).
+          </InfoRow>
+          <InfoRow label="Bridge">
+            Settings → Claude Code Integration → Setup.
+          </InfoRow>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+function ContentJA() {
+  return (
+    <>
+      <Section icon={<Hash size={15} />} title="数値とコスト">
+        <div style={{ marginBottom: 6 }}>
+          <B>tok</B> = input + output + キャッシュ生成 + キャッシュ読み取り — Anthropic が課金するすべてのトークン種別。
+        </div>
+        <UsageTable
+          headers={['表示場所', '集計期間', 'tok', '$']}
+          rows={[
+            ['ヘッダー', '当日 0:00 以降', '全種別', 'API換算'],
+            ['Plan Usage', '現在の請求ウィンドウ', '全種別', 'API換算'],
+            ['Model Usage', '全期間・モデル別', '全種別', 'API換算'],
+          ]}
+        />
+        <Note>
+          <B>$</B> は API 換算の概算値です — 実際の請求額とは異なります。Max/Pro は月額固定料金。
+        </Note>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Activity size={15} />} title="アクティビティ">
+        <div style={{ marginBottom: 5 }}><B>7d</B> — 7日間 × 24時間のヒートマップ。</div>
+        <div style={{ marginBottom: 5 }}><B>5mo</B> — 5ヶ月分の GitHub スタイルカレンダー。ホバーで日付とトークン数を確認。</div>
+        <div style={{ marginBottom: 5 }}><B>Hourly</B> — 直近 30 日の時間帯別トークン分布。</div>
+        <div><B>Weekly</B> — 直近 4 週間の横棒グラフ。</div>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Signal size={15} />} title="データソース">
+        <SrcRow badge="1st">
+          <B>Anthropic API</B> — ウェブダッシュボードと同じ権威ある数値。3 分ごとに更新、429 発生時は指数バックオフ。
+        </SrcRow>
+        <SrcRow badge="2nd">
+          <B>Bridge</B> — Claude Code が stdin 経由でリアルタイムデータを送信（statusLine プラグイン）。API 利用不可時のフォールバック。
+        </SrcRow>
+        <SrcRow badge="FB">
+          <B>最後のキャッシュ値</B> — API 障害時も直近の成功値を保持。リセット済みの古いデータは起動時に自動削除。
+        </SrcRow>
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label={<><span style={{ color: C.active }}>●</span> / <span style={{ color: C.barRed }}>●</span></>}>
+            ヘッダーのドット — 緑: 接続中、赤: 到達不可。ホバーでエラー詳細を表示。
+          </InfoRow>
+          <InfoRow label="(cached)">
+            API が一時的に利用不可だが、以前の値がある場合にレート制限バーへ表示。
+          </InfoRow>
+          <InfoRow label="—">
+            まだ API レスポンスなし（初回起動または 429 直後）。
+          </InfoRow>
+          <InfoRow label="Bridge">
+            Settings → Claude Code Integration → Setup。
+          </InfoRow>
+        </div>
+      </Section>
+    </>
+  );
+}
 
 export default function HelpView({ onBack }: Props) {
   const [lang, setLang] = useState<Lang>('en');
-  const [selected, setSelected] = useState<CardId | null>(null);
-
-  const selectedCard = CARDS.find(c => c.id === selected);
-  const t = (c: Card) => c[lang];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
@@ -269,7 +311,7 @@ export default function HelpView({ onBack }: Props) {
 
       {/* 언어 토글 */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 0', gap: 4, flexShrink: 0 }}>
-        {(['en', 'ko'] as Lang[]).map(l => (
+        {(['en', 'ko', 'ja'] as Lang[]).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{
             padding: '2px 8px', fontSize: 10, border: 'none', borderRadius: 10, cursor: 'pointer',
             background: lang === l ? C.accent : '#0000000a',
@@ -281,59 +323,10 @@ export default function HelpView({ onBack }: Props) {
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 14px' }}>
-
-        {/* 카드 그리드 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {CARDS.map(card => {
-            const isSelected = selected === card.id;
-            return (
-              <button
-                key={card.id}
-                onClick={() => setSelected(isSelected ? null : card.id)}
-                style={{
-                  background: isSelected ? C.accent + '10' : C.bgCard,
-                  border: `1px solid ${isSelected ? C.accent + '66' : C.border}`,
-                  borderRadius: 8,
-                  padding: '11px 12px',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'border-color 0.15s, background 0.15s',
-                }}
-              >
-                <div style={{ fontSize: 20, marginBottom: 6, lineHeight: 1 }}>{card.icon}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? C.accent : C.text }}>
-                  {t(card).title}
-                </div>
-                <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-                  {t(card).sub}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 상세 패널 */}
-        {selectedCard && (
-          <div style={{
-            marginTop: 10,
-            background: C.bgCard,
-            border: `1px solid ${C.border}`,
-            borderLeft: `3px solid ${C.accent}`,
-            borderRadius: 8,
-            padding: '12px 14px',
-            fontSize: 11,
-            color: C.textDim,
-            lineHeight: 1.7,
-            animation: 'fadeIn 0.15s ease',
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>
-              {selectedCard.icon} {t(selectedCard).title}
-            </div>
-            {t(selectedCard).detail}
-          </div>
-        )}
-
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 18px' }}>
+        {lang === 'en' && <ContentEN />}
+        {lang === 'ko' && <ContentKO />}
+        {lang === 'ja' && <ContentJA />}
       </div>
     </div>
   );

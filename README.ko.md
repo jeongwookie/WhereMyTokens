@@ -35,13 +35,17 @@
 
 <table align="center">
   <tr>
-    <td align="center" width="340">
-      <img src="assets/screenshots.png" width="220" alt="세션, 플랜 사용량 바, 7일 히트맵, 모델별 분석" /><br/>
+    <td align="center" width="230">
+      <img src="assets/screenshot-main.png" width="190" alt="세션, 플랜 사용량 바, 7일 히트맵, 모델별 분석" /><br/>
       <sub><b>세션 · 플랜 사용량 · 7일 히트맵</b></sub>
     </td>
-    <td align="center" width="340">
-      <img src="assets/screenshot-hourly.png" width="220" alt="최근 30일 시간대별 토큰 사용량 바차트" /><br/>
+    <td align="center" width="230">
+      <img src="assets/screenshot-hourly.png" width="190" alt="최근 30일 시간대별 토큰 사용량 바차트" /><br/>
       <sub><b>시간대별 토큰 사용량 (최근 30일)</b></sub>
+    </td>
+    <td align="center" width="230">
+      <img src="assets/screenshot-help.png" width="190" alt="Help 뷰 — 수치, 활동 탭, 데이터 소스 설명" /><br/>
+      <sub><b>Help — 수치 · 활동 · 데이터 소스</b></sub>
     </td>
   </tr>
 </table>

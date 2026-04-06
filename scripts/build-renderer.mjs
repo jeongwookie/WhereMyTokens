@@ -1,5 +1,5 @@
 import esbuild from 'esbuild';
-import { mkdirSync, copyFileSync } from 'fs';
+import { mkdirSync, copyFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -22,6 +22,22 @@ await esbuild.build({
     'process.env.NODE_ENV': '"production"',
   },
 });
+
+// Noto Sans 폰트 복사 (400, 700 weight WOFF2 + CSS만)
+const fontsDir = join(root, 'dist', 'renderer', 'fonts');
+for (const pkg of ['noto-sans', 'noto-sans-kr', 'noto-sans-jp']) {
+  const src = join(root, 'node_modules', '@fontsource', pkg);
+  const dst = join(fontsDir, pkg);
+  mkdirSync(join(dst, 'files'), { recursive: true });
+  for (const weight of ['400', '700']) {
+    copyFileSync(join(src, `${weight}.css`), join(dst, `${weight}.css`));
+  }
+  for (const file of readdirSync(join(src, 'files'))) {
+    if (file.endsWith('.woff2')) {
+      copyFileSync(join(src, 'files', file), join(dst, 'files', file));
+    }
+  }
+}
 
 // HTML 복사
 copyFileSync(

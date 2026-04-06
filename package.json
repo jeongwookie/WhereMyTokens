@@ -37,7 +37,10 @@
       "runAfterFinish": true
     },
     "extraResources": [
-      { "from": "dist/bridge", "to": "bridge" }
+      {
+        "from": "dist/bridge",
+        "to": "bridge"
+      }
     ],
     "files": [
       "dist/**/*",
@@ -46,8 +49,12 @@
     ]
   },
   "dependencies": {
+    "@fontsource/noto-sans": "^5.2.10",
+    "@fontsource/noto-sans-jp": "^5.2.9",
+    "@fontsource/noto-sans-kr": "^5.2.9",
     "chokidar": "^3.6.0",
     "electron-store": "^8.2.0",
+    "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "recharts": "^3.8.1"
