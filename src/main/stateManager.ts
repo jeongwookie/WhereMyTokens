@@ -240,18 +240,11 @@ export class StateManager {
     checkAlerts(limits, settings.alertThresholds, settings.enableAlerts);
   }
 
-  /** bridge (stdin) takes priority; fallback to API; fallback to last known value */
+  /** API 데이터 항상 우선 (서버 권위값); API 없을 때만 bridge fallback */
   private buildLimits(): UsageLimits {
     const now = Date.now();
-    const rl = this.liveSession?.rate_limits;
-    // Use bridge data if it's within the last 5 minutes
-    if (rl && this.liveSession?._ts && now - this.liveSession._ts < 300_000) {
-      return {
-        h5:   { pct: rl.five_hour?.used_percentage ?? 0, resetMs: rl.five_hour?.resets_at ? rl.five_hour.resets_at - now : 0 },
-        week: { pct: rl.seven_day?.used_percentage  ?? 0, resetMs: rl.seven_day?.resets_at  ? rl.seven_day.resets_at  - now : 0 },
-        so:   { pct: 0, resetMs: 0 },
-      };
-    }
+
+    // API 데이터가 있으면 항상 우선 — 웹 대시보드와 동일한 서버 권위값
     if (this.apiUsagePct) {
       return {
         h5:   { pct: this.apiUsagePct.h5Pct,   resetMs: this.apiUsagePct.h5ResetMs },
@@ -259,7 +252,19 @@ export class StateManager {
         so:   { pct: this.apiUsagePct.soPct,    resetMs: this.apiUsagePct.soResetMs },
       };
     }
-    // No API data — retain previous state limits (zero if never succeeded)
+
+    // API 없을 때만 bridge fallback (5분 이내 신선한 데이터)
+    // bridge는 Claude Code 요청 시에만 갱신되므로 리셋 후 stale해질 수 있음
+    const rl = this.liveSession?.rate_limits;
+    if (rl && this.liveSession?._ts && now - this.liveSession._ts < 300_000) {
+      return {
+        h5:   { pct: rl.five_hour?.used_percentage ?? 0, resetMs: rl.five_hour?.resets_at  ? rl.five_hour.resets_at  - now : 0 },
+        week: { pct: rl.seven_day?.used_percentage  ?? 0, resetMs: rl.seven_day?.resets_at ? rl.seven_day.resets_at  - now : 0 },
+        so:   { pct: 0, resetMs: 0 },
+      };
+    }
+
+    // 모두 없으면 이전 상태 유지 (재시작/오프라인 시 0 대신 마지막 값 표시)
     return this.state?.limits ?? { h5: { pct: 0, resetMs: 0 }, week: { pct: 0, resetMs: 0 }, so: { pct: 0, resetMs: 0 } };
   }
 
