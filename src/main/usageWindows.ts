@@ -128,7 +128,7 @@ export function computeUsage(
 
   for (const e of allEntries) {
     const ts = e.timestamp.getTime();
-    const tokens = e.inputTokens + e.outputTokens;
+    const tokens = e.inputTokens + e.outputTokens + e.cacheCreationTokens + e.cacheReadTokens;
 
     // 7-day heatmap
     if (ts >= day7Start) {

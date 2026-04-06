@@ -145,6 +145,20 @@ The dot in the header shows API connectivity (green = connected, red = unreachab
 
 ---
 
+## How numbers work
+
+All token counts (`tok`) include **input + output + cache creation + cache reads** — every token type Anthropic charges for. Cost (`$`) is always the API-equivalent estimate for the same token mix.
+
+| Display | Scope | tok | $ |
+|---------|-------|-----|---|
+| Header | Today since midnight | All token types | API-equivalent |
+| Plan Usage (5h / 1w) | Current billing window | All token types | API-equivalent |
+| Model Usage | **All time**, per model | All token types | API-equivalent |
+
+> **Note:** `$` values are estimates — not your actual bill. Claude Max/Pro subscriptions are flat monthly fees.
+
+---
+
 ## Activity tabs
 
 | Tab | Description |

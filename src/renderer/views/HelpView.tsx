@@ -4,7 +4,7 @@ import ViewHeader from '../components/ViewHeader';
 
 interface Props { onBack: () => void }
 type Lang = 'en' | 'ko';
-type CardId = 'plan' | 'bridge' | 'sessions' | 'cost' | 'activity' | 'alerts' | 'projects' | 'models';
+type CardId = 'numbers' | 'plan' | 'bridge' | 'sessions' | 'cost' | 'activity' | 'alerts' | 'projects' | 'models';
 
 interface Card {
   id: CardId;
@@ -18,6 +18,36 @@ const B = ({ children }: { children: React.ReactNode }) => (
 );
 
 const CARDS: Card[] = [
+  {
+    id: 'numbers',
+    icon: '🔢',
+    en: {
+      title: 'Numbers',
+      sub: 'tok · $ · what they mean',
+      detail: (
+        <>
+          <div><B>tok</B> = input + output + cache creation + cache reads. All token types Anthropic charges for.</div>
+          <div style={{ marginTop: 5 }}><B>Header tok / $</B> — today since midnight. tok and $ both include cache.</div>
+          <div style={{ marginTop: 5 }}><B>Plan Usage tok / $</B> — within the 5h or 1w billing window. Same counting.</div>
+          <div style={{ marginTop: 5 }}><B>Model Usage tok / $</B> — <B>all-time</B> cumulative per model. Same counting.</div>
+          <div style={{ marginTop: 5 }}><B>$</B> is always an API-equivalent estimate — not your actual bill. Max/Pro subscriptions are flat monthly fees.</div>
+        </>
+      ),
+    },
+    ko: {
+      title: '수치 의미',
+      sub: 'tok · $ · 계산 기준',
+      detail: (
+        <>
+          <div><B>tok</B> = input + output + 캐시 생성 + 캐시 읽기. Anthropic이 과금하는 모든 토큰 유형 포함.</div>
+          <div style={{ marginTop: 5 }}><B>헤더 tok / $</B> — 오늘 자정 이후 누계. tok과 $ 모두 캐시 포함.</div>
+          <div style={{ marginTop: 5 }}><B>Plan Usage tok / $</B> — 5h 또는 1w 빌링 창 내 합계. 동일한 계산 기준.</div>
+          <div style={{ marginTop: 5 }}><B>Model Usage tok / $</B> — <B>전체 기간</B> 모델별 누적. 동일한 계산 기준.</div>
+          <div style={{ marginTop: 5 }}><B>$</B>는 항상 API 환산 추정값 — 실제 청구액이 아님. Max/Pro는 월정액.</div>
+        </>
+      ),
+    },
+  },
   {
     id: 'plan',
     icon: '📊',
@@ -206,7 +236,8 @@ const CARDS: Card[] = [
       sub: 'All-time breakdown',
       detail: (
         <>
-          <div>Cumulative token usage and cost per model across all time.</div>
+          <div><B>All-time</B> cumulative token usage and cost per model — not limited to a window.</div>
+          <div style={{ marginTop: 5 }}>tok includes input, output, and cache tokens. $ is the API-equivalent cost.</div>
           <div style={{ marginTop: 5 }}>Shown as a bar chart in the <B>Model Usage</B> section on the main screen.</div>
         </>
       ),
@@ -216,7 +247,8 @@ const CARDS: Card[] = [
       sub: '전체 기간 집계',
       detail: (
         <>
-          <div>전체 기간의 모델별 누적 토큰 사용량과 비용.</div>
+          <div>창(5h/1w)과 무관하게 <B>전체 기간</B>의 모델별 누적 토큰·비용.</div>
+          <div style={{ marginTop: 5 }}>tok = input + output + 캐시 포함. $ = API 환산 누적 비용.</div>
           <div style={{ marginTop: 5 }}>메인 화면 <B>Model Usage</B> 섹션에 바 차트로 표시.</div>
         </>
       ),
