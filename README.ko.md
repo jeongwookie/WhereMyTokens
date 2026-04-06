@@ -33,10 +33,18 @@
 
 ## 스크린샷
 
-<p align="center">
-  <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — 세션, 플랜 사용량, 활동 히트맵, 모델별 분석" />
-  <img src="assets/screenshot-hourly.png" width="260" alt="WhereMyTokens — 시간대별 토큰 사용량 차트" />
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="340">
+      <img src="assets/screenshots.png" width="220" alt="세션, 플랜 사용량 바, 7일 히트맵, 모델별 분석" /><br/>
+      <sub><b>세션 · 플랜 사용량 · 7일 히트맵</b></sub>
+    </td>
+    <td align="center" width="340">
+      <img src="assets/screenshot-hourly.png" width="220" alt="최근 30일 시간대별 토큰 사용량 바차트" /><br/>
+      <sub><b>시간대별 토큰 사용량 (최근 30일)</b></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 

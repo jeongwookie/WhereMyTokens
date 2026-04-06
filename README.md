@@ -33,10 +33,18 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 ## Screenshots
 
-<p align="center">
-  <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — sessions, plan usage, activity heatmap, and model breakdown" />
-  <img src="assets/screenshot-hourly.png" width="260" alt="WhereMyTokens — hourly token usage bar chart" />
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="340">
+      <img src="assets/screenshots.png" width="220" alt="Sessions, plan usage bars, 7-day heatmap, and model breakdown" /><br/>
+      <sub><b>Sessions · Plan Usage · 7-day Heatmap</b></sub>
+    </td>
+    <td align="center" width="340">
+      <img src="assets/screenshot-hourly.png" width="220" alt="Hourly token usage bar chart for the last 30 days" /><br/>
+      <sub><b>Hourly Token Usage (last 30 days)</b></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 

@@ -33,10 +33,18 @@
 
 ## スクリーンショット
 
-<p align="center">
-  <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — セッション、プラン使用量、アクティビティヒートマップ、モデル別分析" />
-  <img src="assets/screenshot-hourly.png" width="260" alt="WhereMyTokens — 時間帯別トークン使用量チャート" />
-</p>
+<table align="center">
+  <tr>
+    <td align="center" width="340">
+      <img src="assets/screenshots.png" width="220" alt="セッション、プラン使用量バー、7日ヒートマップ、モデル別分析" /><br/>
+      <sub><b>セッション · プラン使用量 · 7日ヒートマップ</b></sub>
+    </td>
+    <td align="center" width="340">
+      <img src="assets/screenshot-hourly.png" width="220" alt="過去30日間の時間帯別トークン使用量チャート" /><br/>
+      <sub><b>時間帯別トークン使用量（過去30日間）</b></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
