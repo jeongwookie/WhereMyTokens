@@ -58,7 +58,7 @@ WhereMyTokens can receive live rate limit data from Claude Code via the official
 3. Each time Claude Code runs, it pipes session data (rate limits, context %, model, cost) to WhereMyTokens via stdin
 4. The app updates immediately — no polling delay
 
-When bridge data is active (updated within the last 5 minutes), the rate limit bars use live values. When Claude Code is not running, the app falls back to the last known API values.
+The bridge provides supplementary context data (context window %, model, cost). Rate limit percentages always use the Anthropic API as the authoritative source; bridge values serve as a fallback when the API is unavailable.
 
 ---
 
@@ -137,9 +137,9 @@ Two data sources, used in priority order:
 
 | Priority | Source | Description |
 |----------|--------|-------------|
-| 1st | **Bridge (stdin)** | Live data from Claude Code via `statusLine`. Updated each time Claude Code calls the API. |
-| 2nd | **Anthropic API** | `/api/oauth/usage` — exact % and reset times. Fetched every 3 min; exponential backoff on 429. |
-| Fallback | **Last known value** | On API failure, the last successful value is kept. Rate limit bars never reset to zero due to a failed fetch. |
+| 1st | **Anthropic API** | `/api/oauth/usage` — authoritative % and reset times, same source as the web dashboard. Fetched every 3 min; exponential backoff on 429. |
+| 2nd | **Bridge (stdin)** | Live data from Claude Code via `statusLine`. Used as fallback when API data is unavailable. |
+| Fallback | **Last known value** | On API failure, the last successful value is kept. Cached values are validated on startup — stale data past its reset window is automatically cleared. |
 
 The dot in the header shows API connectivity (green = connected, red = unreachable). Hover the dot to see the last error message. A `(cached)` label appears on rate limit bars when the API is temporarily unavailable but a previous value exists. Rate limit bars show `—` when the API has not yet returned a successful value (e.g., on first launch or after a 429).
 

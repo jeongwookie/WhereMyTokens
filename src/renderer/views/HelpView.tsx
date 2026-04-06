@@ -26,7 +26,7 @@ const CARDS: Card[] = [
       sub: '5h · 1w · Sonnet',
       detail: (
         <>
-          <div><B>5h</B> rolling window · <B>1w</B> resets Monday · <B>Sonnet</B> separate weekly cap.</div>
+          <div><B>5h</B> window aligned to Anthropic's API schedule · <B>1w</B> resets on billing cycle · <B>Sonnet</B> separate weekly cap.</div>
           <div style={{ marginTop: 5 }}>Bar colors: purple → amber (50%) → orange (75%) → red (90%). Reset timer shown next to bar.</div>
           <div style={{ marginTop: 5 }}><B>Extra Usage</B> card appears if monthly add-on credits are enabled on your account.</div>
         </>
@@ -37,7 +37,7 @@ const CARDS: Card[] = [
       sub: '5h · 1w · Sonnet',
       detail: (
         <>
-          <div><B>5h</B> 롤링 윈도우 · <B>1w</B> 월요일 리셋 · <B>Sonnet</B> 독립 주간 상한.</div>
+          <div><B>5h</B> Anthropic API 스케줄 기준 윈도우 · <B>1w</B> 빌링 주기 리셋 · <B>Sonnet</B> 독립 주간 상한.</div>
           <div style={{ marginTop: 5 }}>바 색상: 보라 → 황(50%) → 주황(75%) → 적(90%). 옆에 리셋 타이머 표시.</div>
           <div style={{ marginTop: 5 }}><B>Extra Usage</B> 카드는 계정에 월간 추가 크레딧이 활성화된 경우에만 표시.</div>
         </>
