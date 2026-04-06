@@ -35,6 +35,7 @@
 
 <p align="center">
   <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — セッション、プラン使用量、アクティビティヒートマップ、モデル別分析" />
+  <img src="assets/screenshot-hourly.png" width="260" alt="WhereMyTokens — 時間帯別トークン使用量チャート" />
 </p>
 
 ---

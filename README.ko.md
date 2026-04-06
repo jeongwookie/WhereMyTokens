@@ -35,6 +35,7 @@
 
 <p align="center">
   <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — 세션, 플랜 사용량, 활동 히트맵, 모델별 분석" />
+  <img src="assets/screenshot-hourly.png" width="260" alt="WhereMyTokens — 시간대별 토큰 사용량 차트" />
 </p>
 
 ---

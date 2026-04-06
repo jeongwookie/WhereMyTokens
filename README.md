@@ -35,6 +35,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 <p align="center">
   <img src="assets/screenshots.png" width="260" alt="WhereMyTokens — sessions, plan usage, activity heatmap, and model breakdown" />
+  <img src="assets/screenshot-hourly.png" width="260" alt="WhereMyTokens — hourly token usage bar chart" />
 </p>
 
 ---
