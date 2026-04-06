@@ -88,13 +88,17 @@ function weekLabel(weeksAgo: number): string {
 export function computeUsage(
   allEntries: ParsedEntry[],
   _userLimits: { h5: number; week: number; sonnetWeek: number },
+  weekResetMs = 0,  // API에서 받은 week 리셋까지 남은 ms (0이면 calendar 기준 fallback)
 ): UsageData {
   const now = Date.now();
   const dayMs = 24 * 3600 * 1000;
   const weekMs = 7 * dayMs;
 
   const h5Start = now - 5 * 3600 * 1000;
-  const weekStart = getWeekStart().getTime();
+  // API reset 정보가 있으면 실제 billing 주기 시작 시각, 없으면 calendar 월요일 자정 fallback
+  const weekStart = weekResetMs > 0
+    ? now - (weekMs - weekResetMs)
+    : getWeekStart().getTime();
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
   // 자정 기준 시작점 — 오늘 항목이 오늘 셀에 정확히 들어가도록

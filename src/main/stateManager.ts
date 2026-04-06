@@ -222,11 +222,17 @@ export class StateManager {
     const effectiveLimits = this.autoLimits
       ? { h5: this.autoLimits.h5, week: this.autoLimits.week, sonnetWeek: this.autoLimits.sonnetWeek }
       : settings.usageLimits;
-    const usage = computeUsage(this.allEntries, effectiveLimits);
+    // API의 실제 billing 주기 기준으로 week 윈도우 정렬 (bridge > API > calendar fallback)
+    const now = Date.now();
+    const rl = this.liveSession?.rate_limits;
+    const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
+    const weekResetMs = bridgeActive && rl?.seven_day?.resets_at
+      ? rl.seven_day.resets_at - now
+      : (this.apiUsagePct?.weekResetMs ?? 0);
+    const usage = computeUsage(this.allEntries, effectiveLimits, weekResetMs);
     const limits = this.buildLimits();
     const sessions = this.buildSessionInfos();
 
-    const bridgeActive = !!(this.liveSession?._ts && Date.now() - this.liveSession._ts < 300_000);
     const extraUsage = this.apiUsagePct?.extraUsage ?? null;
     this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage };
     this.onUpdate(this.state);

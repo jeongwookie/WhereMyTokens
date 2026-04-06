@@ -5,9 +5,14 @@ assets/screenshot.png
 assets/icon.png
 assets/icon-256.png
 *.log
+*.html
 .DS_Store
 Thumbs.db
 
 # 로컬 협업 문서 (Claude + 정욱)
 CLAUDE.md
 RELEASE.md
+TODO.md
+
+# Claude Code 로컬 설정 (커밋 제외)
+.claude/settings.local.json
