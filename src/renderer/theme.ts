@@ -76,6 +76,20 @@ export function fmtCost(usd: number, currency: string, rate: number): string {
   return `$${usd.toFixed(4)}`;
 }
 
+// 헤더용 간결 비용 표시 (긴 금액을 K/M 단위로 축약)
+export function fmtCostShort(usd: number, currency: string, rate: number): string {
+  if (currency === 'KRW') {
+    const krw = Math.round(usd * rate);
+    if (krw >= 1_000_000) return `₩${(krw / 1_000_000).toFixed(1)}M`;
+    if (krw >= 10_000)    return `₩${Math.round(krw / 1_000)}K`;
+    return `₩${krw.toLocaleString()}`;
+  }
+  if (usd >= 1_000) return `$${(usd / 1_000).toFixed(1)}K`;
+  if (usd >= 100)   return `$${Math.round(usd)}`;
+  if (usd >= 1)     return `$${usd.toFixed(2)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
 export function fmtDuration(ms: number): string {
   const h = Math.floor(ms / 3600000);
   const m = Math.floor((ms % 3600000) / 60000);

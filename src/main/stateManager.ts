@@ -202,7 +202,10 @@ export class StateManager {
   private startWatcher() {
     if (!fs.existsSync(SESSIONS_DIR)) return;
     this.watcher = chokidar.watch(SESSIONS_DIR, { ignoreInitial: true, depth: 0 });
-    this.watcher.on('add', () => this.fastRefresh());
+    this.watcher.on('add', (filePath: string) => {
+      if (filePath.endsWith('.jsonl')) void this.heavyRefresh();
+      else this.fastRefresh();
+    });
     this.watcher.on('unlink', () => this.fastRefresh());
 
     // Watch for JSONL changes

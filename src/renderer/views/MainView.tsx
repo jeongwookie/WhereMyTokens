@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
-import { C, fmtTokens, fmtCost } from '../theme';
+import { C, fmtTokens, fmtCost, fmtCostShort } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
@@ -101,15 +101,15 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
       {/* draggable header */}
-      <div style={{ ...drag, padding: '10px 14px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: C.accent, letterSpacing: -0.5 }}>WhereMyTokens</span>
+      <div style={{ ...drag, padding: '10px 14px 8px', display: 'flex', gap: 8, alignItems: 'center', borderBottom: `1px solid ${C.border}`, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: C.accent, letterSpacing: -0.5, flexShrink: 0 }}>WhereMyTokens</span>
 
-        <div style={{ ...noDrag, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ ...noDrag, display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
           {/* 오늘 토큰 · 비용 */}
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
             {fmtTokens(usage.todayTokens)}<span style={{ fontSize: 9, color: C.textMuted, marginLeft: 2 }}>tok</span>
             <span style={{ color: C.border, margin: '0 5px' }}>·</span>
-            <span style={{ color: C.accent }}>{fmtCost(usage.todayCost, currency, usdToKrw)}</span>
+            <span style={{ color: C.accent }}>{fmtCostShort(usage.todayCost, currency, usdToKrw)}</span>
           </span>
 
           {/* 플랜 + API 상태 클러스터 */}
