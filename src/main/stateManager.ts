@@ -300,7 +300,8 @@ export class StateManager {
         if (excluded.has(dir)) continue; // excluded from tracking
         const dirPath = path.join(PROJECTS_DIR, dir);
         try {
-          const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl'));
+          // agent- 접두사 파일 제외 (서브에이전트 세션 — 중복 계산 방지)
+          const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
           for (const file of files) {
             const parsed = parseJsonlFile(path.join(dirPath, file));
             for (const e of parsed.entries) {
