@@ -52,6 +52,12 @@ export interface WeeklyTotal {
   costUSD: number;
 }
 
+export interface BurnRate {
+  h5OutputPerMin: number;    // 최근 5분 output tokens/min
+  h5EtaMs: number | null;    // h5 한도 도달 예상 ms (null = 활동 없음)
+  weekEtaMs: number | null;  // 1w 한도 도달 예상 ms
+}
+
 export interface UsageData {
   h5: WindowStats;
   week: WindowStats;
@@ -65,6 +71,7 @@ export interface UsageData {
   todayTokens: number;
   todayCost: number;
   sonnetWeekTokens: number;
+  burnRate: BurnRate;
 }
 
 export interface UsageLimits {

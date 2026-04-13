@@ -229,7 +229,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
         {/* Claude 5h / Codex 5h */}
         <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-          limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} />
+          limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate} />
         <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} />
 
         {/* Claude 1w / Sonnet 1w / Codex 1w */}

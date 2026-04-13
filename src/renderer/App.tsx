@@ -17,6 +17,7 @@ const DEFAULT_STATE: AppState = {
     h5Codex: EMPTY_WINDOW, weekCodex: EMPTY_WINDOW,
     models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
     todayTokens: 0, todayCost: 0, sonnetWeekTokens: 0,
+    burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
   },
   limits: {
     h5: { pct:0, resetMs:0 }, week: { pct:0, resetMs:0 }, so: { pct:0, resetMs:0 },

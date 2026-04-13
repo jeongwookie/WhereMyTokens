@@ -1,5 +1,5 @@
 import React from 'react';
-import { WindowStats } from '../types';
+import { WindowStats, BurnRate } from '../types';
 import { C, fmtTokens, fmtCost, fmtDuration } from '../theme';
 
 // 캐시 효율 등급 계산
@@ -21,6 +21,7 @@ interface Props {
   resetMs?: number;    // ms until reset
   apiConnected?: boolean;
   hideCost?: boolean;
+  burnRate?: BurnRate; // ETA 예측 (h5 카드에만 전달)
 }
 
 function pctBarColor(pct: number): string {
@@ -32,7 +33,7 @@ function pctBarColor(pct: number): string {
 
 export default function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
-  limitPct, resetMs, apiConnected, hideCost,
+  limitPct, resetMs, apiConnected, hideCost, burnRate,
 }: Props) {
   if (stats.totalTokens === 0 && stats.requestCount === 0) return null;
 
@@ -102,6 +103,13 @@ export default function TokenStatsCard({
           </div>
         );
       })()}
+
+      {/* ETA 예측 (번 레이트 기반, 위험 시에만 표시) */}
+      {burnRate && burnRate.h5EtaMs !== null && burnRate.h5EtaMs < (resetMs ?? Infinity) && (
+        <div style={{ fontSize: 9, color: '#c0392b', marginTop: 3 }}>
+          ⚡ ~{fmtDuration(burnRate.h5EtaMs)} to limit at current rate
+        </div>
+      )}
 
       {/* 캐시 절감 비용 */}
       {showSavings && (
