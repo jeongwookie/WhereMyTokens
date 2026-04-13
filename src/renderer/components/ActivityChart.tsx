@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { HourlyBucket, WeeklyTotal } from '../types';
+import { HourlyBucket, WeeklyTotal, TimeOfDayBucket } from '../types';
 import { C, fmtTokens } from '../theme';
 
-type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly';
+type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly' | 'TOD';
 
 function blueIntensity(i: number): string {
   const sat = Math.round(55 + i * 30);
@@ -400,6 +400,75 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
   );
 }
 
+// --- TOD (Time-of-Day) Rhythm Chart ---
+const TOD_ORDER: TimeOfDayBucket['period'][] = ['morning', 'afternoon', 'evening', 'night'];
+const TOD_COLORS: Record<string, string> = {
+  morning:   'hsl(44, 90%, 50%)',
+  afternoon: 'hsl(244, 55%, 52%)',
+  evening:   'hsl(280, 60%, 52%)',
+  night:     'hsl(220, 30%, 45%)',
+};
+
+function TODChart({ data }: { data: TimeOfDayBucket[] }) {
+  if (data.every(b => b.tokens === 0)) {
+    return (
+      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.textMuted }}>
+        No data (last 30 days)
+      </div>
+    );
+  }
+
+  const sorted = TOD_ORDER.map(p => data.find(b => b.period === p)!).filter(Boolean);
+  const maxTokens = Math.max(...sorted.map(b => b.tokens), 1);
+  const peakPeriod = sorted.reduce((a, b) => a.tokens >= b.tokens ? a : b);
+
+  return (
+    <div style={{ padding: '4px 0' }}>
+      {sorted.map(bucket => {
+        const pct = bucket.tokens / maxTokens;
+        const isPeak = bucket.period === peakPeriod.period && bucket.tokens > 0;
+        const color = TOD_COLORS[bucket.period];
+
+        return (
+          <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+            <div style={{
+              width: 80, fontSize: 9, fontWeight: isPeak ? 700 : 400,
+              color: isPeak ? C.text : C.textMuted, textAlign: 'right', flexShrink: 0,
+            }}>
+              {bucket.label}
+            </div>
+
+            <div style={{ flex: 1, position: 'relative', height: 14 }}>
+              <div style={{ position: 'absolute', inset: 0, background: '#0000000a', borderRadius: 3 }} />
+              <div style={{
+                position: 'absolute', left: 0, top: 0, bottom: 0,
+                width: `${Math.max(pct * 100, bucket.tokens > 0 ? 2 : 0)}%`,
+                background: color, borderRadius: 3,
+                opacity: isPeak ? 1 : 0.6,
+              }} />
+            </div>
+
+            <div style={{
+              width: 56, fontSize: 10, fontWeight: isPeak ? 700 : 400,
+              color: isPeak ? C.text : C.textDim, textAlign: 'right', flexShrink: 0,
+            }}>
+              {fmtTokens(bucket.tokens)}
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{
+        marginTop: 4, paddingTop: 5, borderTop: `1px solid ${C.border}`,
+        fontSize: 9, color: C.textMuted,
+      }}>
+        Peak: <span style={{ color: C.accent, fontWeight: 600 }}>{peakPeriod.label}</span>
+        <span style={{ color: C.textMuted }}> · {peakPeriod.requestCount} req, {fmtTokens(peakPeriod.tokens)} tok</span>
+      </div>
+    </div>
+  );
+}
+
 // color legend
 function ColorLegend() {
   return (
@@ -418,15 +487,16 @@ interface Props {
   heatmap30: HourlyBucket[];
   heatmap90: HourlyBucket[];
   weeklyTimeline: WeeklyTotal[];
+  todBuckets: TimeOfDayBucket[];
   currency: string;
   usdToKrw: number;
 }
 
-export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline }: Props) {
+export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets }: Props) {
   const [tab, setTab] = useState<ChartTab>('7d');
   const [collapsed, setCollapsed] = useState(false);
 
-  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly'];
+  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly', 'TOD'];
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -482,6 +552,12 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
             <>
               <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly growth (last 4 weeks, Mon–Sun)</div>
               <WeeklyGrowthChart data={weeklyTimeline} />
+            </>
+          )}
+          {tab === 'TOD' && (
+            <>
+              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Time-of-day coding rhythm (last 30 days)</div>
+              <TODChart data={todBuckets} />
             </>
           )}
         </div>

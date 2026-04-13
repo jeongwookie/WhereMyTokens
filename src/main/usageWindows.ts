@@ -38,6 +38,14 @@ export interface BurnRate {
   weekEtaMs: number | null;  // 1w 한도 도달 예상 ms
 }
 
+export interface TimeOfDayBucket {
+  period: 'morning' | 'afternoon' | 'evening' | 'night';
+  label: string;
+  tokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+
 export interface UsageData {
   h5: WindowStats;
   week: WindowStats;
@@ -52,6 +60,7 @@ export interface UsageData {
   todayCost: number;
   sonnetWeekTokens: number;
   burnRate: BurnRate;
+  todBuckets: TimeOfDayBucket[];
 }
 
 function emptyWindow(): WindowStats {
@@ -136,6 +145,14 @@ export function computeUsage(
   const timelineMap = new Map<number, WeeklyTotal>();
   let todayTokens = 0, todayCost = 0, sonnetWeekTokens = 0;
 
+  // TOD 집계용 (최근 30일)
+  const todMap: Record<string, TimeOfDayBucket> = {
+    night:     { period: 'night',     label: 'Night (0–6h)',      tokens: 0, costUSD: 0, requestCount: 0 },
+    morning:   { period: 'morning',   label: 'Morning (6–12h)',   tokens: 0, costUSD: 0, requestCount: 0 },
+    afternoon: { period: 'afternoon', label: 'Afternoon (12–18h)', tokens: 0, costUSD: 0, requestCount: 0 },
+    evening:   { period: 'evening',   label: 'Evening (18–24h)',  tokens: 0, costUSD: 0, requestCount: 0 },
+  };
+
   for (const e of allEntries) {
     const ts = e.timestamp.getTime();
     const tokens = e.inputTokens + e.outputTokens + e.cacheCreationTokens + e.cacheReadTokens;
@@ -158,6 +175,15 @@ export function computeUsage(
       const b = heatMap30.get(k);
       if (b) b.tokens += tokens;
       else heatMap30.set(k, { dayIndex, hour, tokens });
+    }
+
+    // TOD 분류 (최근 30일)
+    if (ts >= day30Start) {
+      const hour = e.timestamp.getHours();
+      const period = hour < 6 ? 'night' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+      todMap[period].tokens += tokens;
+      todMap[period].costUSD += e.costUSD;
+      todMap[period].requestCount += 1;
     }
 
     // 120-day heatmap
@@ -234,13 +260,15 @@ export function computeUsage(
     ? (weekRemaining / h5OutputPerMin) * 60_000 : null;
   const burnRate: BurnRate = { h5OutputPerMin, h5EtaMs, weekEtaMs };
 
+  const todBuckets: TimeOfDayBucket[] = [todMap.night, todMap.morning, todMap.afternoon, todMap.evening];
+
   return {
     h5, week, h5Codex, weekCodex, models,
     heatmap: Array.from(heatMap7.values()),
     heatmap30: Array.from(heatMap30.values()),
     heatmap90: Array.from(heatMap90.values()),
     weeklyTimeline: Array.from(timelineMap.values()).sort((a, b) => a.weekIndex - b.weekIndex),
-    todayTokens, todayCost, sonnetWeekTokens, burnRate,
+    todayTokens, todayCost, sonnetWeekTokens, burnRate, todBuckets,
   };
 }
 

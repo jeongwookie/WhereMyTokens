@@ -253,6 +253,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           heatmap30={usage.heatmap30}
           heatmap90={usage.heatmap90}
           weeklyTimeline={usage.weeklyTimeline}
+          todBuckets={usage.todBuckets}
           currency={currency}
           usdToKrw={usdToKrw}
         />

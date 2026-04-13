@@ -58,6 +58,14 @@ export interface BurnRate {
   weekEtaMs: number | null;  // 1w 한도 도달 예상 ms
 }
 
+export interface TimeOfDayBucket {
+  period: 'morning' | 'afternoon' | 'evening' | 'night';
+  label: string;
+  tokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+
 export interface UsageData {
   h5: WindowStats;
   week: WindowStats;
@@ -72,6 +80,7 @@ export interface UsageData {
   todayCost: number;
   sonnetWeekTokens: number;
   burnRate: BurnRate;
+  todBuckets: TimeOfDayBucket[];
 }
 
 export interface UsageLimits {
