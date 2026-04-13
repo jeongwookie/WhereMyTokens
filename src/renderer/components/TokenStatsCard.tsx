@@ -22,6 +22,8 @@ interface Props {
   apiConnected?: boolean;
   hideCost?: boolean;
   burnRate?: BurnRate; // ETA 예측 (h5 카드에만 전달)
+  compact?: boolean;   // 2열 그리드용: borderBottom 제거, padding 축소
+  borderRight?: boolean; // 그리드 좌측 셀에 구분선 추가
 }
 
 function pctBarColor(pct: number): string {
@@ -34,6 +36,7 @@ function pctBarColor(pct: number): string {
 export default function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, apiConnected, hideCost, burnRate,
+  compact, borderRight,
 }: Props) {
   if (stats.totalTokens === 0 && stats.requestCount === 0) return null;
 
@@ -54,7 +57,11 @@ export default function TokenStatsCard({
   const showSavings = stats.cacheSavingsUSD > 0.005;
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}`, padding: '7px 14px' }}>
+    <div style={{
+      borderBottom: compact ? 'none' : `1px solid ${C.border}`,
+      borderRight: borderRight ? `1px solid ${C.border}` : 'none',
+      padding: compact ? '6px 10px' : '7px 14px',
+    }}>
       {/* header: provider · period, 등급 뱃지, tokens, req count, cost */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: showLimitBar ? 5 : 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

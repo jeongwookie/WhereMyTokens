@@ -227,14 +227,31 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
         </div>
 
-        {/* Claude 5h / Codex 5h */}
-        <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-          limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate} />
-        <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} />
+        {/* 5h 행: Claude 5h | Codex 5h (2열 그리드) */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
+              limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
+              compact borderRight />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} compact />
+          </div>
+        </div>
 
-        {/* Claude 1w / Sonnet 1w / Codex 1w */}
-        <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
-          limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected} />
+        {/* 1w 행: Claude 1w | Codex 1w (2열 그리드) */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
+              limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
+              compact borderRight />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} compact />
+          </div>
+        </div>
+
+        {/* Sonnet 1w / Extra Usage (전체 폭) */}
         {showSonnet && (
           <TokenStatsCard provider="Sonnet" period="1w" stats={{
             inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
@@ -245,7 +262,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         {extraUsage?.isEnabled && (
           <ExtraUsageCard extraUsage={extraUsage} />
         )}
-        <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
 
         {/* activity chart */}
         <ActivityChart
