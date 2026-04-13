@@ -3,6 +3,7 @@ dist/
 release/
 assets/screenshot.png
 assets/icon.png
+assets/icon-128.png
 assets/icon-256.png
 *.log
 *.html
