@@ -238,7 +238,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         {showSonnet && (
           <TokenStatsCard provider="Sonnet" period="1w" stats={{
             inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
-            totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0,
+            totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
           }} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
         )}

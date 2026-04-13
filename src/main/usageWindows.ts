@@ -9,6 +9,7 @@ export interface WindowStats {
   costUSD: number;
   requestCount: number;
   cacheEfficiency: number;
+  cacheSavingsUSD: number; // 캐시 읽기로 절감한 비용 (vs 일반 input 요금)
 }
 
 export interface ModelUsage {
@@ -47,7 +48,7 @@ export interface UsageData {
 }
 
 function emptyWindow(): WindowStats {
-  return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0 };
+  return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0 };
 }
 
 function addEntry(w: WindowStats, e: ParsedEntry) {
@@ -63,6 +64,8 @@ function addEntry(w: WindowStats, e: ParsedEntry) {
 function finalize(w: WindowStats) {
   const d = w.cacheReadTokens + w.cacheCreationTokens;
   w.cacheEfficiency = d > 0 ? (w.cacheReadTokens / d) * 100 : 0;
+  // Sonnet 기준: 일반 input $3.00/M vs cache_read $0.30/M → 차이 $2.70/M
+  w.cacheSavingsUSD = w.cacheReadTokens * 2.70 / 1_000_000;
 }
 
 function getWeekStart(): Date {

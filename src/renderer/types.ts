@@ -29,6 +29,7 @@ export interface WindowStats {
   costUSD: number;
   requestCount: number;
   cacheEfficiency: number;
+  cacheSavingsUSD: number; // 캐시 읽기로 절감한 비용
 }
 
 export interface ModelUsage {

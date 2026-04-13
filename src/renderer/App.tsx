@@ -8,7 +8,7 @@ import { C } from './theme';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
-const EMPTY_WINDOW = { inputTokens:0, outputTokens:0, cacheCreationTokens:0, cacheReadTokens:0, totalTokens:0, costUSD:0, requestCount:0, cacheEfficiency:0 };
+const EMPTY_WINDOW = { inputTokens:0, outputTokens:0, cacheCreationTokens:0, cacheReadTokens:0, totalTokens:0, costUSD:0, requestCount:0, cacheEfficiency:0, cacheSavingsUSD:0 };
 
 const DEFAULT_STATE: AppState = {
   sessions: [],
