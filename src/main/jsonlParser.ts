@@ -75,7 +75,9 @@ export function parseJsonlFile(filePath: string): ParsedFile {
 
   const lines = raw.split('\n').filter(l => l.trim());
   const entries: ParsedEntry[] = [];
-  const seen = new Set<string>();
+  // key: message id, value: entries 배열 인덱스
+  // Set 대신 Map을 써서 동일 id 중 output_tokens 최대값 보존
+  const seen = new Map<string, number>();
   let latestModel = '';
   let latestRawModel = '';
   let latestInputTokens = 0;
@@ -126,8 +128,17 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     if (inp + out + cw + cr === 0) continue;
 
     const id = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
-    if (seen.has(id)) continue;
-    seen.add(id);
+    if (seen.has(id)) {
+      // 스트리밍 중 동일 message_id가 여러 번 기록될 수 있음
+      // output_tokens가 더 큰 엔트리(최종 청크)로 교체
+      const prevIdx = seen.get(id)!;
+      if (out > entries[prevIdx].outputTokens) {
+        const updatedCost = calcCost(rawModel, inp, out, cw, cr);
+        entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost };
+      }
+      continue;
+    }
+    seen.set(id, entries.length); // push 직전 인덱스 저장
 
     const cost = calcCost(rawModel, inp, out, cw, cr);
     const ts = timestamp ? new Date(timestamp) : new Date(0);
