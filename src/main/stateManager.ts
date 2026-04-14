@@ -10,12 +10,14 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
+import { getGitStats, getGitStatsAsync, GitStats } from './gitStatsCollector';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
   contextUsed: number;    // tokens
   contextMax: number;     // tokens
   toolCounts: Record<string, number>;
+  gitStats: GitStats | null;
 }
 
 export interface UsageLimits {
@@ -48,6 +50,7 @@ export class StateManager {
   private heavyTimer: NodeJS.Timeout | null = null;
   private autoLimitTimer: NodeJS.Timeout | null = null;
   private watcher: chokidar.FSWatcher | null = null;
+  private heavyDebounce: NodeJS.Timeout | null = null;
   private onUpdate: (s: AppState) => void;
   private autoLimits: AutoLimits | null = null;
   private apiUsagePct: ApiUsagePct | null = null;
@@ -100,6 +103,8 @@ export class StateManager {
         h5Codex: this.emptyWindow(), weekCodex: this.emptyWindow(),
         models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
         todayTokens: 0, todayCost: 0, sonnetWeekTokens: 0,
+        burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
+        todBuckets: [],
       },
       limits: {
         h5: { pct: 0, resetMs: 0 },
@@ -116,7 +121,7 @@ export class StateManager {
   }
 
   private emptyWindow() {
-    return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0 };
+    return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0 };
   }
 
   start() {
@@ -199,19 +204,28 @@ export class StateManager {
     this.heavyTimer = setInterval(() => { void this.heavyRefresh(); }, 300_000);
   }
 
+  // 디바운스된 heavyRefresh — 연속 JSONL 변경 시 최소 3초 대기
+  private debouncedHeavyRefresh() {
+    if (this.heavyDebounce) clearTimeout(this.heavyDebounce);
+    this.heavyDebounce = setTimeout(() => {
+      this.heavyDebounce = null;
+      void this.heavyRefresh();
+    }, 3000);
+  }
+
   private startWatcher() {
     if (!fs.existsSync(SESSIONS_DIR)) return;
     this.watcher = chokidar.watch(SESSIONS_DIR, { ignoreInitial: true, depth: 0 });
     this.watcher.on('add', (filePath: string) => {
-      if (filePath.endsWith('.jsonl')) void this.heavyRefresh();
+      if (filePath.endsWith('.jsonl')) this.debouncedHeavyRefresh();
       else this.fastRefresh();
     });
     this.watcher.on('unlink', () => this.fastRefresh());
 
-    // Watch for JSONL changes
+    // Watch for JSONL changes — 디바운스 적용
     if (fs.existsSync(PROJECTS_DIR)) {
       this.watcher.add(path.join(PROJECTS_DIR, '**', '*.jsonl'));
-      this.watcher.on('change', () => this.heavyRefresh());
+      this.watcher.on('change', () => this.debouncedHeavyRefresh());
     }
   }
 
@@ -247,7 +261,7 @@ export class StateManager {
       ?? (bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : 0);
     const usage = computeUsage(this.allEntries, effectiveLimits, weekResetMs, h5ResetMs);
     const limits = this.buildLimits();
-    const sessions = this.buildSessionInfos();
+    const sessions = await this.buildSessionInfosAsync();
 
     const extraUsage = this.apiUsagePct?.extraUsage ?? null;
     this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage };
@@ -300,7 +314,8 @@ export class StateManager {
         if (excluded.has(dir)) continue; // excluded from tracking
         const dirPath = path.join(PROJECTS_DIR, dir);
         try {
-          const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl'));
+          // agent- 접두사 파일 제외 (서브에이전트 세션 — 중복 계산 방지)
+          const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
           for (const file of files) {
             const parsed = parseJsonlFile(path.join(dirPath, file));
             for (const e of parsed.entries) {
@@ -340,8 +355,38 @@ export class StateManager {
         } catch { /* skip */ }
       }
 
-      return { ...s, modelName, contextUsed, contextMax, toolCounts };
+      const gitStats = getGitStats(s.cwd);
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
     });
+  }
+
+  // heavyRefresh용 — git stats를 async로 확보하여 첫 렌더링에 브랜치명 포함
+  private async buildSessionInfosAsync(): Promise<SessionInfo[]> {
+    const settings = this.getSettings();
+    const excluded = new Set(settings.excludedProjects ?? []);
+    const discovered = discoverSessions().filter(s => !excluded.has(s.projectName));
+    return Promise.all(discovered.map(async s => {
+      let modelName = '';
+      let contextUsed = 0;
+      let contextMax = 200_000;
+      let toolCounts: Record<string, number> = {};
+
+      if (s.jsonlPath) {
+        try {
+          const parsed = parseJsonlFile(s.jsonlPath);
+          modelName = parsed.modelName;
+          contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
+          toolCounts = parsed.toolCounts;
+
+          const raw = parsed.rawModel.toLowerCase();
+          if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
+          else contextMax = 200_000;
+        } catch { /* skip */ }
+      }
+
+      const gitStats = await getGitStatsAsync(s.cwd);
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
+    }));
   }
 
   getState(): AppState {

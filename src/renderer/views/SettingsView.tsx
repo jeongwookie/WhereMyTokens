@@ -87,16 +87,6 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <input style={{ ...inp, width: 160 }} value={s.globalHotkey} onChange={e => setS({ ...s, globalHotkey: e.target.value })} />
         </div>
 
-        <SectionHeader label="Data" />
-        <div style={row}>
-          <span style={label}>Show provider</span>
-          <select style={sel} value={s.provider ?? 'both'} onChange={e => setS({ ...s, provider: e.target.value as AppSettings['provider'] })}>
-            <option value="both">Claude + Codex</option>
-            <option value="claude">Claude only</option>
-            <option value="codex">Codex only</option>
-          </select>
-        </div>
-
         <SectionHeader label="Currency" />
         <div style={row}>
           <span style={label}>Currency</span>
@@ -121,6 +111,23 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
             <option value="tokens">5h tokens</option>
             <option value="cost">5h cost</option>
           </select>
+        </div>
+
+        <SectionHeader label="Appearance" />
+        <div style={row}>
+          <span style={label}>Theme</span>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {(['light', 'dark'] as const).map(t => (
+              <button key={t} onClick={() => setS({ ...s, theme: t })} style={{
+                padding: '3px 12px', fontSize: 11, border: `1px solid ${(s.theme ?? 'light') === t ? C.accent + '88' : C.border}`,
+                borderRadius: 4, cursor: 'pointer', fontWeight: (s.theme ?? 'light') === t ? 700 : 400,
+                background: (s.theme ?? 'light') === t ? C.accent + '22' : 'transparent',
+                color: (s.theme ?? 'light') === t ? C.accent : C.textDim,
+              }}>
+                {t === 'light' ? 'Light' : 'Dark'}
+              </button>
+            ))}
+          </div>
         </div>
 
       </div>

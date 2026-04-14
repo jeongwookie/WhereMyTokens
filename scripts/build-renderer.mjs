@@ -25,7 +25,7 @@ await esbuild.build({
 
 // Noto Sans 폰트 복사 (400, 700 weight WOFF2 + CSS만)
 const fontsDir = join(root, 'dist', 'renderer', 'fonts');
-for (const pkg of ['noto-sans', 'noto-sans-kr', 'noto-sans-jp']) {
+for (const pkg of ['noto-sans', 'noto-sans-kr', 'noto-sans-jp', 'jetbrains-mono']) {
   const src = join(root, 'node_modules', '@fontsource', pkg);
   const dst = join(fontsDir, pkg);
   mkdirSync(join(dst, 'files'), { recursive: true });

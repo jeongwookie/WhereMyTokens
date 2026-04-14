@@ -1,6 +1,6 @@
 {
   "name": "wheremytokens-win",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Windows system tray monitor for Claude Code token usage",
   "main": "dist/main/index.js",
   "scripts": {
@@ -49,6 +49,7 @@
     ]
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@fontsource/noto-sans": "^5.2.10",
     "@fontsource/noto-sans-jp": "^5.2.9",
     "@fontsource/noto-sans-kr": "^5.2.9",

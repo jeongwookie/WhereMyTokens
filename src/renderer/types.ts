@@ -1,3 +1,20 @@
+export interface GitStats {
+  branch: string | null;
+  toplevel: string | null;
+  commitsToday: number;
+  linesAdded: number;
+  linesRemoved: number;
+  commits7d: number;
+  linesAdded7d: number;
+  linesRemoved7d: number;
+  commits30d: number;
+  linesAdded30d: number;
+  linesRemoved30d: number;
+  totalCommits: number;
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+}
+
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 
 export interface SessionInfo {
@@ -18,6 +35,7 @@ export interface SessionInfo {
   isWorktree?: boolean;
   worktreeBranch?: string | null;
   mainRepoName?: string | null;
+  gitStats?: GitStats | null;
 }
 
 export interface WindowStats {
@@ -29,6 +47,7 @@ export interface WindowStats {
   costUSD: number;
   requestCount: number;
   cacheEfficiency: number;
+  cacheSavingsUSD: number; // 캐시 읽기로 절감한 비용
 }
 
 export interface ModelUsage {
@@ -51,6 +70,20 @@ export interface WeeklyTotal {
   costUSD: number;
 }
 
+export interface BurnRate {
+  h5OutputPerMin: number;    // 최근 5분 output tokens/min
+  h5EtaMs: number | null;    // h5 한도 도달 예상 ms (null = 활동 없음)
+  weekEtaMs: number | null;  // 1w 한도 도달 예상 ms
+}
+
+export interface TimeOfDayBucket {
+  period: 'morning' | 'afternoon' | 'evening' | 'night';
+  label: string;
+  tokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+
 export interface UsageData {
   h5: WindowStats;
   week: WindowStats;
@@ -64,6 +97,8 @@ export interface UsageData {
   todayTokens: number;
   todayCost: number;
   sonnetWeekTokens: number;
+  burnRate: BurnRate;
+  todBuckets: TimeOfDayBucket[];
 }
 
 export interface UsageLimits {
@@ -73,20 +108,18 @@ export interface UsageLimits {
 }
 
 export interface AppSettings {
-  language: 'ko' | 'en';
-  refreshInterval: number;
   usageLimits: { h5: number; week: number; sonnetWeek: number };
+  provider: 'claude' | 'codex' | 'both';
   alertThresholds: number[];
   openAtLogin: boolean;
-  defaultChartView: 'line' | 'heatmap';
   currency: 'USD' | 'KRW';
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
-  provider: 'claude' | 'codex' | 'both';
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   hiddenProjects: string[];
   excludedProjects: string[];
+  theme: 'light' | 'dark';
 }
 
 export type NotifType = 'alert';

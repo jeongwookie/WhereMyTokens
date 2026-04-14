@@ -30,8 +30,8 @@ function createTray(): Tray {
 
 function createPopupWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 380,
-    height: 900,
+    width: 420,
+    height: 980,
     show: false,
     frame: false,
     resizable: false,

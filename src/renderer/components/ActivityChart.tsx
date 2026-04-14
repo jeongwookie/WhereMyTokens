@@ -1,8 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { HourlyBucket, WeeklyTotal } from '../types';
-import { C, fmtTokens } from '../theme';
+import { HourlyBucket, WeeklyTotal, TimeOfDayBucket } from '../types';
+import { useTheme } from '../ThemeContext';
+import { fmtTokens } from '../theme';
 
-type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly';
+type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly' | 'Rhythm';
+
+const TAB_LABELS: Record<ChartTab, string> = {
+  '7d': '7d', '5mo': '5mo', 'Hourly': 'Hourly', 'Weekly': 'Weekly', 'Rhythm': 'Rhythm',
+};
 
 function blueIntensity(i: number): string {
   const sat = Math.round(55 + i * 30);
@@ -12,6 +17,7 @@ function blueIntensity(i: number): string {
 
 // --- 7-day heatmap (7 rows × 24 cols) ---
 function Heatmap7({ data }: { data: HourlyBucket[] }) {
+  const C = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -25,11 +31,11 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
     const LEFT = 18, TOP = 14;
     const cw = Math.floor((W - LEFT) / HOURS);
     const ch = cw;
-    canvas.height = TOP + DAYS * ch + 2;
+    canvas.height = TOP + DAYS * ch + 18;
 
     ctx.clearRect(0, 0, W, canvas.height);
 
-    ctx.fillStyle = '#5048b820';
+    ctx.fillStyle = C.accentDim;
     for (let d = 0; d < DAYS; d++)
       for (let h = 0; h < HOURS; h++)
         ctx.fillRect(LEFT + h * cw + 1, TOP + d * ch + 1, cw - 2, ch - 2);
@@ -55,13 +61,20 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
       date.setDate(date.getDate() - (6 - d));
       ctx.fillText(dayNames[date.getDay()], LEFT - 3, TOP + d * ch + ch / 2 + 3);
     }
-  }, [data]);
+
+    // 하단 시간 축 라벨
+    ctx.textAlign = 'center';
+    ctx.fillStyle = C.textMuted;
+    for (const h of [0, 6, 12, 18, 23])
+      ctx.fillText(`${h}h`, LEFT + h * cw + cw / 2, TOP + DAYS * ch + 12);
+  }, [data, C]);
 
   return <canvas ref={canvasRef} width={330} style={{ width: '100%', display: 'block' }} />;
 }
 
 // --- 90-day heatmap: GitHub-style calendar grid (weeks × weekdays) ---
 function Heatmap90({ data }: { data: HourlyBucket[] }) {
+  const C = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; tokens: number } | null>(null);
 
@@ -84,12 +97,10 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
   const maxTokens = Math.max(...Array.from(dateMap.values()).map(v => v.tokens), 1);
 
   // Compute grid dimensions
-  // startDate = today - 89 days
   const startDate = new Date(today); startDate.setDate(today.getDate() - (DAYS - 1));
   // first Sunday on or before startDate
   const gridStart = new Date(startDate);
-  gridStart.setDate(gridStart.getDate() - gridStart.getDay()); // back to Sunday
-  // total columns = ceil((DAYS + startDate.getDay()) / 7) + 1 to ensure today is included
+  gridStart.setDate(gridStart.getDate() - gridStart.getDay());
   const daySpan = Math.floor((today.getTime() - gridStart.getTime()) / 86400000) + 1;
   const COLS = Math.ceil(daySpan / 7);
 
@@ -100,7 +111,6 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     if (!ctx) return;
 
     const W = canvas.width;
-    // Use same cell size as 7d heatmap (7d: LEFT=18, HOURS=24)
     const cw = Math.floor((W - 18) / 24);
     const ch = cw;
     canvas.height = TOP + ROWS * ch + 2;
@@ -124,7 +134,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
         const cell = dateMap.get(key);
         const tokens = cell?.tokens ?? 0;
 
-        ctx.fillStyle = tokens > 0 ? blueIntensity(tokens / maxTokens) : '#5048b820';
+        ctx.fillStyle = tokens > 0 ? blueIntensity(tokens / maxTokens) : C.accentDim;
         ctx.fillRect(x, y, cw - 2, ch - 2);
 
         // Today border
@@ -157,7 +167,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     for (let row = 0; row < ROWS; row++) {
       ctx.fillText(dayNames[row], LEFT - 3, TOP + row * ch + ch / 2 + 3);
     }
-  }, [data, COLS]);
+  }, [data, COLS, C]);
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
@@ -166,7 +176,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
     const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const my = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const cw = Math.floor((canvas.width - 18) / 24); // same as draw
+    const cw = Math.floor((canvas.width - 18) / 24);
     const col = Math.floor((mx - LEFT) / cw);
     const row = Math.floor((my - TOP) / cw);
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) { setTooltip(null); return; }
@@ -210,6 +220,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
 
 // --- Hourly distribution bar chart ---
 function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
+  const C = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; hour: number; tokens: number } | null>(null);
 
@@ -232,8 +243,6 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
     const TOP = 8;
     const slotW = W / 24;
     const barW = Math.max(3, slotW - 3);
-    const BAR_COLOR = 'hsl(244, 55%, 52%)';
-    const BAR_EMPTY = '#5048b815';
 
     for (let h = 0; h < 24; h++) {
       const pct = hourlyTotals[h] / maxTokens;
@@ -243,12 +252,12 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
       const r = Math.min(3, barW / 2);
 
       if (hourlyTotals[h] === 0) {
-        ctx.fillStyle = BAR_EMPTY;
+        ctx.fillStyle = C.accentDim;
         ctx.fillRect(x, BOTTOM - 2, barW, 2);
         continue;
       }
 
-      ctx.fillStyle = BAR_COLOR;
+      ctx.fillStyle = C.accent;
       ctx.beginPath();
       if (barH > r * 2) {
         ctx.moveTo(x + r, y);
@@ -274,7 +283,7 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
     ctx.textAlign = 'center';
     for (let h = 0; h <= 21; h += 3)
       ctx.fillText(`${h}`, h * slotW + slotW / 2, H - 4);
-  }, [data]);
+  }, [data, C]);
 
   function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
@@ -307,6 +316,7 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
 
 // --- Weekly growth chart (last 4 weeks) ---
 function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
+  const C = useTheme();
   const recent = data.slice(-4);
 
   if (recent.length === 0) {
@@ -320,12 +330,11 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
   const maxTokens = Math.max(...recent.map(d => d.tokens), 1);
   const totalTokens = recent.reduce((sum, d) => sum + d.tokens, 0);
   const peakEntry = recent.reduce((a, b) => a.tokens >= b.tokens ? a : b);
-  const BAR_COLOR = 'hsl(244, 55%, 52%)';
   const n = recent.length;
 
   function rowLabel(i: number): string {
     const ago = n - 1 - i;
-    return ago === 0 ? 'current' : `week+${ago}`;
+    return ago === 0 ? 'current' : `${ago}w ago`;
   }
 
   function weekRange(i: number): string {
@@ -361,11 +370,11 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
             </div>
 
             <div style={{ flex: 1, position: 'relative', height: 14 }}>
-              <div style={{ position: 'absolute', inset: 0, background: '#0000000a', borderRadius: 3 }} />
+              <div style={{ position: 'absolute', inset: 0, background: C.accentDim, borderRadius: 3 }} />
               <div style={{
                 position: 'absolute', left: 0, top: 0, bottom: 0,
                 width: `${Math.max(pct * 100, entry.tokens > 0 ? 2 : 0)}%`,
-                background: BAR_COLOR, borderRadius: 3,
+                background: C.accent, borderRadius: 3,
                 opacity: isCurrent ? 1 : isPeak ? 0.85 : 0.6,
               }} />
             </div>
@@ -400,8 +409,83 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
   );
 }
 
-// color legend
+// --- TOD (Time-of-Day) Rhythm Panel — 리디자인: 아이콘+풀네임+그라데이션 ---
+const TOD_ORDER: TimeOfDayBucket['period'][] = ['morning', 'afternoon', 'evening', 'night'];
+
+const TOD_INFO: Record<string, { icon: string; name: string; time: string; gradient: string; color: string }> = {
+  morning:   { icon: '☀️', name: 'Morning',   time: '6–12h',  gradient: 'linear-gradient(90deg, #fbbf24, #f59e0b)', color: '#fbbf24' },
+  afternoon: { icon: '🔥', name: 'Afternoon', time: '12–18h', gradient: 'linear-gradient(90deg, #fb923c, #f87171)', color: '#fb923c' },
+  evening:   { icon: '🌆', name: 'Evening',   time: '18–24h', gradient: 'linear-gradient(90deg, #a78bfa, #f472b6)', color: '#a78bfa' },
+  night:     { icon: '🌙', name: 'Night',     time: '0–6h',   gradient: 'linear-gradient(90deg, #60a5fa, #818cf8)', color: '#60a5fa' },
+};
+
+export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
+  const C = useTheme();
+
+  if (data.every(b => b.tokens === 0)) {
+    return (
+      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: C.textMuted }}>
+        No data
+      </div>
+    );
+  }
+
+  const sorted = TOD_ORDER.map(p => data.find(b => b.period === p)!).filter(Boolean);
+  const maxTokens = Math.max(...sorted.map(b => b.tokens), 1);
+  const peakPeriod = sorted.reduce((a, b) => a.tokens >= b.tokens ? a : b);
+
+  return (
+    <div style={{ padding: '4px 0' }}>
+      {sorted.map(bucket => {
+        const pct = bucket.tokens / maxTokens;
+        const isPeak = bucket.period === peakPeriod.period && bucket.tokens > 0;
+        const info = TOD_INFO[bucket.period];
+
+        return (
+          <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 13, width: 18, textAlign: 'center' }}>{info.icon}</span>
+            <span style={{
+              fontSize: 10, width: 52, flexShrink: 0, fontFamily: C.fontMono,
+              color: isPeak ? info.color : C.textDim,
+              fontWeight: isPeak ? 600 : 400,
+            }}>{info.name}</span>
+            <span style={{ fontSize: 8, width: 34, flexShrink: 0, color: C.textMuted, fontFamily: C.fontMono }}>{info.time}</span>
+            <div style={{ flex: 1, height: 8, background: '#252a38', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{
+                width: `${Math.max(pct * 100, bucket.tokens > 0 ? 3 : 0)}%`,
+                height: '100%', borderRadius: 4,
+                background: info.gradient,
+              }} />
+            </div>
+            <span style={{
+              width: 32, fontSize: 10, textAlign: 'right', flexShrink: 0,
+              fontFamily: C.fontMono,
+              color: isPeak ? info.color : C.textDim,
+              fontWeight: isPeak ? 600 : 400,
+            }}>
+              {Math.round(pct * 100)}%
+            </span>
+          </div>
+        );
+      })}
+
+      <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
+          🔥 Peak: <strong style={{ color: TOD_INFO[peakPeriod.period]?.color ?? C.accent }}>
+            {TOD_INFO[peakPeriod.period]?.name ?? peakPeriod.label} ({TOD_INFO[peakPeriod.period]?.time})
+          </strong>
+        </div>
+        <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2, fontFamily: C.fontMono }}>
+          Last 7 days · local timezone
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 색상 범례
 function ColorLegend() {
+  const C = useTheme();
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 3 }}>
       <span style={{ fontSize: 9, color: C.textMuted }}>less</span>
@@ -418,74 +502,81 @@ interface Props {
   heatmap30: HourlyBucket[];
   heatmap90: HourlyBucket[];
   weeklyTimeline: WeeklyTotal[];
+  todBuckets: TimeOfDayBucket[];
   currency: string;
   usdToKrw: number;
 }
 
-export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline }: Props) {
+export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets }: Props) {
+  const C = useTheme();
   const [tab, setTab] = useState<ChartTab>('7d');
-  const [collapsed, setCollapsed] = useState(false);
 
-  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly'];
+  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly', 'Rhythm'];
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {!collapsed && (
-            <div style={{ display: 'flex', gap: 2 }}>
-              {tabs.map(t => (
-                <button key={t} onClick={() => setTab(t)} style={{
-                  padding: '2px 7px', fontSize: 10, border: 'none', borderRadius: 10, cursor: 'pointer',
-                  background: tab === t ? C.accent : '#0000000a',
-                  color: tab === t ? '#fff' : C.textDim,
-                  fontWeight: tab === t ? 700 : 400,
-                }}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
-          <button onClick={() => setCollapsed(c => !c)} style={{
-            background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer',
-            fontSize: 11, padding: '0 2px', lineHeight: 1,
-          }}>
-            {collapsed ? '∨' : '∧'}
-          </button>
+    <div>
+      {/* 헤더: 제목 + 탭 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
+          <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, background: C.accentDim, padding: '1px 5px', borderRadius: 3 }}>
+            {Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Local'}
+          </span>
+        </span>
+        <div style={{ display: 'flex', gap: 2 }}>
+          {tabs.map(t => {
+            const isRhythm = t === 'Rhythm';
+            const isActive = tab === t;
+            return (
+              <button key={t} onClick={() => setTab(t)} style={{
+                padding: '4px 8px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+                border: isActive && isRhythm ? '1px solid rgba(251,191,36,0.2)' :
+                        isActive ? `1px solid rgba(167,139,250,0.15)` : '1px solid transparent',
+                background: isActive && isRhythm ? 'rgba(251,191,36,0.1)' :
+                            isActive ? C.accent + '22' : 'none',
+                color: isActive && isRhythm ? '#fbbf24' :
+                       isActive ? C.accent :
+                       isRhythm ? '#fb923c' : C.textMuted,
+                fontWeight: isActive ? 700 : 400,
+              }}>
+                {TAB_LABELS[t]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {!collapsed && (
-        <div style={{ padding: '8px 14px' }}>
-          {tab === '7d' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>7-day heatmap (day × hour)</div>
-              <Heatmap7 data={heatmap} />
-              <ColorLegend />
-            </>
-          )}
-          {tab === '5mo' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5-month activity (calendar grid, oldest → today)</div>
-              <Heatmap90 data={heatmap90} />
-              <ColorLegend />
-            </>
-          )}
-          {tab === 'Hourly' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly token usage (last 30 days)</div>
-              <HourlyDistribution data={heatmap30} />
-            </>
-          )}
-          {tab === 'Weekly' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly growth (last 4 weeks, Mon–Sun)</div>
-              <WeeklyGrowthChart data={weeklyTimeline} />
-            </>
-          )}
-        </div>
-      )}
+      <div style={{ padding: '8px 14px', minHeight: 175 }}>
+        {tab === '7d' && (
+          <>
+            <Heatmap7 data={heatmap} />
+            <ColorLegend />
+          </>
+        )}
+        {tab === '5mo' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5mo activity</div>
+            <Heatmap90 data={heatmap90} />
+            <ColorLegend />
+          </>
+        )}
+        {tab === 'Hourly' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly (30d)</div>
+            <HourlyDistribution data={heatmap30} />
+          </>
+        )}
+        {tab === 'Weekly' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly (4w)</div>
+            <WeeklyGrowthChart data={weeklyTimeline} />
+          </>
+        )}
+        {tab === 'Rhythm' && (
+          <TODPanel data={todBuckets} />
+        )}
+      </div>
     </div>
   );
 }

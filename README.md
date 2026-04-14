@@ -11,44 +11,32 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 [한국어](README.ko.md) · [日本語](README.ja.md)
 
+<div align="center">
+
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
+
+</div>
+
 ---
 
 ## Features
 
 - **Live session tracking** — detects running Claude Code sessions (Terminal, VS Code, Cursor, Windsurf, etc.) with real-time status: `active` / `waiting` / `idle` / `compacting`
-- **Rate limit bars** — 5h and 1w usage from Anthropic's API, with progress bars and time-to-reset counters
+- **2-level session grouping** — sessions grouped by git project → branch, with per-project commit stats and line counts; idle sessions progressively collapse (top-3 tools → context bar only → single-line summary)
+- **Rate limit bars** — 5h and 1w usage from Anthropic's API, with progress bars, time-to-reset counters, and cache efficiency grades (Excellent/Good/Fair/Poor)
 - **Claude Code bridge** — register WhereMyTokens as a Claude Code `statusLine` plugin for live rate limit data without API polling
-- **Context window warnings** — per-session compact warnings at 50% / 80% / 95%+ inline in the session list
-- **Tool usage bars** — proportional color bar + top-3 tool names (Bash, Edit, Read, …) per session
-- **Activity heatmaps** — 7-day heatmap (day × hour) and 5-month calendar grid (GitHub-style); hourly distribution; 4-week comparison chart
-- **Model breakdown** — per-model token and cost totals across all time
+- **Code Output** — git-based productivity metrics: commits, net lines changed, $/commit with today/all-time toggle
+- **Context window warnings** — per-session context bar; amber at 50%, orange at 80%, red at 95%+, with "⚠ near limit" / "⚠ at limit" labels
+- **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …) per session
+- **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day coding patterns with per-period gradient bars)
+- **Model breakdown** — per-model token and cost totals across all time, with gradient bars
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
 - **Alerts** — Windows toast notifications at configurable usage thresholds (50% / 80% / 90%)
 - **Project management** — hide projects from the UI, or fully exclude them from tracking
 - **Extra Usage budget** — monthly extra usage card showing credits used / limit and utilization % (shown when extra usage is enabled on your account)
 - **Always-on-top widget** — stays visible over other windows; minimize with the `−` button in the header or via the tray icon; global hotkey to toggle
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
-
----
-
-## Screenshots
-
-<table align="center">
-  <tr>
-    <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="Sessions, plan usage bars, 7-day heatmap, and model breakdown" /><br/>
-      <sub><b>Sessions · Plan Usage · 7-day Heatmap</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-hourly.png" width="190" alt="Hourly token usage bar chart for the last 30 days" /><br/>
-      <sub><b>Hourly Token Usage (last 30 days)</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-help.png" width="190" alt="Help view — Numbers, Activity, and Data Sources explained" /><br/>
-      <sub><b>Help — Numbers, Activity &amp; Data Sources</b></sub>
-    </td>
-  </tr>
-</table>
+- **Dark theme by default** — modern dark UI with JetBrains Mono for numeric displays
 
 ---
 
@@ -78,7 +66,7 @@ The bridge provides supplementary context data (context window %, model, cost). 
 
 ### Option A — Pre-built executable
 
-1. Download `WhereMyTokens-v1.4.1-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
+1. Download `WhereMyTokens-v1.5.0-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
 2. Extract the zip
 3. Run `WhereMyTokens.exe`
 
@@ -167,10 +155,11 @@ All token counts (`tok`) include **input + output + cache creation + cache reads
 
 | Tab | Description |
 |-----|-------------|
-| 7d | 7-day heatmap (day-of-week × hour grid) |
+| 7d | 7-day heatmap (day-of-week × hour grid) with time axis and color legend |
 | 5mo | 5-month calendar grid (GitHub-style weeks × weekdays, hover for date + tokens) |
 | Hourly | Hourly token distribution across the last 30 days |
 | Weekly | Last 4 weeks horizontal bar chart |
+| Rhythm | Time-of-day coding patterns — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙 with gradient bars (7-day, local timezone) |
 
 ---
 
@@ -211,6 +200,7 @@ src/
   main/
     index.ts              Electron main, tray, popup window
     stateManager.ts       Polling, state assembly, bridge integration
+    gitStatsCollector.ts  Git branch, commit, and line stats (with TTL cache)
     sessionDiscovery.ts   Reads ~/.claude/sessions/*.json
     jsonlParser.ts        Parses conversation JSONL files
     usageWindows.ts       5h/1w window aggregation + heatmaps
@@ -228,10 +218,11 @@ src/
       NotificationsView.tsx
       HelpView.tsx
     components/
-      SessionRow.tsx       Session row (context bar + tool bar)
-      TokenStatsCard.tsx   Usage stats + rate limit bar
-      ActivityChart.tsx    Heatmaps + charts
-      ModelBreakdown.tsx   Per-model totals
+      SessionRow.tsx       Session row with idle collapse (context bar + tool chips)
+      TokenStatsCard.tsx   Usage stats + rate limit bar + cache efficiency grade
+      ActivityChart.tsx    Heatmaps, charts, and Rhythm tab
+      CodeOutputCard.tsx   Git-based productivity metrics (commits, lines, $/commit)
+      ModelBreakdown.tsx   Per-model totals with gradient bars
       ExtraUsageCard.tsx   Extra Usage monthly budget card
 ```
 

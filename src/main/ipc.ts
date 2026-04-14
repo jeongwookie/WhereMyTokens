@@ -7,37 +7,36 @@ import { AppState } from './stateManager';
 import { getHistory, clearHistory } from './notificationHistory';
 
 export interface AppSettings {
-  language: 'ko' | 'en';
-  refreshInterval: number;   // seconds
+  // 내부용 (UI 미노출, fallback 용도)
   usageLimits: { h5: number; week: number; sonnetWeek: number };
+  provider: 'claude' | 'codex' | 'both';
+
+  // 사용자 설정
   alertThresholds: number[]; // [50, 80, 90]
   openAtLogin: boolean;
-  defaultChartView: 'line' | 'heatmap';
   currency: 'USD' | 'KRW';
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
-  provider: 'claude' | 'codex' | 'both';
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   hiddenProjects: string[];
   excludedProjects: string[];
+  theme: 'light' | 'dark';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  language: 'en',
-  refreshInterval: 5,
   usageLimits: { h5: 100, week: 2000, sonnetWeek: 100_000_000 },
+  provider: 'both',
   alertThresholds: [50, 80, 90],
   openAtLogin: false,
-  defaultChartView: 'heatmap',
   currency: 'USD',
   usdToKrw: 1380,
   globalHotkey: 'CommandOrControl+Shift+D',
   enableAlerts: true,
-  provider: 'both',
   trayDisplay: 'h5pct',
   hiddenProjects: [],
   excludedProjects: [],
+  theme: 'dark',
 };
 
 export function registerIpcHandlers(

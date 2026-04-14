@@ -11,44 +11,32 @@
 
 [English](README.md) · [日本語](README.ja.md)
 
+<div align="center">
+
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
+
+</div>
+
 ---
 
 ## 주요 기능
 
 - **실시간 세션 추적** — 실행 중인 Claude Code 세션(터미널, VS Code, Cursor, Windsurf 등)을 감지하고 실시간 상태를 표시: `active` / `waiting` / `idle` / `compacting`
-- **속도 제한 바** — Anthropic API에서 가져온 5시간·주간 사용량을 프로그레스 바와 리셋 카운터로 표시
+- **2단계 세션 그루핑** — git 프로젝트 → 브랜치별로 그루핑, 프로젝트별 커밋·라인 통계 표시; idle 세션은 단계적 축소 (상위 3개 툴 → 컨텍스트 바만 → 한 줄 요약)
+- **속도 제한 바** — Anthropic API에서 가져온 5시간·주간 사용량을 프로그레스 바, 리셋 카운터, 캐시 효율 등급(Excellent/Good/Fair/Poor)으로 표시
 - **Claude Code 브리지** — WhereMyTokens를 Claude Code `statusLine` 플러그인으로 등록해 API 폴링 없이 실시간 속도 제한 데이터 수신
-- **컨텍스트 창 경고** — 세션별 인라인 컨텍스트 바; 50% / 80% / 95%+에서 색상 변경
-- **툴 사용 바** — 세션별 비례 색상 바 + 상위 3개 툴 이름(Bash, Edit, Read 등)
-- **활동 히트맵** — 7일 히트맵(요일×시간), 5개월 캘린더 그리드(GitHub 스타일), 시간대별 분포, 4주 비교 차트
-- **모델별 분석** — 전체 기간의 모델별 토큰·비용 합계
+- **Code Output** — git 기반 생산성 지표: 커밋 수, 순 라인 변경, $/커밋 (today/all time 토글)
+- **컨텍스트 창 경고** — 세션별 컨텍스트 바; 50%에서 황색, 80%에서 주황, 95%+에서 적색, "⚠ near limit" / "⚠ at limit" 표시
+- **툴 사용 바** — 세션별 비례 색상 바 + 툴 칩(Bash, Edit, Read 등)
+- **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교, **Rhythm** (시간대별 코딩 패턴, 그라데이션 바)
+- **모델별 분석** — 전체 기간의 모델별 토큰·비용 합계, 그라데이션 바
 - **비용 표시** — USD 또는 KRW, 구독 환산 가치
 - **알림** — 설정 가능한 사용량 임계값(50% / 80% / 90%)에서 Windows 토스트 알림
 - **프로젝트 관리** — UI에서 프로젝트 숨기기, 또는 추적에서 완전히 제외
 - **Extra Usage 예산** — 월간 추가 사용량 카드로 크레딧 사용량·한도·비율 표시 (계정에서 활성화된 경우)
 - **항상 위 위젯** — 다른 창 위에 고정 표시; 헤더의 `−` 버튼 또는 트레이 아이콘으로 최소화; 전역 단축키로 토글
 - **트레이 라벨** — 작업표시줄에 사용량 %, 토큰 수, 또는 비용 직접 표시
-
----
-
-## 스크린샷
-
-<table align="center">
-  <tr>
-    <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="세션, 플랜 사용량 바, 7일 히트맵, 모델별 분석" /><br/>
-      <sub><b>세션 · 플랜 사용량 · 7일 히트맵</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-hourly.png" width="190" alt="최근 30일 시간대별 토큰 사용량 바차트" /><br/>
-      <sub><b>시간대별 토큰 사용량 (최근 30일)</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-help.png" width="190" alt="Help 뷰 — 수치, 활동 탭, 데이터 소스 설명" /><br/>
-      <sub><b>Help — 수치 · 활동 · 데이터 소스</b></sub>
-    </td>
-  </tr>
-</table>
+- **기본 다크 테마** — 모던 다크 UI, 숫자 표시에 JetBrains Mono 폰트 사용
 
 ---
 
@@ -78,7 +66,7 @@ WhereMyTokens는 공식 `statusLine` 플러그인 메커니즘을 통해 Claude 
 
 ### 방법 A — 사전 빌드된 실행 파일
 
-1. [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)에서 `WhereMyTokens-v1.4.0-win-x64.zip` 다운로드
+1. [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)에서 `WhereMyTokens-v1.5.0-win-x64.zip` 다운로드
 2. ZIP 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -167,10 +155,11 @@ npm run dist
 
 | 탭 | 설명 |
 |----|------|
-| 7d | 7일 히트맵 (요일 × 시간 그리드) |
+| 7d | 7일 히트맵 (요일 × 시간 그리드), 시간축 + 색상 범례 |
 | 5mo | 5개월 캘린더 그리드 (GitHub 스타일, 날짜+토큰 호버) |
 | Hourly | 최근 30일의 시간대별 토큰 분포 |
 | Weekly | 최근 4주 가로 바 차트 |
+| Rhythm | 시간대별 코딩 패턴 — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙, 그라데이션 바 (7일, 로컬 타임존) |
 
 ---
 

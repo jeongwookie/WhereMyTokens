@@ -25,6 +25,17 @@ function getState(key: string): AlertState {
 // Store previous percentage (only alert when rising)
 const prevPct: Record<string, number> = {};
 
+// 3-샘플 이동 평균 스무딩 — 순간 급등/급락에 의한 오발 방지
+const pctHistory: Map<string, number[]> = new Map();
+
+function smoothedPct(key: string, rawPct: number): number {
+  const hist = pctHistory.get(key) ?? [];
+  hist.push(rawPct);
+  if (hist.length > 3) hist.shift();
+  pctHistory.set(key, hist);
+  return hist.reduce((a, b) => a + b, 0) / hist.length;
+}
+
 export function checkAlerts(
   limits: UsageLimits,
   thresholds: number[],
@@ -49,22 +60,26 @@ export function checkAlerts(
     if (currentReset > state.lastResetTime + 5000) {
       state.lastResetTime = currentReset;
       state.firedThresholds.clear();
+      pctHistory.delete(key); // 리셋 후 스무딩 히스토리 초기화
     }
+
+    // 3-샘플 이동 평균으로 노이즈 제거 후 threshold 비교
+    const smoothPct = smoothedPct(key, pct);
 
     // Cooldown check
     const cooldownExpired = now - state.lastAlertTime > COOLDOWN_MS;
     // Only alert when percentage is actually rising (avoid repeating at 100% due to bad calculation)
     const prev = prevPct[key] ?? 0;
-    prevPct[key] = pct;
-    const isRising = pct > prev + 1;  // only when rising by more than 1%
+    prevPct[key] = smoothPct;
+    const isRising = smoothPct > prev + 1;  // only when rising by more than 1%
 
     for (const threshold of [...thresholds].sort((a, b) => b - a)) {
-      if (pct >= threshold && !state.firedThresholds.has(threshold) && cooldownExpired && (isRising || prev === 0)) {
+      if (smoothPct >= threshold && !state.firedThresholds.has(threshold) && cooldownExpired && (isRising || prev === 0)) {
         state.firedThresholds.add(threshold);
         state.lastAlertTime = now;
 
         const title = `⚠️ ${label} reached ${threshold}%`;
-        const body = `Currently at ${Math.round(pct)}% usage`;
+        const body = `Currently at ${Math.round(smoothPct)}% usage`;
         addNotification('alert', title, body);
         try {
           new Notification({ title: `WhereMyTokens ${title}`, body }).show();

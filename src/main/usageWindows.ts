@@ -9,6 +9,7 @@ export interface WindowStats {
   costUSD: number;
   requestCount: number;
   cacheEfficiency: number;
+  cacheSavingsUSD: number; // 캐시 읽기로 절감한 비용 (vs 일반 input 요금)
 }
 
 export interface ModelUsage {
@@ -31,6 +32,20 @@ export interface WeeklyTotal {
   costUSD: number;
 }
 
+export interface BurnRate {
+  h5OutputPerMin: number;    // 최근 5분 output tokens/min
+  h5EtaMs: number | null;    // h5 한도 도달 예상 ms (null = 활동 없음)
+  weekEtaMs: number | null;  // 1w 한도 도달 예상 ms
+}
+
+export interface TimeOfDayBucket {
+  period: 'morning' | 'afternoon' | 'evening' | 'night';
+  label: string;
+  tokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+
 export interface UsageData {
   h5: WindowStats;
   week: WindowStats;
@@ -44,10 +59,12 @@ export interface UsageData {
   todayTokens: number;
   todayCost: number;
   sonnetWeekTokens: number;
+  burnRate: BurnRate;
+  todBuckets: TimeOfDayBucket[];
 }
 
 function emptyWindow(): WindowStats {
-  return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0 };
+  return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0 };
 }
 
 function addEntry(w: WindowStats, e: ParsedEntry) {
@@ -63,6 +80,8 @@ function addEntry(w: WindowStats, e: ParsedEntry) {
 function finalize(w: WindowStats) {
   const d = w.cacheReadTokens + w.cacheCreationTokens;
   w.cacheEfficiency = d > 0 ? (w.cacheReadTokens / d) * 100 : 0;
+  // Sonnet 기준: 일반 input $3.00/M vs cache_read $0.30/M → 차이 $2.70/M
+  w.cacheSavingsUSD = w.cacheReadTokens * 2.70 / 1_000_000;
 }
 
 function getWeekStart(): Date {
@@ -126,6 +145,14 @@ export function computeUsage(
   const timelineMap = new Map<number, WeeklyTotal>();
   let todayTokens = 0, todayCost = 0, sonnetWeekTokens = 0;
 
+  // TOD 집계용 (최근 30일)
+  const todMap: Record<string, TimeOfDayBucket> = {
+    night:     { period: 'night',     label: 'Night (0–6h)',      tokens: 0, costUSD: 0, requestCount: 0 },
+    morning:   { period: 'morning',   label: 'Morning (6–12h)',   tokens: 0, costUSD: 0, requestCount: 0 },
+    afternoon: { period: 'afternoon', label: 'Afternoon (12–18h)', tokens: 0, costUSD: 0, requestCount: 0 },
+    evening:   { period: 'evening',   label: 'Evening (18–24h)',  tokens: 0, costUSD: 0, requestCount: 0 },
+  };
+
   for (const e of allEntries) {
     const ts = e.timestamp.getTime();
     const tokens = e.inputTokens + e.outputTokens + e.cacheCreationTokens + e.cacheReadTokens;
@@ -148,6 +175,15 @@ export function computeUsage(
       const b = heatMap30.get(k);
       if (b) b.tokens += tokens;
       else heatMap30.set(k, { dayIndex, hour, tokens });
+    }
+
+    // TOD 분류 (최근 30일)
+    if (ts >= day30Start) {
+      const hour = e.timestamp.getHours();
+      const period = hour < 6 ? 'night' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+      todMap[period].tokens += tokens;
+      todMap[period].costUSD += e.costUSD;
+      todMap[period].requestCount += 1;
     }
 
     // 120-day heatmap
@@ -210,13 +246,29 @@ export function computeUsage(
     .filter(m => m.tokens > 0)
     .sort((a, b) => b.tokens - a.tokens);
 
+  // 최근 5분 슬라이딩 윈도우 번 레이트 계산
+  const win5min = now - 5 * 60 * 1000;
+  const recent5minOutput = allEntries
+    .filter(e => e.provider === 'claude' && e.timestamp.getTime() >= win5min)
+    .reduce((sum, e) => sum + e.outputTokens, 0);
+  const h5OutputPerMin = recent5minOutput / 5;
+  const h5Remaining = _userLimits.h5 - h5.totalTokens;
+  const weekRemaining = _userLimits.week - week.totalTokens;
+  const h5EtaMs = h5OutputPerMin > 0 && h5Remaining > 0
+    ? (h5Remaining / h5OutputPerMin) * 60_000 : null;
+  const weekEtaMs = h5OutputPerMin > 0 && weekRemaining > 0
+    ? (weekRemaining / h5OutputPerMin) * 60_000 : null;
+  const burnRate: BurnRate = { h5OutputPerMin, h5EtaMs, weekEtaMs };
+
+  const todBuckets: TimeOfDayBucket[] = [todMap.night, todMap.morning, todMap.afternoon, todMap.evening];
+
   return {
     h5, week, h5Codex, weekCodex, models,
     heatmap: Array.from(heatMap7.values()),
     heatmap30: Array.from(heatMap30.values()),
     heatmap90: Array.from(heatMap90.values()),
     weeklyTimeline: Array.from(timelineMap.values()).sort((a, b) => a.weekIndex - b.weekIndex),
-    todayTokens, todayCost, sonnetWeekTokens,
+    todayTokens, todayCost, sonnetWeekTokens, burnRate, todBuckets,
   };
 }
 

@@ -1,22 +1,14 @@
 import React from 'react';
 import { ExtraUsage } from '../types';
-import { C } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 interface Props {
   extraUsage: ExtraUsage;
 }
 
-function pctBarColor(pct: number): string {
-  if (pct >= 90) return '#c0392b';
-  if (pct >= 75) return '#e67e22';
-  if (pct >= 50) return '#d4a017';
-  return '#b07a20';  // 추가 사용 구간 — 기본도 amber 계열로 구분
-}
-
 // 월 단위 남은 시간 포맷 (최대 31일)
 function fmtMonthlyReset(): string {
   const now = new Date();
-  // 다음 달 1일 자정(UTC)까지 남은 시간 계산
   const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const ms = nextMonth.getTime() - now.getTime();
   if (ms <= 0) return '';
@@ -27,9 +19,10 @@ function fmtMonthlyReset(): string {
 }
 
 export default function ExtraUsageCard({ extraUsage }: Props) {
+  const C = useTheme();
   const { monthlyLimit, usedCredits, utilization } = extraUsage;
   const barPct = Math.min(100, utilization);
-  const barColor = pctBarColor(barPct);
+  const barColor = barPct >= 90 ? C.barRed : barPct >= 75 ? C.barOrange : barPct >= 50 ? C.barYellow : C.barOrange;
 
   // cent → USD 변환
   const usedUSD = (usedCredits / 100).toFixed(2);
@@ -37,19 +30,19 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
   const resetStr = fmtMonthlyReset();
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}`, padding: '7px 14px' }}>
+    <div style={{ padding: '7px 14px' }}>
       {/* 헤더: 레이블 왼쪽, 금액+% 오른쪽 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
         <span style={{ fontSize: 11, color: C.textMuted }}>Extra Usage · monthly</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-          <span style={{ fontSize: 10, color: C.textMuted }}>${usedUSD} / ${limitUSD}</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: barColor }}>{Math.round(barPct)}%</span>
+          <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>${usedUSD} / ${limitUSD}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: barPct >= 99 ? C.barRed : barColor, fontFamily: C.fontMono }}>{Math.round(barPct)}%</span>
         </div>
       </div>
 
       {/* 프로그레스 바 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{ flex: 1, height: 5, background: '#0000000a', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ flex: 1, height: 5, background: C.accentDim, borderRadius: 3, overflow: 'hidden' }}>
           <div style={{
             width: `${barPct}%`, height: '100%',
             background: barColor, borderRadius: 3,
