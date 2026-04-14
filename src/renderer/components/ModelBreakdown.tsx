@@ -20,14 +20,14 @@ export default function ModelBreakdown({ models, currency, usdToKrw }: { models:
         return (
           <div key={m.model} style={{ marginBottom: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ fontSize: 11, color, fontWeight: 600 }}>{m.model}</span>
+              <span style={{ fontSize: 11, color, fontWeight: 600, width: 70, flexShrink: 0 }}>{m.model}</span>
               <div style={{ display: 'flex', gap: 8 }}>
-                <span style={{ fontSize: 10, color: C.textMuted }}>{fmtTokens(m.tokens)}</span>
-                <span style={{ fontSize: 11, color: C.textDim }}>{fmtCost(m.costUSD, currency, usdToKrw)}</span>
+                <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>{fmtTokens(m.tokens)}</span>
+                <span style={{ fontSize: 11, color: C.textDim, fontFamily: C.fontMono }}>{fmtCost(m.costUSD, currency, usdToKrw)}</span>
               </div>
             </div>
             <div style={{ height: 3, background: C.accentDim, borderRadius: 2 }}>
-              <div style={{ width: `${(m.tokens / maxT) * 100}%`, height: '100%', background: color, borderRadius: 2 }} />
+              <div style={{ width: `${(m.tokens / maxT) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${color}, ${color}88)`, borderRadius: 2 }} />
             </div>
           </div>
         );

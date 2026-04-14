@@ -35,8 +35,8 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
         <span style={{ fontSize: 11, color: C.textMuted }}>Extra Usage · monthly</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-          <span style={{ fontSize: 10, color: C.textMuted }}>${usedUSD} / ${limitUSD}</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: barColor }}>{Math.round(barPct)}%</span>
+          <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>${usedUSD} / ${limitUSD}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: barPct >= 99 ? C.barRed : barColor, fontFamily: C.fontMono }}>{Math.round(barPct)}%</span>
         </div>
       </div>
 

@@ -63,6 +63,10 @@ export interface Theme {
 
   // ETA 경고
   etaWarning: string;
+
+  // 폰트
+  fontMono: string;
+  fontSans: string;
 }
 
 // ─── Light 테마 ─────────────────────────────────────────────────────────────
@@ -115,58 +119,64 @@ export const LIGHT: Theme = {
   gradePoorBg:         '#fde8e8', gradePoorColor:      '#8b1a1a',
 
   etaWarning: '#c0392b',
+
+  fontMono: "'JetBrains Mono', monospace",
+  fontSans: "'Noto Sans', 'Noto Sans KR', sans-serif",
 };
 
 // ─── Dark 테마 ──────────────────────────────────────────────────────────────
 
 export const DARK: Theme = {
-  headerBg:     '#1e1440',
-  headerText:   '#ffffff',
-  headerAccent: '#f5a623',
-  headerSub:    '#9080c0',
-  headerBorder: '#2e2460',
+  headerBg:     '#13151a',
+  headerText:   '#e8eaf0',
+  headerAccent: '#fbbf24',
+  headerSub:    '#8b90a0',
+  headerBorder: 'rgba(255,255,255,0.06)',
 
-  bg:       '#0f0c1e',
-  bgCard:   '#1a1635',
-  bgRow:    '#231e42',
-  bgHover:  '#2c2655',
+  bg:       '#0d0f13',
+  bgCard:   '#161920',
+  bgRow:    '#1e2230',
+  bgHover:  '#262a38',
 
-  border:    '#2e2860',
-  borderSub: '#231e42',
+  border:    'rgba(255,255,255,0.06)',
+  borderSub: 'rgba(255,255,255,0.04)',
 
-  text:      '#e0daf8',
-  textDim:   '#a89fd8',
-  textMuted: '#6860a8',
+  text:      '#e8eaf0',
+  textDim:   '#8b90a0',
+  textMuted: '#5a5f72',
 
-  accent:    '#8070e8',
-  accentDim: '#8070e822',
+  accent:    '#a78bfa',
+  accentDim: '#a78bfa22',
 
-  active:     '#3aae60',
-  waiting:    '#e08020',
-  idle:       '#6860a8',
-  compacting: '#3090d0',
+  active:     '#34d399',
+  waiting:    '#fbbf24',
+  idle:       '#5a5f72',
+  compacting: '#60a5fa',
 
-  input:  '#4a88d8',
-  output: '#3aa050',
-  cacheW: '#e08020',
-  cacheR: '#8040c0',
+  input:  '#60a5fa',
+  output: '#34d399',
+  cacheW: '#fbbf24',
+  cacheR: '#a78bfa',
 
-  opus:   '#c060f0',
-  sonnet: '#3090e0',
-  haiku:  '#40b860',
-  gpt:    '#f08050',
+  opus:   '#c084fc',
+  sonnet: '#60a5fa',
+  haiku:  '#34d399',
+  gpt:    '#fb923c',
 
-  barGreen:  '#3aae60',
-  barOrange: '#e08020',
-  barRed:    '#e04040',
-  barYellow: '#e0b020',
+  barGreen:  '#34d399',
+  barOrange: '#fbbf24',
+  barRed:    '#f87171',
+  barYellow: '#fbbf24',
 
-  gradeExcellentBg:    '#1a3a28', gradeExcellentColor: '#50e888',
-  gradeGoodBg:         '#1a2848', gradeGoodColor:      '#6098f8',
-  gradeFairBg:         '#3a2c10', gradeFairColor:      '#e8b840',
-  gradePoorBg:         '#3a1818', gradePoorColor:      '#f06060',
+  gradeExcellentBg:    '#132820', gradeExcellentColor: '#34d399',
+  gradeGoodBg:         '#131f30', gradeGoodColor:      '#60a5fa',
+  gradeFairBg:         '#2a2210', gradeFairColor:      '#fbbf24',
+  gradePoorBg:         '#2a1515', gradePoorColor:      '#f87171',
 
-  etaWarning: '#e04040',
+  etaWarning: '#f87171',
+
+  fontMono: "'JetBrains Mono', monospace",
+  fontSans: "'Noto Sans', 'Noto Sans KR', sans-serif",
 };
 
 // ─── 테마 선택 ───────────────────────────────────────────────────────────────

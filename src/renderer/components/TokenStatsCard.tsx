@@ -102,54 +102,57 @@ export default function TokenStatsCard({
         </div>
 
         {/* 대형 퍼센트 */}
-        <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 4 }}>
+        <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 6, fontFamily: C.fontMono }}>
           {noData ? '—' : `${Math.round(barPct)}%`}
         </div>
 
-        {/* 진행 바 + 리셋 시간 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <div style={{ flex: 1, height: 4, background: C.accentDim, borderRadius: 2, overflow: 'hidden' }}>
-            {!noData && (
-              <div style={{
-                width: `${barPct}%`, height: '100%',
-                background: barColor, borderRadius: 2,
-                transition: 'width 0.4s',
-              }} />
-            )}
-          </div>
-          {!noData && resetStr && (
-            <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0, whiteSpace: 'nowrap' }}>{resetStr}</span>
+        {/* 진행 바 (전폭) */}
+        <div style={{ height: 4, background: C.accentDim, borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+          {!noData && (
+            <div style={{
+              width: `${barPct}%`, height: '100%',
+              background: barColor, borderRadius: 2,
+              transition: 'width 0.4s',
+            }} />
           )}
         </div>
 
-        {/* 토큰 breakdown (컬러 점, 단일 행) */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+        {/* 토큰 breakdown (컬러 점, 2줄 배치) */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 6px', marginBottom: 4 }}>
           <TokenDotRow label="In"  value={stats.inputTokens}  color={C.input} />
           <TokenDotRow label="Out" value={stats.outputTokens} color={C.output} />
           {stats.cacheCreationTokens > 0 && <TokenDotRow label="CW" value={stats.cacheCreationTokens} color={C.cacheW} />}
           {stats.cacheReadTokens > 0     && <TokenDotRow label="CR" value={stats.cacheReadTokens}     color={C.cacheR} />}
         </div>
 
-        {/* 절감 비용 */}
+        {/* 절감 비용 — 녹색 배지 */}
         {showSavings && (
-          <div style={{ fontSize: 9, color: C.gradeExcellentColor, marginTop: 4 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 9, color: C.gradeExcellentColor, marginTop: 2,
+            background: C.gradeExcellentBg, borderRadius: 12,
+            padding: '2px 8px', border: `1px solid ${C.gradeExcellentColor}33`,
+          }}>
             ✦ Saved {fmtCost(stats.cacheSavingsUSD, currency, usdToKrw)} via cache
           </div>
         )}
 
         {/* ETA 경고 */}
         {showEta && (
-          <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 2 }}>
+          <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 3 }}>
             ⚡ ~{fmtDuration(burnRate!.h5EtaMs!)} to limit
           </div>
         )}
 
-        {/* Footer: 비용 */}
-        {!hideCost && stats.costUSD > 0 && (
-          <div style={{ textAlign: 'right', marginTop: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: costColor }}>{costStr}</span>
-          </div>
-        )}
+        {/* Footer: 리셋 왼쪽 ↔ 비용 오른쪽 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
+          {!noData && resetStr ? (
+            <span style={{ fontSize: 9, color: C.textMuted }}>{resetStr}</span>
+          ) : <span />}
+          {!hideCost && stats.costUSD > 0 && (
+            <span style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
+          )}
+        </div>
       </div>
     );
   }
@@ -198,7 +201,7 @@ export default function TokenStatsCard({
                 }} />
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
               {noData ? '—' : `${Math.round(barPct)}%`}
             </span>
             {!noData && resetStr && (
