@@ -24,8 +24,10 @@ export default function CodeOutputCard({ sessions, todayCost, allTimeCost, curre
   let totalCommits = 0, totalLinesAdded = 0, totalLinesRemoved = 0;
 
   for (const s of sessions) {
-    if (!s.gitStats || seen.has(s.cwd)) continue;
-    seen.add(s.cwd);
+    // gitCommonDir: 같은 저장소의 worktree는 동일한 값 → 중복 제거
+    const repoKey = s.gitStats?.gitCommonDir ?? s.gitStats?.toplevel ?? s.cwd;
+    if (!s.gitStats || seen.has(repoKey)) continue;
+    seen.add(repoKey);
     commitsToday += s.gitStats.commitsToday;
     linesAdded += s.gitStats.linesAdded;
     linesRemoved += s.gitStats.linesRemoved;

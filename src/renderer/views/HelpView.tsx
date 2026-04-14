@@ -140,7 +140,8 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Commits</B> — number of git commits in the period.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
         <div style={{ marginBottom: 5 }}><B>$/Commit</B> — cost per commit (today uses today's cost; all uses all-time model cost sum).</div>
-        <div><B>today / all</B> — toggle between today and all-time stats.</div>
+        <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
+        <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
 
       <Divider />
@@ -210,7 +211,8 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 해당 기간의 git 커밋 수.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
         <div style={{ marginBottom: 5 }}><B>$/Commit</B> — 커밋당 비용 (today는 오늘 비용, all은 전체 모델 비용 합산 기준).</div>
-        <div><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
+        <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
+        <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
 
       <Divider />
@@ -280,7 +282,8 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 期間内の git コミット数。</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
         <div style={{ marginBottom: 5 }}><B>$/Commit</B> — コミットあたりのコスト（today は今日のコスト、all は全期間のモデルコスト合計基準）。</div>
-        <div><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
+        <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
+        <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>
 
       <Divider />

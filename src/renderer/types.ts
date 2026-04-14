@@ -1,6 +1,7 @@
 export interface GitStats {
   branch: string | null;
   toplevel: string | null;
+  gitCommonDir: string | null;  // 워크트리 중복 제거용 (git rev-parse --git-common-dir, 절대 경로)
   commitsToday: number;
   linesAdded: number;
   linesRemoved: number;

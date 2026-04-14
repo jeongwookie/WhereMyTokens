@@ -1,8 +1,10 @@
 import { execFile } from 'child_process';
+import path from 'path';
 
 export interface GitStats {
   branch: string | null;
   toplevel: string | null;
+  gitCommonDir: string | null;  // 워크트리 중복 제거용 (절대 경로 정규화)
   commitsToday: number;
   linesAdded: number;
   linesRemoved: number;
@@ -54,14 +56,21 @@ function countLines(output: string): number {
 
 async function collectStats(cwd: string): Promise<GitStats | null> {
   try {
+    // 현재 저장소 git user 이메일로 본인 커밋만 필터링 (미설정 시 전체 포함)
+    const userEmail = await execGitAsync(['config', 'user.email'], cwd).catch(() => '');
+    const authorArgs = userEmail ? [`--author=${userEmail}`] : [];
+
     // 병렬로 가벼운 명령 먼저 실행
-    const [branch, toplevel, todayLog, todayNumstat, totalCountStr] = await Promise.all([
+    const [branch, toplevel, gitCommonDirRaw, todayLog, todayNumstat, totalCountStr] = await Promise.all([
       execGitAsync(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).catch(() => null),
       execGitAsync(['rev-parse', '--show-toplevel'], cwd).catch(() => null),
-      execGitAsync(['log', '--since=midnight', '--format=%H'], cwd).catch(() => ''),
-      execGitAsync(['log', '--since=midnight', '--numstat', '--format='], cwd).catch(() => ''),
-      execGitAsync(['rev-list', '--count', 'HEAD'], cwd).catch(() => '0'),
+      execGitAsync(['rev-parse', '--git-common-dir'], cwd).catch(() => null),
+      execGitAsync(['log', '--since=midnight', '--format=%H', ...authorArgs], cwd).catch(() => ''),
+      execGitAsync(['log', '--since=midnight', '--numstat', '--format=', ...authorArgs], cwd).catch(() => ''),
+      execGitAsync(['rev-list', '--count', 'HEAD', ...authorArgs], cwd).catch(() => '0'),
     ]);
+    // git-common-dir은 일반 저장소에서 '.git'(상대 경로), worktree에서 절대 경로 반환 → 정규화
+    const gitCommonDir = gitCommonDirRaw ? path.resolve(cwd, gitCommonDirRaw) : null;
 
     const commitsToday = countLines(todayLog);
     const today = parseNumstat(todayNumstat);
@@ -70,26 +79,27 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
     // 7d/30d/all numstat — 순차 실행 (무거운 작업이므로 하나씩)
     // shortlog --summary로 커밋 수만 세고, numstat은 최소한으로
     const [log7d, numstat7d] = await Promise.all([
-      execGitAsync(['log', '--since=7 days ago', '--format=%H'], cwd).catch(() => ''),
-      execGitAsync(['log', '--since=7 days ago', '--numstat', '--format='], cwd).catch(() => ''),
+      execGitAsync(['log', '--since=7 days ago', '--format=%H', ...authorArgs], cwd).catch(() => ''),
+      execGitAsync(['log', '--since=7 days ago', '--numstat', '--format=', ...authorArgs], cwd).catch(() => ''),
     ]);
     const commits7d = countLines(log7d);
     const d7 = parseNumstat(numstat7d);
 
     const [log30d, numstat30d] = await Promise.all([
-      execGitAsync(['log', '--since=30 days ago', '--format=%H'], cwd).catch(() => ''),
-      execGitAsync(['log', '--since=30 days ago', '--numstat', '--format='], cwd).catch(() => ''),
+      execGitAsync(['log', '--since=30 days ago', '--format=%H', ...authorArgs], cwd).catch(() => ''),
+      execGitAsync(['log', '--since=30 days ago', '--numstat', '--format=', ...authorArgs], cwd).catch(() => ''),
     ]);
     const commits30d = countLines(log30d);
     const d30 = parseNumstat(numstat30d);
 
     // 전체 numstat — 가장 무거움, shortstat으로 대체
-    const allStat = await execGitAsync(['log', '--format=', '--numstat'], cwd).catch(() => '');
+    const allStat = await execGitAsync(['log', '--format=', '--numstat', ...authorArgs], cwd).catch(() => '');
     const total = parseNumstat(allStat);
 
     return {
       branch,
       toplevel,
+      gitCommonDir,
       commitsToday,
       linesAdded: today.added,
       linesRemoved: today.removed,

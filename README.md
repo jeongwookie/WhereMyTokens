@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
 - **2-level session grouping** — sessions grouped by git project → branch, with per-project commit stats and line counts; idle sessions progressively collapse (top-3 tools → context bar only → single-line summary)
 - **Rate limit bars** — 5h and 1w usage from Anthropic's API, with progress bars, time-to-reset counters, and cache efficiency grades (Excellent/Good/Fair/Poor)
 - **Claude Code bridge** — register WhereMyTokens as a Claude Code `statusLine` plugin for live rate limit data without API polling
-- **Code Output** — git-based productivity metrics: commits, net lines changed, $/commit with today/all-time toggle
+- **Code Output** — git-based productivity metrics: commits, net lines changed, $/commit with today/all-time toggle; only your commits are counted (filtered by `git config user.email`)
 - **Context window warnings** — per-session context bar; amber at 50%, orange at 80%, red at 95%+, with "⚠ near limit" / "⚠ at limit" labels
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …) per session
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day coding patterns with per-period gradient bars)
