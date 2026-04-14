@@ -17,3 +17,4 @@ TODO.md
 
 # Claude Code 로컬 설정 (커밋 제외)
 .claude/settings.local.json
+.mcp.json
