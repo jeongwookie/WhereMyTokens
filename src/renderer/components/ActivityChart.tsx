@@ -5,6 +5,10 @@ import { fmtTokens } from '../theme';
 
 type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly';
 
+const TAB_LABELS: Record<ChartTab, string> = {
+  '7d': '7d', '5mo': '5mo', 'Hourly': 'Hrly', 'Weekly': 'Wkly',
+};
+
 function blueIntensity(i: number): string {
   const sat = Math.round(55 + i * 30);
   const lgt = Math.round(88 - i * 45);
@@ -456,16 +460,15 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
                 position: 'absolute', left: 0, top: 0, bottom: 0,
                 width: `${Math.max(pct * 100, bucket.tokens > 0 ? 3 : 0)}%`,
                 background: color, borderRadius: 3,
-                opacity: isPeak ? 1 : 0.65,
               }} />
             </div>
 
-            {/* 토큰 수치 */}
+            {/* % 수치 */}
             <div style={{
-              width: 44, fontSize: 9, fontWeight: isPeak ? 700 : 400,
+              width: 36, fontSize: 9, fontWeight: isPeak ? 700 : 400,
               color: isPeak ? C.text : C.textDim, textAlign: 'right', flexShrink: 0,
             }}>
-              {fmtTokens(bucket.tokens)}
+              {Math.round(pct * 100)}%
             </div>
           </div>
         );
@@ -475,8 +478,7 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
         marginTop: 4, paddingTop: 5, borderTop: `1px solid ${C.border}`,
         fontSize: 9, color: C.textMuted,
       }}>
-        ⚡ <span style={{ color: C.accent, fontWeight: 600 }}>{TOD_SHORT[peakPeriod.period]?.label ?? peakPeriod.label}</span>
-        <span style={{ color: C.textMuted }}> peak · {fmtTokens(peakPeriod.tokens)}</span>
+        ⚡ <span style={{ color: C.accent, fontWeight: 600 }}>Peak: {TOD_SHORT[peakPeriod.period]?.label ?? peakPeriod.label}</span>
       </div>
     </div>
   );
@@ -509,69 +511,56 @@ interface Props {
 export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline }: Props) {
   const C = useTheme();
   const [tab, setTab] = useState<ChartTab>('7d');
-  const [collapsed, setCollapsed] = useState(false);
 
   const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly'];
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}` }}>
-      {/* 행1: 제목 + collapse 버튼만 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 4px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
+    <div>
+      {/* 단일 헤더 행: 제목 왼쪽 + 탭 버튼 오른쪽 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
-        <button onClick={() => setCollapsed(c => !c)} style={{
-          background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer',
-          fontSize: 11, padding: '0 2px', lineHeight: 1,
-        }}>
-          {collapsed ? '∨' : '∧'}
-        </button>
-      </div>
-
-      {/* 행2: 탭 버튼 (collapsed 상태에서 숨김) */}
-      {!collapsed && (
-        <div style={{ display: 'flex', gap: 3, padding: '4px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ display: 'flex', gap: 3 }}>
           {tabs.map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
-              padding: '2px 9px', fontSize: 10, border: 'none', borderRadius: 10, cursor: 'pointer',
+              padding: '2px 7px', fontSize: 9, border: 'none', borderRadius: 8, cursor: 'pointer',
               background: tab === t ? C.accent : C.accentDim,
               color: tab === t ? '#fff' : C.textDim,
               fontWeight: tab === t ? 700 : 400,
             }}>
-              {t}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </div>
-      )}
+      </div>
 
-      {!collapsed && (
-        <div style={{ padding: '8px 14px' }}>
-          {tab === '7d' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>7-day heatmap (day × hour)</div>
-              <Heatmap7 data={heatmap} />
-              <ColorLegend />
-            </>
-          )}
-          {tab === '5mo' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5-month activity (calendar grid, oldest → today)</div>
-              <Heatmap90 data={heatmap90} />
-              <ColorLegend />
-            </>
-          )}
-          {tab === 'Hourly' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly token usage (last 30 days)</div>
-              <HourlyDistribution data={heatmap30} />
-            </>
-          )}
-          {tab === 'Weekly' && (
-            <>
-              <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly growth (last 4 weeks, Mon–Sun)</div>
-              <WeeklyGrowthChart data={weeklyTimeline} />
-            </>
-          )}
-        </div>
-      )}
+      <div style={{ padding: '8px 14px' }}>
+        {tab === '7d' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>7-day heatmap (day × hour)</div>
+            <Heatmap7 data={heatmap} />
+            <ColorLegend />
+          </>
+        )}
+        {tab === '5mo' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5-month activity (calendar grid, oldest → today)</div>
+            <Heatmap90 data={heatmap90} />
+            <ColorLegend />
+          </>
+        )}
+        {tab === 'Hourly' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly token usage (last 30 days)</div>
+            <HourlyDistribution data={heatmap30} />
+          </>
+        )}
+        {tab === 'Weekly' && (
+          <>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly growth (last 4 weeks, Mon–Sun)</div>
+            <WeeklyGrowthChart data={weeklyTimeline} />
+          </>
+        )}
+      </div>
     </div>
   );
 }

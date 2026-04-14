@@ -68,11 +68,11 @@ export interface Theme {
 // ─── Light 테마 ─────────────────────────────────────────────────────────────
 
 export const LIGHT: Theme = {
-  headerBg:     '#1e1440',
+  headerBg:     '#261b4f',
   headerText:   '#ffffff',
   headerAccent: '#f5a623',
-  headerSub:    '#9080c0',
-  headerBorder: '#2e2460',
+  headerSub:    '#b0a0d8',
+  headerBorder: '#3a2870',
 
   bg:       '#f4f4f8',
   bgCard:   '#ffffff',

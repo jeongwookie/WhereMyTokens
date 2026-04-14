@@ -10,6 +10,11 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
   const sc = stateColor(session.state, C);
   const mc = modelColor(session.modelName, C);
 
+  // 표시 이름: worktreeBranch 우선, 없으면 cwd 마지막 폴더명
+  const displayName = session.worktreeBranch
+    ?? session.cwd.split(/[\\/]/).filter(Boolean).pop()
+    ?? session.projectName;
+
   const toolEntries = Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const totalTools = toolEntries.reduce((s, [, n]) => s + n, 0);
 
@@ -33,16 +38,16 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: sc, flexShrink: 0 }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
-            {session.projectName}
+            {displayName}
           </span>
           {session.modelName && (
             <span style={{ fontSize: 9, background: mc + '22', color: mc, border: `1px solid ${mc}44`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, flexShrink: 0 }}>
               {session.modelName}
             </span>
           )}
-          {session.isWorktree && session.worktreeBranch && (
+          {session.isWorktree && !session.worktreeBranch && (
             <span style={{ fontSize: 8, background: C.input + '22', color: C.input, border: `1px solid ${C.input}44`, borderRadius: 3, padding: '1px 5px', flexShrink: 0 }}>
-              ⎇ {session.worktreeBranch}
+              ⎇ worktree
             </span>
           )}
         </div>
@@ -97,7 +102,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
           <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
             {toolEntries.map(([name, count], i) => (
               <span key={name} style={{ fontSize: 9, color: TOOL_COLORS[i % TOOL_COLORS.length] }}>
-                {name} {count}
+                {name}×{count}
               </span>
             ))}
           </div>

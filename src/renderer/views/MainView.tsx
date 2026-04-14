@@ -154,175 +154,188 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                 <span style={{ fontSize: 10, fontWeight: 700, color: noData ? C.headerSub : '#fff', flexShrink: 0, width: 30, textAlign: 'right' }}>
                   {noData ? '—' : `${Math.round(pct)}%`}
                 </span>
-                {!noData && resetMs && resetMs > 0 && (
-                  <span style={{ fontSize: 9, color: C.headerSub, flexShrink: 0, whiteSpace: 'nowrap' }}>
-                    ↻ {apiConnected === false ? '~' : ''}{fmtDuration(resetMs)}
-                  </span>
+                {!noData && (
+                  showEta
+                    ? <span style={{ fontSize: 9, color: C.etaWarning, flexShrink: 0, whiteSpace: 'nowrap' }}>⚡ ~{fmtDuration(etaMs!)} left</span>
+                    : resetMs && resetMs > 0
+                      ? <span style={{ fontSize: 9, color: C.headerSub, flexShrink: 0, whiteSpace: 'nowrap' }}>↻ {apiConnected === false ? '~' : ''}{fmtDuration(resetMs)}</span>
+                      : null
                 )}
               </div>
-              {showEta && (
-                <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 2 }}>
-                  ⚡ ~{fmtDuration(etaMs!)} to limit at current rate
-                </div>
-              )}
             </div>
           );
         })()}
       </div>
 
       {/* scroll area */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8 }}>
 
-        {/* ── Plan Usage 섹션 (Sessions 위) ────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
-        </div>
-
-        {/* Claude: 5h | 1w 나란히 (히어로 레이아웃) */}
-        <div style={{ display: 'flex' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-              limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-              hero borderRight />
+        {/* ── Plan Usage 카드 ───────────────────────────────────────────── */}
+        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+          {/* 헤더 */}
+          <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
-              limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-              hero />
-          </div>
-        </div>
 
-        {/* Codex: 5h | 1w (데이터 있을 때만, 히어로 없이) */}
-        {(usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0) && (
-          <div style={{ display: 'flex' }}>
+          {/* Claude: 5h | 1w 나란히 (히어로 레이아웃) */}
+          <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} borderRight />
+              <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
+                hero borderRight />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
+              <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
+                hero />
             </div>
           </div>
-        )}
 
-        {/* Sonnet 1w / Extra Usage */}
-        {showSonnet && (
-          <TokenStatsCard provider="Sonnet" period="1w" stats={{
-            inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
-            totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
-          }} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
-        )}
-        {extraUsage?.isEnabled && (
-          <ExtraUsageCard extraUsage={extraUsage} />
-        )}
+          {/* Codex: 5h | 1w (데이터 있을 때만) */}
+          {(usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0) && (
+            <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} borderRight />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
+              </div>
+            </div>
+          )}
 
-        {/* ── Sessions 섹션 ─────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['all', 'active'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setActiveFilter(f)}
-                style={{
-                  background: activeFilter === f ? C.accent + '22' : 'none',
-                  border: `1px solid ${activeFilter === f ? C.accent + '66' : C.border}`,
-                  color: activeFilter === f ? C.accent : C.textMuted,
-                  borderRadius: 3, padding: '1px 7px', fontSize: 9, cursor: 'pointer', fontWeight: activeFilter === f ? 700 : 400,
-                }}
+          {/* Sonnet 1w (박스 스타일) */}
+          {showSonnet && (
+            <div style={{ background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+              <TokenStatsCard provider="Sonnet" period="1w" stats={{
+                inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
+                totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
+              }} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
+            </div>
+          )}
+
+          {/* Extra Usage (박스 스타일) */}
+          {extraUsage?.isEnabled && (
+            <div style={{ background: C.bgRow }}>
+              <ExtraUsageCard extraUsage={extraUsage} />
+            </div>
+          )}
+        </div>
+
+        {/* ── Sessions 카드 ─────────────────────────────────────────────── */}
+        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+          {/* 헤더 */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['all', 'active'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setActiveFilter(f)}
+                  style={{
+                    background: activeFilter === f ? C.accent + '22' : 'none',
+                    border: `1px solid ${activeFilter === f ? C.accent + '66' : C.border}`,
+                    color: activeFilter === f ? C.accent : C.textMuted,
+                    borderRadius: 3, padding: '1px 7px', fontSize: 9, cursor: 'pointer', fontWeight: activeFilter === f ? 700 : 400,
+                  }}
+                >
+                  {f === 'all' ? 'All' : 'Active'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 세션 목록 */}
+          {visibleGroups.length > 0
+            ? visibleGroups.map(([groupName, groupSessions]) => (
+              <div key={groupName}
+                onMouseEnter={() => setHoveredGroup(groupName)}
+                onMouseLeave={() => setHoveredGroup(null)}
               >
-                {f === 'all' ? 'All' : 'Active'}
+                <div style={{ display: 'flex', alignItems: 'center', padding: '4px 14px 3px', background: C.bgCard, borderTop: `1px solid ${C.borderSub}` }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: C.accent, textTransform: 'uppercase', letterSpacing: 1.0, flex: 1 }}>
+                    {groupName}
+                  </span>
+                  {hoveredGroup === groupName && (
+                    <div style={{ display: 'flex', gap: 2 }}>
+                      <button
+                        onClick={() => hideProject(groupName)}
+                        title={`Hide "${groupName}" (still tracked)`}
+                        style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
+                      >✕</button>
+                      <button
+                        onClick={() => excludeProject(groupName)}
+                        title={`Exclude "${groupName}" from tracking`}
+                        style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
+                      >⊘</button>
+                    </div>
+                  )}
+                </div>
+                {groupSessions.map(s => <SessionRow key={s.sessionId} session={s} />)}
+              </div>
+            ))
+            : sessions.length === 0
+              ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active Claude Code sessions</div>
+              : null
+          }
+
+          {/* 숨긴 프로젝트 관리 */}
+          {allHidden.length > 0 && (
+            <div style={{ padding: '4px 14px', borderTop: `1px solid ${C.border}` }}>
+              <button
+                onClick={() => setShowHiddenManager(v => !v)}
+                style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: 0 }}
+              >
+                {showHiddenManager ? '▲' : '▼'} {allHidden.length} hidden project{allHidden.length > 1 ? 's' : ''}
               </button>
-            ))}
-          </div>
+              {showHiddenManager && (
+                <div style={{ marginTop: 4 }}>
+                  {allHidden.map(name => (
+                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+                      <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{name}</span>
+                      <button
+                        onClick={() => unhideProject(name)}
+                        style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3 }}
+                      >show</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* sessions */}
-        {visibleGroups.length > 0
-          ? visibleGroups.map(([groupName, groupSessions]) => (
-            <div key={groupName}
-              onMouseEnter={() => setHoveredGroup(groupName)}
-              onMouseLeave={() => setHoveredGroup(null)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', padding: '4px 14px 3px', background: C.bg, borderTop: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 9, fontWeight: 400, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.0, flex: 1 }}>
-                  {groupName}
-                </span>
-                {hoveredGroup === groupName && (
-                  <div style={{ display: 'flex', gap: 2 }}>
-                    <button
-                      onClick={() => hideProject(groupName)}
-                      title={`Hide "${groupName}" (still tracked)`}
-                      style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
-                    >✕</button>
-                    <button
-                      onClick={() => excludeProject(groupName)}
-                      title={`Exclude "${groupName}" from tracking`}
-                      style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
-                    >⊘</button>
-                  </div>
-                )}
-              </div>
-              {groupSessions.map(s => <SessionRow key={s.sessionId} session={s} />)}
+        {/* ── Activity + TOD Rhythm 카드 ────────────────────────────────── */}
+        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+          <div style={{ display: 'flex' }}>
+            {/* Activity 차트 (좌 55%) */}
+            <div style={{ flex: 55, borderRight: `1px solid ${C.border}`, minWidth: 0 }}>
+              <ActivityChart
+                heatmap={usage.heatmap}
+                heatmap30={usage.heatmap30}
+                heatmap90={usage.heatmap90}
+                weeklyTimeline={usage.weeklyTimeline}
+                todBuckets={usage.todBuckets}
+                currency={currency}
+                usdToKrw={usdToKrw}
+              />
             </div>
-          ))
-          : sessions.length === 0
-            ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active Claude Code sessions</div>
-            : null
-        }
-
-        {/* 숨긴 프로젝트 관리 */}
-        {allHidden.length > 0 && (
-          <div style={{ padding: '4px 14px', borderBottom: `1px solid ${C.border}` }}>
-            <button
-              onClick={() => setShowHiddenManager(v => !v)}
-              style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: 0 }}
-            >
-              {showHiddenManager ? '▲' : '▼'} {allHidden.length} hidden project{allHidden.length > 1 ? 's' : ''}
-            </button>
-            {showHiddenManager && (
-              <div style={{ marginTop: 4 }}>
-                {allHidden.map(name => (
-                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
-                    <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{name}</span>
-                    <button
-                      onClick={() => unhideProject(name)}
-                      style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3 }}
-                    >show</button>
-                  </div>
-                ))}
+            {/* TOD Rhythm 패널 (우 45%) */}
+            <div style={{ flex: 45, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px 5px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>TOD Rhythm</span>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Activity + TOD 사이드패널 나란히 ──────────────────────────── */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-          {/* Activity 차트 (좌 55%) */}
-          <div style={{ flex: 55, borderRight: `1px solid ${C.border}`, minWidth: 0 }}>
-            <ActivityChart
-              heatmap={usage.heatmap}
-              heatmap30={usage.heatmap30}
-              heatmap90={usage.heatmap90}
-              weeklyTimeline={usage.weeklyTimeline}
-              todBuckets={usage.todBuckets}
-              currency={currency}
-              usdToKrw={usdToKrw}
-            />
-          </div>
-          {/* TOD Rhythm 패널 (우 45%) */}
-          <div style={{ flex: 45, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px 5px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>TOD Rhythm</span>
-            </div>
-            <div style={{ padding: '8px 10px' }}>
-              <TODPanel data={usage.todBuckets} />
+              <div style={{ padding: '8px 10px' }}>
+                <TODPanel data={usage.todBuckets} />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ── Model Breakdown ──────────────────────────────────────────── */}
-        <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
+        {/* ── Model Usage 카드 ──────────────────────────────────────────── */}
+        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+          <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
+        </div>
 
       </div>
 

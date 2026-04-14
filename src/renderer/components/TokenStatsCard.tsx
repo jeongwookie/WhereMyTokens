@@ -63,7 +63,14 @@ export default function TokenStatsCard({
   let resetStr = '';
   if (resetMs && resetMs > 0) {
     const approx = apiConnected === false ? '~' : '';
-    resetStr = `↻ ${approx}${fmtDuration(resetMs)}`;
+    const durationStr = `↻ ${approx}${fmtDuration(resetMs)}`;
+    if (resetMs > 4 * 24 * 3600 * 1000) {
+      // 4일 이상 → 요일 병기: "↻ 152h 3m · resets Mon"
+      const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(Date.now() + resetMs).getDay()];
+      resetStr = `${durationStr} · resets ${dayName}`;
+    } else {
+      resetStr = durationStr;
+    }
   }
 
   const grade = cacheGrade(stats.cacheEfficiency, C);
@@ -115,18 +122,12 @@ export default function TokenStatsCard({
           )}
         </div>
 
-        {/* 토큰 breakdown (컬러 점) */}
-        <div style={{ color: C.textDim, lineHeight: 1.8 }}>
-          <div>
-            <TokenDotRow label="In"  value={stats.inputTokens}          color={C.input} />
-            <TokenDotRow label="Out" value={stats.outputTokens}         color={C.output} />
-          </div>
-          {(stats.cacheCreationTokens > 0 || stats.cacheReadTokens > 0) && (
-            <div>
-              <TokenDotRow label="CW" value={stats.cacheCreationTokens} color={C.cacheW} />
-              <TokenDotRow label="CR" value={stats.cacheReadTokens}     color={C.cacheR} />
-            </div>
-          )}
+        {/* 토큰 breakdown (컬러 점, 단일 행) */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+          <TokenDotRow label="In"  value={stats.inputTokens}  color={C.input} />
+          <TokenDotRow label="Out" value={stats.outputTokens} color={C.output} />
+          {stats.cacheCreationTokens > 0 && <TokenDotRow label="CW" value={stats.cacheCreationTokens} color={C.cacheW} />}
+          {stats.cacheReadTokens > 0     && <TokenDotRow label="CR" value={stats.cacheReadTokens}     color={C.cacheR} />}
         </div>
 
         {/* 절감 비용 */}
@@ -156,7 +157,6 @@ export default function TokenStatsCard({
   // ── 일반 레이아웃 (진행 바 위주) ──────────────────────────────────────────
   return (
     <div style={{
-      borderBottom: `1px solid ${C.border}`,
       borderRight: borderRight ? `1px solid ${C.border}` : 'none',
       padding: '7px 14px',
     }}>

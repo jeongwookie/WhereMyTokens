@@ -30,7 +30,7 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
   const resetStr = fmtMonthlyReset();
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}`, padding: '7px 14px' }}>
+    <div style={{ padding: '7px 14px' }}>
       {/* 헤더: 레이블 왼쪽, 금액+% 오른쪽 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
         <span style={{ fontSize: 11, color: C.textMuted }}>Extra Usage · monthly</span>
