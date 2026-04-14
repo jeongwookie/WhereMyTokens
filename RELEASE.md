@@ -99,6 +99,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.6.0 | 2026-04-14 | Code Output all-time에 모든 Claude 프로젝트 자동 포함 (~/.claude/projects/ 기반), today 통계 브랜치별 중복제거, git stats 영속 폴백 |
 | v1.5.1 | 2026-04-14 | Code Output 중복 집계 수정 (worktree dedup, 본인 커밋만 필터링), 세션 패널 워크트리 프로젝트 그루핑 수정 |
 | v1.5.0 | 2026-04-14 | 대시보드 리디자인 — 다크 테마 기본, 2단계 세션 그루핑, Code Output, Rhythm 탭, 스크롤바 커스텀, 타임존 배지, 설정 정리, 데모 영상 |
 | v1.4.1 | 2026-04-07 | 신규 JSONL 파일 생성 시 usage 즉시 갱신, 헤더 토큰/비용 표시 간결화 |
