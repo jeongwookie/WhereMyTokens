@@ -76,7 +76,7 @@ export default function TokenStatsCard({
     return (
       <div style={{
         borderRight: borderRight ? `1px solid ${C.border}` : 'none',
-        padding: '8px 12px 10px',
+        padding: '8px 12px 8px',
         background: C.bgCard,
       }}>
         {/* 제공자 + 등급 */}
@@ -100,7 +100,7 @@ export default function TokenStatsCard({
         </div>
 
         {/* 진행 바 + 리셋 시간 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <div style={{ flex: 1, height: 4, background: C.accentDim, borderRadius: 2, overflow: 'hidden' }}>
             {!noData && (
               <div style={{
@@ -116,7 +116,7 @@ export default function TokenStatsCard({
         </div>
 
         {/* 토큰 breakdown (컬러 점) */}
-        <div style={{ color: C.textDim, lineHeight: 1.9 }}>
+        <div style={{ color: C.textDim, lineHeight: 1.8 }}>
           <div>
             <TokenDotRow label="In"  value={stats.inputTokens}          color={C.input} />
             <TokenDotRow label="Out" value={stats.outputTokens}         color={C.output} />

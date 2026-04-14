@@ -94,7 +94,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
             <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{totalTools}×</span>
           </div>
           {/* 전체 툴 이름 + 횟수 */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
             {toolEntries.map(([name, count], i) => (
               <span key={name} style={{ fontSize: 9, color: TOOL_COLORS[i % TOOL_COLORS.length] }}>
                 {name} {count}

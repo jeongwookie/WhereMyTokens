@@ -244,7 +244,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               onMouseEnter={() => setHoveredGroup(groupName)}
               onMouseLeave={() => setHoveredGroup(null)}
             >
-              <div style={{ display: 'flex', alignItems: 'center', padding: '3px 14px 2px', background: C.bg, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '4px 14px 3px', background: C.bg, borderTop: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 9, fontWeight: 400, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1.0, flex: 1 }}>
                   {groupName}
                 </span>

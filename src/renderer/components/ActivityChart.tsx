@@ -408,13 +408,21 @@ const TOD_COLORS: Record<string, string> = {
   night:     'hsl(220, 30%, 45%)',
 };
 
+// 좁은 패널에 맞춘 짧은 라벨 + 시간대
+const TOD_SHORT: Record<string, { label: string; time: string }> = {
+  morning:   { label: 'Morn',  time: '6–12h' },
+  afternoon: { label: 'Aftn',  time: '12–18h' },
+  evening:   { label: 'Even',  time: '18–24h' },
+  night:     { label: 'Night', time: '0–6h' },
+};
+
 export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
   const C = useTheme();
 
   if (data.every(b => b.tokens === 0)) {
     return (
-      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.textMuted }}>
-        No data (last 30 days)
+      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: C.textMuted }}>
+        No data
       </div>
     );
   }
@@ -429,28 +437,32 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
         const pct = bucket.tokens / maxTokens;
         const isPeak = bucket.period === peakPeriod.period && bucket.tokens > 0;
         const color = TOD_COLORS[bucket.period];
+        const short = TOD_SHORT[bucket.period];
 
         return (
-          <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
-            <div style={{
-              width: 80, fontSize: 9, fontWeight: isPeak ? 700 : 400,
-              color: isPeak ? C.text : C.textMuted, textAlign: 'right', flexShrink: 0,
-            }}>
-              {bucket.label}
+          <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            {/* 짧은 라벨 2줄: "Morn" / "6–12h" */}
+            <div style={{ width: 40, flexShrink: 0, textAlign: 'right' }}>
+              <div style={{ fontSize: 10, fontWeight: isPeak ? 700 : 400, color: isPeak ? C.text : C.textMuted, lineHeight: 1.2 }}>
+                {short.label}
+              </div>
+              <div style={{ fontSize: 8, color: C.textMuted, lineHeight: 1.2 }}>{short.time}</div>
             </div>
 
-            <div style={{ flex: 1, position: 'relative', height: 14 }}>
+            {/* 바 영역 */}
+            <div style={{ flex: 1, position: 'relative', height: 16 }}>
               <div style={{ position: 'absolute', inset: 0, background: C.accentDim, borderRadius: 3 }} />
               <div style={{
                 position: 'absolute', left: 0, top: 0, bottom: 0,
-                width: `${Math.max(pct * 100, bucket.tokens > 0 ? 2 : 0)}%`,
+                width: `${Math.max(pct * 100, bucket.tokens > 0 ? 3 : 0)}%`,
                 background: color, borderRadius: 3,
-                opacity: isPeak ? 1 : 0.6,
+                opacity: isPeak ? 1 : 0.65,
               }} />
             </div>
 
+            {/* 토큰 수치 */}
             <div style={{
-              width: 56, fontSize: 10, fontWeight: isPeak ? 700 : 400,
+              width: 44, fontSize: 9, fontWeight: isPeak ? 700 : 400,
               color: isPeak ? C.text : C.textDim, textAlign: 'right', flexShrink: 0,
             }}>
               {fmtTokens(bucket.tokens)}
@@ -463,8 +475,8 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
         marginTop: 4, paddingTop: 5, borderTop: `1px solid ${C.border}`,
         fontSize: 9, color: C.textMuted,
       }}>
-        Peak: <span style={{ color: C.accent, fontWeight: 600 }}>{peakPeriod.label}</span>
-        <span style={{ color: C.textMuted }}> · {peakPeriod.requestCount} req, {fmtTokens(peakPeriod.tokens)} tok</span>
+        ⚡ <span style={{ color: C.accent, fontWeight: 600 }}>{TOD_SHORT[peakPeriod.period]?.label ?? peakPeriod.label}</span>
+        <span style={{ color: C.textMuted }}> peak · {fmtTokens(peakPeriod.tokens)}</span>
       </div>
     </div>
   );
@@ -503,31 +515,32 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
 
   return (
     <div style={{ borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
+      {/* 행1: 제목 + collapse 버튼만 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 4px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {!collapsed && (
-            <div style={{ display: 'flex', gap: 2 }}>
-              {tabs.map(t => (
-                <button key={t} onClick={() => setTab(t)} style={{
-                  padding: '2px 7px', fontSize: 10, border: 'none', borderRadius: 10, cursor: 'pointer',
-                  background: tab === t ? C.accent : C.accentDim,
-                  color: tab === t ? '#fff' : C.textDim,
-                  fontWeight: tab === t ? 700 : 400,
-                }}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
-          <button onClick={() => setCollapsed(c => !c)} style={{
-            background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer',
-            fontSize: 11, padding: '0 2px', lineHeight: 1,
-          }}>
-            {collapsed ? '∨' : '∧'}
-          </button>
-        </div>
+        <button onClick={() => setCollapsed(c => !c)} style={{
+          background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer',
+          fontSize: 11, padding: '0 2px', lineHeight: 1,
+        }}>
+          {collapsed ? '∨' : '∧'}
+        </button>
       </div>
+
+      {/* 행2: 탭 버튼 (collapsed 상태에서 숨김) */}
+      {!collapsed && (
+        <div style={{ display: 'flex', gap: 3, padding: '4px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+          {tabs.map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              padding: '2px 9px', fontSize: 10, border: 'none', borderRadius: 10, cursor: 'pointer',
+              background: tab === t ? C.accent : C.accentDim,
+              color: tab === t ? '#fff' : C.textDim,
+              fontWeight: tab === t ? 700 : 400,
+            }}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!collapsed && (
         <div style={{ padding: '8px 14px' }}>
