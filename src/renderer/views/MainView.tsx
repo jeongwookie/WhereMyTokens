@@ -4,7 +4,7 @@ import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtCostShort, fmtDuration } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
-import ActivityChart from '../components/ActivityChart';
+import ActivityChart, { TODPanel } from '../components/ActivityChart';
 import ModelBreakdown from '../components/ModelBreakdown';
 import ExtraUsageCard from '../components/ExtraUsageCard';
 
@@ -173,7 +173,50 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       {/* scroll area */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
 
-        {/* Sessions 섹션 헤더 + 필터 inline */}
+        {/* ── Plan Usage 섹션 (Sessions 위) ────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
+        </div>
+
+        {/* Claude: 5h | 1w 나란히 (히어로 레이아웃) */}
+        <div style={{ display: 'flex' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
+              limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
+              hero borderRight />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
+              limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
+              hero />
+          </div>
+        </div>
+
+        {/* Codex: 5h | 1w (데이터 있을 때만, 히어로 없이) */}
+        {(usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0) && (
+          <div style={{ display: 'flex' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} borderRight />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
+            </div>
+          </div>
+        )}
+
+        {/* Sonnet 1w / Extra Usage */}
+        {showSonnet && (
+          <TokenStatsCard provider="Sonnet" period="1w" stats={{
+            inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
+            totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
+          }} currency={currency} usdToKrw={usdToKrw}
+            limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
+        )}
+        {extraUsage?.isEnabled && (
+          <ExtraUsageCard extraUsage={extraUsage} />
+        )}
+
+        {/* ── Sessions 섹션 ─────────────────────────────────────────────── */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
           <div style={{ display: 'flex', gap: 4 }}>
@@ -210,18 +253,12 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                     <button
                       onClick={() => hideProject(groupName)}
                       title={`Hide "${groupName}" (still tracked)`}
-                      style={{
-                        background: 'none', border: 'none', color: C.textMuted,
-                        cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1,
-                      }}
+                      style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
                     >✕</button>
                     <button
                       onClick={() => excludeProject(groupName)}
                       title={`Exclude "${groupName}" from tracking`}
-                      style={{
-                        background: 'none', border: 'none', color: C.textMuted,
-                        cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1,
-                      }}
+                      style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
                     >⊘</button>
                   </div>
                 )}
@@ -234,7 +271,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             : null
         }
 
-        {/* hidden projects indicator */}
+        {/* 숨긴 프로젝트 관리 */}
         {allHidden.length > 0 && (
           <div style={{ padding: '4px 14px', borderBottom: `1px solid ${C.border}` }}>
             <button
@@ -259,59 +296,32 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           </div>
         )}
 
-        {/* Plan Usage 섹션 헤더 */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
-        </div>
-
-        {/* 5h 행: Claude 5h | Codex 5h (2열 그리드) */}
+        {/* ── Activity + TOD 사이드패널 나란히 ──────────────────────────── */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-              limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-              borderRight />
+          {/* Activity 차트 (좌 55%) */}
+          <div style={{ flex: 55, borderRight: `1px solid ${C.border}`, minWidth: 0 }}>
+            <ActivityChart
+              heatmap={usage.heatmap}
+              heatmap30={usage.heatmap30}
+              heatmap90={usage.heatmap90}
+              weeklyTimeline={usage.weeklyTimeline}
+              todBuckets={usage.todBuckets}
+              currency={currency}
+              usdToKrw={usdToKrw}
+            />
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} />
+          {/* TOD Rhythm 패널 (우 45%) */}
+          <div style={{ flex: 45, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px 5px', background: C.bgRow, borderTop: `2px solid ${C.accent}` }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>TOD Rhythm</span>
+            </div>
+            <div style={{ padding: '8px 10px' }}>
+              <TODPanel data={usage.todBuckets} />
+            </div>
           </div>
         </div>
 
-        {/* 1w 행: Claude 1w | Codex 1w (2열 그리드) */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
-              limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-              borderRight />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
-          </div>
-        </div>
-
-        {/* Sonnet 1w / Extra Usage (전체 폭) */}
-        {showSonnet && (
-          <TokenStatsCard provider="Sonnet" period="1w" stats={{
-            inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
-            totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
-          }} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
-        )}
-        {extraUsage?.isEnabled && (
-          <ExtraUsageCard extraUsage={extraUsage} />
-        )}
-
-        {/* activity chart */}
-        <ActivityChart
-          heatmap={usage.heatmap}
-          heatmap30={usage.heatmap30}
-          heatmap90={usage.heatmap90}
-          weeklyTimeline={usage.weeklyTimeline}
-          todBuckets={usage.todBuckets}
-          currency={currency}
-          usdToKrw={usdToKrw}
-        />
-
-        {/* model breakdown */}
+        {/* ── Model Breakdown ──────────────────────────────────────────── */}
         <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
 
       </div>
