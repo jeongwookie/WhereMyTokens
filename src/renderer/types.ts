@@ -108,17 +108,14 @@ export interface UsageLimits {
 }
 
 export interface AppSettings {
-  language: 'ko' | 'en';
-  refreshInterval: number;
   usageLimits: { h5: number; week: number; sonnetWeek: number };
+  provider: 'claude' | 'codex' | 'both';
   alertThresholds: number[];
   openAtLogin: boolean;
-  defaultChartView: 'line' | 'heatmap';
   currency: 'USD' | 'KRW';
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
-  provider: 'claude' | 'codex' | 'both';
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   hiddenProjects: string[];
   excludedProjects: string[];

@@ -87,16 +87,6 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <input style={{ ...inp, width: 160 }} value={s.globalHotkey} onChange={e => setS({ ...s, globalHotkey: e.target.value })} />
         </div>
 
-        <SectionHeader label="Data" />
-        <div style={row}>
-          <span style={label}>Show provider</span>
-          <select style={sel} value={s.provider ?? 'both'} onChange={e => setS({ ...s, provider: e.target.value as AppSettings['provider'] })}>
-            <option value="both">Claude + Codex</option>
-            <option value="claude">Claude only</option>
-            <option value="codex">Codex only</option>
-          </select>
-        </div>
-
         <SectionHeader label="Currency" />
         <div style={row}>
           <span style={label}>Currency</span>

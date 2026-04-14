@@ -476,7 +476,7 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
           </strong>
         </div>
         <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2, fontFamily: C.fontMono }}>
-          최근 7일 기준 · 로컬 타임존 (KST)
+          Last 7 days · local timezone
         </div>
       </div>
     </div>
@@ -517,7 +517,12 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
     <div>
       {/* 헤더: 제목 + 탭 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
+          <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, background: C.accentDim, padding: '1px 5px', borderRadius: 3 }}>
+            {Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Local'}
+          </span>
+        </span>
         <div style={{ display: 'flex', gap: 2 }}>
           {tabs.map(t => {
             const isRhythm = t === 'Rhythm';
