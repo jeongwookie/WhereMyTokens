@@ -10,7 +10,7 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
-import { getGitStats, GitStats } from './gitStatsCollector';
+import { getGitStats, getGitStatsAsync, GitStats } from './gitStatsCollector';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -261,7 +261,7 @@ export class StateManager {
       ?? (bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : 0);
     const usage = computeUsage(this.allEntries, effectiveLimits, weekResetMs, h5ResetMs);
     const limits = this.buildLimits();
-    const sessions = this.buildSessionInfos();
+    const sessions = await this.buildSessionInfosAsync();
 
     const extraUsage = this.apiUsagePct?.extraUsage ?? null;
     this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage };
@@ -358,6 +358,35 @@ export class StateManager {
       const gitStats = getGitStats(s.cwd);
       return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
     });
+  }
+
+  // heavyRefresh용 — git stats를 async로 확보하여 첫 렌더링에 브랜치명 포함
+  private async buildSessionInfosAsync(): Promise<SessionInfo[]> {
+    const settings = this.getSettings();
+    const excluded = new Set(settings.excludedProjects ?? []);
+    const discovered = discoverSessions().filter(s => !excluded.has(s.projectName));
+    return Promise.all(discovered.map(async s => {
+      let modelName = '';
+      let contextUsed = 0;
+      let contextMax = 200_000;
+      let toolCounts: Record<string, number> = {};
+
+      if (s.jsonlPath) {
+        try {
+          const parsed = parseJsonlFile(s.jsonlPath);
+          modelName = parsed.modelName;
+          contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
+          toolCounts = parsed.toolCounts;
+
+          const raw = parsed.rawModel.toLowerCase();
+          if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
+          else contextMax = 200_000;
+        } catch { /* skip */ }
+      }
+
+      const gitStats = await getGitStatsAsync(s.cwd);
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
+    }));
   }
 
   getState(): AppState {

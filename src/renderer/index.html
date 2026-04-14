@@ -49,6 +49,12 @@
       flex-shrink: 0;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 커스텀 스크롤바 — Soft Accent */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.35); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.55); }
   </style>
 </head>
 <body>
