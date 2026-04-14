@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
-import { C, fmtTokens, fmtCost, fmtCostShort } from '../theme';
+import { useTheme } from '../ThemeContext';
+import { fmtTokens, fmtCostShort } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
@@ -18,6 +19,7 @@ const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
 export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
+  const C = useTheme();
   const { sessions, usage, limits, settings, apiConnected, apiError, extraUsage } = state;
   const { currency, usdToKrw } = settings;
   const hiddenProjects: string[] = settings.hiddenProjects ?? [];
@@ -232,10 +234,10 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
               limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-              compact borderRight />
+              borderRight />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} compact />
+            <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} />
           </div>
         </div>
 
@@ -244,10 +246,10 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
               limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-              compact borderRight />
+              borderRight />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} compact />
+            <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
           </div>
         </div>
 

@@ -4,7 +4,8 @@ import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
 import HelpView from './views/HelpView';
-import { C } from './theme';
+import { getTheme } from './theme';
+import { ThemeProvider } from './ThemeContext';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
@@ -29,7 +30,7 @@ const DEFAULT_STATE: AppState = {
     alertThresholds: [50,80,90], openAtLogin: false,
     defaultChartView: 'heatmap', currency: 'USD', usdToKrw: 1380,
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
-    provider: 'both', trayDisplay: 'h5pct',
+    provider: 'both', trayDisplay: 'h5pct', theme: 'light',
   },
   autoLimits: null,
   lastUpdated: 0,
@@ -70,38 +71,47 @@ export default function App() {
     window.wmt.quit().catch(() => window.close());
   }
 
-  const bgStyle: React.CSSProperties = { background: C.bg, height: '100vh', color: C.text };
+  const theme = getTheme(state.settings.theme ?? 'light');
+  const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
 
   if (view === 'settings') {
     return (
-      <div style={bgStyle}>
-        <SettingsView settings={state.settings} onSave={handleSaveSettings} onBack={() => setView('main')} />
-      </div>
+      <ThemeProvider value={theme}>
+        <div style={bgStyle}>
+          <SettingsView settings={state.settings} onSave={handleSaveSettings} onBack={() => setView('main')} />
+        </div>
+      </ThemeProvider>
     );
   }
 
   if (view === 'notifications') {
     return (
-      <div style={bgStyle}>
-        <NotificationsView onBack={() => setView('main')} />
-      </div>
+      <ThemeProvider value={theme}>
+        <div style={bgStyle}>
+          <NotificationsView onBack={() => setView('main')} />
+        </div>
+      </ThemeProvider>
     );
   }
 
   if (view === 'help') {
     return (
-      <div style={bgStyle}>
-        <HelpView onBack={() => setView('main')} />
-      </div>
+      <ThemeProvider value={theme}>
+        <div style={bgStyle}>
+          <HelpView onBack={() => setView('main')} />
+        </div>
+      </ThemeProvider>
     );
   }
 
   return (
-    <MainView
-      state={state}
-      onNav={setView}
-      onQuit={handleQuit}
-      onRefresh={refresh}
-    />
+    <ThemeProvider value={theme}>
+      <MainView
+        state={state}
+        onNav={setView}
+        onQuit={handleQuit}
+        onRefresh={refresh}
+      />
+    </ThemeProvider>
   );
 }

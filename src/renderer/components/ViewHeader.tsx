@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { C } from '../theme';
+import { useTheme } from '../ThemeContext';
 
 interface Props {
   title: string;
@@ -7,6 +7,7 @@ interface Props {
 }
 
 export default function ViewHeader({ title, onBack }: Props) {
+  const C = useTheme();
   const [hover, setHover] = useState(false);
 
   return (

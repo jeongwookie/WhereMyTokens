@@ -1,14 +1,22 @@
 import React from 'react';
 import { WindowStats, BurnRate } from '../types';
-import { C, fmtTokens, fmtCost, fmtDuration } from '../theme';
+import { useTheme } from '../ThemeContext';
+import { fmtTokens, fmtCost, fmtDuration, Theme } from '../theme';
 
 // 캐시 효율 등급 계산
-function cacheGrade(eff: number): { label: string; bg: string; color: string } | null {
+function cacheGrade(eff: number, C: Theme) {
   if (eff <= 0) return null;
-  if (eff >= 80) return { label: 'Excellent', bg: '#e6f7ee', color: '#1e7e44' };
-  if (eff >= 60) return { label: 'Good',      bg: '#e6f0ff', color: '#1a5fb4' };
-  if (eff >= 40) return { label: 'Fair',      bg: '#fff4e0', color: '#9a5c00' };
-  return           { label: 'Poor',      bg: '#fde8e8', color: '#8b1a1a' };
+  if (eff >= 80) return { label: 'Excellent', bg: C.gradeExcellentBg, color: C.gradeExcellentColor };
+  if (eff >= 60) return { label: 'Good',      bg: C.gradeGoodBg,      color: C.gradeGoodColor };
+  if (eff >= 40) return { label: 'Fair',      bg: C.gradeFairBg,      color: C.gradeFairColor };
+  return           { label: 'Poor',      bg: C.gradePoorBg,      color: C.gradePoorColor };
+}
+
+function pctBarColor(pct: number, C: Theme): string {
+  if (pct >= 90) return C.barRed;
+  if (pct >= 75) return C.barOrange;
+  if (pct >= 50) return C.barYellow;
+  return C.accent;
 }
 
 interface Props {
@@ -17,35 +25,40 @@ interface Props {
   stats: WindowStats;
   currency: string;
   usdToKrw: number;
-  limitPct?: number;   // 0-100
-  resetMs?: number;    // ms until reset
+  limitPct?: number;    // 0-100
+  resetMs?: number;     // ms until reset
   apiConnected?: boolean;
   hideCost?: boolean;
-  burnRate?: BurnRate; // ETA 예측 (h5 카드에만 전달)
-  compact?: boolean;   // 2열 그리드용: borderBottom 제거, padding 축소
-  borderRight?: boolean; // 그리드 좌측 셀에 구분선 추가
+  burnRate?: BurnRate;  // ETA 예측 (h5 카드에만 전달)
+  hero?: boolean;       // true = 히어로 대형 % 레이아웃
+  borderRight?: boolean;
 }
 
-function pctBarColor(pct: number): string {
-  if (pct >= 90) return '#c0392b';
-  if (pct >= 75) return '#e67e22';
-  if (pct >= 50) return '#d4a017';
-  return C.accent;
+function TokenDotRow({ label, value, color }: { label: string; value: number; color: string }) {
+  if (value === 0) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginRight: 10 }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 9 }}>{label} {fmtTokens(value)}</span>
+    </span>
+  );
 }
 
 export default function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, apiConnected, hideCost, burnRate,
-  compact, borderRight,
+  hero, borderRight,
 }: Props) {
+  const C = useTheme();
+
   if (stats.totalTokens === 0 && stats.requestCount === 0) return null;
 
   const costStr = fmtCost(stats.costUSD, currency, usdToKrw);
-  const costColor = stats.costUSD > 5 ? '#7a3030' : stats.costUSD > 2 ? '#7a5a20' : C.textDim;
+  const costColor = stats.costUSD > 5 ? C.barRed : stats.costUSD > 2 ? C.barYellow : C.textDim;
 
   const showLimitBar = limitPct != null;
   const barPct = Math.min(100, limitPct ?? 0);
-  const barColor = pctBarColor(barPct);
+  const barColor = pctBarColor(barPct, C);
 
   let resetStr = '';
   if (resetMs && resetMs > 0) {
@@ -53,14 +66,99 @@ export default function TokenStatsCard({
     resetStr = `↻ ${approx}${fmtDuration(resetMs)}`;
   }
 
-  const grade = cacheGrade(stats.cacheEfficiency);
+  const grade = cacheGrade(stats.cacheEfficiency, C);
   const showSavings = stats.cacheSavingsUSD > 0.005;
+  const showEta = burnRate && burnRate.h5EtaMs !== null && burnRate.h5EtaMs < (resetMs ?? Infinity);
 
+  // ── 히어로 레이아웃 (대형 % 숫자 + 토큰 breakdown) ──────────────────────────
+  if (hero && showLimitBar) {
+    const noData = apiConnected === false && barPct === 0;
+    return (
+      <div style={{
+        borderRight: borderRight ? `1px solid ${C.border}` : 'none',
+        padding: '8px 12px 10px',
+        background: C.bgCard,
+      }}>
+        {/* 제공자 + 등급 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
+            {provider} {period}
+            {apiConnected === false && limitPct != null && limitPct > 0 && (
+              <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
+            )}
+          </span>
+          {grade && (
+            <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: grade.bg, color: grade.color }}>
+              {grade.label}
+            </span>
+          )}
+        </div>
+
+        {/* 대형 퍼센트 */}
+        <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 4 }}>
+          {noData ? '—' : `${Math.round(barPct)}%`}
+        </div>
+
+        {/* 진행 바 + 리셋 시간 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <div style={{ flex: 1, height: 4, background: C.accentDim, borderRadius: 2, overflow: 'hidden' }}>
+            {!noData && (
+              <div style={{
+                width: `${barPct}%`, height: '100%',
+                background: barColor, borderRadius: 2,
+                transition: 'width 0.4s',
+              }} />
+            )}
+          </div>
+          {!noData && resetStr && (
+            <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0, whiteSpace: 'nowrap' }}>{resetStr}</span>
+          )}
+        </div>
+
+        {/* 토큰 breakdown (컬러 점) */}
+        <div style={{ color: C.textDim, lineHeight: 1.9 }}>
+          <div>
+            <TokenDotRow label="In"  value={stats.inputTokens}          color={C.input} />
+            <TokenDotRow label="Out" value={stats.outputTokens}         color={C.output} />
+          </div>
+          {(stats.cacheCreationTokens > 0 || stats.cacheReadTokens > 0) && (
+            <div>
+              <TokenDotRow label="CW" value={stats.cacheCreationTokens} color={C.cacheW} />
+              <TokenDotRow label="CR" value={stats.cacheReadTokens}     color={C.cacheR} />
+            </div>
+          )}
+        </div>
+
+        {/* 절감 비용 */}
+        {showSavings && (
+          <div style={{ fontSize: 9, color: C.gradeExcellentColor, marginTop: 4 }}>
+            ✦ Saved {fmtCost(stats.cacheSavingsUSD, currency, usdToKrw)} via cache
+          </div>
+        )}
+
+        {/* ETA 경고 */}
+        {showEta && (
+          <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 2 }}>
+            ⚡ ~{fmtDuration(burnRate!.h5EtaMs!)} to limit
+          </div>
+        )}
+
+        {/* Footer: 비용 */}
+        {!hideCost && stats.costUSD > 0 && (
+          <div style={{ textAlign: 'right', marginTop: 4 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: costColor }}>{costStr}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 일반 레이아웃 (진행 바 위주) ──────────────────────────────────────────
   return (
     <div style={{
-      borderBottom: compact ? 'none' : `1px solid ${C.border}`,
+      borderBottom: `1px solid ${C.border}`,
       borderRight: borderRight ? `1px solid ${C.border}` : 'none',
-      padding: compact ? '6px 10px' : '7px 14px',
+      padding: '7px 14px',
     }}>
       {/* header: provider · period, 등급 뱃지, tokens, req count, cost */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: showLimitBar ? 5 : 0 }}>
@@ -69,7 +167,6 @@ export default function TokenStatsCard({
           {apiConnected === false && limitPct != null && limitPct > 0 && (
             <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
           )}
-          {/* 캐시 효율 등급 뱃지 */}
           {grade && (
             <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: grade.bg, color: grade.color }}>
               {grade.label}
@@ -92,7 +189,7 @@ export default function TokenStatsCard({
         const noData = apiConnected === false && barPct === 0;
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ flex: 1, height: 5, background: '#0000000a', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 5, background: C.accentDim, borderRadius: 3, overflow: 'hidden' }}>
               {!noData && (
                 <div style={{
                   width: `${barPct}%`, height: '100%',
@@ -111,16 +208,16 @@ export default function TokenStatsCard({
         );
       })()}
 
-      {/* ETA 예측 (번 레이트 기반, 위험 시에만 표시) */}
-      {burnRate && burnRate.h5EtaMs !== null && burnRate.h5EtaMs < (resetMs ?? Infinity) && (
-        <div style={{ fontSize: 9, color: '#c0392b', marginTop: 3 }}>
-          ⚡ ~{fmtDuration(burnRate.h5EtaMs)} to limit at current rate
+      {/* ETA 경고 */}
+      {showEta && (
+        <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 3 }}>
+          ⚡ ~{fmtDuration(burnRate!.h5EtaMs!)} to limit at current rate
         </div>
       )}
 
       {/* 캐시 절감 비용 */}
       {showSavings && (
-        <div style={{ fontSize: 9, color: '#1e7e44', marginTop: 3 }}>
+        <div style={{ fontSize: 9, color: C.gradeExcellentColor, marginTop: 3 }}>
           ✦ Saved {fmtCost(stats.cacheSavingsUSD, currency, usdToKrw)} via cache
         </div>
       )}

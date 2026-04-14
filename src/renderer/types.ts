@@ -104,6 +104,7 @@ export interface AppSettings {
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   hiddenProjects: string[];
   excludedProjects: string[];
+  theme: 'light' | 'dark';
 }
 
 export type NotifType = 'alert';

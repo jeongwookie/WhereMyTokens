@@ -1,19 +1,14 @@
 import React from 'react';
 import { SessionInfo } from '../types';
-import { C, stateColor, stateLabel, modelColor, fmtRelative, fmtTokens } from '../theme';
-
-const TOOL_COLORS = ['#3a78c8', '#3a9438', '#b07820', '#6e42a0', '#2672a8', '#7a5050'];
-
-function contextBarColor(pct: number): string {
-  if (pct >= 90) return '#c0392b';
-  if (pct >= 80) return '#e67e22';
-  if (pct >= 50) return '#d4a017';
-  return '#5048b8';
-}
+import { useTheme } from '../ThemeContext';
+import { stateColor, stateLabel, modelColor, fmtRelative, fmtTokens } from '../theme';
 
 export default function SessionRow({ session }: { session: SessionInfo }) {
-  const sc = stateColor(session.state);
-  const mc = modelColor(session.modelName);
+  const C = useTheme();
+  const TOOL_COLORS = [C.input, C.output, C.cacheW, C.cacheR, C.sonnet, C.idle];
+
+  const sc = stateColor(session.state, C);
+  const mc = modelColor(session.modelName, C);
 
   const toolEntries = Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const totalTools = toolEntries.reduce((s, [, n]) => s + n, 0);
@@ -23,7 +18,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
     ? Math.min(100, (session.contextUsed / session.contextMax) * 100)
     : 0;
   const showCtx = session.contextUsed > 0 && session.contextMax > 0;
-  const ctxColor = contextBarColor(ctxPct);
+  const ctxColor = ctxPct >= 90 ? C.barRed : ctxPct >= 80 ? C.barOrange : ctxPct >= 50 ? C.barYellow : C.accent;
   const ctxRemaining = session.contextMax - session.contextUsed;
 
   let ctxLabel = '';
@@ -46,7 +41,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
             </span>
           )}
           {session.isWorktree && session.worktreeBranch && (
-            <span style={{ fontSize: 8, background: '#2672a822', color: '#4a90c8', border: '1px solid #2672a844', borderRadius: 3, padding: '1px 5px', flexShrink: 0 }}>
+            <span style={{ fontSize: 8, background: C.input + '22', color: C.input, border: `1px solid ${C.input}44`, borderRadius: 3, padding: '1px 5px', flexShrink: 0 }}>
               ⎇ {session.worktreeBranch}
             </span>
           )}
@@ -66,7 +61,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
       {showCtx && (
         <div style={{ marginTop: 5, marginLeft: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ flex: 1, height: 3, background: '#0000000a', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 3, background: C.accentDim, borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
                 width: `${ctxPct}%`, height: '100%',
                 background: ctxColor, borderRadius: 2,
@@ -98,7 +93,7 @@ export default function SessionRow({ session }: { session: SessionInfo }) {
             </div>
             <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{totalTools}×</span>
           </div>
-          {/* 전체 툴 이름 + 횟수 (바 색상과 동일 순서) */}
+          {/* 전체 툴 이름 + 횟수 */}
           <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
             {toolEntries.map(([name, count], i) => (
               <span key={name} style={{ fontSize: 9, color: TOOL_COLORS[i % TOOL_COLORS.length] }}>
