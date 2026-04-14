@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
 import { useTheme } from '../ThemeContext';
-import { fmtTokens, fmtCostShort } from '../theme';
+import { fmtTokens, fmtCost, fmtCostShort, fmtDuration } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
@@ -102,22 +102,16 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
-      {/* draggable header */}
-      <div style={{ ...drag, padding: '10px 14px 8px', display: 'flex', gap: 8, alignItems: 'center', borderBottom: `1px solid ${C.border}`, flexShrink: 0, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: C.accent, letterSpacing: -0.5, flexShrink: 0 }}>WhereMyTokens</span>
-
-        <div style={{ ...noDrag, display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-          {/* 오늘 토큰 · 비용 */}
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
-            {fmtTokens(usage.todayTokens)}<span style={{ fontSize: 9, color: C.textMuted, marginLeft: 2 }}>tok</span>
-            <span style={{ color: C.border, margin: '0 5px' }}>·</span>
-            <span style={{ color: C.accent }}>{fmtCostShort(usage.todayCost, currency, usdToKrw)}</span>
+      {/* 헤더 — 다크 퍼플 배경, 2행 구조 */}
+      <div style={{ background: C.headerBg, flexShrink: 0, borderBottom: `1px solid ${C.headerBorder}` }}>
+        {/* 행1: 로고 + 플랜 뱃지 + API 점 + 윈도우 컨트롤 */}
+        <div style={{ ...drag, padding: '8px 12px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: -0.3, flexShrink: 0 }}>
+            ⚡ WhereMyTokens
           </span>
-
-          {/* 플랜 + API 상태 클러스터 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
             {state.autoLimits && (
-              <span style={{ fontSize: 9, color: C.textMuted, background: C.bgRow, borderRadius: 3, padding: '1px 5px', fontWeight: 600, border: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 9, color: C.headerSub, background: 'rgba(255,255,255,0.1)', borderRadius: 3, padding: '1px 6px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)' }}>
                 {state.autoLimits.plan}
               </span>
             )}
@@ -125,14 +119,55 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
               style={{ width: 6, height: 6, borderRadius: '50%', background: apiConnected ? '#4ade80' : '#f87171', display: 'inline-block', flexShrink: 0 }}
             />
-          </div>
-
-          {/* 윈도우 컨트롤 */}
-          <div style={{ display: 'flex', gap: 2 }}>
-            <button onClick={() => window.wmt.minimize().catch(() => {})} title="최소화" style={{ ...noDrag, width: 28, height: 22, background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-            <button onClick={onQuit} title="종료" style={{ ...noDrag, width: 28, height: 22, background: 'none', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <button onClick={() => window.wmt.minimize().catch(() => {})} title="최소화" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+            <button onClick={onQuit} title="종료" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
         </div>
+
+        {/* 행2: 대형 비용 + 오늘 토큰 */}
+        <div style={{ ...drag, padding: '0 14px 8px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <span style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1 }}>
+            {fmtCost(usage.todayCost, currency, usdToKrw)}
+          </span>
+          <span style={{ fontSize: 11, color: C.headerSub, whiteSpace: 'nowrap' }}>
+            {fmtTokens(usage.todayTokens)} tok · today
+          </span>
+        </div>
+
+        {/* 5h 전역 진행 바 */}
+        {(() => {
+          const pct = Math.min(100, limits.h5.pct ?? 0);
+          const noData = apiConnected === false && pct === 0;
+          const barColor = pct >= 90 ? C.barRed : pct >= 75 ? C.barOrange : pct >= 50 ? C.barYellow : C.accent;
+          const resetMs = limits.h5.resetMs;
+          const etaMs = usage.burnRate?.h5EtaMs;
+          const showEta = etaMs !== null && etaMs !== undefined && etaMs < (resetMs ?? Infinity);
+          return (
+            <div style={{ padding: '0 14px 8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 9, color: C.headerSub, flexShrink: 0 }}>5h limit</span>
+                <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden' }}>
+                  {!noData && (
+                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 2, transition: 'width 0.4s' }} />
+                  )}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: noData ? C.headerSub : '#fff', flexShrink: 0, width: 30, textAlign: 'right' }}>
+                  {noData ? '—' : `${Math.round(pct)}%`}
+                </span>
+                {!noData && resetMs && resetMs > 0 && (
+                  <span style={{ fontSize: 9, color: C.headerSub, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    ↻ {apiConnected === false ? '~' : ''}{fmtDuration(resetMs)}
+                  </span>
+                )}
+              </div>
+              {showEta && (
+                <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 2 }}>
+                  ⚡ ~{fmtDuration(etaMs!)} to limit at current rate
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* scroll area */}
