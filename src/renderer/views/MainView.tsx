@@ -89,19 +89,22 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   type BranchGroup = { branch: string; sessions: typeof sessions; commits: number; added: number; removed: number };
   type ProjectGroup = { name: string; branches: BranchGroup[]; totalCommits: number; totalAdded: number; totalRemoved: number };
   const projectGroups: ProjectGroup[] = (() => {
-    // toplevel → 대표 프로젝트명 매핑
-    const toplevelNames = new Map<string, string>();
+    // gitCommonDir → 대표 프로젝트명 매핑
+    // gitCommonDir은 같은 저장소의 모든 워크트리에서 동일한 값을 가짐
+    const repoNames = new Map<string, string>();
     for (const s of filteredSessions) {
-      const tl = s.gitStats?.toplevel;
-      if (tl && !toplevelNames.has(tl)) {
-        // mainRepoName이 있으면 우선, 없으면 toplevel 마지막 폴더명
-        toplevelNames.set(tl, s.mainRepoName ?? tl.split(/[\\/]/).filter(Boolean).pop() ?? s.projectName);
+      const repoId = s.gitStats?.gitCommonDir ?? s.gitStats?.toplevel;
+      if (repoId && !repoNames.has(repoId)) {
+        // mainRepoName 우선, 없으면 gitCommonDir에서 .git 제거 후 마지막 폴더명 추출
+        const nameFromCommonDir = s.gitStats?.gitCommonDir
+          ?.replace(/[/\\]\.git$/, '').split(/[/\\]/).filter(Boolean).pop();
+        repoNames.set(repoId, s.mainRepoName ?? nameFromCommonDir ?? s.gitStats?.toplevel?.split(/[\\/]/).filter(Boolean).pop() ?? s.projectName);
       }
     }
     const projMap: Record<string, typeof sessions> = {};
     for (const s of filteredSessions) {
-      const tl = s.gitStats?.toplevel;
-      const key = tl ? (toplevelNames.get(tl) ?? s.projectName) : (s.mainRepoName ?? s.projectName);
+      const repoId = s.gitStats?.gitCommonDir ?? s.gitStats?.toplevel;
+      const key = repoId ? (repoNames.get(repoId) ?? s.projectName) : (s.mainRepoName ?? s.projectName);
       if (!projMap[key]) projMap[key] = [];
       projMap[key].push(s);
     }

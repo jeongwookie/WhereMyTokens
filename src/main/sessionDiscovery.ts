@@ -29,23 +29,30 @@ function encodeCwd(cwd: string): string {
 }
 
 function detectWorktree(cwd: string): { mainName: string; branch: string } | null {
-  try {
-    const gitFile = path.join(cwd, '.git');
-    const stat = fs.statSync(gitFile);
-    if (!stat.isFile()) return null;  // .git is a directory — regular repo
-    const content = fs.readFileSync(gitFile, 'utf-8').trim();
-    const match = content.match(/^gitdir:\s*(.+)$/m);
-    if (!match) return null;
-    const gitdir = match[1].trim().replace(/\//g, path.sep);
-    // gitdir example: C:\dev\kokokara-app\.git\worktrees\feature-branch
-    const worktreesIdx = gitdir.toLowerCase().indexOf('.git' + path.sep + 'worktrees');
-    if (worktreesIdx < 0) return null;
-    const mainGitPath = gitdir.substring(0, worktreesIdx);  // C:\dev\kokokara-app\
-    const branch = path.basename(gitdir);                    // feature-branch
-    const mainName = path.basename(mainGitPath.replace(/[/\\]$/, ''));
-    return { mainName, branch };
-  } catch {
-    return null;
+  // cwd부터 상위 디렉토리를 순회하며 .git 파일(워크트리 마커) 탐색
+  let dir = cwd;
+  while (true) {
+    try {
+      const gitFile = path.join(dir, '.git');
+      const stat = fs.statSync(gitFile);
+      if (!stat.isFile()) return null;  // .git이 디렉토리면 일반 저장소 — 워크트리 아님
+      const content = fs.readFileSync(gitFile, 'utf-8').trim();
+      const match = content.match(/^gitdir:\s*(.+)$/m);
+      if (!match) return null;
+      const gitdir = match[1].trim().replace(/\//g, path.sep);
+      // gitdir example: C:\dev\kokokara-app\.git\worktrees\feature-branch
+      const worktreesIdx = gitdir.toLowerCase().indexOf('.git' + path.sep + 'worktrees');
+      if (worktreesIdx < 0) return null;
+      const mainGitPath = gitdir.substring(0, worktreesIdx);  // C:\dev\kokokara-app\
+      const branch = path.basename(gitdir);                    // feature-branch
+      const mainName = path.basename(mainGitPath.replace(/[/\\]$/, ''));
+      return { mainName, branch };
+    } catch {
+      // 이 디렉토리에 .git 없음 — 상위로 이동
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;  // 파일시스템 루트 도달
+    dir = parent;
   }
 }
 
