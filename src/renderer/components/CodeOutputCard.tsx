@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SessionInfo } from '../types';
+import { SessionInfo, GitStats } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtCost } from '../theme';
 
@@ -8,32 +8,38 @@ const PERIODS: Period[] = ['today', 'all'];
 
 interface Props {
   sessions: SessionInfo[];
+  repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (전체 repo, 세션 무관)
   todayCost: number;
   allTimeCost: number;
   currency: string;
   usdToKrw: number;
 }
 
-export default function CodeOutputCard({ sessions, todayCost, allTimeCost, currency, usdToKrw }: Props) {
+export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [period, setPeriod] = useState<Period>('today');
 
-  // cwd 기준 중복 제거 후 git stats 합산
-  const seen = new Set<string>();
+  // today: sessions 기반, (repo, branch)별 중복제거 — 활성 브랜치마다 카운트
+  const seenToday = new Set<string>();
   let commitsToday = 0, linesAdded = 0, linesRemoved = 0;
-  let totalCommits = 0, totalLinesAdded = 0, totalLinesRemoved = 0;
-
   for (const s of sessions) {
-    // gitCommonDir: 같은 저장소의 worktree는 동일한 값 → 중복 제거
-    const repoKey = s.gitStats?.gitCommonDir ?? s.gitStats?.toplevel ?? s.cwd;
-    if (!s.gitStats || seen.has(repoKey)) continue;
-    seen.add(repoKey);
-    commitsToday += s.gitStats.commitsToday;
-    linesAdded += s.gitStats.linesAdded;
-    linesRemoved += s.gitStats.linesRemoved;
-    totalCommits += s.gitStats.totalCommits;
-    totalLinesAdded += s.gitStats.totalLinesAdded;
-    totalLinesRemoved += s.gitStats.totalLinesRemoved ?? 0;
+    if (!s.gitStats) continue;
+    const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
+    const branchKey = `${repoKey}::${s.gitStats.branch ?? ''}`;
+    if (!seenToday.has(branchKey)) {
+      seenToday.add(branchKey);
+      commitsToday += s.gitStats.commitsToday;
+      linesAdded += s.gitStats.linesAdded;
+      linesRemoved += s.gitStats.linesRemoved;
+    }
+  }
+
+  // all-time: repoGitStats 기반 — ~/.claude/projects/ 전체에서 발견된 모든 repo 포함
+  let totalCommits = 0, totalLinesAdded = 0, totalLinesRemoved = 0;
+  for (const stats of Object.values(repoGitStats)) {
+    totalCommits += stats.totalCommits;
+    totalLinesAdded += stats.totalLinesAdded;
+    totalLinesRemoved += stats.totalLinesRemoved ?? 0;
   }
 
   if (totalCommits === 0 && commitsToday === 0) return null;

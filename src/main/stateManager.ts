@@ -11,6 +11,7 @@ import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { getGitStats, getGitStatsAsync, GitStats } from './gitStatsCollector';
+import { discoverAllProjectCwds } from './projectDiscovery';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -37,6 +38,7 @@ export interface AppState {
   apiError?: string;      // last API error message for debugging
   bridgeActive: boolean;  // whether the Claude Code statusLine bridge is connected
   extraUsage: ApiUsagePct['extraUsage'];
+  repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
 }
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
@@ -117,6 +119,7 @@ export class StateManager {
       apiConnected: false,
       bridgeActive: false,
       extraUsage: null,
+      repoGitStats: {},
     };
   }
 
@@ -264,7 +267,18 @@ export class StateManager {
     const sessions = await this.buildSessionInfosAsync();
 
     const extraUsage = this.apiUsagePct?.extraUsage ?? null;
-    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage };
+
+    // ~/.claude/projects/ 기반으로 모든 Claude 작업 repo의 git stats 수집
+    const allCwds = discoverAllProjectCwds();
+    const rawStats = await Promise.all(allCwds.map(cwd => getGitStatsAsync(cwd).catch(() => null)));
+    const repoGitStats: Record<string, GitStats> = {};
+    for (const stats of rawStats) {
+      if (!stats?.gitCommonDir) continue;
+      if (repoGitStats[stats.gitCommonDir]) continue; // 중복 제거
+      repoGitStats[stats.gitCommonDir] = stats;
+    }
+
+    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats };
     this.onUpdate(this.state);
 
     checkAlerts(limits, settings.alertThresholds, settings.enableAlerts);

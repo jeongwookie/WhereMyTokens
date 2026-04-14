@@ -161,6 +161,7 @@ export interface AppState {
   apiError?: string;
   bridgeActive: boolean;
   extraUsage: ExtraUsage | null;
+  repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
 }
 
 declare global {

@@ -35,6 +35,7 @@ const DEFAULT_STATE: AppState = {
   autoLimits: null,
   lastUpdated: 0,
   extraUsage: null,
+  repoGitStats: {},
 };
 
 export default function App() {

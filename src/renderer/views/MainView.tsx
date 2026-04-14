@@ -228,7 +228,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         </div>
 
         {/* ── Code Output 카드 ────────────────────────────────────────── */}
-        <CodeOutputCard sessions={sessions} todayCost={usage.todayCost} allTimeCost={usage.models.reduce((s, m) => s + m.costUSD, 0)} currency={currency} usdToKrw={usdToKrw} />
+        <CodeOutputCard sessions={sessions} repoGitStats={state.repoGitStats} todayCost={usage.todayCost} allTimeCost={usage.models.reduce((s, m) => s + m.costUSD, 0)} currency={currency} usdToKrw={usdToKrw} />
 
         {/* ── Sessions 카드 ─────────────────────────────────────────────── */}
         <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, paddingBottom: 16 }}>
