@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trayDisplay: 'h5pct',
   hiddenProjects: [],
   excludedProjects: [],
-  theme: 'light',
+  theme: 'dark',
 };
 
 export function registerIpcHandlers(

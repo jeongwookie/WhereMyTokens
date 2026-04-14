@@ -51,7 +51,8 @@ export default function TokenStatsCard({
 }: Props) {
   const C = useTheme();
 
-  if (stats.totalTokens === 0 && stats.requestCount === 0) return null;
+  // hero 카드는 데이터 0이어도 표시 (리셋 직후 빈 상태 방지)
+  if (!hero && stats.totalTokens === 0 && stats.requestCount === 0) return null;
 
   const costStr = fmtCost(stats.costUSD, currency, usdToKrw);
   const costColor = stats.costUSD > 5 ? C.barRed : stats.costUSD > 2 ? C.barYellow : C.textDim;
