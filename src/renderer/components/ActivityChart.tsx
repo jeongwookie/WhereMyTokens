@@ -3,10 +3,10 @@ import { HourlyBucket, WeeklyTotal, TimeOfDayBucket } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens } from '../theme';
 
-type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly';
+type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly' | 'Rhythm';
 
 const TAB_LABELS: Record<ChartTab, string> = {
-  '7d': '7d', '5mo': '5mo', 'Hourly': 'Hrly', 'Weekly': 'Wkly',
+  '7d': '7d', '5mo': '5mo', 'Hourly': 'Hourly', 'Weekly': 'Weekly', 'Rhythm': 'Rhythm',
 };
 
 function blueIntensity(i: number): string {
@@ -31,7 +31,7 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
     const LEFT = 18, TOP = 14;
     const cw = Math.floor((W - LEFT) / HOURS);
     const ch = cw;
-    canvas.height = TOP + DAYS * ch + 2;
+    canvas.height = TOP + DAYS * ch + 18;
 
     ctx.clearRect(0, 0, W, canvas.height);
 
@@ -61,6 +61,12 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
       date.setDate(date.getDate() - (6 - d));
       ctx.fillText(dayNames[date.getDay()], LEFT - 3, TOP + d * ch + ch / 2 + 3);
     }
+
+    // 하단 시간 축 라벨
+    ctx.textAlign = 'center';
+    ctx.fillStyle = C.textMuted;
+    for (const h of [0, 6, 12, 18, 23])
+      ctx.fillText(`${h}h`, LEFT + h * cw + cw / 2, TOP + DAYS * ch + 12);
   }, [data, C]);
 
   return <canvas ref={canvasRef} width={330} style={{ width: '100%', display: 'block' }} />;
@@ -328,7 +334,7 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
 
   function rowLabel(i: number): string {
     const ago = n - 1 - i;
-    return ago === 0 ? 'current' : `week+${ago}`;
+    return ago === 0 ? 'current' : `${ago}w ago`;
   }
 
   function weekRange(i: number): string {
@@ -403,21 +409,14 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
   );
 }
 
-// --- TOD (Time-of-Day) Rhythm Panel — 사이드 패널로 분리된 독립 컴포넌트 ---
+// --- TOD (Time-of-Day) Rhythm Panel — 리디자인: 아이콘+풀네임+그라데이션 ---
 const TOD_ORDER: TimeOfDayBucket['period'][] = ['morning', 'afternoon', 'evening', 'night'];
-const TOD_COLORS: Record<string, string> = {
-  morning:   'hsl(44, 90%, 50%)',
-  afternoon: 'hsl(244, 55%, 52%)',
-  evening:   'hsl(280, 60%, 52%)',
-  night:     'hsl(220, 30%, 45%)',
-};
 
-// 좁은 패널에 맞춘 짧은 라벨 + 시간대
-const TOD_SHORT: Record<string, { label: string; time: string }> = {
-  morning:   { label: 'Morn',  time: '6–12h' },
-  afternoon: { label: 'Aftn',  time: '12–18h' },
-  evening:   { label: 'Even',  time: '18–24h' },
-  night:     { label: 'Night', time: '0–6h' },
+const TOD_INFO: Record<string, { icon: string; name: string; time: string; gradient: string; color: string }> = {
+  morning:   { icon: '☀️', name: 'Morning',   time: '6–12h',  gradient: 'linear-gradient(90deg, #fbbf24, #f59e0b)', color: '#fbbf24' },
+  afternoon: { icon: '🔥', name: 'Afternoon', time: '12–18h', gradient: 'linear-gradient(90deg, #fb923c, #f87171)', color: '#fb923c' },
+  evening:   { icon: '🌆', name: 'Evening',   time: '18–24h', gradient: 'linear-gradient(90deg, #a78bfa, #f472b6)', color: '#a78bfa' },
+  night:     { icon: '🌙', name: 'Night',     time: '0–6h',   gradient: 'linear-gradient(90deg, #60a5fa, #818cf8)', color: '#60a5fa' },
 };
 
 export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
@@ -440,45 +439,45 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
       {sorted.map(bucket => {
         const pct = bucket.tokens / maxTokens;
         const isPeak = bucket.period === peakPeriod.period && bucket.tokens > 0;
-        const color = TOD_COLORS[bucket.period];
-        const short = TOD_SHORT[bucket.period];
+        const info = TOD_INFO[bucket.period];
 
         return (
-          <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-            {/* 짧은 라벨 2줄: "Morn" / "6–12h" */}
-            <div style={{ width: 40, flexShrink: 0, textAlign: 'right' }}>
-              <div style={{ fontSize: 10, fontWeight: isPeak ? 700 : 400, color: isPeak ? C.text : C.textMuted, lineHeight: 1.2 }}>
-                {short.label}
-              </div>
-              <div style={{ fontSize: 8, color: C.textMuted, lineHeight: 1.2 }}>{short.time}</div>
-            </div>
-
-            {/* 바 영역 */}
-            <div style={{ flex: 1, position: 'relative', height: 16 }}>
-              <div style={{ position: 'absolute', inset: 0, background: C.accentDim, borderRadius: 3 }} />
+          <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 13, width: 18, textAlign: 'center' }}>{info.icon}</span>
+            <span style={{
+              fontSize: 10, width: 52, flexShrink: 0, fontFamily: C.fontMono,
+              color: isPeak ? info.color : C.textDim,
+              fontWeight: isPeak ? 600 : 400,
+            }}>{info.name}</span>
+            <span style={{ fontSize: 8, width: 34, flexShrink: 0, color: C.textMuted, fontFamily: C.fontMono }}>{info.time}</span>
+            <div style={{ flex: 1, height: 8, background: '#252a38', borderRadius: 4, overflow: 'hidden' }}>
               <div style={{
-                position: 'absolute', left: 0, top: 0, bottom: 0,
                 width: `${Math.max(pct * 100, bucket.tokens > 0 ? 3 : 0)}%`,
-                background: color, borderRadius: 3,
+                height: '100%', borderRadius: 4,
+                background: info.gradient,
               }} />
             </div>
-
-            {/* % 수치 */}
-            <div style={{
-              width: 36, fontSize: 9, fontWeight: isPeak ? 700 : 400,
-              color: isPeak ? C.text : C.textDim, textAlign: 'right', flexShrink: 0,
+            <span style={{
+              width: 32, fontSize: 10, textAlign: 'right', flexShrink: 0,
+              fontFamily: C.fontMono,
+              color: isPeak ? info.color : C.textDim,
+              fontWeight: isPeak ? 600 : 400,
             }}>
               {Math.round(pct * 100)}%
-            </div>
+            </span>
           </div>
         );
       })}
 
-      <div style={{
-        marginTop: 4, paddingTop: 5, borderTop: `1px solid ${C.border}`,
-        fontSize: 9, color: C.textMuted,
-      }}>
-        ⚡ <span style={{ color: C.accent, fontWeight: 600 }}>Peak: {TOD_SHORT[peakPeriod.period]?.label ?? peakPeriod.label}</span>
+      <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+        <div style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
+          🔥 Peak: <strong style={{ color: TOD_INFO[peakPeriod.period]?.color ?? C.accent }}>
+            {TOD_INFO[peakPeriod.period]?.name ?? peakPeriod.label} ({TOD_INFO[peakPeriod.period]?.time})
+          </strong>
+        </div>
+        <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2, fontFamily: C.fontMono }}>
+          최근 7일 기준 · 로컬 타임존 (KST)
+        </div>
       </div>
     </div>
   );
@@ -508,57 +507,69 @@ interface Props {
   usdToKrw: number;
 }
 
-export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline }: Props) {
+export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets }: Props) {
   const C = useTheme();
   const [tab, setTab] = useState<ChartTab>('7d');
 
-  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly'];
+  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly', 'Rhythm'];
 
   return (
     <div>
-      {/* 단일 헤더 행: 제목 왼쪽 + 탭 버튼 오른쪽 */}
+      {/* 헤더: 제목 + 탭 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
-        <div style={{ display: 'flex', gap: 3 }}>
-          {tabs.map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding: '2px 7px', fontSize: 9, border: 'none', borderRadius: 8, cursor: 'pointer',
-              background: tab === t ? C.accent : C.accentDim,
-              color: tab === t ? '#fff' : C.textDim,
-              fontWeight: tab === t ? 700 : 400,
-            }}>
-              {TAB_LABELS[t]}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: 2 }}>
+          {tabs.map(t => {
+            const isRhythm = t === 'Rhythm';
+            const isActive = tab === t;
+            return (
+              <button key={t} onClick={() => setTab(t)} style={{
+                padding: '4px 8px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+                border: isActive && isRhythm ? '1px solid rgba(251,191,36,0.2)' :
+                        isActive ? `1px solid rgba(167,139,250,0.15)` : '1px solid transparent',
+                background: isActive && isRhythm ? 'rgba(251,191,36,0.1)' :
+                            isActive ? C.accent + '22' : 'none',
+                color: isActive && isRhythm ? '#fbbf24' :
+                       isActive ? C.accent :
+                       isRhythm ? '#fb923c' : C.textMuted,
+                fontWeight: isActive ? 700 : 400,
+              }}>
+                {TAB_LABELS[t]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div style={{ padding: '8px 14px' }}>
+      <div style={{ padding: '8px 14px', minHeight: 175 }}>
         {tab === '7d' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>7-day heatmap (day × hour)</div>
             <Heatmap7 data={heatmap} />
             <ColorLegend />
           </>
         )}
         {tab === '5mo' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5-month activity (calendar grid, oldest → today)</div>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5mo activity</div>
             <Heatmap90 data={heatmap90} />
             <ColorLegend />
           </>
         )}
         {tab === 'Hourly' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly token usage (last 30 days)</div>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly (30d)</div>
             <HourlyDistribution data={heatmap30} />
           </>
         )}
         {tab === 'Weekly' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly growth (last 4 weeks, Mon–Sun)</div>
+            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly (4w)</div>
             <WeeklyGrowthChart data={weeklyTimeline} />
           </>
+        )}
+        {tab === 'Rhythm' && (
+          <TODPanel data={todBuckets} />
         )}
       </div>
     </div>

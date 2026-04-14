@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { AppState } from '../types';
 import { useTheme } from '../ThemeContext';
-import { fmtTokens, fmtCost, fmtCostShort, fmtDuration } from '../theme';
+import { fmtTokens, fmtCost } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
-import ActivityChart, { TODPanel } from '../components/ActivityChart';
+import ActivityChart from '../components/ActivityChart';
 import ModelBreakdown from '../components/ModelBreakdown';
 import ExtraUsageCard from '../components/ExtraUsageCard';
+import CodeOutputCard from '../components/CodeOutputCard';
 
 interface Props {
   state: AppState;
@@ -82,16 +83,44 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const filteredSessions = activeFilter === 'active'
     ? sessions.filter(s => s.state === 'active' || s.state === 'waiting')
     : sessions;
-  const filteredGroups = (() => {
-    const groups: Record<string, typeof sessions> = {};
+
+  // 2단계 그루핑: Project → Branch → Sessions
+  type BranchGroup = { branch: string; sessions: typeof sessions; commits: number; added: number; removed: number };
+  type ProjectGroup = { name: string; branches: BranchGroup[]; totalCommits: number; totalAdded: number; totalRemoved: number };
+  const projectGroups: ProjectGroup[] = (() => {
+    const projMap: Record<string, typeof sessions> = {};
     for (const s of filteredSessions) {
       const key = s.mainRepoName ?? s.projectName;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(s);
+      if (!projMap[key]) projMap[key] = [];
+      projMap[key].push(s);
     }
-    return Object.entries(groups);
+    return Object.entries(projMap)
+      .filter(([name]) => !hiddenProjects.includes(name))
+      .map(([name, sess]) => {
+        // 브랜치 그루핑
+        const branchMap: Record<string, typeof sessions> = {};
+        for (const s of sess) {
+          const br = s.gitStats?.branch ?? '(unknown)';
+          if (!branchMap[br]) branchMap[br] = [];
+          branchMap[br].push(s);
+        }
+        // 브랜치별 커밋 (같은 브랜치의 첫 세션 gitStats 사용, 중복 방지)
+        const branches: BranchGroup[] = Object.entries(branchMap).map(([branch, bSess]) => {
+          const first = bSess.find(s => s.gitStats)?.gitStats;
+          return {
+            branch,
+            sessions: bSess,
+            commits: first?.commitsToday ?? 0,
+            added: first?.linesAdded ?? 0,
+            removed: first?.linesRemoved ?? 0,
+          };
+        });
+        const totalCommits = branches.reduce((s, b) => s + b.commits, 0);
+        const totalAdded = branches.reduce((s, b) => s + b.added, 0);
+        const totalRemoved = branches.reduce((s, b) => s + b.removed, 0);
+        return { name, branches, totalCommits, totalAdded, totalRemoved };
+      });
   })();
-  const visibleGroups = filteredGroups.filter(([name]) => !hiddenProjects.includes(name));
 
   // all known project names (for unhide UI, include ones not currently in sessions)
   const allHidden = hiddenProjects;
@@ -126,7 +155,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
         {/* 행2: 대형 비용 + 오늘 토큰 */}
         <div style={{ ...drag, padding: '0 14px 8px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1 }}>
+          <span style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono }}>
             {fmtCost(usage.todayCost, currency, usdToKrw)}
           </span>
           <span style={{ fontSize: 11, color: C.headerSub, whiteSpace: 'nowrap' }}>
@@ -134,78 +163,39 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           </span>
         </div>
 
-        {/* 5h 전역 진행 바 */}
-        {(() => {
-          const pct = Math.min(100, limits.h5.pct ?? 0);
-          const noData = apiConnected === false && pct === 0;
-          const barColor = pct >= 90 ? C.barRed : pct >= 75 ? C.barOrange : pct >= 50 ? C.barYellow : C.accent;
-          const resetMs = limits.h5.resetMs;
-          const etaMs = usage.burnRate?.h5EtaMs;
-          const showEta = etaMs !== null && etaMs !== undefined && etaMs < (resetMs ?? Infinity);
-          return (
-            <div style={{ padding: '0 14px 8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 9, color: C.headerSub, flexShrink: 0 }}>5h limit</span>
-                <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden' }}>
-                  {!noData && (
-                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 2, transition: 'width 0.4s' }} />
-                  )}
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: noData ? C.headerSub : '#fff', flexShrink: 0, width: 30, textAlign: 'right' }}>
-                  {noData ? '—' : `${Math.round(pct)}%`}
-                </span>
-                {!noData && (
-                  showEta
-                    ? <span style={{ fontSize: 9, color: C.etaWarning, flexShrink: 0, whiteSpace: 'nowrap' }}>⚡ ~{fmtDuration(etaMs!)} left</span>
-                    : resetMs && resetMs > 0
-                      ? <span style={{ fontSize: 9, color: C.headerSub, flexShrink: 0, whiteSpace: 'nowrap' }}>↻ {apiConnected === false ? '~' : ''}{fmtDuration(resetMs)}</span>
-                      : null
-                )}
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
       {/* scroll area */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8 }}>
 
         {/* ── Plan Usage 카드 ───────────────────────────────────────────── */}
-        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+        <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
           {/* 헤더 */}
           <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
           </div>
 
-          {/* Claude: 5h | 1w 나란히 (히어로 레이아웃) */}
-          <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-                limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-                hero borderRight />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
-                limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-                hero />
-            </div>
+          {/* Claude: 5h | 1w 나란히 (CSS Grid 2열, 동일 폭) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+            <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
+              limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
+              hero borderRight />
+            <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
+              limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
+              hero />
           </div>
 
           {/* Codex: 5h | 1w (데이터 있을 때만) */}
           {(usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0) && (
-            <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} borderRight />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+              <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} borderRight />
+              <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
             </div>
           )}
 
-          {/* Sonnet 1w (박스 스타일) */}
+          {/* Sonnet 1w (Plan Usage 내부, 동일 행 패턴) */}
           {showSonnet && (
-            <div style={{ background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ borderBottom: `1px solid ${C.border}` }}>
               <TokenStatsCard provider="Sonnet" period="1w" stats={{
                 inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
                 totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
@@ -214,16 +204,19 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             </div>
           )}
 
-          {/* Extra Usage (박스 스타일) */}
+          {/* Extra Usage (Plan Usage 내부, 동일 행 패턴) */}
           {extraUsage?.isEnabled && (
-            <div style={{ background: C.bgRow }}>
+            <div>
               <ExtraUsageCard extraUsage={extraUsage} />
             </div>
           )}
         </div>
 
+        {/* ── Code Output 카드 ────────────────────────────────────────── */}
+        <CodeOutputCard sessions={sessions} todayCost={usage.todayCost} allTimeCost={usage.models.reduce((s, m) => s + m.costUSD, 0)} currency={currency} usdToKrw={usdToKrw} />
+
         {/* ── Sessions 카드 ─────────────────────────────────────────────── */}
-        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+        <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, paddingBottom: 16 }}>
           {/* 헤더 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
@@ -245,33 +238,62 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             </div>
           </div>
 
-          {/* 세션 목록 */}
-          {visibleGroups.length > 0
-            ? visibleGroups.map(([groupName, groupSessions]) => (
-              <div key={groupName}
-                onMouseEnter={() => setHoveredGroup(groupName)}
+          {/* 세션 목록 — 2단계 그루핑 */}
+          {projectGroups.length > 0
+            ? projectGroups.map(proj => (
+              <div key={proj.name}
+                onMouseEnter={() => setHoveredGroup(proj.name)}
                 onMouseLeave={() => setHoveredGroup(null)}
               >
-                <div style={{ display: 'flex', alignItems: 'center', padding: '4px 14px 3px', background: C.bgCard, borderTop: `1px solid ${C.borderSub}` }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: C.accent, textTransform: 'uppercase', letterSpacing: 1.0, flex: 1 }}>
-                    {groupName}
-                  </span>
-                  {hoveredGroup === groupName && (
-                    <div style={{ display: 'flex', gap: 2 }}>
-                      <button
-                        onClick={() => hideProject(groupName)}
-                        title={`Hide "${groupName}" (still tracked)`}
-                        style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
-                      >✕</button>
-                      <button
-                        onClick={() => excludeProject(groupName)}
-                        title={`Exclude "${groupName}" from tracking`}
-                        style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}
-                      >⊘</button>
-                    </div>
-                  )}
+                {/* 프로젝트 헤더 */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 10px', margin: '10px 8px 0',
+                  background: `${C.accent}08`, borderRadius: 4, border: `1px solid ${C.accent}14`,
+                }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: C.fontSans }}>{proj.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {proj.totalCommits > 0 && (
+                      <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
+                        {proj.totalCommits} commit{proj.totalCommits > 1 ? 's' : ''} · +{proj.totalAdded} / -{proj.totalRemoved}
+                      </span>
+                    )}
+                    {hoveredGroup === proj.name && (
+                      <div style={{ display: 'flex', gap: 2 }}>
+                        <button onClick={() => hideProject(proj.name)} title="Hide"
+                          style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
+                        <button onClick={() => excludeProject(proj.name)} title="Exclude"
+                          style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>⊘</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {groupSessions.map(s => <SessionRow key={s.sessionId} session={s} />)}
+
+                {/* 브랜치별 그루핑 */}
+                {proj.branches.map(br => (
+                  <div key={br.branch} style={{ margin: '6px 8px 0 14px' }}>
+                    {/* 브랜치 줄 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 0', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11 }}>🌿</span>
+                      <span title={br.branch} style={{
+                        fontSize: 10, color: C.textDim, fontWeight: 500, fontFamily: C.fontMono,
+                        maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>{br.branch}</span>
+                      {br.commits > 0 && (
+                        <>
+                          <span style={{ fontSize: 8, background: '#60a5fa1a', color: '#60a5fa', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>
+                            {br.commits} commit{br.commits > 1 ? 's' : ''}
+                          </span>
+                          <span style={{ fontSize: 8, background: '#34d3991a', color: '#34d399', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>+{br.added}</span>
+                          <span style={{ fontSize: 8, background: '#f871711a', color: '#f87171', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>-{br.removed}</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* 세션 카드들 */}
+                    {br.sessions.map(s => <SessionRow key={s.sessionId} session={s} />)}
+                  </div>
+                ))}
               </div>
             ))
             : sessions.length === 0
@@ -305,35 +327,21 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           )}
         </div>
 
-        {/* ── Activity + TOD Rhythm 카드 ────────────────────────────────── */}
-        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-          <div style={{ display: 'flex' }}>
-            {/* Activity 차트 (좌 55%) */}
-            <div style={{ flex: 55, borderRight: `1px solid ${C.border}`, minWidth: 0 }}>
-              <ActivityChart
-                heatmap={usage.heatmap}
-                heatmap30={usage.heatmap30}
-                heatmap90={usage.heatmap90}
-                weeklyTimeline={usage.weeklyTimeline}
-                todBuckets={usage.todBuckets}
-                currency={currency}
-                usdToKrw={usdToKrw}
-              />
-            </div>
-            {/* TOD Rhythm 패널 (우 45%) */}
-            <div style={{ flex: 45, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', padding: '6px 10px 5px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>TOD Rhythm</span>
-              </div>
-              <div style={{ padding: '8px 10px' }}>
-                <TODPanel data={usage.todBuckets} />
-              </div>
-            </div>
-          </div>
+        {/* ── Activity 카드 (Rhythm 탭 통합) ──────────────────────────── */}
+        <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+          <ActivityChart
+            heatmap={usage.heatmap}
+            heatmap30={usage.heatmap30}
+            heatmap90={usage.heatmap90}
+            weeklyTimeline={usage.weeklyTimeline}
+            todBuckets={usage.todBuckets}
+            currency={currency}
+            usdToKrw={usdToKrw}
+          />
         </div>
 
         {/* ── Model Usage 카드 ──────────────────────────────────────────── */}
-        <div style={{ margin: '8px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+        <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
           <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
         </div>
 
