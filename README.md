@@ -36,28 +36,15 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 ## Demo
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5" width="380" autoplay loop muted>
-    Your browser does not support the video tag.
-  </video>
-</p>
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
 
 ## Screenshots
 
 <table align="center">
   <tr>
-    <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="Header, Plan Usage bars, Code Output, and session list" /><br/>
-      <sub><b>Plan Usage · Code Output · Sessions</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-dashboard.png" width="190" alt="Full dashboard with sessions, 7-day heatmap, and model breakdown" /><br/>
-      <sub><b>Sessions · 7d Heatmap · Model Usage</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-rhythm.png" width="190" alt="Rhythm tab showing time-of-day coding patterns with gradient bars" /><br/>
-      <sub><b>Activity · Rhythm Tab</b></sub>
-    </td>
+    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
+    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
+    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
   </tr>
 </table>
 

@@ -36,28 +36,15 @@
 
 ## 데모
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5" width="380" autoplay loop muted>
-    브라우저가 video 태그를 지원하지 않습니다.
-  </video>
-</p>
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
 
 ## 스크린샷
 
 <table align="center">
   <tr>
-    <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="헤더, Plan Usage 바, Code Output, 세션 목록" /><br/>
-      <sub><b>Plan Usage · Code Output · 세션</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-dashboard.png" width="190" alt="전체 대시보드 — 세션, 7일 히트맵, 모델별 분석" /><br/>
-      <sub><b>세션 · 7일 히트맵 · 모델별 분석</b></sub>
-    </td>
-    <td align="center" width="230">
-      <img src="assets/screenshot-rhythm.png" width="190" alt="Rhythm 탭 — 시간대별 코딩 패턴, 그라데이션 바" /><br/>
-      <sub><b>Activity · Rhythm 탭</b></sub>
-    </td>
+    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
+    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
+    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
   </tr>
 </table>
 
