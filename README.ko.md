@@ -66,7 +66,7 @@ WhereMyTokens는 공식 `statusLine` 플러그인 메커니즘을 통해 Claude 
 
 ### 방법 A — 사전 빌드된 실행 파일
 
-1. [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)에서 `WhereMyTokens-v1.4.0-win-x64.zip` 다운로드
+1. [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)에서 `WhereMyTokens-v1.5.0-win-x64.zip` 다운로드
 2. ZIP 압축 해제
 3. `WhereMyTokens.exe` 실행
 
