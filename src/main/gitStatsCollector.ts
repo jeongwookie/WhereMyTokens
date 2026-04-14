@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import path from 'path';
+import Store from 'electron-store';
 
 export interface GitStats {
   branch: string | null;
@@ -25,6 +26,27 @@ const CACHE_TTL = 120_000;
 
 // 진행 중인 요청 중복 방지
 const pending = new Map<string, Promise<GitStats | null>>();
+
+// 영속 스토어 — cwd가 삭제되어 git 명령이 실패해도 마지막 수집 stats를 반환하기 위함
+interface PersistedStatsStore { cache: Record<string, GitStats>; }
+let persistedStore: Store<PersistedStatsStore> | null = null;
+function getPersistedStore(): Store<PersistedStatsStore> {
+  if (!persistedStore) {
+    persistedStore = new Store<PersistedStatsStore>({ name: 'gitStatsCache', defaults: { cache: {} } });
+  }
+  return persistedStore;
+}
+function saveStats(cwd: string, stats: GitStats): void {
+  try {
+    const store = getPersistedStore();
+    store.set('cache', { ...store.get('cache'), [cwd]: stats });
+  } catch { /* 저장 실패는 무시 */ }
+}
+function loadStats(cwd: string): GitStats | null {
+  try {
+    return getPersistedStore().get('cache')[cwd] ?? null;
+  } catch { return null; }
+}
 
 function parseNumstat(output: string): { added: number; removed: number } {
   let added = 0, removed = 0;
@@ -128,12 +150,16 @@ export async function getGitStatsAsync(cwd: string): Promise<GitStats | null> {
   if (inflight) return inflight;
 
   const promise = collectStats(cwd).then(stats => {
-    if (stats) cache.set(cwd, { stats, ts: Date.now() });
+    if (stats) {
+      cache.set(cwd, { stats, ts: Date.now() });
+      saveStats(cwd, stats);
+    }
     pending.delete(cwd);
-    return stats;
+    // 수집 실패 시 마지막으로 저장된 stats 반환 (cwd 삭제된 경우 등)
+    return stats ?? loadStats(cwd);
   }).catch(() => {
     pending.delete(cwd);
-    return null;
+    return loadStats(cwd);
   });
 
   pending.set(cwd, promise);
