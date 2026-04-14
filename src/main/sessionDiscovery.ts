@@ -40,10 +40,10 @@ function detectWorktree(cwd: string): { mainName: string; branch: string } | nul
       const match = content.match(/^gitdir:\s*(.+)$/m);
       if (!match) return null;
       const gitdir = match[1].trim().replace(/\//g, path.sep);
-      // gitdir example: C:\dev\kokokara-app\.git\worktrees\feature-branch
+      // gitdir example: C:\dev\my-app\.git\worktrees\feature-branch
       const worktreesIdx = gitdir.toLowerCase().indexOf('.git' + path.sep + 'worktrees');
       if (worktreesIdx < 0) return null;
-      const mainGitPath = gitdir.substring(0, worktreesIdx);  // C:\dev\kokokara-app\
+      const mainGitPath = gitdir.substring(0, worktreesIdx);  // C:\dev\my-app\
       const branch = path.basename(gitdir);                    // feature-branch
       const mainName = path.basename(mainGitPath.replace(/[/\\]$/, ''));
       return { mainName, branch };

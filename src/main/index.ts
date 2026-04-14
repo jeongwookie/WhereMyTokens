@@ -106,7 +106,7 @@ function updateTray(state: AppState) {
 }
 
 app.whenReady().then(() => {
-  app.setAppUserModelId('com.jeongwook.wheremytokens');
+  app.setAppUserModelId('com.wheremytokens.app');
 
   const stateManager = new StateManager(store, (state) => updateTray(state));
   registerIpcHandlers(store, () => stateManager.getState(), () => stateManager.forceRefresh(), () => stateManager.applySettingsChange());
