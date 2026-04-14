@@ -50,6 +50,7 @@ export class StateManager {
   private heavyTimer: NodeJS.Timeout | null = null;
   private autoLimitTimer: NodeJS.Timeout | null = null;
   private watcher: chokidar.FSWatcher | null = null;
+  private heavyDebounce: NodeJS.Timeout | null = null;
   private onUpdate: (s: AppState) => void;
   private autoLimits: AutoLimits | null = null;
   private apiUsagePct: ApiUsagePct | null = null;
@@ -203,19 +204,28 @@ export class StateManager {
     this.heavyTimer = setInterval(() => { void this.heavyRefresh(); }, 300_000);
   }
 
+  // 디바운스된 heavyRefresh — 연속 JSONL 변경 시 최소 3초 대기
+  private debouncedHeavyRefresh() {
+    if (this.heavyDebounce) clearTimeout(this.heavyDebounce);
+    this.heavyDebounce = setTimeout(() => {
+      this.heavyDebounce = null;
+      void this.heavyRefresh();
+    }, 3000);
+  }
+
   private startWatcher() {
     if (!fs.existsSync(SESSIONS_DIR)) return;
     this.watcher = chokidar.watch(SESSIONS_DIR, { ignoreInitial: true, depth: 0 });
     this.watcher.on('add', (filePath: string) => {
-      if (filePath.endsWith('.jsonl')) void this.heavyRefresh();
+      if (filePath.endsWith('.jsonl')) this.debouncedHeavyRefresh();
       else this.fastRefresh();
     });
     this.watcher.on('unlink', () => this.fastRefresh());
 
-    // Watch for JSONL changes
+    // Watch for JSONL changes — 디바운스 적용
     if (fs.existsSync(PROJECTS_DIR)) {
       this.watcher.add(path.join(PROJECTS_DIR, '**', '*.jsonl'));
-      this.watcher.on('change', () => this.heavyRefresh());
+      this.watcher.on('change', () => this.debouncedHeavyRefresh());
     }
   }
 
