@@ -1,3 +1,20 @@
+export interface GitStats {
+  branch: string | null;
+  toplevel: string | null;
+  commitsToday: number;
+  linesAdded: number;
+  linesRemoved: number;
+  commits7d: number;
+  linesAdded7d: number;
+  linesRemoved7d: number;
+  commits30d: number;
+  linesAdded30d: number;
+  linesRemoved30d: number;
+  totalCommits: number;
+  totalLinesAdded: number;
+  totalLinesRemoved: number;
+}
+
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 
 export interface SessionInfo {
@@ -18,6 +35,7 @@ export interface SessionInfo {
   isWorktree?: boolean;
   worktreeBranch?: string | null;
   mainRepoName?: string | null;
+  gitStats?: GitStats | null;
 }
 
 export interface WindowStats {

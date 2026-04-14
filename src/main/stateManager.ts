@@ -10,12 +10,14 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
+import { getGitStats, GitStats } from './gitStatsCollector';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
   contextUsed: number;    // tokens
   contextMax: number;     // tokens
   toolCounts: Record<string, number>;
+  gitStats: GitStats | null;
 }
 
 export interface UsageLimits {
@@ -343,7 +345,8 @@ export class StateManager {
         } catch { /* skip */ }
       }
 
-      return { ...s, modelName, contextUsed, contextMax, toolCounts };
+      const gitStats = getGitStats(s.cwd);
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
     });
   }
 
