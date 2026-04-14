@@ -34,21 +34,29 @@
 
 ---
 
+## デモ
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5" width="380" autoplay loop muted>
+    お使いのブラウザはvideoタグをサポートしていません。
+  </video>
+</p>
+
 ## スクリーンショット
 
 <table align="center">
   <tr>
     <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="セッション、プラン使用量バー、7日ヒートマップ、モデル別分析" /><br/>
-      <sub><b>セッション · プラン使用量 · 7日ヒートマップ</b></sub>
+      <img src="assets/screenshot-main.png" width="190" alt="ヘッダー、Plan Usageバー、Code Output、セッションリスト" /><br/>
+      <sub><b>Plan Usage · Code Output · セッション</b></sub>
     </td>
     <td align="center" width="230">
-      <img src="assets/screenshot-hourly.png" width="190" alt="過去30日間の時間帯別トークン使用量チャート" /><br/>
-      <sub><b>時間帯別トークン使用量（過去30日間）</b></sub>
+      <img src="assets/screenshot-dashboard.png" width="190" alt="ダッシュボード全体 — セッション、7日ヒートマップ、モデル別分析" /><br/>
+      <sub><b>セッション · 7日ヒートマップ · モデル別分析</b></sub>
     </td>
     <td align="center" width="230">
-      <img src="assets/screenshot-help.png" width="190" alt="Help画面 — 数値・アクティビティ・データソースの説明" /><br/>
-      <sub><b>Help — 数値 · アクティビティ · データソース</b></sub>
+      <img src="assets/screenshot-rhythm.png" width="190" alt="Rhythmタブ — 時間帯別コーディングパターン、グラデーションバー" /><br/>
+      <sub><b>Activity · Rhythmタブ</b></sub>
     </td>
   </tr>
 </table>

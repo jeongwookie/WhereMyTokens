@@ -34,21 +34,29 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 ---
 
+## Demo
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5" width="380" autoplay loop muted>
+    Your browser does not support the video tag.
+  </video>
+</p>
+
 ## Screenshots
 
 <table align="center">
   <tr>
     <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="Sessions, plan usage bars, 7-day heatmap, and model breakdown" /><br/>
-      <sub><b>Sessions · Plan Usage · 7-day Heatmap</b></sub>
+      <img src="assets/screenshot-main.png" width="190" alt="Header, Plan Usage bars, Code Output, and session list" /><br/>
+      <sub><b>Plan Usage · Code Output · Sessions</b></sub>
     </td>
     <td align="center" width="230">
-      <img src="assets/screenshot-hourly.png" width="190" alt="Hourly token usage bar chart for the last 30 days" /><br/>
-      <sub><b>Hourly Token Usage (last 30 days)</b></sub>
+      <img src="assets/screenshot-dashboard.png" width="190" alt="Full dashboard with sessions, 7-day heatmap, and model breakdown" /><br/>
+      <sub><b>Sessions · 7d Heatmap · Model Usage</b></sub>
     </td>
     <td align="center" width="230">
-      <img src="assets/screenshot-help.png" width="190" alt="Help view — Numbers, Activity, and Data Sources explained" /><br/>
-      <sub><b>Help — Numbers, Activity &amp; Data Sources</b></sub>
+      <img src="assets/screenshot-rhythm.png" width="190" alt="Rhythm tab showing time-of-day coding patterns with gradient bars" /><br/>
+      <sub><b>Activity · Rhythm Tab</b></sub>
     </td>
   </tr>
 </table>

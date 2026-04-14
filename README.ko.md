@@ -34,21 +34,29 @@
 
 ---
 
+## 데모
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5" width="380" autoplay loop muted>
+    브라우저가 video 태그를 지원하지 않습니다.
+  </video>
+</p>
+
 ## 스크린샷
 
 <table align="center">
   <tr>
     <td align="center" width="230">
-      <img src="assets/screenshot-main.png" width="190" alt="세션, 플랜 사용량 바, 7일 히트맵, 모델별 분석" /><br/>
-      <sub><b>세션 · 플랜 사용량 · 7일 히트맵</b></sub>
+      <img src="assets/screenshot-main.png" width="190" alt="헤더, Plan Usage 바, Code Output, 세션 목록" /><br/>
+      <sub><b>Plan Usage · Code Output · 세션</b></sub>
     </td>
     <td align="center" width="230">
-      <img src="assets/screenshot-hourly.png" width="190" alt="최근 30일 시간대별 토큰 사용량 바차트" /><br/>
-      <sub><b>시간대별 토큰 사용량 (최근 30일)</b></sub>
+      <img src="assets/screenshot-dashboard.png" width="190" alt="전체 대시보드 — 세션, 7일 히트맵, 모델별 분석" /><br/>
+      <sub><b>세션 · 7일 히트맵 · 모델별 분석</b></sub>
     </td>
     <td align="center" width="230">
-      <img src="assets/screenshot-help.png" width="190" alt="Help 뷰 — 수치, 활동 탭, 데이터 소스 설명" /><br/>
-      <sub><b>Help — 수치 · 활동 · 데이터 소스</b></sub>
+      <img src="assets/screenshot-rhythm.png" width="190" alt="Rhythm 탭 — 시간대별 코딩 패턴, 그라데이션 바" /><br/>
+      <sub><b>Activity · Rhythm 탭</b></sub>
     </td>
   </tr>
 </table>
