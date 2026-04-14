@@ -29,6 +29,21 @@ v1.x.0  — 신기능 추가
 
 ---
 
+## 릴리즈 ZIP 파일명 규칙
+
+**반드시 아래 형식 유지:**
+
+```
+WhereMyTokens-v{VERSION}-win-x64.zip
+```
+
+예: `WhereMyTokens-v1.6.0-win-x64.zip`
+
+- `portable`, `unpacked`, `win-unpacked` 등 임의 접미사 금지
+- README.md / README.ko.md / README.ja.md / RELEASE.md 이력의 파일명도 동일 형식 사용
+
+---
+
 ## 3. 빌드
 
 ```bash
