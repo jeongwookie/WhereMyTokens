@@ -85,12 +85,23 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
     : sessions;
 
   // 2단계 그루핑: Project → Branch → Sessions
+  // toplevel(git root)이 같으면 같은 프로젝트로 합치기 (worktree 통합)
   type BranchGroup = { branch: string; sessions: typeof sessions; commits: number; added: number; removed: number };
   type ProjectGroup = { name: string; branches: BranchGroup[]; totalCommits: number; totalAdded: number; totalRemoved: number };
   const projectGroups: ProjectGroup[] = (() => {
+    // toplevel → 대표 프로젝트명 매핑
+    const toplevelNames = new Map<string, string>();
+    for (const s of filteredSessions) {
+      const tl = s.gitStats?.toplevel;
+      if (tl && !toplevelNames.has(tl)) {
+        // mainRepoName이 있으면 우선, 없으면 toplevel 마지막 폴더명
+        toplevelNames.set(tl, s.mainRepoName ?? tl.split(/[\\/]/).filter(Boolean).pop() ?? s.projectName);
+      }
+    }
     const projMap: Record<string, typeof sessions> = {};
     for (const s of filteredSessions) {
-      const key = s.mainRepoName ?? s.projectName;
+      const tl = s.gitStats?.toplevel;
+      const key = tl ? (toplevelNames.get(tl) ?? s.projectName) : (s.mainRepoName ?? s.projectName);
       if (!projMap[key]) projMap[key] = [];
       projMap[key].push(s);
     }
@@ -153,7 +164,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           </div>
         </div>
 
-        {/* 행2: 대형 비용 + 오늘 토큰 */}
+        {/* 행2: 대형 비용 + 오늘 토큰 + 크레딧 */}
         <div style={{ ...drag, padding: '0 14px 8px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
           <span style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono }}>
             {fmtCost(usage.todayCost, currency, usdToKrw)}
@@ -161,6 +172,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           <span style={{ fontSize: 11, color: C.headerSub, whiteSpace: 'nowrap' }}>
             {fmtTokens(usage.todayTokens)} tok · today
           </span>
+          <span style={{ fontSize: 8, color: C.headerSub, opacity: 0.4, marginLeft: 'auto', flexShrink: 0 }}>by jeongwookie</span>
         </div>
 
       </div>
@@ -348,37 +360,32 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       </div>
 
       {/* bottom tabs */}
-      <div style={{ borderTop: `1px solid ${C.border}`, flexShrink: 0, background: C.bgCard }}>
-        <div style={{ display: 'flex' }}>
-          {[
-            { key: 'settings',      icon: '⚙',  label: 'Settings' },
-            { key: 'notifications', icon: '🔔', label: 'Alerts' },
-            { key: 'help',          icon: '?',  label: 'Help' },
-            { key: 'refresh',       icon: '↺',  label: lastRefreshLabel || 'Refresh' },
-          ].map(({ key, icon, label }) => (
-            <button
-              key={key}
-              onClick={() => key === 'refresh' ? handleRefresh() : onNav(key as 'settings' | 'notifications' | 'help')}
-              style={{
-                flex: 1, padding: '7px 0', background: 'none', border: 'none',
-                color: key === 'refresh' && refreshing ? C.accent : C.textDim,
-                cursor: key === 'refresh' && refreshing ? 'wait' : 'pointer',
-                fontSize: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-              }}
-            >
-              <span style={{
-                fontSize: 13,
-                display: 'inline-block',
-                transition: 'transform 0.4s',
-                transform: key === 'refresh' && refreshing ? 'rotate(360deg)' : 'none',
-              }}>{icon}</span>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ textAlign: 'center', padding: '0 0 4px', fontSize: 8, color: C.textMuted, opacity: 0.5 }}>
-          by jeongwookie
-        </div>
+      <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: C.bgCard }}>
+        {[
+          { key: 'settings',      icon: '⚙',  label: 'Settings' },
+          { key: 'notifications', icon: '🔔', label: 'Alerts' },
+          { key: 'help',          icon: '?',  label: 'Help' },
+          { key: 'refresh',       icon: '↺',  label: lastRefreshLabel || 'Refresh' },
+        ].map(({ key, icon, label }) => (
+          <button
+            key={key}
+            onClick={() => key === 'refresh' ? handleRefresh() : onNav(key as 'settings' | 'notifications' | 'help')}
+            style={{
+              flex: 1, padding: '7px 0', background: 'none', border: 'none',
+              color: key === 'refresh' && refreshing ? C.accent : C.textDim,
+              cursor: key === 'refresh' && refreshing ? 'wait' : 'pointer',
+              fontSize: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            }}
+          >
+            <span style={{
+              fontSize: 13,
+              display: 'inline-block',
+              transition: 'transform 0.4s',
+              transform: key === 'refresh' && refreshing ? 'rotate(360deg)' : 'none',
+            }}>{icon}</span>
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
