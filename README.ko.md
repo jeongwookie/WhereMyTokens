@@ -11,6 +11,20 @@
 
 [English](README.md) · [日本語](README.ja.md)
 
+<div align="center">
+
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
+
+</div>
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
+    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
+    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
+  </tr>
+</table>
+
 ---
 
 ## 주요 기능
@@ -31,22 +45,6 @@
 - **항상 위 위젯** — 다른 창 위에 고정 표시; 헤더의 `−` 버튼 또는 트레이 아이콘으로 최소화; 전역 단축키로 토글
 - **트레이 라벨** — 작업표시줄에 사용량 %, 토큰 수, 또는 비용 직접 표시
 - **기본 다크 테마** — 모던 다크 UI, 숫자 표시에 JetBrains Mono 폰트 사용
-
----
-
-## 데모
-
-https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
-
-## 스크린샷
-
-<table align="center">
-  <tr>
-    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
-    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
-    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
-  </tr>
-</table>
 
 ---
 

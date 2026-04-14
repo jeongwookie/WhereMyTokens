@@ -11,6 +11,20 @@
 
 [English](README.md) · [한국어](README.ko.md)
 
+<div align="center">
+
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
+
+</div>
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
+    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
+    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
+  </tr>
+</table>
+
 ---
 
 ## 主な機能
@@ -31,22 +45,6 @@
 - **常に最前面ウィジェット** — 他のウィンドウの上に固定表示；ヘッダーの `−` ボタンまたはトレイアイコンで最小化；グローバルホットキーで切り替え
 - **トレイラベル** — タスクバーに使用量 %、トークン数、またはコストを直接表示
 - **デフォルトダークテーマ** — モダンなダーク UI、数値表示に JetBrains Mono フォントを使用
-
----
-
-## デモ
-
-https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
-
-## スクリーンショット
-
-<table align="center">
-  <tr>
-    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
-    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
-    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
-  </tr>
-</table>
 
 ---
 

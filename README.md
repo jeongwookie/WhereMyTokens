@@ -11,6 +11,20 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 [한국어](README.ko.md) · [日本語](README.ja.md)
 
+<div align="center">
+
+https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
+
+</div>
+
+<table align="center">
+  <tr>
+    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
+    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
+    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
+  </tr>
+</table>
+
 ---
 
 ## Features
@@ -31,22 +45,6 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 - **Always-on-top widget** — stays visible over other windows; minimize with the `−` button in the header or via the tray icon; global hotkey to toggle
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
 - **Dark theme by default** — modern dark UI with JetBrains Mono for numeric displays
-
----
-
-## Demo
-
-https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
-
-## Screenshots
-
-<table align="center">
-  <tr>
-    <td align="center"><img src="assets/screenshot-main.png" width="240" /><br/><sub><b>Plan Usage</b></sub></td>
-    <td align="center"><img src="assets/screenshot-dashboard.png" width="240" /><br/><sub><b>Dashboard</b></sub></td>
-    <td align="center"><img src="assets/screenshot-rhythm.png" width="240" /><br/><sub><b>Rhythm</b></sub></td>
-  </tr>
-</table>
 
 ---
 
