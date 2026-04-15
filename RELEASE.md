@@ -114,6 +114,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.7.0 | 2026-04-15 | Activity Breakdown 패널 (세션별 카테고리별 output 토큰 분석, 10개 카테고리), 종료 시 crash 수정, 레이아웃 폴리쉬 |
 | v1.6.0 | 2026-04-14 | Code Output all-time에 모든 Claude 프로젝트 자동 포함 (~/.claude/projects/ 기반), today 통계 브랜치별 중복제거, git stats 영속 폴백 |
 | v1.5.1 | 2026-04-14 | Code Output 중복 집계 수정 (worktree dedup, 본인 커밋만 필터링), 세션 패널 워크트리 프로젝트 그루핑 수정 |
 | v1.5.0 | 2026-04-14 | 대시보드 리디자인 — 다크 테마 기본, 2단계 세션 그루핑, Code Output, Rhythm 탭, 스크롤바 커스텀, 타임존 배지, 설정 정리, 데모 영상 |
