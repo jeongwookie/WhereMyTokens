@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import chokidar from 'chokidar';
 import { discoverSessions, DiscoveredSession } from './sessionDiscovery';
-import { parseJsonlFile, ParsedEntry } from './jsonlParser';
+import { parseJsonlFile, ParsedEntry, ActivityBreakdown } from './jsonlParser';
 import { computeUsage, UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS } from './ipc';
 import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimitedError } from './rateLimitFetcher';
@@ -19,6 +19,7 @@ export interface SessionInfo extends DiscoveredSession {
   contextMax: number;     // tokens
   toolCounts: Record<string, number>;
   gitStats: GitStats | null;
+  activityBreakdown: ActivityBreakdown | null;
 }
 
 export interface UsageLimits {
@@ -356,12 +357,14 @@ export class StateManager {
       let contextMax = 200_000;
       let toolCounts: Record<string, number> = {};
 
+      let activityBreakdown: SessionInfo['activityBreakdown'] = null;
       if (s.jsonlPath) {
         try {
           const parsed = parseJsonlFile(s.jsonlPath);
           modelName = parsed.modelName;
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
+          activityBreakdown = parsed.activityBreakdown;
 
           const raw = parsed.rawModel.toLowerCase();
           if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
@@ -370,7 +373,7 @@ export class StateManager {
       }
 
       const gitStats = getGitStats(s.cwd);
-      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown };
     });
   }
 
@@ -385,12 +388,14 @@ export class StateManager {
       let contextMax = 200_000;
       let toolCounts: Record<string, number> = {};
 
+      let activityBreakdown: SessionInfo['activityBreakdown'] = null;
       if (s.jsonlPath) {
         try {
           const parsed = parseJsonlFile(s.jsonlPath);
           modelName = parsed.modelName;
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
+          activityBreakdown = parsed.activityBreakdown;
 
           const raw = parsed.rawModel.toLowerCase();
           if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
@@ -399,7 +404,7 @@ export class StateManager {
       }
 
       const gitStats = await getGitStatsAsync(s.cwd);
-      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats };
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown };
     }));
   }
 

@@ -37,6 +37,11 @@ export interface SessionInfo {
   worktreeBranch?: string | null;
   mainRepoName?: string | null;
   gitStats?: GitStats | null;
+  activityBreakdown?: {
+    read: number; editWrite: number; search: number; git: number;
+    buildTest: number; terminal: number; thinking: number; response: number;
+    subagents: number; web: number;
+  } | null;
 }
 
 export interface WindowStats {

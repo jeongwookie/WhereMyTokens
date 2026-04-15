@@ -53,6 +53,19 @@ function calcCost(model: string, inp: number, out: number, cw: number, cr: numbe
   return (inp * p.in + out * p.out + cw * p.cw + cr * p.cr) / 1_000_000;
 }
 
+export interface ActivityBreakdown {
+  read: number;       // Read 툴 호출에 귀속된 output 토큰 (비례 배분)
+  editWrite: number;  // Edit / Write / MultiEdit / NotebookEdit
+  search: number;     // Grep / Glob / LS / TodoRead
+  git: number;        // Bash — git 명령
+  buildTest: number;  // Bash — npm/tsc/test/build 등
+  terminal: number;   // Bash — 기타 / mcp__*
+  thinking: number;   // thinking 블록
+  response: number;   // text 블록 (최종 응답)
+  subagents: number;  // Agent 툴
+  web: number;        // WebFetch / WebSearch
+}
+
 export interface ParsedFile {
   entries: ParsedEntry[];
   modelName: string;        // normalized model name of latest entry
@@ -61,6 +74,33 @@ export interface ParsedFile {
   latestCacheCreationTokens: number;
   latestCacheReadTokens: number;
   toolCounts: Record<string, number>;
+  activityBreakdown: ActivityBreakdown;
+}
+
+function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown {
+  switch (name) {
+    case 'Read':                                    return 'read';
+    case 'Edit': case 'Write':
+    case 'MultiEdit': case 'NotebookEdit':          return 'editWrite';
+    case 'Grep': case 'Glob': case 'LS':
+    case 'TodoRead': case 'TodoWrite':              return 'search';
+    case 'Agent':                                   return 'subagents';
+    case 'WebFetch': case 'WebSearch':              return 'web';
+    case 'Bash': {
+      const cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
+      if (/^git\b/.test(cmd))                       return 'git';
+      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd))
+                                                    return 'buildTest';
+      return 'terminal';
+    }
+    default:
+      if (name.startsWith('mcp__'))                return 'terminal';
+      return 'terminal';
+  }
+}
+
+function emptyBreakdown(): ActivityBreakdown {
+  return { read: 0, editWrite: 0, search: 0, git: 0, buildTest: 0, terminal: 0, thinking: 0, response: 0, subagents: 0, web: 0 };
 }
 
 export function parseJsonlFile(filePath: string): ParsedFile {
@@ -84,24 +124,12 @@ export function parseJsonlFile(filePath: string): ParsedFile {
   let latestCacheCreationTokens = 0;
   let latestCacheReadTokens = 0;
   const toolCounts: Record<string, number> = {};
+  const activityBreakdown = emptyBreakdown();
 
   for (const line of lines) {
     let obj: Record<string, unknown>;
     try { obj = JSON.parse(line) as Record<string, unknown>; }
     catch { continue; }
-
-    // Tally tool call counts
-    if (obj.type === 'tool_use' || (obj.type === 'assistant' && Array.isArray((obj.message as Record<string, unknown>)?.content))) {
-      const content = (obj.message as Record<string, unknown>)?.content as unknown[];
-      if (Array.isArray(content)) {
-        for (const c of content) {
-          const item = c as Record<string, unknown>;
-          if (item?.type === 'tool_use' && typeof item.name === 'string') {
-            toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1;
-          }
-        }
-      }
-    }
 
     if (obj.type !== 'assistant') continue;
 
@@ -130,7 +158,7 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     const id = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
     if (seen.has(id)) {
       // 스트리밍 중 동일 message_id가 여러 번 기록될 수 있음
-      // output_tokens가 더 큰 엔트리(최종 청크)로 교체
+      // output_tokens가 더 큰 엔트리(최종 청크)로 교체 — toolCounts/breakdown은 재산정 안 함
       const prevIdx = seen.get(id)!;
       if (out > entries[prevIdx].outputTokens) {
         const updatedCost = calcCost(rawModel, inp, out, cw, cr);
@@ -139,6 +167,45 @@ export function parseJsonlFile(filePath: string): ParsedFile {
       continue;
     }
     seen.set(id, entries.length); // push 직전 인덱스 저장
+
+    // ── 첫 등장 엔트리만: toolCounts + activityBreakdown 집계 ──
+    const content = (obj.message as Record<string, unknown>)?.content as unknown[];
+    if (Array.isArray(content)) {
+      // 툴 호출 횟수
+      for (const c of content) {
+        const item = c as Record<string, unknown>;
+        if (item?.type === 'tool_use' && typeof item.name === 'string') {
+          toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1;
+        }
+      }
+
+      // Activity breakdown: content 블록 char 길이 비례로 output 토큰 배분
+      if (out > 0) {
+        const blockData: Array<{ cat: keyof ActivityBreakdown; chars: number }> = [];
+        for (const c of content) {
+          const item = c as Record<string, unknown>;
+          let chars = 0;
+          let cat: keyof ActivityBreakdown = 'response';
+          if (item.type === 'thinking') {
+            chars = (item.thinking as string ?? '').length;
+            cat = 'thinking';
+          } else if (item.type === 'text') {
+            chars = (item.text as string ?? '').length;
+            cat = 'response';
+          } else if (item.type === 'tool_use' && typeof item.name === 'string') {
+            chars = JSON.stringify(item.input ?? {}).length + item.name.length;
+            cat = classifyToolUse(item.name, item.input);
+          }
+          if (chars > 0) blockData.push({ cat, chars });
+        }
+        const totalChars = blockData.reduce((s, b) => s + b.chars, 0);
+        if (totalChars > 0) {
+          for (const { cat, chars } of blockData) {
+            activityBreakdown[cat] += Math.round((chars / totalChars) * out);
+          }
+        }
+      }
+    }
 
     const cost = calcCost(rawModel, inp, out, cw, cr);
     const ts = timestamp ? new Date(timestamp) : new Date(0);
@@ -174,11 +241,11 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     latestCacheReadTokens = last.cacheReadTokens;
   }
 
-  return { entries, modelName: latestModel, rawModel: latestRawModel, latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens, toolCounts };
+  return { entries, modelName: latestModel, rawModel: latestRawModel, latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens, toolCounts, activityBreakdown };
 }
 
 function emptyResult(): ParsedFile {
-  return { entries: [], modelName: '', rawModel: '', latestInputTokens: 0, latestCacheCreationTokens: 0, latestCacheReadTokens: 0, toolCounts: {} };
+  return { entries: [], modelName: '', rawModel: '', latestInputTokens: 0, latestCacheCreationTokens: 0, latestCacheReadTokens: 0, toolCounts: {}, activityBreakdown: emptyBreakdown() };
 }
 
 export { normalizeModel, getProvider };
