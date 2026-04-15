@@ -90,6 +90,7 @@ function buildTrayTitle(state: AppState): string {
 
 function updateTray(state: AppState) {
   if (!tray) return;
+  try {
   const settings = state.settings ?? DEFAULT_SETTINGS;
   const t = state.usage.todayTokens;
   const c = state.usage.todayCost;
@@ -100,9 +101,10 @@ function updateTray(state: AppState) {
   const title = buildTrayTitle(state);
   if (title) tray.setTitle(title);
 
-  if (popupWindow?.isVisible()) {
+  if (popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible()) {
     popupWindow.webContents.send('state:updated');
   }
+  } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
 }
 
 app.whenReady().then(() => {
@@ -114,6 +116,7 @@ app.whenReady().then(() => {
   tray = createTray();
   popupWindow = createPopupWindow();
   stateManager.start();
+  app.once('before-quit', () => stateManager.stop());
 
   // Show popup on first launch (after renderer is ready)
   popupWindow.once('ready-to-show', () => showPopup());
