@@ -13,7 +13,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 <div align="center">
 
-https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
+https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 
 </div>
 
