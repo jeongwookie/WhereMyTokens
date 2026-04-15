@@ -80,6 +80,25 @@ function SrcRow({ badge, children }: { badge: '1st' | '2nd' | 'FB'; children: Re
   );
 }
 
+function CatRow({ icon, label, color, children }: {
+  icon: string; label: string; color: string; children: React.ReactNode;
+}) {
+  const C = useTheme();
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 5, alignItems: 'flex-start' }}>
+      <span style={{
+        fontSize: 9.5, fontWeight: 700, padding: '2px 6px',
+        borderRadius: 3, whiteSpace: 'nowrap' as const, flexShrink: 0,
+        background: color + '20', color, border: `1px solid ${color}44`,
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+      }}>
+        {icon} {label}
+      </span>
+      <span style={{ fontSize: 11, color: C.textMuted }}>{children}</span>
+    </div>
+  );
+}
+
 function UsageTable({ rows, headers }: {
   headers: [string, string, string, string];
   rows: [string, string, string, string][];
@@ -150,7 +169,19 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Project → Branch → Session</B> — sessions are grouped by git project, then by branch.</div>
         <div style={{ marginBottom: 5 }}><B>Idle collapse</B> — active/waiting sessions show full details. Idle sessions progressively collapse: &lt;1h shows top-3 tools, 1-6h shows context bar only, 6h+ shows a single-line summary.</div>
         <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). Shows how well prompt caching is being utilized.</div>
-        <div><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
+        <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click the <B>Breakdown</B> button on any session row to expand a per-category output token breakdown. One panel open at a time — clicking another session auto-closes the previous.</div>
+        <CatRow icon="💭" label="Thinking" color="#a78bfa">Extended thinking blocks</CatRow>
+        <CatRow icon="💬" label="Response" color="#8b90a0">Text blocks — the final answer text</CatRow>
+        <CatRow icon="📄" label="Read" color="#60a5fa">Read tool</CatRow>
+        <CatRow icon="✏️" label="Edit/Write" color="#34d399">Edit · Write · MultiEdit · NotebookEdit</CatRow>
+        <CatRow icon="🔍" label="Search" color="#22d3ee">Grep · Glob · LS · TodoRead · TodoWrite</CatRow>
+        <CatRow icon="🌿" label="Git" color="#c084fc">Bash — commands starting with git</CatRow>
+        <CatRow icon="⚙️" label="Build/Test" color="#fb923c">Bash — npm, tsc, jest, cargo, python, go build…</CatRow>
+        <CatRow icon="💻" label="Terminal" color="#fbbf24">Other Bash commands · mcp__* tools</CatRow>
+        <CatRow icon="🤖" label="Subagents" color="#f472b6">Agent tool</CatRow>
+        <CatRow icon="🌐" label="Web" color="#38bdf8">WebFetch · WebSearch</CatRow>
+        <Note>Attribution: each turn's output tokens are split across content blocks by character proportion (block chars ÷ total chars × output tokens). Zero-value categories are hidden.</Note>
       </Section>
 
       <Divider />
@@ -221,7 +252,19 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>프로젝트 → 브랜치 → 세션</B> — git 프로젝트별, 브랜치별로 그루핑.</div>
         <div style={{ marginBottom: 5 }}><B>Idle 축소</B> — active/waiting은 전체 표시. idle 세션은 단계별 축소: 1시간 미만은 상위 3개 툴, 1-6시간은 컨텍스트 바만, 6시간 이상은 한 줄 요약.</div>
         <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). 프롬프트 캐싱 활용도.</div>
-        <div><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
+        <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Breakdown</B> 버튼을 누르면 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션 클릭 시 자동으로 닫힙니다.</div>
+        <CatRow icon="💭" label="Thinking" color="#a78bfa">확장 사고 블록</CatRow>
+        <CatRow icon="💬" label="Response" color="#8b90a0">텍스트 블록 — 최종 응답 텍스트</CatRow>
+        <CatRow icon="📄" label="Read" color="#60a5fa">Read 툴</CatRow>
+        <CatRow icon="✏️" label="Edit/Write" color="#34d399">Edit · Write · MultiEdit · NotebookEdit</CatRow>
+        <CatRow icon="🔍" label="Search" color="#22d3ee">Grep · Glob · LS · TodoRead · TodoWrite</CatRow>
+        <CatRow icon="🌿" label="Git" color="#c084fc">Bash — git 명령</CatRow>
+        <CatRow icon="⚙️" label="Build/Test" color="#fb923c">Bash — npm, tsc, jest, cargo, python 등</CatRow>
+        <CatRow icon="💻" label="Terminal" color="#fbbf24">기타 Bash 명령 · mcp__* 툴</CatRow>
+        <CatRow icon="🤖" label="Subagents" color="#f472b6">Agent 툴</CatRow>
+        <CatRow icon="🌐" label="Web" color="#38bdf8">WebFetch · WebSearch</CatRow>
+        <Note>토큰 배분: 각 턴의 output 토큰을 컨텐츠 블록별 문자 수 비율로 분배합니다 (블록 문자 수 ÷ 전체 문자 수 × output 토큰). 값이 0인 카테고리는 표시되지 않습니다.</Note>
       </Section>
 
       <Divider />
@@ -292,7 +335,19 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>プロジェクト → ブランチ → セッション</B> — git プロジェクト別、ブランチ別にグループ化。</div>
         <div style={{ marginBottom: 5 }}><B>Idle 折りたたみ</B> — active/waiting は完全表示。idle セッションは段階的に折りたたみ：1 時間未満はトップ 3 ツール、1-6 時間はコンテキストバーのみ、6 時間以上は 1 行サマリー。</div>
         <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Excellent (80%+)、Good (60%+)、Fair (40%+)、Poor (&lt;40%)。プロンプトキャッシングの活用度。</div>
-        <div><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
+        <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Breakdown</B> ボタンをクリックすると、カテゴリ別の output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。</div>
+        <CatRow icon="💭" label="Thinking" color="#a78bfa">拡張思考ブロック</CatRow>
+        <CatRow icon="💬" label="Response" color="#8b90a0">テキストブロック — 最終回答テキスト</CatRow>
+        <CatRow icon="📄" label="Read" color="#60a5fa">Read ツール</CatRow>
+        <CatRow icon="✏️" label="Edit/Write" color="#34d399">Edit · Write · MultiEdit · NotebookEdit</CatRow>
+        <CatRow icon="🔍" label="Search" color="#22d3ee">Grep · Glob · LS · TodoRead · TodoWrite</CatRow>
+        <CatRow icon="🌿" label="Git" color="#c084fc">Bash — git コマンド</CatRow>
+        <CatRow icon="⚙️" label="Build/Test" color="#fb923c">Bash — npm, tsc, jest, cargo, python など</CatRow>
+        <CatRow icon="💻" label="Terminal" color="#fbbf24">その他の Bash コマンド · mcp__* ツール</CatRow>
+        <CatRow icon="🤖" label="Subagents" color="#f472b6">Agent ツール</CatRow>
+        <CatRow icon="🌐" label="Web" color="#38bdf8">WebFetch · WebSearch</CatRow>
+        <Note>トークン配分：各ターンの output トークン数をコンテンツブロックの文字数比率で分配します（ブロック文字数 ÷ 総文字数 × output トークン数）。値が 0 のカテゴリは非表示。</Note>
       </Section>
 
       <Divider />

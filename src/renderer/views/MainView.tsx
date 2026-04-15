@@ -30,6 +30,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const [showHiddenManager, setShowHiddenManager] = useState(false);
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('all');
+  // 확장된 세션 ID (한 번에 하나만 — 새 세션 클릭 시 이전 자동 닫힘)
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
   useEffect(() => {
     if (state.lastUpdated === 0) return;
@@ -306,7 +308,16 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                     </div>
 
                     {/* 세션 카드들 */}
-                    {br.sessions.map(s => <SessionRow key={s.sessionId} session={s} />)}
+                    {br.sessions.map(s => (
+                      <SessionRow
+                        key={s.sessionId}
+                        session={s}
+                        expanded={expandedSession === s.sessionId}
+                        onToggle={() => setExpandedSession(
+                          expandedSession === s.sessionId ? null : s.sessionId
+                        )}
+                      />
+                    ))}
                   </div>
                 ))}
               </div>
@@ -318,7 +329,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
           {/* 숨긴 프로젝트 관리 */}
           {allHidden.length > 0 && (
-            <div style={{ padding: '4px 14px', borderTop: `1px solid ${C.border}` }}>
+            <div style={{ padding: '4px 14px', marginTop: 8, borderTop: `1px solid ${C.border}` }}>
               <button
                 onClick={() => setShowHiddenManager(v => !v)}
                 style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: 0 }}
