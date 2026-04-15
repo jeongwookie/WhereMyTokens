@@ -44,7 +44,7 @@ export default function SessionRow({ session, expanded, onToggle }: {
   if (idle >= 360) {
     return (
       <div style={{
-        padding: '5px 10px', marginLeft: 8, marginTop: 3,
+        padding: '5px 10px', marginLeft: 8, marginRight: 8, marginTop: 3,
         background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 6,
         opacity: 0.45,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -83,7 +83,7 @@ export default function SessionRow({ session, expanded, onToggle }: {
         onClick={hasBreakdown ? onToggle : undefined}
         style={{
           padding: isCompact ? '6px 10px' : '7px 10px',
-          marginLeft: 8, marginTop: 3,
+          marginLeft: 8, marginRight: 8, marginTop: 3,
           background: C.bgRow,
           border: `1px solid ${isExpanded ? 'rgba(167,139,250,0.35)' : C.border}`,
           borderRadius: isExpanded ? '6px 6px 0 0' : 6,
@@ -190,7 +190,7 @@ export default function SessionRow({ session, expanded, onToggle }: {
                   <span key={i} style={{ display: 'inline-block', width: 2, height: h, background: 'currentColor', borderRadius: '1px 1px 0 0' }} />
                 ))}
               </span>
-              Activity
+              Breakdown
               <span style={{ fontSize: 7, opacity: 0.75 }}>{isExpanded ? '▲' : '▼'}</span>
             </button>
           </div>

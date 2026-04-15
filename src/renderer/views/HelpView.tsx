@@ -170,7 +170,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Idle collapse</B> — active/waiting sessions show full details. Idle sessions progressively collapse: &lt;1h shows top-3 tools, 1-6h shows context bar only, 6h+ shows a single-line summary.</div>
         <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). Shows how well prompt caching is being utilized.</div>
         <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click the <B>Activity</B> button on any session row to expand a per-category output token breakdown. One panel open at a time — clicking another session auto-closes the previous.</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click the <B>Breakdown</B> button on any session row to expand a per-category output token breakdown. One panel open at a time — clicking another session auto-closes the previous.</div>
         <CatRow icon="💭" label="Thinking" color="#a78bfa">Extended thinking blocks</CatRow>
         <CatRow icon="💬" label="Response" color="#8b90a0">Text blocks — the final answer text</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read tool</CatRow>
@@ -253,7 +253,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>Idle 축소</B> — active/waiting은 전체 표시. idle 세션은 단계별 축소: 1시간 미만은 상위 3개 툴, 1-6시간은 컨텍스트 바만, 6시간 이상은 한 줄 요약.</div>
         <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). 프롬프트 캐싱 활용도.</div>
         <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Activity</B> 버튼을 누르면 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션 클릭 시 자동으로 닫힙니다.</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Breakdown</B> 버튼을 누르면 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션 클릭 시 자동으로 닫힙니다.</div>
         <CatRow icon="💭" label="Thinking" color="#a78bfa">확장 사고 블록</CatRow>
         <CatRow icon="💬" label="Response" color="#8b90a0">텍스트 블록 — 최종 응답 텍스트</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read 툴</CatRow>
@@ -336,7 +336,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Idle 折りたたみ</B> — active/waiting は完全表示。idle セッションは段階的に折りたたみ：1 時間未満はトップ 3 ツール、1-6 時間はコンテキストバーのみ、6 時間以上は 1 行サマリー。</div>
         <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Excellent (80%+)、Good (60%+)、Fair (40%+)、Poor (&lt;40%)。プロンプトキャッシングの活用度。</div>
         <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Activity</B> ボタンをクリックすると、カテゴリ別の output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Breakdown</B> ボタンをクリックすると、カテゴリ別の output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。</div>
         <CatRow icon="💭" label="Thinking" color="#a78bfa">拡張思考ブロック</CatRow>
         <CatRow icon="💬" label="Response" color="#8b90a0">テキストブロック — 最終回答テキスト</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read ツール</CatRow>

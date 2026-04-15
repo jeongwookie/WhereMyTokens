@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
 - **Code Output** — git 기반 생산성 지표: 커밋 수, 순 라인 변경, $/커밋 (today/all time 토글); `~/.claude/projects/` 히스토리를 통해 Claude를 사용한 모든 프로젝트 자동 발견 — 세션이 활성 상태가 아니어도 포함
 - **컨텍스트 창 경고** — 세션별 컨텍스트 바; 50%에서 황색, 80%에서 주황, 95%+에서 적색, "⚠ near limit" / "⚠ at limit" 표시
 - **툴 사용 바** — 세션별 비례 색상 바 + 툴 칩(Bash, Edit, Read 등)
-- **Activity Breakdown** — 세션 행의 **Activity ▼** 버튼을 클릭하면 카테고리별 토큰 사용 분석 패널 표시: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, Response. 한 번에 하나만 열림
+- **Activity Breakdown** — 세션 행의 **Breakdown** 버튼을 클릭하면 카테고리별 토큰 사용 분석 패널 표시: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, Response. 한 번에 하나만 열림
 - **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교, **Rhythm** (시간대별 코딩 패턴, 그라데이션 바)
 - **모델별 분석** — 전체 기간의 모델별 토큰·비용 합계, 그라데이션 바
 - **비용 표시** — USD 또는 KRW, 구독 환산 가치
@@ -115,7 +115,7 @@ npm run dist
 - 세션 상태 배지와 마지막 활동 시간
 - **컨텍스트 바** — 세션별 항상 표시; 50%에서 황색, 80%에서 주황, 95%+에서 적색
 - **툴 바** — 비례 색상 바 + 상위 3개 툴 이름과 호출 횟수
-- **Activity ▼ 버튼** — 카테고리별 토큰 사용 분석 패널 토글 (Read / Edit/Write / Search / Git / Build/Test / Terminal / Subagents / Thinking / Response), 한 번에 하나만 열림
+- **Breakdown 버튼** — 카테고리별 토큰 사용 분석 패널 토글 (Read / Edit/Write / Search / Git / Build/Test / Terminal / Subagents / Thinking / Response), 한 번에 하나만 열림
 
 **All / Active**로 세션 필터링. 프로젝트 헤더에 마우스를 올리면:
 - `x` — UI에서 숨기기 (추적은 계속)
@@ -167,7 +167,7 @@ npm run dist
 
 ## Activity Breakdown
 
-세션 행의 **Activity** 버튼을 클릭하면 해당 세션의 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션을 클릭하면 이전 패널이 자동으로 닫힙니다.
+세션 행의 **Breakdown** 버튼을 클릭하면 해당 세션의 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션을 클릭하면 이전 패널이 자동으로 닫힙니다.
 
 | 카테고리 | 색상 | 소스 |
 |---------|------|------|

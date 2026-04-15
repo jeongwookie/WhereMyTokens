@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
 - **Code Output** — git-based productivity metrics: commits, net lines changed, $/commit with today/all-time toggle; auto-discovers every project you've ever used Claude on via `~/.claude/projects/` history — no active session required; only your commits are counted (filtered by `git config user.email`)
 - **Context window warnings** — per-session context bar; amber at 50%, orange at 80%, red at 95%+, with "⚠ near limit" / "⚠ at limit" labels
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …) per session
-- **Activity Breakdown** — click the **Activity ▼** button on any session row to expand a per-category token breakdown: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, and Response; shows what Claude actually spent tokens on; one panel open at a time
+- **Activity Breakdown** — click the **Breakdown** button on any session row to expand a per-category token breakdown: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, and Response; shows what Claude actually spent tokens on; one panel open at a time
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day coding patterns with per-period gradient bars)
 - **Model breakdown** — per-model token and cost totals across all time, with gradient bars
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
@@ -115,7 +115,7 @@ Each row shows:
 - Session state badge and last activity time
 - **Context bar** — always visible per session; turns amber at 50%, orange at 80%, red at 95%+
 - **Tool bar** — proportional color bar + top-3 tool names with call counts
-- **Activity ▼ button** — expands a per-category token breakdown panel (Read / Edit/Write / Search / Git / Build/Test / Terminal / Subagents / Thinking / Response) — one panel open at a time
+- **Breakdown button** — expands a per-category token breakdown panel (Read / Edit/Write / Search / Git / Build/Test / Terminal / Subagents / Thinking / Response) — one panel open at a time
 
 Use **All / Active** to filter sessions. Hover a project header to:
 - `x` — hide from the UI (still tracked)
@@ -167,7 +167,7 @@ All token counts (`tok`) include **input + output + cache creation + cache reads
 
 ## Activity Breakdown
 
-Click the **Activity** button on any session row to expand a per-category breakdown of output tokens for that session. Only one panel can be open at a time — clicking another session auto-closes the previous.
+Click the **Breakdown** button on any session row to expand a per-category breakdown of output tokens for that session. Only one panel can be open at a time — clicking another session auto-closes the previous.
 
 | Category | Color | Source |
 |----------|-------|--------|

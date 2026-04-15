@@ -329,7 +329,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
           {/* 숨긴 프로젝트 관리 */}
           {allHidden.length > 0 && (
-            <div style={{ padding: '4px 14px', borderTop: `1px solid ${C.border}` }}>
+            <div style={{ padding: '4px 14px', marginTop: 8, borderTop: `1px solid ${C.border}` }}>
               <button
                 onClick={() => setShowHiddenManager(v => !v)}
                 style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: 0 }}
