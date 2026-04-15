@@ -28,6 +28,7 @@ https://github.com/user-attachments/assets/03ff7ed5-022d-4612-88f7-adc3666e1df5
 - **Code Output** — git ベースの生産性指標：コミット数、純変更行数、$/コミット（today/all time 切り替え）；`~/.claude/projects/` の履歴から Claude を使用したすべてのプロジェクトを自動検出 — セッションがアクティブでなくても含まれる
 - **コンテキストウィンドウ警告** — セッションごとのコンテキストバー；50% で琥珀色、80% でオレンジ、95%+ で赤、"⚠ near limit" / "⚠ at limit" 表示
 - **ツール使用バー** — セッションごとの比例色分けバー + ツールチップ（Bash、Edit、Read など）
+- **Activity Breakdown** — セッション行の **Activity ▼** ボタンをクリックすると、カテゴリ別トークン使用分析パネルを表示：Read、Edit/Write、Search、Git、Build/Test、Terminal、Subagents、Thinking、Response。同時に開けるのは 1 つのみ
 - **アクティビティタブ** — 7 日間ヒートマップ、5 ヶ月カレンダー（GitHub スタイル）、時間帯別分布、4 週間比較、**Rhythm**（時間帯別コーディングパターン、グラデーションバー）
 - **モデル別分析** — 全期間のモデルごとのトークン数・コスト合計、グラデーションバー
 - **コスト表示** — USD または KRW、サブスクリプション換算価値
@@ -114,6 +115,7 @@ npm run dist
 - セッション状態バッジと最終アクティビティ時間
 - **コンテキストバー** — セッションごとに常時表示；50% で琥珀色、80% でオレンジ、95%+ で赤
 - **ツールバー** — 比例色分けバー + 上位 3 ツール名と呼び出し回数
+- **Activity ▼ ボタン** — カテゴリ別トークン使用分析パネルのトグル（Read / Edit/Write / Search / Git / Build/Test / Terminal / Subagents / Thinking / Response）、同時に開けるのは 1 つのみ
 
 **All / Active** でセッションをフィルタリング。プロジェクトヘッダーにマウスを合わせると：
 - `x` — UI から非表示（追跡は継続）
@@ -160,6 +162,27 @@ npm run dist
 | Hourly | 直近 30 日間の時間帯別トークン分布 |
 | Weekly | 直近 4 週間の横棒グラフ |
 | Rhythm | 時間帯別コーディングパターン — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙、グラデーションバー（7 日間、ローカルタイムゾーン） |
+
+---
+
+## Activity Breakdown
+
+セッション行の **Activity** ボタンをクリックすると、そのセッションのカテゴリ別 output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。
+
+| カテゴリ | 色 | ソース |
+|---------|-----|--------|
+| 💭 Thinking | 紫 | 拡張思考ブロック |
+| 💬 Response | グレー | テキストブロック — 最終回答テキスト |
+| 📄 Read | 青 | `Read` ツール呼び出し |
+| ✏️ Edit / Write | 緑 | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` |
+| 🔍 Search | シアン | `Grep`, `Glob`, `LS`, `TodoRead`, `TodoWrite` |
+| 🌿 Git | ラベンダー | `Bash` — `git` で始まるコマンド |
+| ⚙️ Build / Test | オレンジ | `Bash` — `npm`, `tsc`, `jest`, `cargo`, `python`, `go build` など |
+| 💻 Terminal | 琥珀 | その他の `Bash` コマンド; `mcp__*` ツール |
+| 🤖 Subagents | ピンク | `Agent` ツール |
+| 🌐 Web | スカイ | `WebFetch`, `WebSearch` |
+
+> **トークン配分方法：** 各 assistant ターンの output トークン数をコンテンツブロックの文字数比率で分配します — `ブロック文字数 ÷ 総文字数 × output トークン数`。値が 0 のカテゴリは非表示になります。
 
 ---
 
