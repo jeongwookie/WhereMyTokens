@@ -76,10 +76,10 @@ export default function ActivityBreakdown({ session }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                 <span style={{ fontSize: 10, width: 14, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
                 <span style={{ fontSize: 10, color: C.textDim, flex: 1 }}>{cat.label}</span>
-                <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted }}>
+                <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 42, textAlign: 'right', flexShrink: 0 }}>
                   {fmtTokens(tokens)}
                 </span>
-                <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 28, textAlign: 'right' }}>
+                <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 26, textAlign: 'right', flexShrink: 0 }}>
                   {Math.round(pct)}%
                 </span>
               </div>
