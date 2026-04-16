@@ -4,6 +4,8 @@
 
 **Claude Code 토큰 사용량을 실시간으로 모니터링하는 Windows 시스템 트레이 앱.**
 
+Claude Code를 매일 사용하는 한국인 개발자가 직접 만들고 쓰고 있는 앱입니다.
+
 작업표시줄에 조용히 상주하며 Claude Code 사용량 — 토큰, 비용, 세션 활동, 속도 제한 — 을 한눈에 보여줍니다.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)

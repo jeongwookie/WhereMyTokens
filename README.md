@@ -4,6 +4,8 @@
 
 **Windows system tray app for monitoring Claude Code token usage in real time.**
 
+Built by a Korean developer who uses Claude Code daily — scratching my own itch.
+
 Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, session activity, and rate limits — at a glance.
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)

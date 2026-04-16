@@ -4,6 +4,8 @@
 
 **Claude Code のトークン使用量をリアルタイムで監視する Windows システムトレイアプリ。**
 
+Claude Code を毎日使う韓国人開発者が、自分のために作って使い続けているアプリです。
+
 タスクバーに常駐し、Claude Code の使用状況 — トークン数、コスト、セッション活動、レート制限 — を一目で確認できます。
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
