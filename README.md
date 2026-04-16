@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **2-level session grouping** — sessions grouped by git project → branch, with per-project commit stats and line counts; idle sessions progressively collapse (top-3 tools → context bar only → single-line summary)
 - **Rate limit bars** — 5h and 1w usage from Anthropic's API, with progress bars, time-to-reset counters, and cache efficiency grades (Excellent/Good/Fair/Poor)
 - **Claude Code bridge** — register WhereMyTokens as a Claude Code `statusLine` plugin for live rate limit data without API polling
-- **Code Output** — git-based productivity metrics: commits, net lines changed, $/commit with today/all-time toggle; auto-discovers every project you've ever used Claude on via `~/.claude/projects/` history — no active session required; only your commits are counted (filtered by `git config user.email`)
+- **Code Output** — git-based productivity metrics: commits, net lines changed, and **Claude ROI** (cost per 1K lines added) with today/all-time toggle; today shows an efficiency label (Excellent/Good/Normal/Low/Exploring) vs your all-time average; auto-discovers every project you've ever used Claude on via `~/.claude/projects/` history — no active session required; only your commits are counted (filtered by `git config user.email`)
 - **Context window warnings** — per-session context bar; amber at 50%, orange at 80%, red at 95%+, with "⚠ near limit" / "⚠ at limit" labels
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …) per session
 - **Activity Breakdown** — click the **Breakdown** button on any session row to expand a per-category token breakdown: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, and Response; shows what Claude actually spent tokens on; one panel open at a time
@@ -246,7 +246,7 @@ src/
       SessionRow.tsx       Session row with idle collapse (context bar + tool chips)
       TokenStatsCard.tsx   Usage stats + rate limit bar + cache efficiency grade
       ActivityChart.tsx    Heatmaps, charts, and Rhythm tab
-      CodeOutputCard.tsx   Git-based productivity metrics (commits, lines, $/commit)
+      CodeOutputCard.tsx   Git-based productivity metrics (commits, lines, Claude ROI $/1K lines)
       ModelBreakdown.tsx   Per-model totals with gradient bars
       ExtraUsageCard.tsx   Extra Usage monthly budget card
 ```

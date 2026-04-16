@@ -144,7 +144,7 @@ function ContentEN() {
           rows={[
             ['Header', 'Today since midnight', 'All types', 'API-equiv'],
             ['Plan Usage', 'Current billing window', 'All types', 'API-equiv'],
-            ['Code Output', 'Today / All time', 'Git stats', '$/commit'],
+            ['Code Output', 'Today / All time', 'Git stats', '$/1K lines'],
             ['Model Usage', 'All time, per model', 'All types', 'API-equiv'],
           ]}
         />
@@ -158,7 +158,7 @@ function ContentEN() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — number of git commits in the period.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
-        <div style={{ marginBottom: 5 }}><B>$/Commit</B> — cost per commit (today uses today's cost; all uses all-time model cost sum).</div>
+        <div style={{ marginBottom: 5 }}><B>Claude ROI</B> — how efficiently you turned Claude spend into code output, measured as cost per 1,000 lines added. <B>today</B> tab shows a label (Excellent / Good / Normal / Low / Exploring) based on how today's $/1K lines compares to your all-time average, with a multiplier like ×5.4 vs avg. <B>all</B> tab shows the raw all-time average $/1K lines. Lower cost per 1K lines = higher ROI.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
@@ -227,7 +227,7 @@ function ContentKO() {
           rows={[
             ['헤더', '오늘 자정 이후', '전체', 'API 환산'],
             ['Plan Usage', '현재 빌링 창', '전체', 'API 환산'],
-            ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/커밋'],
+            ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/1K lines'],
             ['Model Usage', '전체 기간, 모델별', '전체', 'API 환산'],
           ]}
         />
@@ -241,7 +241,7 @@ function ContentKO() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 해당 기간의 git 커밋 수.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
-        <div style={{ marginBottom: 5 }}><B>$/Commit</B> — 커밋당 비용 (today는 오늘 비용, all은 전체 모델 비용 합산 기준).</div>
+        <div style={{ marginBottom: 5 }}><B>Claude ROI</B> — Claude 비용 대비 코드 산출 효율. 1,000 라인 추가당 비용으로 측정합니다. <B>today</B> 탭은 오늘의 $/1K lines를 전체 평균과 비교해 레이블(Excellent / Good / Normal / Low / Exploring)과 배율(×5.4 vs avg)로 표시. <B>all</B> 탭은 전체 기간 평균 $/1K lines를 수치로 표시. 값이 낮을수록 ROI가 높습니다.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
@@ -310,7 +310,7 @@ function ContentJA() {
           rows={[
             ['ヘッダー', '当日 0:00 以降', '全種別', 'API換算'],
             ['Plan Usage', '現在の請求ウィンドウ', '全種別', 'API換算'],
-            ['Code Output', '今日 / 全期間', 'Git統計', '$/コミット'],
+            ['Code Output', '今日 / 全期間', 'Git統計', '$/1K lines'],
             ['Model Usage', '全期間・モデル別', '全種別', 'API換算'],
           ]}
         />
@@ -324,7 +324,7 @@ function ContentJA() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 期間内の git コミット数。</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
-        <div style={{ marginBottom: 5 }}><B>$/Commit</B> — コミットあたりのコスト（today は今日のコスト、all は全期間のモデルコスト合計基準）。</div>
+        <div style={{ marginBottom: 5 }}><B>Claude ROI</B> — Claude コストに対するコード産出効率。1,000 行追加あたりのコストで測定します。<B>today</B> タブは今日の $/1K lines を全期間平均と比較し、ラベル（Excellent / Good / Normal / Low / Exploring）と倍率（×5.4 vs avg）で表示。<B>all</B> タブは全期間平均の $/1K lines を数値で表示。値が低いほど ROI が高くなります。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>

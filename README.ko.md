@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **2단계 세션 그루핑** — git 프로젝트 → 브랜치별로 그루핑, 프로젝트별 커밋·라인 통계 표시; idle 세션은 단계적 축소 (상위 3개 툴 → 컨텍스트 바만 → 한 줄 요약)
 - **속도 제한 바** — Anthropic API에서 가져온 5시간·주간 사용량을 프로그레스 바, 리셋 카운터, 캐시 효율 등급(Excellent/Good/Fair/Poor)으로 표시
 - **Claude Code 브리지** — WhereMyTokens를 Claude Code `statusLine` 플러그인으로 등록해 API 폴링 없이 실시간 속도 제한 데이터 수신
-- **Code Output** — git 기반 생산성 지표: 커밋 수, 순 라인 변경, $/커밋 (today/all time 토글); `~/.claude/projects/` 히스토리를 통해 Claude를 사용한 모든 프로젝트 자동 발견 — 세션이 활성 상태가 아니어도 포함
+- **Code Output** — git 기반 생산성 지표: 커밋 수, 순 라인 변경, **Claude ROI** (1K 라인 추가당 비용) (today/all time 토글); today는 전체 평균 대비 효율 레이블(Excellent/Good/Normal/Low/Exploring) 표시; `~/.claude/projects/` 히스토리를 통해 Claude를 사용한 모든 프로젝트 자동 발견 — 세션이 활성 상태가 아니어도 포함
 - **컨텍스트 창 경고** — 세션별 컨텍스트 바; 50%에서 황색, 80%에서 주황, 95%+에서 적색, "⚠ near limit" / "⚠ at limit" 표시
 - **툴 사용 바** — 세션별 비례 색상 바 + 툴 칩(Bash, Edit, Read 등)
 - **Activity Breakdown** — 세션 행의 **Breakdown** 버튼을 클릭하면 카테고리별 토큰 사용 분석 패널 표시: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, Response. 한 번에 하나만 열림

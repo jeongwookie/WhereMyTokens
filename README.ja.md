@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **2 段階セッショングループ化** — git プロジェクト → ブランチ別にグループ化、プロジェクトごとのコミット・行数統計を表示；idle セッションは段階的に折りたたみ（トップ 3 ツール → コンテキストバーのみ → 1 行サマリー）
 - **レート制限バー** — Anthropic API から取得した 5 時間・週間使用量をプログレスバー、リセットカウンター、キャッシュ効率グレード（Excellent/Good/Fair/Poor）で表示
 - **Claude Code ブリッジ** — WhereMyTokens を Claude Code の `statusLine` プラグインとして登録し、API ポーリングなしでリアルタイムのレート制限データを受信
-- **Code Output** — git ベースの生産性指標：コミット数、純変更行数、$/コミット（today/all time 切り替え）；`~/.claude/projects/` の履歴から Claude を使用したすべてのプロジェクトを自動検出 — セッションがアクティブでなくても含まれる
+- **Code Output** — git ベースの生産性指標：コミット数、純変更行数、**Claude ROI**（1K 行追加あたりのコスト）（today/all time 切り替え）；today は全期間平均と比較した効率ラベル（Excellent/Good/Normal/Low/Exploring）を表示；`~/.claude/projects/` の履歴から Claude を使用したすべてのプロジェクトを自動検出 — セッションがアクティブでなくても含まれる
 - **コンテキストウィンドウ警告** — セッションごとのコンテキストバー；50% で琥珀色、80% でオレンジ、95%+ で赤、"⚠ near limit" / "⚠ at limit" 表示
 - **ツール使用バー** — セッションごとの比例色分けバー + ツールチップ（Bash、Edit、Read など）
 - **Activity Breakdown** — セッション行の **Breakdown** ボタンをクリックすると、カテゴリ別トークン使用分析パネルを表示：Read、Edit/Write、Search、Git、Build/Test、Terminal、Subagents、Thinking、Response。同時に開けるのは 1 つのみ
