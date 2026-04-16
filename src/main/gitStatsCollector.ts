@@ -48,6 +48,20 @@ function loadStats(cwd: string): GitStats | null {
   } catch { return null; }
 }
 
+/** 영속 스토어의 모든 stats를 gitCommonDir 키로 반환 (삭제된 워크트리 복원용) */
+export function getAllPersistedStatsByRepo(): Record<string, GitStats> {
+  try {
+    const allCached = getPersistedStore().get('cache');
+    const byRepo: Record<string, GitStats> = {};
+    for (const stats of Object.values(allCached)) {
+      if (!stats?.gitCommonDir) continue;
+      if (byRepo[stats.gitCommonDir]) continue; // 동일 repo 중 first wins
+      byRepo[stats.gitCommonDir] = stats;
+    }
+    return byRepo;
+  } catch { return {}; }
+}
+
 function parseNumstat(output: string): { added: number; removed: number } {
   let added = 0, removed = 0;
   for (const line of output.split('\n')) {

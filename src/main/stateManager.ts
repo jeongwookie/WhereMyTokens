@@ -10,7 +10,7 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
-import { getGitStats, getGitStatsAsync, GitStats } from './gitStatsCollector';
+import { getGitStats, getGitStatsAsync, GitStats, getAllPersistedStatsByRepo } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
 
 export interface SessionInfo extends DiscoveredSession {
@@ -273,10 +273,20 @@ export class StateManager {
     const allCwds = discoverAllProjectCwds();
     const rawStats = await Promise.all(allCwds.map(cwd => getGitStatsAsync(cwd).catch(() => null)));
     const repoGitStats: Record<string, GitStats> = {};
+
+    // 1단계: fresh 수집 결과 먼저 적용 (신선도 우선, 중복 제거)
     for (const stats of rawStats) {
       if (!stats?.gitCommonDir) continue;
-      if (repoGitStats[stats.gitCommonDir]) continue; // 중복 제거
+      if (repoGitStats[stats.gitCommonDir]) continue;
       repoGitStats[stats.gitCommonDir] = stats;
+    }
+
+    // 2단계: 영속 캐시로 누락 repo 보충 (삭제된 워크트리 복원)
+    const persisted = getAllPersistedStatsByRepo();
+    for (const [gitCommonDir, stats] of Object.entries(persisted)) {
+      if (!repoGitStats[gitCommonDir]) {
+        repoGitStats[gitCommonDir] = stats;
+      }
     }
 
     this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats };
