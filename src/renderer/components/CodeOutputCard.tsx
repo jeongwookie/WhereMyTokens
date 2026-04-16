@@ -65,7 +65,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
     if (effRatio < 0.8)  return { text: 'Good',      color: C.active };
     if (effRatio < 1.2)  return { text: 'Normal',    color: '#f59e0b' };
     if (effRatio < 2.0)  return { text: 'Low',       color: '#f97316' };
-    return { text: 'Exploring', color: C.textDim };
+    return { text: 'Very Low',   color: '#ef4444' };
   })();
 
   // all 탭 서브텍스트용 라인 수 포맷 (+247K lines)
