@@ -11,7 +11,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-[한국어](README.ko.md) · [日本語](README.ja.md)
+[English](README.md) · [한국어](README.ko.md) · [日本語](README.ja.md)
 
 <div align="center">
 
