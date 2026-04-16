@@ -19,15 +19,15 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
   const C = useTheme();
   const [period, setPeriod] = useState<Period>('today');
 
-  // today: sessions 기반, (repo, branch)별 중복제거 — 활성 브랜치마다 카운트
+  // today: sessions 기반, repo별 중복제거 (--branches로 수집하므로 branch 구분 불필요)
+  // → 같은 repo의 여러 워크트리/세션에서 공유 커밋이 중복 집계되는 것을 방지
   const seenToday = new Set<string>();
   let commitsToday = 0, linesAdded = 0, linesRemoved = 0;
   for (const s of sessions) {
     if (!s.gitStats) continue;
     const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
-    const branchKey = `${repoKey}::${s.gitStats.branch ?? ''}`;
-    if (!seenToday.has(branchKey)) {
-      seenToday.add(branchKey);
+    if (!seenToday.has(repoKey)) {
+      seenToday.add(repoKey);
       commitsToday += s.gitStats.commitsToday;
       linesAdded += s.gitStats.linesAdded;
       linesRemoved += s.gitStats.linesRemoved;

@@ -69,7 +69,7 @@ The bridge provides supplementary context data (context window %, model, cost). 
 
 ### Option A — Pre-built executable
 
-1. Download `WhereMyTokens-v1.7.2-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
+1. Download `WhereMyTokens-v1.7.3-win-x64.zip` from [Releases](https://github.com/jeongwookie/WhereMyTokens/releases)
 2. Extract the zip
 3. Run `WhereMyTokens.exe`
 

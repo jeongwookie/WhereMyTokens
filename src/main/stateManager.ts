@@ -329,7 +329,8 @@ export class StateManager {
 
     const settings = this.getSettings();
     const excluded = new Set(settings.excludedProjects ?? []);
-    const seen = new Set<string>();
+    // requestId → entries 배열 인덱스 (동일 ID 중 outputTokens 최대값 보존)
+    const seen = new Map<string, number>();
     try {
       const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
         .filter(d => d.isDirectory())
@@ -344,9 +345,15 @@ export class StateManager {
           for (const file of files) {
             const parsed = parseJsonlFile(path.join(dirPath, file));
             for (const e of parsed.entries) {
-              if (!seen.has(e.requestId)) {
-                seen.add(e.requestId);
+              const prevIdx = seen.get(e.requestId);
+              if (prevIdx === undefined) {
+                // 첫 등장 — 추가
+                seen.set(e.requestId, entries.length);
                 entries.push(e);
+              } else if (e.outputTokens > entries[prevIdx].outputTokens) {
+                // 동일 requestId에서 outputTokens가 더 큰 엔트리(최종 청크)로 교체
+                // → 파일 읽기 순서에 무관하게 항상 동일 결과 보장
+                entries[prevIdx] = e;
               }
             }
           }
