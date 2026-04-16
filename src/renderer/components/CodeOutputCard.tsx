@@ -49,21 +49,43 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
     ? { commits: commitsToday, added: linesAdded, removed: linesRemoved }
     : { commits: totalCommits, added: totalLinesAdded, removed: totalLinesRemoved };
 
-  // 기간별 비용
   const periodCost = period === 'today' ? todayCost : allTimeCost;
-  const costPerCommit = data.commits > 0 && periodCost > 0 ? periodCost / data.commits : 0;
   const netLines = data.added - data.removed;
 
-  // all time 평균 $/commit (today 서브텍스트용)
-  const allTimeAvgCpc = totalCommits > 0 && allTimeCost > 0 ? allTimeCost / totalCommits : 0;
+  // $/line 효율 계산 (today 기준 vs all-time 평균)
+  const todayPerLine = linesAdded > 0 && todayCost > 0 ? todayCost / linesAdded : null;
+  const avgPerLine   = totalLinesAdded > 0 && allTimeCost > 0 ? allTimeCost / totalLinesAdded : null;
+  const effRatio     = todayPerLine != null && avgPerLine != null ? todayPerLine / avgPerLine : null;
+
+  // 효율 레이블 (ratio = today$/line ÷ avg$/line, 낮을수록 효율적)
+  const effInfo: { text: string; color: string } = (() => {
+    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 1000, currency, usdToKrw) : '—', color: C.textDim };
+    if (linesAdded === 0 || effRatio === null) return { text: 'Exploring', color: C.textDim };
+    if (effRatio < 0.5)  return { text: 'Excellent', color: C.active };
+    if (effRatio < 0.8)  return { text: 'Good',      color: C.active };
+    if (effRatio < 1.2)  return { text: 'Normal',    color: '#f59e0b' };
+    if (effRatio < 2.0)  return { text: 'Low',       color: '#f97316' };
+    return { text: 'Exploring', color: C.textDim };
+  })();
+
+  // all 탭 서브텍스트용 라인 수 포맷 (+247K lines)
+  const totalLinesFormatted = totalLinesAdded >= 1000
+    ? `+${(totalLinesAdded / 1000).toFixed(0)}K lines`
+    : `+${totalLinesAdded} lines`;
+
+  // KPI 서브텍스트: ×N.N vs avg (today) / +247K lines (all)
+  const effSub = (() => {
+    if (period === 'all') return totalLinesFormatted;
+    if (effRatio === null) return '';
+    if (effRatio < 1) return `×${(1 / effRatio).toFixed(1)} vs avg`;
+    return `${effRatio.toFixed(1)}x avg cost`;
+  })();
+
+  // 하단 바용 $/1K lines (기간별, ×1000으로 환산)
+  const perLine = data.added > 0 && periodCost > 0 ? (periodCost / data.added) * 1000 : null;
 
   // COMMITS 서브텍스트
   const commitsSub = period === 'today' ? `${totalCommits} total` : 'all time';
-
-  // $/COMMIT 서브텍스트
-  const cpcSub = period === 'today' && allTimeAvgCpc > 0
-    ? `avg ${fmtCost(allTimeAvgCpc, currency, usdToKrw)}`
-    : period === 'all' ? `${totalCommits} commits` : '';
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -90,9 +112,9 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
         <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
         <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
-        <KPI label="$/Commit"
-          value={costPerCommit > 0 ? fmtCost(costPerCommit, currency, usdToKrw) : '—'}
-          sub={cpcSub} color={C.textDim} C={C} />
+        <KPI label="Claude ROI"
+          value={effInfo.text}
+          sub={effSub} color={effInfo.color} C={C} />
       </div>
 
       {/* 한 줄 요약 */}
@@ -104,6 +126,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
         }}>
           <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
             {data.commits} commit{data.commits > 1 ? 's' : ''} · {netLines >= 0 ? '+' : ''}{netLines} net lines
+            {perLine ? ` · ${fmtCost(perLine, currency, usdToKrw)}/1K lines` : ''}
           </span>
         </div>
       )}
