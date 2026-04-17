@@ -268,6 +268,12 @@ Costs shown are **API-equivalent estimates**, not actual billing. Claude Max/Pro
 
 ---
 
+## Contributing
+
+Issues and pull requests are welcome. Please open an issue first to discuss what you'd like to change.
+
+---
+
 ## Acknowledgements
 
 Inspired by [duckbar](https://github.com/rofeels/duckbar) — the macOS counterpart.
