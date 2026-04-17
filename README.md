@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 ## Features
 
 - **Live session tracking** — detects running Claude Code sessions (Terminal, VS Code, Cursor, Windsurf, etc.) with real-time status: `active` / `waiting` / `idle` / `compacting`
-- **2-level session grouping** — sessions grouped by git project → branch, with per-project commit stats and line counts; idle sessions progressively collapse (top-3 tools → context bar only → single-line summary)
+- **2-level session grouping** — sessions grouped by git project → branch, with per-project commit stats and line counts; idle sessions progressively collapse (top-3 tools → context bar only → auto-hidden after 6h)
 - **Rate limit bars** — 5h and 1w usage from Anthropic's API, with progress bars, time-to-reset counters, and cache efficiency grades (Excellent/Good/Fair/Poor)
 - **Claude Code bridge** — register WhereMyTokens as a Claude Code `statusLine` plugin for live rate limit data without API polling
 - **Header stats** — today/all-time toggle showing cost, API calls, sessions, cache efficiency %, cache savings, and token breakdown (In/Out/Cache) at a glance
@@ -32,7 +32,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **Context window warnings** — per-session context bar; amber at 50%, orange at 80%, red at 95%+, with "⚠ near limit" / "⚠ at limit" labels
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …) per session
 - **Activity Breakdown** — click the **Breakdown** button on any session row to expand a per-category token breakdown: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, and Response; shows what Claude actually spent tokens on; one panel open at a time
-- **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day cost distribution over 30 days with gradient bars and peak indicator)
+- **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day cost distribution over 30 days with gradient bars and peak detail stats)
 - **Model breakdown** — per-model token and cost totals across all time, with gradient bars
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
 - **Alerts** — Windows toast notifications at configurable usage thresholds (50% / 80% / 90%)
@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **Extra Usage budget** — monthly extra usage card showing credits used / limit and utilization % (shown when extra usage is enabled on your account)
 - **Always-on-top widget** — stays visible over other windows; minimize with the `−` button in the header or via the tray icon; global hotkey to toggle
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
-- **Dark theme by default** — modern dark UI with JetBrains Mono for numeric displays
+- **Auto/Light/Dark theme** — follows system preference by default; modern UI with JetBrains Mono for numeric displays
 
 ---
 
@@ -108,7 +108,7 @@ npm run dist
    - Currency (USD / KRW)
    - Global shortcut
    - Alert thresholds
-   - Launch at login
+   - Start with Windows
    - Tray label style
 
 ### Session list
@@ -165,7 +165,7 @@ All token counts (`tok`) include **input + output + cache creation + cache reads
 | 5mo | 5-month calendar grid (GitHub-style weeks × weekdays, hover for date + tokens) |
 | Hourly | Hourly token distribution across the last 30 days |
 | Weekly | Last 4 weeks horizontal bar chart |
-| Rhythm | Time-of-day cost distribution — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙 with gradient bars and peak indicator (30-day, local timezone) |
+| Rhythm | Time-of-day cost distribution — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙 with gradient bars, peak detail stats (tokens, cost, requests %), and local timezone (30-day) |
 
 ---
 

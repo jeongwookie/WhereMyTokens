@@ -168,7 +168,7 @@ function ContentEN() {
 
       <Section icon={<GitBranch size={15} />} title="Sessions">
         <div style={{ marginBottom: 5 }}><B>Project → Branch → Session</B> — sessions are grouped by git project, then by branch.</div>
-        <div style={{ marginBottom: 5 }}><B>Idle collapse</B> — active/waiting sessions show full details. Idle sessions progressively collapse: &lt;1h shows top-3 tools, 1-6h shows context bar only, 6h+ shows a single-line summary.</div>
+        <div style={{ marginBottom: 5 }}><B>Idle collapse</B> — active/waiting sessions show full details. Idle sessions progressively collapse: &lt;1h shows top-3 tools, 1-6h shows context bar only, 6h+ are auto-hidden (expandable via "Show N idle sessions" button).</div>
         <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). Shows how well prompt caching is being utilized.</div>
         <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
         <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click the <B>Breakdown</B> button on any session row to expand a per-category output token breakdown. One panel open at a time — clicking another session auto-closes the previous.</div>
@@ -192,7 +192,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5-month GitHub-style calendar. Hover for date + tokens.</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — Token distribution by hour across the last 30 days.</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — Last 4 weeks horizontal bar chart.</div>
-        <div><B>Rhythm</B> — Time-of-day cost distribution (Morning/Afternoon/Evening/Night) over the last 30 days with peak indicator, local timezone.</div>
+        <div><B>Rhythm</B> — Time-of-day cost distribution (Morning/Afternoon/Evening/Night) over the last 30 days with gradient bars, peak detail stats (tokens, cost, requests %), and local timezone.</div>
       </Section>
 
       <Divider />
@@ -252,7 +252,7 @@ function ContentKO() {
 
       <Section icon={<GitBranch size={15} />} title="세션">
         <div style={{ marginBottom: 5 }}><B>프로젝트 → 브랜치 → 세션</B> — git 프로젝트별, 브랜치별로 그루핑.</div>
-        <div style={{ marginBottom: 5 }}><B>Idle 축소</B> — active/waiting은 전체 표시. idle 세션은 단계별 축소: 1시간 미만은 상위 3개 툴, 1-6시간은 컨텍스트 바만, 6시간 이상은 한 줄 요약.</div>
+        <div style={{ marginBottom: 5 }}><B>Idle 축소</B> — active/waiting은 전체 표시. idle 세션은 단계별 축소: 1시간 미만은 상위 3개 툴, 1-6시간은 컨텍스트 바만, 6시간 이상은 자동 숨김 ("Show N idle sessions" 버튼으로 펼치기 가능).</div>
         <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). 프롬프트 캐싱 활용도.</div>
         <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
         <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Breakdown</B> 버튼을 누르면 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션 클릭 시 자동으로 닫힙니다.</div>
@@ -276,7 +276,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5개월 GitHub 스타일 캘린더. 날짜+토큰 호버.</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 시간대별 토큰 분포 (최근 30일).</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — 최근 4주 가로 바 차트.</div>
-        <div><B>Rhythm</B> — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 최근 30일, 피크 표시, 로컬 타임존.</div>
+        <div><B>Rhythm</B> — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 최근 30일, 그라데이션 바, 피크 상세 통계 (토큰, 비용, 요청 %), 로컬 타임존.</div>
       </Section>
 
       <Divider />
@@ -336,7 +336,7 @@ function ContentJA() {
 
       <Section icon={<GitBranch size={15} />} title="セッション">
         <div style={{ marginBottom: 5 }}><B>プロジェクト → ブランチ → セッション</B> — git プロジェクト別、ブランチ別にグループ化。</div>
-        <div style={{ marginBottom: 5 }}><B>Idle 折りたたみ</B> — active/waiting は完全表示。idle セッションは段階的に折りたたみ：1 時間未満はトップ 3 ツール、1-6 時間はコンテキストバーのみ、6 時間以上は 1 行サマリー。</div>
+        <div style={{ marginBottom: 5 }}><B>Idle 折りたたみ</B> — active/waiting は完全表示。idle セッションは段階的に折りたたみ：1 時間未満はトップ 3 ツール、1-6 時間はコンテキストバーのみ、6 時間以上は自動非表示（「Show N idle sessions」ボタンで展開可能）。</div>
         <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Excellent (80%+)、Good (60%+)、Fair (40%+)、Poor (&lt;40%)。プロンプトキャッシングの活用度。</div>
         <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
         <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Breakdown</B> ボタンをクリックすると、カテゴリ別の output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。</div>
@@ -360,7 +360,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5ヶ月分の GitHub スタイルカレンダー。ホバーで日付とトークン数を確認。</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 直近 30 日の時間帯別トークン分布。</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — 直近 4 週間の横棒グラフ。</div>
-        <div><B>Rhythm</B> — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、直近 30 日間、ピーク表示、ローカルタイムゾーン。</div>
+        <div><B>Rhythm</B> — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、直近 30 日間、グラデーションバー、ピーク詳細統計（トークン、コスト、リクエスト %）、ローカルタイムゾーン。</div>
       </Section>
 
       <Divider />

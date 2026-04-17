@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 ## 주요 기능
 
 - **실시간 세션 추적** — 실행 중인 Claude Code 세션(터미널, VS Code, Cursor, Windsurf 등)을 감지하고 실시간 상태를 표시: `active` / `waiting` / `idle` / `compacting`
-- **2단계 세션 그루핑** — git 프로젝트 → 브랜치별로 그루핑, 프로젝트별 커밋·라인 통계 표시; idle 세션은 단계적 축소 (상위 3개 툴 → 컨텍스트 바만 → 한 줄 요약)
+- **2단계 세션 그루핑** — git 프로젝트 → 브랜치별로 그루핑, 프로젝트별 커밋·라인 통계 표시; idle 세션은 단계적 축소 (상위 3개 툴 → 컨텍스트 바만 → 6시간 이상 자동 숨김)
 - **속도 제한 바** — Anthropic API에서 가져온 5시간·주간 사용량을 프로그레스 바, 리셋 카운터, 캐시 효율 등급(Excellent/Good/Fair/Poor)으로 표시
 - **Claude Code 브리지** — WhereMyTokens를 Claude Code `statusLine` 플러그인으로 등록해 API 폴링 없이 실시간 속도 제한 데이터 수신
 - **헤더 통계** — today/all-time 토글로 비용, API 호출 수, 세션 수, 캐시 적중률, 캐시 절약 비용, 토큰 분석(In/Out/Cache)을 한눈에 표시
@@ -32,7 +32,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **컨텍스트 창 경고** — 세션별 컨텍스트 바; 50%에서 황색, 80%에서 주황, 95%+에서 적색, "⚠ near limit" / "⚠ at limit" 표시
 - **툴 사용 바** — 세션별 비례 색상 바 + 툴 칩(Bash, Edit, Read 등)
 - **Activity Breakdown** — 세션 행의 **Breakdown** 버튼을 클릭하면 카테고리별 토큰 사용 분석 패널 표시: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, Response. 한 번에 하나만 열림
-- **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교, **Rhythm** (30일간 시간대별 비용 분포, 피크 표시)
+- **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교, **Rhythm** (30일간 시간대별 비용 분포, 피크 상세 통계)
 - **모델별 분석** — 전체 기간의 모델별 토큰·비용 합계, 그라데이션 바
 - **비용 표시** — USD 또는 KRW, 구독 환산 가치
 - **알림** — 설정 가능한 사용량 임계값(50% / 80% / 90%)에서 Windows 토스트 알림
@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **Extra Usage 예산** — 월간 추가 사용량 카드로 크레딧 사용량·한도·비율 표시 (계정에서 활성화된 경우)
 - **항상 위 위젯** — 다른 창 위에 고정 표시; 헤더의 `−` 버튼 또는 트레이 아이콘으로 최소화; 전역 단축키로 토글
 - **트레이 라벨** — 작업표시줄에 사용량 %, 토큰 수, 또는 비용 직접 표시
-- **기본 다크 테마** — 모던 다크 UI, 숫자 표시에 JetBrains Mono 폰트 사용
+- **Auto/Light/Dark 테마** — 기본값은 시스템 설정 따름; 모던 UI, 숫자 표시에 JetBrains Mono 폰트 사용
 
 ---
 
@@ -108,7 +108,7 @@ npm run dist
    - 통화 (USD / KRW)
    - 전역 단축키
    - 알림 임계값
-   - 로그인 시 시작
+   - Windows 시작 시 자동 실행
    - 트레이 라벨 스타일
 
 ### 세션 목록
@@ -165,7 +165,7 @@ npm run dist
 | 5mo | 5개월 캘린더 그리드 (GitHub 스타일, 날짜+토큰 호버) |
 | Hourly | 최근 30일의 시간대별 토큰 분포 |
 | Weekly | 최근 4주 가로 바 차트 |
-| Rhythm | 시간대별 비용 분포 — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙, 피크 표시 (30일, 로컬 타임존) |
+| Rhythm | 시간대별 비용 분포 — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙, 그라데이션 바, 피크 상세 통계 (토큰, 비용, 요청 %), 로컬 타임존 (30일) |
 
 ---
 
