@@ -3,18 +3,18 @@ import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens } from '../theme';
 
-// 활동 카테고리 메타데이터 (색상·아이콘·레이블)
+// 활동 카테고리 메타데이터 — 인접 색상 간 색상환 거리를 최대화하여 구분성 확보
 const CATEGORIES = [
-  { key: 'read',      label: 'Read',        icon: '📄', color: '#60a5fa' },
-  { key: 'editWrite', label: 'Edit / Write', icon: '✏️', color: '#34d399' },
-  { key: 'search',    label: 'Search',       icon: '🔍', color: '#22d3ee' },
-  { key: 'git',       label: 'Git',          icon: '🌿', color: '#f59e0b' },
-  { key: 'buildTest', label: 'Build / Test', icon: '⚙️', color: '#fb923c' },
-  { key: 'terminal',  label: 'Terminal',     icon: '💻', color: '#fbbf24' },
-  { key: 'subagents', label: 'Subagents',    icon: '🤖', color: '#f472b6' },
-  { key: 'thinking',  label: 'Thinking',     icon: '💭', color: '#2dd4bf' },
-  { key: 'response',  label: 'Response',     icon: '💬', color: '#8b90a0' },
-  { key: 'web',       label: 'Web',          icon: '🌐', color: '#38bdf8' },
+  { key: 'read',      label: 'Read',        icon: '📄', color: '#60a5fa' },  // blue
+  { key: 'editWrite', label: 'Edit / Write', icon: '✏️', color: '#a78bfa' },  // violet (was green, too close to thinking)
+  { key: 'search',    label: 'Search',       icon: '🔍', color: '#38bdf8' },  // sky blue
+  { key: 'git',       label: 'Git',          icon: '🌿', color: '#4ade80' },  // green (moved from amber)
+  { key: 'buildTest', label: 'Build / Test', icon: '⚙️', color: '#fb923c' },  // orange
+  { key: 'terminal',  label: 'Terminal',     icon: '💻', color: '#fbbf24' },  // amber
+  { key: 'subagents', label: 'Subagents',    icon: '🤖', color: '#f472b6' },  // pink
+  { key: 'thinking',  label: 'Thinking',     icon: '💭', color: '#2dd4bf' },  // teal (앱 accent와 연계)
+  { key: 'response',  label: 'Response',     icon: '💬', color: '#94a3b8' },  // slate (neutral)
+  { key: 'web',       label: 'Web',          icon: '🌐', color: '#c084fc' },  // purple
 ] as const;
 
 type CatKey = typeof CATEGORIES[number]['key'];
