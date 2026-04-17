@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { HourlyBucket, WeeklyTotal, TimeOfDayBucket } from '../types';
 import { useTheme } from '../ThemeContext';
-import { fmtTokens } from '../theme';
+import { fmtTokens, fmtCost } from '../theme';
 
 type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly' | 'Rhythm';
 
@@ -419,7 +419,7 @@ const TOD_INFO: Record<string, { icon: string; name: string; time: string; gradi
   night:     { icon: '🌙', name: 'Night',     time: '0–6h',   gradient: 'linear-gradient(90deg, #60a5fa, #818cf8)', color: '#60a5fa' },
 };
 
-export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
+export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]; currency: string; usdToKrw: number }) {
   const C = useTheme();
 
   if (data.every(b => b.tokens === 0)) {
@@ -432,6 +432,8 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
 
   const sorted = TOD_ORDER.map(p => data.find(b => b.period === p)!).filter(Boolean);
   const maxTokens = Math.max(...sorted.map(b => b.tokens), 1);
+  const totalTokens = sorted.reduce((s, b) => s + b.tokens, 0);
+  const totalCost = sorted.reduce((s, b) => s + b.costUSD, 0);
   const peakPeriod = sorted.reduce((a, b) => a.tokens >= b.tokens ? a : b);
 
   return (
@@ -458,12 +460,12 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
               }} />
             </div>
             <span style={{
-              width: 32, fontSize: 10, textAlign: 'right', flexShrink: 0,
+              width: 70, fontSize: 9, textAlign: 'right', flexShrink: 0,
               fontFamily: C.fontMono,
               color: isPeak ? info.color : C.textDim,
               fontWeight: isPeak ? 600 : 400,
             }}>
-              {Math.round(pct * 100)}%
+              {fmtTokens(bucket.tokens)} · {fmtCost(bucket.costUSD, currency, usdToKrw)}
             </span>
           </div>
         );
@@ -474,9 +476,10 @@ export function TODPanel({ data }: { data: TimeOfDayBucket[] }) {
           🔥 Peak: <strong style={{ color: TOD_INFO[peakPeriod.period]?.color ?? C.accent }}>
             {TOD_INFO[peakPeriod.period]?.name ?? peakPeriod.label} ({TOD_INFO[peakPeriod.period]?.time})
           </strong>
+          <span style={{ color: C.textMuted, fontWeight: 400 }}> · {fmtTokens(totalTokens)} total · {fmtCost(totalCost, currency, usdToKrw)}</span>
         </div>
         <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2, fontFamily: C.fontMono }}>
-          Last 7 days · local timezone
+          Last 30 days · local timezone
         </div>
       </div>
     </div>
@@ -507,7 +510,7 @@ interface Props {
   usdToKrw: number;
 }
 
-export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets }: Props) {
+export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [tab, setTab] = useState<ChartTab>('7d');
 
@@ -574,7 +577,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
           </>
         )}
         {tab === 'Rhythm' && (
-          <TODPanel data={todBuckets} />
+          <TODPanel data={todBuckets} currency={currency} usdToKrw={usdToKrw} />
         )}
       </div>
     </div>
