@@ -155,6 +155,12 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 
 ---
 
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。如需变更，请先开一个 Issue 进行讨论。
+
+---
+
 ## 致谢
 
 灵感来自 [duckbar](https://github.com/rofeels/duckbar) — macOS 版本。

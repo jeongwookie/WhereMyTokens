@@ -155,6 +155,12 @@ Los costos mostrados son **estimaciones equivalentes a la API**, no facturación
 
 ---
 
+## Contribuir
+
+Los issues y pull requests son bienvenidos. Por favor, abre un issue primero para discutir los cambios que te gustaría hacer.
+
+---
+
 ## Agradecimientos
 
 Inspirado en [duckbar](https://github.com/rofeels/duckbar) — la contraparte para macOS.

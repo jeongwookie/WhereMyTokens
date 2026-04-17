@@ -241,6 +241,12 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 
 ---
 
+## コントリビュート
+
+Issue や Pull Request を歓迎します。変更したい内容がある場合は、まず Issue を開いてください。
+
+---
+
 ## 謝辞
 
 macOS 版である [duckbar](https://github.com/rofeels/duckbar) にインスパイアされました。

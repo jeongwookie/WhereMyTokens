@@ -241,6 +241,12 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 
 ---
 
+## 기여하기
+
+이슈와 풀 리퀘스트를 환영합니다. 변경하고 싶은 사항이 있으면 먼저 이슈를 열어주세요.
+
+---
+
 ## 감사의 말
 
 macOS 버전인 [duckbar](https://github.com/rofeels/duckbar)에서 영감을 받았습니다.
