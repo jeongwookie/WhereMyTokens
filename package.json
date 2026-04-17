@@ -1,7 +1,7 @@
 {
   "name": "wheremytokens-win",
   "version": "1.9.1",
-  "description": "Windows system tray monitor for Claude Code token usage",
+  "description": "Windows system tray app for monitoring Claude Code token usage in real time",
   "main": "dist/main/index.js",
   "scripts": {
     "build:main": "tsc",
