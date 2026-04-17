@@ -72,11 +72,11 @@ export interface Theme {
 // ─── Light 테마 ─────────────────────────────────────────────────────────────
 
 export const LIGHT: Theme = {
-  headerBg:     '#261b4f',
+  headerBg:     '#0f172a',
   headerText:   '#ffffff',
   headerAccent: '#f5a623',
-  headerSub:    '#b0a0d8',
-  headerBorder: '#3a2870',
+  headerSub:    '#94a3b8',
+  headerBorder: '#1e293b',
 
   bg:       '#f4f4f8',
   bgCard:   '#ffffff',
@@ -90,8 +90,8 @@ export const LIGHT: Theme = {
   textDim:   '#505070',
   textMuted: '#9090a8',
 
-  accent:    '#5048b8',
-  accentDim: '#5048b822',
+  accent:    '#0f766e',
+  accentDim: '#0f766e22',
 
   active:     '#2a7a48',
   waiting:    '#a06010',
@@ -101,9 +101,9 @@ export const LIGHT: Theme = {
   input:  '#2a68b8',
   output: '#287428',
   cacheW: '#a06010',
-  cacheR: '#5e32a0',
+  cacheR: '#0f766e',
 
-  opus:   '#8b3ec8',
+  opus:   '#b45309',
   sonnet: '#1878b4',
   haiku:  '#2a9040',
   gpt:    '#d4602a',
@@ -145,8 +145,8 @@ export const DARK: Theme = {
   textDim:   '#8b90a0',
   textMuted: '#5a5f72',
 
-  accent:    '#a78bfa',
-  accentDim: '#a78bfa22',
+  accent:    '#0D9488',
+  accentDim: '#0D948822',
 
   active:     '#34d399',
   waiting:    '#fbbf24',
@@ -156,9 +156,9 @@ export const DARK: Theme = {
   input:  '#60a5fa',
   output: '#34d399',
   cacheW: '#fbbf24',
-  cacheR: '#a78bfa',
+  cacheR: '#2dd4bf',
 
-  opus:   '#c084fc',
+  opus:   '#f59e0b',
   sonnet: '#60a5fa',
   haiku:  '#34d399',
   gpt:    '#fb923c',
@@ -267,6 +267,4 @@ export function fmtRelative(isoStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// 하위 호환성을 위한 기본 export (LIGHT 테마)
 // 새 코드는 useTheme() 훅 사용 권장
-export const C = LIGHT;
