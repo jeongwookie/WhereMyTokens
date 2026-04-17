@@ -136,7 +136,7 @@ export interface AppSettings {
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   hiddenProjects: string[];
   excludedProjects: string[];
-  theme: 'light' | 'dark';
+  theme: 'auto' | 'light' | 'dark';
 }
 
 export type NotifType = 'alert';
@@ -195,6 +195,8 @@ declare global {
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
       onUpdated:          (cb: () => void) => () => void;
+      getResolvedTheme:   () => Promise<'light' | 'dark'>;
+      onThemeChanged:     (cb: (theme: 'light' | 'dark') => void) => () => void;
     };
   }
 }

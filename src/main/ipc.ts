@@ -21,7 +21,7 @@ export interface AppSettings {
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   hiddenProjects: string[];
   excludedProjects: string[];
-  theme: 'light' | 'dark';
+  theme: 'auto' | 'light' | 'dark';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   trayDisplay: 'h5pct',
   hiddenProjects: [],
   excludedProjects: [],
-  theme: 'dark',
+  theme: 'auto',
 };
 
 export function registerIpcHandlers(

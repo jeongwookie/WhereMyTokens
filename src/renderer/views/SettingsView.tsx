@@ -118,14 +118,14 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
         <div style={row}>
           <span style={labelStyle}>Theme</span>
           <div style={{ display: 'flex', gap: 2 }}>
-            {(['light', 'dark'] as const).map(t => (
+            {(['auto', 'light', 'dark'] as const).map(t => (
               <button key={t} onClick={() => setS({ ...s, theme: t })} style={{
-                padding: '3px 12px', fontSize: 11, border: `1px solid ${(s.theme ?? 'light') === t ? C.accent + '88' : C.border}`,
-                borderRadius: 4, cursor: 'pointer', fontWeight: (s.theme ?? 'light') === t ? 700 : 400,
-                background: (s.theme ?? 'light') === t ? C.accent + '22' : 'transparent',
-                color: (s.theme ?? 'light') === t ? C.accent : C.textDim,
+                padding: '3px 10px', fontSize: 11, border: `1px solid ${(s.theme ?? 'auto') === t ? C.accent + '88' : C.border}`,
+                borderRadius: 4, cursor: 'pointer', fontWeight: (s.theme ?? 'auto') === t ? 700 : 400,
+                background: (s.theme ?? 'auto') === t ? C.accent + '22' : 'transparent',
+                color: (s.theme ?? 'auto') === t ? C.accent : C.textDim,
               }}>
-                {t === 'light' ? 'Light' : 'Dark'}
+                {t === 'auto' ? 'Auto' : t === 'light' ? 'Light' : 'Dark'}
               </button>
             ))}
           </div>

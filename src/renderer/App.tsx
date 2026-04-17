@@ -35,7 +35,7 @@ const DEFAULT_STATE: AppState = {
     alertThresholds: [50,80,90], openAtLogin: false,
     currency: 'USD', usdToKrw: 1380,
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
-    trayDisplay: 'h5pct', theme: 'dark',
+    trayDisplay: 'h5pct', theme: 'auto',
     hiddenProjects: [], excludedProjects: [],
   },
   autoLimits: null,
@@ -51,6 +51,7 @@ const DEFAULT_STATE: AppState = {
 export default function App() {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [view, setView] = useState<View>('main');
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
   const refresh = useCallback(async () => {
     try {
       const s = await window.wmt.getState();
@@ -63,6 +64,23 @@ export default function App() {
     const cleanup = window.wmt.onUpdated(refresh);
     return cleanup;
   }, [refresh]);
+
+  // 시스템 테마 감지: 초기 resolve + 실시간 변경 리스너
+  useEffect(() => {
+    window.wmt.getResolvedTheme().then(setResolvedTheme);
+    const cleanup = window.wmt.onThemeChanged(setResolvedTheme);
+    return cleanup;
+  }, []);
+
+  // settings.theme 변경 시 재resolve (auto가 아니면 직접 사용)
+  useEffect(() => {
+    const t = state.settings.theme;
+    if (t === 'auto') {
+      window.wmt.getResolvedTheme().then(setResolvedTheme);
+    } else {
+      setResolvedTheme(t);
+    }
+  }, [state.settings.theme]);
 
   // Hide HTML splash and reveal app only when data is ready
   useEffect(() => {
@@ -82,7 +100,7 @@ export default function App() {
     window.wmt.quit().catch(() => window.close());
   }
 
-  const theme = getTheme(state.settings.theme ?? 'light');
+  const theme = getTheme(resolvedTheme);
   const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
 
   if (view === 'settings') {

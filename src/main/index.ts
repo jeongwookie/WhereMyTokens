@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme } from 'electron';
 import * as path from 'path';
 import Store from 'electron-store';
 import { StateManager, AppState } from './stateManager';
@@ -139,7 +139,21 @@ app.whenReady().then(() => {
   // 최소화(숨김) IPC
   ipcMain.handle('window:minimize', () => { popupWindow?.hide(); });
 
-  // nativeTheme.updated not needed — light mode is fixed
+  // 시스템 테마 감지: auto 설정 시 OS 다크모드에 따라 resolve
+  function resolveTheme(): 'light' | 'dark' {
+    const s = { ...DEFAULT_SETTINGS, ...store.store };
+    if (s.theme === 'auto') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+    return s.theme as 'light' | 'dark';
+  }
+
+  ipcMain.handle('theme:resolved', () => resolveTheme());
+
+  nativeTheme.on('updated', () => {
+    const s = { ...DEFAULT_SETTINGS, ...store.store };
+    if (s.theme === 'auto' && popupWindow && !popupWindow.isDestroyed()) {
+      popupWindow.webContents.send('theme:changed', resolveTheme());
+    }
+  });
 });
 
 app.on('window-all-closed', () => { /* tray app: do not quit */ });

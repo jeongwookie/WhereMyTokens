@@ -15,4 +15,10 @@ setupIntegration:     () => ipcRenderer.invoke('integration:setup'),
     ipcRenderer.on('state:updated', cb);
     return () => ipcRenderer.removeListener('state:updated', cb);
   },
+  getResolvedTheme:     () => ipcRenderer.invoke('theme:resolved') as Promise<'light' | 'dark'>,
+  onThemeChanged:       (cb: (theme: 'light' | 'dark') => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, theme: 'light' | 'dark') => cb(theme);
+    ipcRenderer.on('theme:changed', handler);
+    return () => ipcRenderer.removeListener('theme:changed', handler);
+  },
 });
