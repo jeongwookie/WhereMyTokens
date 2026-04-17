@@ -32,6 +32,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('all');
   // 확장된 세션 ID (한 번에 하나만 — 새 세션 클릭 시 이전 자동 닫힘)
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [showStale, setShowStale] = useState(false);
   const [headerPeriod, setHeaderPeriod] = useState<'today' | 'all'>('today');
 
   useEffect(() => {
@@ -83,9 +84,19 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
     window.wmt.setSettings({ excludedProjects: next }).catch(() => {});
   }
 
+  // idle 6h+ 세션 자동 숨김 (active 필터 시에도 적용)
+  const STALE_MS = 6 * 60 * 60 * 1000; // 6시간
+  const isStale = (s: typeof sessions[number]) => {
+    if (s.state === 'active' || s.state === 'waiting') return false;
+    if (!s.lastModified) return true;
+    return Date.now() - new Date(s.lastModified).getTime() > STALE_MS;
+  };
+  const staleSessions = sessions.filter(isStale);
+  const freshSessions = sessions.filter(s => !isStale(s));
+
   const filteredSessions = activeFilter === 'active'
-    ? sessions.filter(s => s.state === 'active' || s.state === 'waiting')
-    : sessions;
+    ? freshSessions.filter(s => s.state === 'active' || s.state === 'waiting')
+    : showStale ? sessions : freshSessions;
 
   // 2단계 그루핑: Project → Branch → Sessions
   // toplevel(git root)이 같으면 같은 프로젝트로 합치기 (worktree 통합)
@@ -386,6 +397,22 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active Claude Code sessions</div>
               : null
           }
+
+          {/* idle 6h+ 숨겨진 세션 토글 */}
+          {staleSessions.length > 0 && activeFilter === 'all' && (
+            <div style={{ padding: '6px 14px', display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowStale(v => !v)}
+                style={{
+                  background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
+                  color: C.textMuted, cursor: 'pointer', fontSize: 9, padding: '3px 12px',
+                  fontFamily: C.fontMono,
+                }}
+              >
+                {showStale ? '▲ Hide' : '▼ Show'} {staleSessions.length} idle session{staleSessions.length > 1 ? 's' : ''}
+              </button>
+            </div>
+          )}
 
           {/* 숨긴 프로젝트 관리 */}
           {allHidden.length > 0 && (
