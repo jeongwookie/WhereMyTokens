@@ -185,7 +185,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         {/* 행2: Cost (좌) + Cache % (우) — 2열 hero */}
         {(() => {
           const isAll = headerPeriod === 'all';
-          const dimStyle = isAll ? 0.65 : 1;
           const cost = isAll ? usage.allTimeCost : usage.todayCost;
           const calls = isAll ? usage.allTimeRequestCount : usage.todayRequestCount;
           const sess = isAll ? state.allTimeSessions : sessions.length;
@@ -196,7 +195,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           const cacheTok = isAll ? usage.allTimeCacheTokens : usage.todayCacheTokens;
 
           return (<>
-            <div style={{ ...drag, display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '2px 14px 7px', borderBottom: '1px solid rgba(255,255,255,0.05)', opacity: dimStyle }}>
+            <div style={{ ...drag, display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '2px 14px 7px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
               {/* 좌: 비용 */}
               <div>
                 <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
@@ -224,7 +223,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             </div>
 
             {/* 행3: 토큰 breakdown (In / Out / Cache) */}
-            <div style={{ ...drag, padding: '6px 14px 8px', display: 'flex', alignItems: 'center', gap: 16, opacity: dimStyle }}>
+            <div style={{ ...drag, padding: '6px 14px 8px', display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.headerSub }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.input, flexShrink: 0 }} />
                 In <span style={{ fontFamily: C.fontMono, fontWeight: 600, color: C.input }}>{fmtTokens(inTok)}</span>
