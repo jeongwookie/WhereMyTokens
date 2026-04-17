@@ -460,27 +460,26 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
               }} />
             </div>
             <span style={{
-              width: 70, fontSize: 9, textAlign: 'right', flexShrink: 0,
+              width: 48, fontSize: 10, textAlign: 'right', flexShrink: 0,
               fontFamily: C.fontMono,
               color: isPeak ? info.color : C.textDim,
-              fontWeight: isPeak ? 600 : 400,
+              fontWeight: isPeak ? 700 : 400,
             }}>
-              {fmtTokens(bucket.tokens)} · {fmtCost(bucket.costUSD, currency, usdToKrw)}
+              {fmtCost(bucket.costUSD, currency, usdToKrw)}
             </span>
           </div>
         );
       })}
 
-      <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
+      <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
           🔥 Peak: <strong style={{ color: TOD_INFO[peakPeriod.period]?.color ?? C.accent }}>
-            {TOD_INFO[peakPeriod.period]?.name ?? peakPeriod.label} ({TOD_INFO[peakPeriod.period]?.time})
+            {TOD_INFO[peakPeriod.period]?.name ?? peakPeriod.label}
           </strong>
-          <span style={{ color: C.textMuted, fontWeight: 400 }}> · {fmtTokens(totalTokens)} total · {fmtCost(totalCost, currency, usdToKrw)}</span>
-        </div>
-        <div style={{ fontSize: 8, color: C.textMuted, marginTop: 2, fontFamily: C.fontMono }}>
-          Last 30 days · local timezone
-        </div>
+        </span>
+        <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
+          30d · {fmtCost(totalCost, currency, usdToKrw)} total
+        </span>
       </div>
     </div>
   );
