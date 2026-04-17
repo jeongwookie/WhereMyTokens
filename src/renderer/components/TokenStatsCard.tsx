@@ -118,25 +118,12 @@ export default function TokenStatsCard({
           )}
         </div>
 
-        {/* 토큰 breakdown (컬러 점, 2줄 배치) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 6px', marginBottom: 4 }}>
+        {/* 토큰 breakdown (In / Out / Cache 3개) */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', marginBottom: 4 }}>
           <TokenDotRow label="In"  value={stats.inputTokens}  color={C.input} />
           <TokenDotRow label="Out" value={stats.outputTokens} color={C.output} />
-          {stats.cacheCreationTokens > 0 && <TokenDotRow label="CW" value={stats.cacheCreationTokens} color={C.cacheW} />}
-          {stats.cacheReadTokens > 0     && <TokenDotRow label="CR" value={stats.cacheReadTokens}     color={C.cacheR} />}
+          <TokenDotRow label="Cache" value={stats.cacheReadTokens + stats.cacheCreationTokens} color={C.cacheR} />
         </div>
-
-        {/* 절감 비용 — 녹색 배지 */}
-        {showSavings && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: 9, color: C.gradeExcellentColor, marginTop: 2,
-            background: C.gradeExcellentBg, borderRadius: 12,
-            padding: '2px 8px', border: `1px solid ${C.gradeExcellentColor}33`,
-          }}>
-            ✦ Saved {fmtCost(stats.cacheSavingsUSD, currency, usdToKrw)} via cache
-          </div>
-        )}
 
         {/* ETA 경고 */}
         {showEta && (
@@ -216,13 +203,6 @@ export default function TokenStatsCard({
       {showEta && (
         <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 3 }}>
           ⚡ ~{fmtDuration(burnRate!.h5EtaMs!)} to limit at current rate
-        </div>
-      )}
-
-      {/* 캐시 절감 비용 */}
-      {showSavings && (
-        <div style={{ fontSize: 9, color: C.gradeExcellentColor, marginTop: 3 }}>
-          ✦ Saved {fmtCost(stats.cacheSavingsUSD, currency, usdToKrw)} via cache
         </div>
       )}
     </div>
