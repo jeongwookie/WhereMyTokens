@@ -114,6 +114,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.8.0 | 2026-04-17 | Header today/all toggle (cost, calls, sessions, cache %, savings, In/Out/Cache tokens), Code Output $/100 lines replacing ROI labels, Rhythm tab cost-based with 30-day data, Plan Usage card cleanup |
 | v1.7.3 | 2026-04-16 | fix: Code Output 이중 집계 — Windows 경로 대소문자 정규화, cross-file dedup 결정적 처리, 워크트리 삭제 시 빈 stats 덮어쓰기 방지 |
 | v1.7.2 | 2026-04-16 | fix: git stats 워크트리 삭제 후 소실 — 영속 캐시로 누락 repo 복원, fresh 수집 신선도 우선 |
 | v1.7.1 | 2026-04-16 | Code Output: $/commit → Claude ROI ($/1K lines), 효율 레이블(Excellent/Good/Normal/Low/Exploring), all 탭 서브텍스트 +Nk lines로 개선 |
