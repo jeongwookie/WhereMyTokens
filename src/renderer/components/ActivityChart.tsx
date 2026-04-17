@@ -521,7 +521,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
-          <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, background: C.accentDim, padding: '1px 5px', borderRadius: 3 }}>
+          <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono, background: C.bgRow, padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
             {Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Local'}
           </span>
         </span>

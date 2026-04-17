@@ -59,7 +59,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
 
   // $/100 lines 표시 (today: 오늘 단가, all: 전체 평균 단가)
   const effInfo: { text: string; color: string } = (() => {
-    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 100, currency, usdToKrw) : '—', color: C.textDim };
+    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 100, currency, usdToKrw) : '—', color: C.accent };
     if (linesAdded === 0 || todayPerLine === null) return { text: '—', color: C.textDim };
     return { text: fmtCost(todayPerLine * 100, currency, usdToKrw), color: C.text };
   })();
