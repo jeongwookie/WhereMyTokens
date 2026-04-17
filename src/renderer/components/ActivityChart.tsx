@@ -452,7 +452,7 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
               fontWeight: isPeak ? 600 : 400,
             }}>{info.name}</span>
             <span style={{ fontSize: 8, width: 34, flexShrink: 0, color: C.textMuted, fontFamily: C.fontMono }}>{info.time}</span>
-            <div style={{ flex: 1, height: 8, background: '#252a38', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 8, background: C.bgRow, borderRadius: 4, overflow: 'hidden' }}>
               <div style={{
                 width: `${Math.max(pct * 100, bucket.tokens > 0 ? 3 : 0)}%`,
                 height: '100%', borderRadius: 4,
@@ -471,16 +471,51 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
         );
       })}
 
-      <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
-          🔥 Peak: <strong style={{ color: TOD_INFO[peakPeriod.period]?.color ?? C.accent }}>
-            {TOD_INFO[peakPeriod.period]?.name ?? peakPeriod.label}
-          </strong>
-        </span>
-        <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
-          30d · {fmtCost(totalCost, currency, usdToKrw)} total
-        </span>
-      </div>
+      {/* 피크 구간 상세 통계 */}
+      {(() => {
+        const peakInfo = TOD_INFO[peakPeriod.period];
+        const peakColor = peakInfo?.color ?? C.accent;
+        const peakPct = totalTokens > 0 ? Math.round(peakPeriod.tokens / totalTokens * 100) : 0;
+        const totalRequests = sorted.reduce((s, b) => s + b.requestCount, 0);
+        return (
+          <div style={{
+            marginTop: 8, paddingTop: 7, borderTop: `1px solid ${C.border}`,
+          }}>
+            {/* Peak 헤더 + 30d total */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
+                🔥 Peak: <strong style={{ color: peakColor }}>
+                  {peakInfo?.name ?? peakPeriod.label}
+                </strong>
+              </span>
+              <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
+                30d · {fmtCost(totalCost, currency, usdToKrw)} total
+              </span>
+            </div>
+            {/* Peak 상세 3열 */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0,
+              background: C.bgRow, borderRadius: 6, overflow: 'hidden',
+              border: `1px solid ${C.border}`,
+            }}>
+              {[
+                { label: 'Tokens', value: fmtTokens(peakPeriod.tokens), sub: `${peakPct}% of total` },
+                { label: 'Cost', value: fmtCost(peakPeriod.costUSD, currency, usdToKrw), sub: `${peakInfo?.time ?? ''}` },
+                { label: 'Requests', value: `${peakPeriod.requestCount}`, sub: `${totalRequests > 0 ? Math.round(peakPeriod.requestCount / totalRequests * 100) : 0}% of total` },
+              ].map((item, i) => (
+                <div key={item.label} style={{
+                  padding: '6px 8px', textAlign: 'center',
+                  borderRight: i < 2 ? `1px solid ${C.border}` : 'none',
+                }}>
+                  <div style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: peakColor, fontFamily: C.fontMono, lineHeight: 1.2 }}>{item.value}</div>
+                  <div style={{ fontSize: 8, color: C.textMuted, marginTop: 1 }}>{item.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
