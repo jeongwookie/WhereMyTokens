@@ -1,28 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AppSettings } from '../types';
-import { C } from '../theme';
+import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 
 interface Props { settings: AppSettings; onSave: (s: Partial<AppSettings>) => void; onBack: () => void; }
 
-const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.border}` };
-const label: React.CSSProperties = { fontSize: 12, color: C.textDim };
-const sel: React.CSSProperties = { background: C.bgRow, color: C.text, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 6px', fontSize: 12 };
-const inp: React.CSSProperties = { ...sel, width: 80 };
-const chk: React.CSSProperties = { accentColor: C.accent };
-
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <div style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 0 4px', borderBottom: `1px solid ${C.border}` }}>
-      {label}
-    </div>
-  );
-}
-
 export default function SettingsView({ settings, onSave, onBack }: Props) {
+  const C = useTheme();
   const [s, setS] = useState({ ...settings });
   const [integrationConfigured, setIntegrationConfigured] = useState<boolean | null>(null);
   const [integrationMsg, setIntegrationMsg] = useState('');
+
+  const row: React.CSSProperties = useMemo(() => ({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.border}` }), [C]);
+  const labelStyle: React.CSSProperties = useMemo(() => ({ fontSize: 12, color: C.textDim }), [C]);
+  const sel: React.CSSProperties = useMemo(() => ({ background: C.bgRow, color: C.text, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 6px', fontSize: 12 }), [C]);
+  const inp: React.CSSProperties = useMemo(() => ({ ...sel, width: 80 }), [sel]);
+  const chk: React.CSSProperties = useMemo(() => ({ accentColor: C.accent }), [C]);
 
   useEffect(() => {
     window.wmt.getIntegrationStatus().then(r => setIntegrationConfigured(r.configured)).catch(() => {});
@@ -42,6 +35,14 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
       setIntegrationMsg(`Error: ${String(e)}`);
     }
     setTimeout(() => setIntegrationMsg(''), 4000);
+  }
+
+  function SectionHeader({ label }: { label: string }) {
+    return (
+      <div style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 0 4px', borderBottom: `1px solid ${C.border}` }}>
+        {label}
+      </div>
+    );
   }
 
   return (
@@ -79,17 +80,17 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
 
         <SectionHeader label="General" />
         <div style={row}>
-          <span style={label}>Launch at login</span>
+          <span style={labelStyle}>Launch at login</span>
           <input type="checkbox" style={chk} checked={s.openAtLogin} onChange={e => setS({ ...s, openAtLogin: e.target.checked })} />
         </div>
         <div style={row}>
-          <span style={label}>Global shortcut</span>
+          <span style={labelStyle}>Global shortcut</span>
           <input style={{ ...inp, width: 160 }} value={s.globalHotkey} onChange={e => setS({ ...s, globalHotkey: e.target.value })} />
         </div>
 
         <SectionHeader label="Currency" />
         <div style={row}>
-          <span style={label}>Currency</span>
+          <span style={labelStyle}>Currency</span>
           <select style={sel} value={s.currency} onChange={e => setS({ ...s, currency: e.target.value as 'USD' | 'KRW' })}>
             <option value="USD">USD ($)</option>
             <option value="KRW">KRW (₩)</option>
@@ -97,14 +98,14 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
         </div>
         {s.currency === 'KRW' && (
           <div style={row}>
-            <span style={label}>Exchange rate (1 USD)</span>
+            <span style={labelStyle}>Exchange rate (1 USD)</span>
             <input style={inp} type="number" value={s.usdToKrw} onChange={e => setS({ ...s, usdToKrw: Number(e.target.value) })} />
           </div>
         )}
 
         <SectionHeader label="Tray" />
         <div style={row}>
-          <span style={label}>Tray label</span>
+          <span style={labelStyle}>Tray label</span>
           <select style={sel} value={s.trayDisplay ?? 'h5pct'} onChange={e => setS({ ...s, trayDisplay: e.target.value as AppSettings['trayDisplay'] })}>
             <option value="none">None</option>
             <option value="h5pct">5h usage %</option>
@@ -115,7 +116,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
 
         <SectionHeader label="Appearance" />
         <div style={row}>
-          <span style={label}>Theme</span>
+          <span style={labelStyle}>Theme</span>
           <div style={{ display: 'flex', gap: 2 }}>
             {(['light', 'dark'] as const).map(t => (
               <button key={t} onClick={() => setS({ ...s, theme: t })} style={{

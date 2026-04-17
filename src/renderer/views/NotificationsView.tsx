@@ -1,26 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { AppSettings } from '../types';
-import { C } from '../theme';
+import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 
 interface Props { onBack: () => void }
 
-const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${C.border}` };
-const label: React.CSSProperties = { fontSize: 12, color: C.text };
-const sub: React.CSSProperties = { fontSize: 10, color: C.textMuted, marginTop: 2 };
-const chk: React.CSSProperties = { accentColor: C.accent, width: 16, height: 16, cursor: 'pointer' };
-
-function SectionHeader({ text }: { text: string }) {
-  return (
-    <div style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 0 4px', borderBottom: `1px solid ${C.border}` }}>
-      {text}
-    </div>
-  );
-}
-
 export default function NotificationsView({ onBack }: Props) {
+  const C = useTheme();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const row: React.CSSProperties = useMemo(() => ({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${C.border}` }), [C]);
+  const labelStyle: React.CSSProperties = useMemo(() => ({ fontSize: 12, color: C.text }), [C]);
+  const sub: React.CSSProperties = useMemo(() => ({ fontSize: 10, color: C.textMuted, marginTop: 2 }), [C]);
+  const chk: React.CSSProperties = useMemo(() => ({ accentColor: C.accent, width: 16, height: 16, cursor: 'pointer' }), [C]);
 
   useEffect(() => {
     window.wmt.getSettings().then(setSettings).catch(() => {});
@@ -48,6 +41,14 @@ export default function NotificationsView({ onBack }: Props) {
     setTimeout(() => setSaved(false), 1500);
   }
 
+  function SectionHeader({ text }: { text: string }) {
+    return (
+      <div style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 0 4px', borderBottom: `1px solid ${C.border}` }}>
+        {text}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
       <ViewHeader title="Alerts" onBack={onBack} />
@@ -57,7 +58,7 @@ export default function NotificationsView({ onBack }: Props) {
 
         <div style={row}>
           <div>
-            <div style={label}>Enable usage alerts</div>
+            <div style={labelStyle}>Enable usage alerts</div>
             <div style={sub}>Send Windows notification when a limit threshold is reached</div>
           </div>
           <input type="checkbox" style={chk}
