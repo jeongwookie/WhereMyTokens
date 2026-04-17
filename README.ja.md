@@ -22,6 +22,30 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 
 </div>
 
+<table>
+  <tr>
+    <th width="50%">ダッシュボード — Today</th>
+    <th width="50%">ダッシュボード — All Time</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-dark-today.png" alt="Today view" /></td>
+    <td><img src="assets/screenshot-dark-all.png" alt="All time view" /></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <th width="33%">Rhythm & ピーク統計</th>
+    <th width="33%">7 日間ヒートマップ</th>
+    <th width="33%">設定</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
+    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
+    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+  </tr>
+</table>
+
 ## ダウンロード
 
 **[⬇ 最新リリースをダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**

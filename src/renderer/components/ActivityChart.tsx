@@ -19,6 +19,16 @@ function blueIntensity(i: number): string {
 function Heatmap7({ data }: { data: HourlyBucket[] }) {
   const C = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; day: string; hour: number; tokens: number } | null>(null);
+
+  const HOURS = 24, DAYS = 7;
+  const LEFT = 18, TOP = 14;
+
+  // day → hour → tokens 맵 구축
+  const dataMap = new Map<string, number>();
+  for (const b of data) {
+    dataMap.set(`${b.dayIndex}-${b.hour}`, b.tokens);
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,8 +37,6 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
     if (!ctx) return;
 
     const W = canvas.width;
-    const HOURS = 24, DAYS = 7;
-    const LEFT = 18, TOP = 14;
     const cw = Math.floor((W - LEFT) / HOURS);
     const ch = cw;
     canvas.height = TOP + DAYS * ch + 18;
@@ -69,7 +77,53 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
       ctx.fillText(`${h}h`, LEFT + h * cw + cw / 2, TOP + DAYS * ch + 12);
   }, [data, C]);
 
-  return <canvas ref={canvasRef} width={330} style={{ width: '100%', display: 'block' }} />;
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleX;
+    const cw = Math.floor((canvas.width - LEFT) / HOURS);
+    const ch = cw;
+    const col = Math.floor((mx - LEFT) / cw);
+    const row = Math.floor((my - TOP) / ch);
+    if (col < 0 || col >= HOURS || row < 0 || row >= DAYS) { setTooltip(null); return; }
+
+    const now = new Date();
+    const cellDate = new Date(now);
+    cellDate.setDate(cellDate.getDate() - (6 - row));
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dateStr = `${dayNames[cellDate.getDay()]} ${cellDate.getMonth() + 1}/${cellDate.getDate()}`;
+    const tokens = dataMap.get(`${row}-${col}`) ?? 0;
+
+    setTooltip({
+      x: (e.clientX - rect.left),
+      y: (e.clientY - rect.top),
+      day: dateStr,
+      hour: col,
+      tokens,
+    });
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <canvas ref={canvasRef} width={330} style={{ width: '100%', display: 'block' }}
+        onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)} />
+      {tooltip && (
+        <div style={{
+          position: 'absolute', left: Math.min(tooltip.x + 4, 220), top: Math.max(tooltip.y - 32, 0),
+          background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4,
+          padding: '2px 6px', fontSize: 9, fontFamily: C.fontMono, pointerEvents: 'none', whiteSpace: 'nowrap',
+        }}>
+          <span style={{ color: C.textMuted }}>{tooltip.day} {tooltip.hour}h </span>
+          <span style={{ color: tooltip.tokens > 0 ? C.text : C.textMuted, fontWeight: 600 }}>
+            {tooltip.tokens > 0 ? fmtTokens(tooltip.tokens) + ' tok' : 'none'}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // --- 90-day heatmap: GitHub-style calendar grid (weeks × weekdays) ---
