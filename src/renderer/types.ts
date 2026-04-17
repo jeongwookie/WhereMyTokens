@@ -102,6 +102,17 @@ export interface UsageData {
   weeklyTimeline: WeeklyTotal[]; // weekly timeline (last 20 weeks)
   todayTokens: number;
   todayCost: number;
+  todayRequestCount: number;
+  todayInputTokens: number;
+  todayOutputTokens: number;
+  todayCacheTokens: number;
+  allTimeRequestCount: number;
+  allTimeCost: number;
+  allTimeCacheTokens: number;
+  allTimeInputTokens: number;
+  allTimeOutputTokens: number;
+  allTimeSavedUSD: number;
+  allTimeAvgCacheEfficiency: number;
   sonnetWeekTokens: number;
   burnRate: BurnRate;
   todBuckets: TimeOfDayBucket[];
@@ -167,6 +178,7 @@ export interface AppState {
   bridgeActive: boolean;
   extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
+  allTimeSessions: number;
 }
 
 declare global {

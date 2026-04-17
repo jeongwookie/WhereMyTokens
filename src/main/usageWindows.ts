@@ -58,6 +58,17 @@ export interface UsageData {
   weeklyTimeline: WeeklyTotal[];
   todayTokens: number;
   todayCost: number;
+  todayRequestCount: number;
+  todayInputTokens: number;
+  todayOutputTokens: number;
+  todayCacheTokens: number;       // cacheRead + cacheCreation
+  allTimeRequestCount: number;
+  allTimeCost: number;
+  allTimeCacheTokens: number;     // 전체 cacheRead + cacheCreation
+  allTimeInputTokens: number;
+  allTimeOutputTokens: number;
+  allTimeSavedUSD: number;
+  allTimeAvgCacheEfficiency: number;
   sonnetWeekTokens: number;
   burnRate: BurnRate;
   todBuckets: TimeOfDayBucket[];
@@ -143,7 +154,9 @@ export function computeUsage(
   const heatMap30 = new Map<string, HourlyBucket>();
   const heatMap90 = new Map<string, HourlyBucket>();
   const timelineMap = new Map<number, WeeklyTotal>();
-  let todayTokens = 0, todayCost = 0, sonnetWeekTokens = 0;
+  let todayTokens = 0, todayCost = 0, todayRequestCount = 0, sonnetWeekTokens = 0;
+  let todayInputTokens = 0, todayOutputTokens = 0, todayCacheTokens = 0;
+  let allTimeCacheTokens = 0, allTimeInputTokens = 0, allTimeOutputTokens = 0;
 
   // TOD 집계용 (최근 30일)
   const todMap: Record<string, TimeOfDayBucket> = {
@@ -214,10 +227,19 @@ export function computeUsage(
       }
     }
 
+    // All-time 토큰 집계
+    allTimeCacheTokens += e.cacheReadTokens + e.cacheCreationTokens;
+    allTimeInputTokens += e.inputTokens;
+    allTimeOutputTokens += e.outputTokens;
+
     // Today
     if (ts >= todayStart.getTime()) {
       todayTokens += tokens;
       todayCost += e.costUSD;
+      todayRequestCount += 1;
+      todayInputTokens += e.inputTokens;
+      todayOutputTokens += e.outputTokens;
+      todayCacheTokens += e.cacheReadTokens + e.cacheCreationTokens;
     }
 
     // Per-model
@@ -262,13 +284,28 @@ export function computeUsage(
 
   const todBuckets: TimeOfDayBucket[] = [todMap.night, todMap.morning, todMap.afternoon, todMap.evening];
 
+  // All-time 집계
+  const allTimeRequestCount = allEntries.length;
+  const allTimeCost = models.reduce((s, m) => s + m.costUSD, 0);
+  // Sonnet 기준: 일반 input $3.00/M vs cache_read $0.30/M → 차이 $2.70/M
+  const allTimeCacheRead = allEntries.reduce((s, e) => s + e.cacheReadTokens, 0);
+  const allTimeCacheCreation = allEntries.reduce((s, e) => s + e.cacheCreationTokens, 0);
+  const allTimeSavedUSD = allTimeCacheRead * 2.70 / 1_000_000;
+  const allTimeAvgCacheEfficiency = (allTimeCacheRead + allTimeCacheCreation) > 0
+    ? (allTimeCacheRead / (allTimeCacheRead + allTimeCacheCreation)) * 100 : 0;
+
   return {
     h5, week, h5Codex, weekCodex, models,
     heatmap: Array.from(heatMap7.values()),
     heatmap30: Array.from(heatMap30.values()),
     heatmap90: Array.from(heatMap90.values()),
     weeklyTimeline: Array.from(timelineMap.values()).sort((a, b) => a.weekIndex - b.weekIndex),
-    todayTokens, todayCost, sonnetWeekTokens, burnRate, todBuckets,
+    todayTokens, todayCost, todayRequestCount,
+    todayInputTokens, todayOutputTokens, todayCacheTokens,
+    allTimeRequestCount, allTimeCost, allTimeCacheTokens,
+    allTimeInputTokens, allTimeOutputTokens,
+    allTimeSavedUSD, allTimeAvgCacheEfficiency,
+    sonnetWeekTokens, burnRate, todBuckets,
   };
 }
 

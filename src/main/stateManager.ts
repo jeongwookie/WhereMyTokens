@@ -40,6 +40,7 @@ export interface AppState {
   bridgeActive: boolean;  // whether the Claude Code statusLine bridge is connected
   extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
+  allTimeSessions: number;
 }
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
@@ -105,7 +106,12 @@ export class StateManager {
         h5: this.emptyWindow(), week: this.emptyWindow(),
         h5Codex: this.emptyWindow(), weekCodex: this.emptyWindow(),
         models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
-        todayTokens: 0, todayCost: 0, sonnetWeekTokens: 0,
+        todayTokens: 0, todayCost: 0, todayRequestCount: 0,
+        todayInputTokens: 0, todayOutputTokens: 0, todayCacheTokens: 0,
+        allTimeRequestCount: 0, allTimeCost: 0, allTimeCacheTokens: 0,
+        allTimeInputTokens: 0, allTimeOutputTokens: 0,
+        allTimeSavedUSD: 0, allTimeAvgCacheEfficiency: 0,
+        sonnetWeekTokens: 0,
         burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
         todBuckets: [],
       },
@@ -121,6 +127,7 @@ export class StateManager {
       bridgeActive: false,
       extraUsage: null,
       repoGitStats: {},
+      allTimeSessions: 0,
     };
   }
 
@@ -249,7 +256,8 @@ export class StateManager {
 
   private async heavyRefresh() {
     await this.refreshApiUsagePct();
-    this.allEntries = this.loadAllEntries();
+    const loaded = this.loadAllEntries();
+    this.allEntries = loaded.entries;
 
     const settings = this.getSettings();
     const effectiveLimits = this.autoLimits
@@ -289,7 +297,7 @@ export class StateManager {
       }
     }
 
-    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats };
+    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, allTimeSessions: loaded.sessionCount };
     this.onUpdate(this.state);
 
     checkAlerts(limits, settings.alertThresholds, settings.enableAlerts);
@@ -323,14 +331,15 @@ export class StateManager {
     return this.state?.limits ?? { h5: { pct: 0, resetMs: 0 }, week: { pct: 0, resetMs: 0 }, so: { pct: 0, resetMs: 0 } };
   }
 
-  private loadAllEntries(): ParsedEntry[] {
+  private loadAllEntries(): { entries: ParsedEntry[]; sessionCount: number } {
     const entries: ParsedEntry[] = [];
-    if (!fs.existsSync(PROJECTS_DIR)) return entries;
+    if (!fs.existsSync(PROJECTS_DIR)) return { entries, sessionCount: 0 };
 
     const settings = this.getSettings();
     const excluded = new Set(settings.excludedProjects ?? []);
     // requestId → entries 배열 인덱스 (동일 ID 중 outputTokens 최대값 보존)
     const seen = new Map<string, number>();
+    let sessionCount = 0;
     try {
       const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
         .filter(d => d.isDirectory())
@@ -342,6 +351,7 @@ export class StateManager {
         try {
           // agent- 접두사 파일 제외 (서브에이전트 세션 — 중복 계산 방지)
           const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
+          sessionCount += files.length;
           for (const file of files) {
             const parsed = parseJsonlFile(path.join(dirPath, file));
             for (const e of parsed.entries) {
@@ -361,7 +371,7 @@ export class StateManager {
       }
     } catch { /* skip */ }
 
-    return entries;
+    return { entries, sessionCount };
   }
 
   private buildSessionInfos(): SessionInfo[] {
