@@ -32,6 +32,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('all');
   // 확장된 세션 ID (한 번에 하나만 — 새 세션 클릭 시 이전 자동 닫힘)
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [headerPeriod, setHeaderPeriod] = useState<'today' | 'all'>('today');
 
   useEffect(() => {
     if (state.lastUpdated === 0) return;
@@ -147,13 +148,25 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
 
-      {/* 헤더 — 다크 퍼플 배경, 2행 구조 */}
+      {/* ── 헤더 — today/all 토글 + 2열 hero ─────────────────────── */}
       <div style={{ background: C.headerBg, flexShrink: 0, borderBottom: `1px solid ${C.headerBorder}` }}>
-        {/* 행1: 로고 + 플랜 뱃지 + API 점 + 윈도우 컨트롤 */}
+
+        {/* 행1: 로고 + [today][all] 토글 + 플랜 뱃지 + API 점 + 윈도우 컨트롤 */}
         <div style={{ ...drag, padding: '8px 12px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: -0.3, flexShrink: 0 }}>
             ⚡ WhereMyTokens
           </span>
+          {/* today/all 토글 */}
+          <div style={{ ...noDrag, display: 'flex', gap: 2, marginLeft: 6 }}>
+            {(['today', 'all'] as const).map(p => (
+              <button key={p} onClick={() => setHeaderPeriod(p)} style={{
+                ...noDrag, padding: '2px 7px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
+                fontFamily: C.fontMono, border: headerPeriod === p ? `1px solid ${C.accent}44` : '1px solid transparent',
+                background: headerPeriod === p ? `${C.accent}22` : 'none',
+                color: headerPeriod === p ? C.accent : C.headerSub, fontWeight: headerPeriod === p ? 700 : 400,
+              }}>{p}</button>
+            ))}
+          </div>
           <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
             {state.autoLimits && (
               <span style={{ fontSize: 9, color: C.headerSub, background: 'rgba(255,255,255,0.1)', borderRadius: 3, padding: '1px 6px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)' }}>
@@ -164,21 +177,69 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
               style={{ width: 6, height: 6, borderRadius: '50%', background: apiConnected ? '#4ade80' : '#f87171', display: 'inline-block', flexShrink: 0 }}
             />
-            <button onClick={() => window.wmt.minimize().catch(() => {})} title="최소화" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-            <button onClick={onQuit} title="종료" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+            <button onClick={() => window.wmt.minimize().catch(() => {})} title="Minimize" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+            <button onClick={onQuit} title="Quit" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
         </div>
 
-        {/* 행2: 대형 비용 + 오늘 토큰 + 크레딧 */}
-        <div style={{ ...drag, padding: '0 14px 8px', display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono }}>
-            {fmtCost(usage.todayCost, currency, usdToKrw)}
-          </span>
-          <span style={{ fontSize: 11, color: C.headerSub, whiteSpace: 'nowrap' }}>
-            {fmtTokens(usage.todayTokens)} tok · today
-          </span>
-          <span style={{ fontSize: 8, color: C.headerSub, opacity: 0.4, marginLeft: 'auto', flexShrink: 0 }}>by jeongwookie</span>
-        </div>
+        {/* 행2: Cost (좌) + Cache % (우) — 2열 hero */}
+        {(() => {
+          const isAll = headerPeriod === 'all';
+          const dimStyle = isAll ? 0.65 : 1;
+          const cost = isAll ? usage.allTimeCost : usage.todayCost;
+          const calls = isAll ? usage.allTimeRequestCount : usage.todayRequestCount;
+          const sess = isAll ? state.allTimeSessions : sessions.length;
+          const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : usage.h5.cacheEfficiency;
+          const saved = isAll ? usage.allTimeSavedUSD : usage.h5.cacheSavingsUSD;
+          const inTok = isAll ? usage.allTimeInputTokens : usage.todayInputTokens;
+          const outTok = isAll ? usage.allTimeOutputTokens : usage.todayOutputTokens;
+          const cacheTok = isAll ? usage.allTimeCacheTokens : usage.todayCacheTokens;
+
+          return (<>
+            <div style={{ ...drag, display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '2px 14px 7px', borderBottom: '1px solid rgba(255,255,255,0.05)', opacity: dimStyle }}>
+              {/* 좌: 비용 */}
+              <div>
+                <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
+                  {isAll ? 'All-time Cost' : 'Today Cost'}
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono }}>
+                  {fmtCost(cost, currency, usdToKrw)}
+                </div>
+                <div style={{ fontSize: 9, color: C.headerSub, marginTop: 3 }}>
+                  <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{fmtTokens(calls)}</span> calls · <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{sess}</span> sessions
+                </div>
+              </div>
+              {/* 우: 캐시 효율 */}
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
+                  {isAll ? 'Avg Cache Hit' : 'Cache Efficiency'}
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: C.active, lineHeight: 1, fontFamily: C.fontMono }}>
+                  {Math.round(cacheEff)}%
+                </div>
+                <div style={{ fontSize: 9, color: C.active, marginTop: 3 }}>
+                  ✦ {fmtCost(saved, currency, usdToKrw)} saved{isAll ? ' total' : ' today'}
+                </div>
+              </div>
+            </div>
+
+            {/* 행3: 토큰 breakdown (In / Out / Cache) */}
+            <div style={{ ...drag, padding: '6px 14px 8px', display: 'flex', alignItems: 'center', gap: 16, opacity: dimStyle }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.headerSub }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.input, flexShrink: 0 }} />
+                In <span style={{ fontFamily: C.fontMono, fontWeight: 600, color: C.input }}>{fmtTokens(inTok)}</span>
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.headerSub }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.output, flexShrink: 0 }} />
+                Out <span style={{ fontFamily: C.fontMono, fontWeight: 600, color: C.output }}>{fmtTokens(outTok)}</span>
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.headerSub }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.cacheR, flexShrink: 0 }} />
+                Cache <span style={{ fontFamily: C.fontMono, fontWeight: 600, color: C.cacheR }}>{fmtTokens(cacheTok)}</span>
+              </div>
+            </div>
+          </>);
+        })()}
 
       </div>
 
