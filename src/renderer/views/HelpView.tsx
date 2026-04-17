@@ -142,9 +142,10 @@ function ContentEN() {
         <UsageTable
           headers={['Display', 'Scope', 'tok', '$']}
           rows={[
-            ['Header', 'Today since midnight', 'All types', 'API-equiv'],
+            ['Header (today)', 'Today since midnight', 'In/Out/Cache + calls, sessions', 'API-equiv + cache savings'],
+            ['Header (all)', 'All time', 'In/Out/Cache + calls, sessions', 'API-equiv + cache savings'],
             ['Plan Usage', 'Current billing window', 'All types', 'API-equiv'],
-            ['Code Output', 'Today / All time', 'Git stats', '$/1K lines'],
+            ['Code Output', 'Today / All time', 'Git stats', '$/100 lines'],
             ['Model Usage', 'All time, per model', 'All types', 'API-equiv'],
           ]}
         />
@@ -158,7 +159,7 @@ function ContentEN() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — number of git commits in the period.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
-        <div style={{ marginBottom: 5 }}><B>Claude ROI</B> — how efficiently you turned Claude spend into code output, measured as cost per 1,000 lines added. <B>today</B> tab shows a label (Excellent / Good / Normal / Low / Exploring) based on how today's $/1K lines compares to your all-time average, with a multiplier like ×5.4 vs avg. <B>all</B> tab shows the raw all-time average $/1K lines. Lower cost per 1K lines = higher ROI.</div>
+        <div style={{ marginBottom: 5 }}><B>$/100 Lines</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 lines. Lower = more efficient.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
@@ -191,7 +192,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5-month GitHub-style calendar. Hover for date + tokens.</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — Token distribution by hour across the last 30 days.</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — Last 4 weeks horizontal bar chart.</div>
-        <div><B>Rhythm</B> — Time-of-day coding patterns (Morning/Afternoon/Evening/Night) over the last 7 days, local timezone.</div>
+        <div><B>Rhythm</B> — Time-of-day cost distribution (Morning/Afternoon/Evening/Night) over the last 30 days with peak indicator, local timezone.</div>
       </Section>
 
       <Divider />
@@ -225,9 +226,10 @@ function ContentKO() {
         <UsageTable
           headers={['표시 위치', '범위', 'tok', '$']}
           rows={[
-            ['헤더', '오늘 자정 이후', '전체', 'API 환산'],
+            ['헤더 (today)', '오늘 자정 이후', 'In/Out/Cache + 호출·세션', 'API 환산 + 캐시 절약'],
+            ['헤더 (all)', '전체 기간', 'In/Out/Cache + 호출·세션', 'API 환산 + 캐시 절약'],
             ['Plan Usage', '현재 빌링 창', '전체', 'API 환산'],
-            ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/1K lines'],
+            ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/100 lines'],
             ['Model Usage', '전체 기간, 모델별', '전체', 'API 환산'],
           ]}
         />
@@ -241,7 +243,7 @@ function ContentKO() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 해당 기간의 git 커밋 수.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
-        <div style={{ marginBottom: 5 }}><B>Claude ROI</B> — Claude 비용 대비 코드 산출 효율. 1,000 라인 추가당 비용으로 측정합니다. <B>today</B> 탭은 오늘의 $/1K lines를 전체 평균과 비교해 레이블(Excellent / Good / Normal / Low / Exploring)과 배율(×5.4 vs avg)로 표시. <B>all</B> 탭은 전체 기간 평균 $/1K lines를 수치로 표시. 값이 낮을수록 ROI가 높습니다.</div>
+        <div style={{ marginBottom: 5 }}><B>$/100 Lines</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 lines. 값이 낮을수록 효율적.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
@@ -274,7 +276,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5개월 GitHub 스타일 캘린더. 날짜+토큰 호버.</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 시간대별 토큰 분포 (최근 30일).</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — 최근 4주 가로 바 차트.</div>
-        <div><B>Rhythm</B> — 시간대별 코딩 패턴 (Morning/Afternoon/Evening/Night), 최근 7일, 로컬 타임존.</div>
+        <div><B>Rhythm</B> — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 최근 30일, 피크 표시, 로컬 타임존.</div>
       </Section>
 
       <Divider />
@@ -308,9 +310,10 @@ function ContentJA() {
         <UsageTable
           headers={['表示場所', '集計期間', 'tok', '$']}
           rows={[
-            ['ヘッダー', '当日 0:00 以降', '全種別', 'API換算'],
+            ['ヘッダー (today)', '当日 0:00 以降', 'In/Out/Cache + 呼出数・セッション', 'API換算 + キャッシュ節約'],
+            ['ヘッダー (all)', '全期間', 'In/Out/Cache + 呼出数・セッション', 'API換算 + キャッシュ節約'],
             ['Plan Usage', '現在の請求ウィンドウ', '全種別', 'API換算'],
-            ['Code Output', '今日 / 全期間', 'Git統計', '$/1K lines'],
+            ['Code Output', '今日 / 全期間', 'Git統計', '$/100 lines'],
             ['Model Usage', '全期間・モデル別', '全種別', 'API換算'],
           ]}
         />
@@ -324,7 +327,7 @@ function ContentJA() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 期間内の git コミット数。</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
-        <div style={{ marginBottom: 5 }}><B>Claude ROI</B> — Claude コストに対するコード産出効率。1,000 行追加あたりのコストで測定します。<B>today</B> タブは今日の $/1K lines を全期間平均と比較し、ラベル（Excellent / Good / Normal / Low / Exploring）と倍率（×5.4 vs avg）で表示。<B>all</B> タブは全期間平均の $/1K lines を数値で表示。値が低いほど ROI が高くなります。</div>
+        <div style={{ marginBottom: 5 }}><B>$/100 Lines</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 lines。値が低いほど効率的。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>
@@ -357,7 +360,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5ヶ月分の GitHub スタイルカレンダー。ホバーで日付とトークン数を確認。</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 直近 30 日の時間帯別トークン分布。</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — 直近 4 週間の横棒グラフ。</div>
-        <div><B>Rhythm</B> — 時間帯別コーディングパターン（Morning/Afternoon/Evening/Night）、直近 7 日間、ローカルタイムゾーン。</div>
+        <div><B>Rhythm</B> — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、直近 30 日間、ピーク表示、ローカルタイムゾーン。</div>
       </Section>
 
       <Divider />

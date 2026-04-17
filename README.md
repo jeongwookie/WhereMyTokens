@@ -27,11 +27,12 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **2-level session grouping** — sessions grouped by git project → branch, with per-project commit stats and line counts; idle sessions progressively collapse (top-3 tools → context bar only → single-line summary)
 - **Rate limit bars** — 5h and 1w usage from Anthropic's API, with progress bars, time-to-reset counters, and cache efficiency grades (Excellent/Good/Fair/Poor)
 - **Claude Code bridge** — register WhereMyTokens as a Claude Code `statusLine` plugin for live rate limit data without API polling
-- **Code Output** — git-based productivity metrics: commits, net lines changed, and **Claude ROI** (cost per 1K lines added) with today/all-time toggle; today shows an efficiency label (Excellent/Good/Normal/Low/Exploring) vs your all-time average; auto-discovers every project you've ever used Claude on via `~/.claude/projects/` history — no active session required; only your commits are counted (filtered by `git config user.email`)
+- **Header stats** — today/all-time toggle showing cost, API calls, sessions, cache efficiency %, cache savings, and token breakdown (In/Out/Cache) at a glance
+- **Code Output** — git-based productivity metrics: commits, net lines changed, and **$/100 Lines** (cost per 100 lines added) with today/all-time toggle; today shows actual cost-per-line with all-time average for comparison; auto-discovers every project you've ever used Claude on via `~/.claude/projects/` history — no active session required; only your commits are counted (filtered by `git config user.email`)
 - **Context window warnings** — per-session context bar; amber at 50%, orange at 80%, red at 95%+, with "⚠ near limit" / "⚠ at limit" labels
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …) per session
 - **Activity Breakdown** — click the **Breakdown** button on any session row to expand a per-category token breakdown: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, and Response; shows what Claude actually spent tokens on; one panel open at a time
-- **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day coding patterns with per-period gradient bars)
+- **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison, and **Rhythm** (time-of-day cost distribution over 30 days with gradient bars and peak indicator)
 - **Model breakdown** — per-model token and cost totals across all time, with gradient bars
 - **Cost display** — USD or KRW, subscription equivalent value vs. actual API cost
 - **Alerts** — Windows toast notifications at configurable usage thresholds (50% / 80% / 90%)
@@ -147,7 +148,8 @@ All token counts (`tok`) include **input + output + cache creation + cache reads
 
 | Display | Scope | tok | $ |
 |---------|-------|-----|---|
-| Header | Today since midnight | All token types | API-equivalent |
+| Header (today) | Today since midnight | In/Out/Cache + calls, sessions | API-equivalent + cache savings |
+| Header (all) | All time | In/Out/Cache + calls, sessions | API-equivalent + cache savings |
 | Plan Usage (5h / 1w) | Current billing window | All token types | API-equivalent |
 | Model Usage | **All time**, per model | All token types | API-equivalent |
 
@@ -163,7 +165,7 @@ All token counts (`tok`) include **input + output + cache creation + cache reads
 | 5mo | 5-month calendar grid (GitHub-style weeks × weekdays, hover for date + tokens) |
 | Hourly | Hourly token distribution across the last 30 days |
 | Weekly | Last 4 weeks horizontal bar chart |
-| Rhythm | Time-of-day coding patterns — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙 with gradient bars (7-day, local timezone) |
+| Rhythm | Time-of-day cost distribution — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙 with gradient bars and peak indicator (30-day, local timezone) |
 
 ---
 
@@ -246,7 +248,7 @@ src/
       SessionRow.tsx       Session row with idle collapse (context bar + tool chips)
       TokenStatsCard.tsx   Usage stats + rate limit bar + cache efficiency grade
       ActivityChart.tsx    Heatmaps, charts, and Rhythm tab
-      CodeOutputCard.tsx   Git-based productivity metrics (commits, lines, Claude ROI $/1K lines)
+      CodeOutputCard.tsx   Git-based productivity metrics (commits, lines, $/100 lines)
       ModelBreakdown.tsx   Per-model totals with gradient bars
       ExtraUsageCard.tsx   Extra Usage monthly budget card
 ```

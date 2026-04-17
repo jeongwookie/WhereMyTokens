@@ -27,11 +27,12 @@ https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
 - **2단계 세션 그루핑** — git 프로젝트 → 브랜치별로 그루핑, 프로젝트별 커밋·라인 통계 표시; idle 세션은 단계적 축소 (상위 3개 툴 → 컨텍스트 바만 → 한 줄 요약)
 - **속도 제한 바** — Anthropic API에서 가져온 5시간·주간 사용량을 프로그레스 바, 리셋 카운터, 캐시 효율 등급(Excellent/Good/Fair/Poor)으로 표시
 - **Claude Code 브리지** — WhereMyTokens를 Claude Code `statusLine` 플러그인으로 등록해 API 폴링 없이 실시간 속도 제한 데이터 수신
-- **Code Output** — git 기반 생산성 지표: 커밋 수, 순 라인 변경, **Claude ROI** (1K 라인 추가당 비용) (today/all time 토글); today는 전체 평균 대비 효율 레이블(Excellent/Good/Normal/Low/Exploring) 표시; `~/.claude/projects/` 히스토리를 통해 Claude를 사용한 모든 프로젝트 자동 발견 — 세션이 활성 상태가 아니어도 포함
+- **헤더 통계** — today/all-time 토글로 비용, API 호출 수, 세션 수, 캐시 적중률, 캐시 절약 비용, 토큰 분석(In/Out/Cache)을 한눈에 표시
+- **Code Output** — git 기반 생산성 지표: 커밋 수, 순 라인 변경, **$/100 Lines** (100 라인 추가당 비용) (today/all time 토글); today는 실제 라인당 비용과 전체 평균을 비교 표시; `~/.claude/projects/` 히스토리를 통해 Claude를 사용한 모든 프로젝트 자동 발견 — 세션이 활성 상태가 아니어도 포함
 - **컨텍스트 창 경고** — 세션별 컨텍스트 바; 50%에서 황색, 80%에서 주황, 95%+에서 적색, "⚠ near limit" / "⚠ at limit" 표시
 - **툴 사용 바** — 세션별 비례 색상 바 + 툴 칩(Bash, Edit, Read 등)
 - **Activity Breakdown** — 세션 행의 **Breakdown** 버튼을 클릭하면 카테고리별 토큰 사용 분석 패널 표시: Read, Edit/Write, Search, Git, Build/Test, Terminal, Subagents, Thinking, Response. 한 번에 하나만 열림
-- **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교, **Rhythm** (시간대별 코딩 패턴, 그라데이션 바)
+- **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교, **Rhythm** (30일간 시간대별 비용 분포, 피크 표시)
 - **모델별 분석** — 전체 기간의 모델별 토큰·비용 합계, 그라데이션 바
 - **비용 표시** — USD 또는 KRW, 구독 환산 가치
 - **알림** — 설정 가능한 사용량 임계값(50% / 80% / 90%)에서 Windows 토스트 알림
@@ -147,7 +148,8 @@ npm run dist
 
 | 표시 위치 | 범위 | tok | $ |
 |---------|------|-----|---|
-| 헤더 | 오늘 자정 이후 | 모든 토큰 유형 | API 환산 |
+| 헤더 (today) | 오늘 자정 이후 | In/Out/Cache + 호출 수, 세션 수 | API 환산 + 캐시 절약 |
+| 헤더 (all) | 전체 기간 | In/Out/Cache + 호출 수, 세션 수 | API 환산 + 캐시 절약 |
 | Plan Usage (5h / 1w) | 현재 빌링 창 | 모든 토큰 유형 | API 환산 |
 | Model Usage | **전체 기간**, 모델별 | 모든 토큰 유형 | API 환산 |
 
@@ -163,7 +165,7 @@ npm run dist
 | 5mo | 5개월 캘린더 그리드 (GitHub 스타일, 날짜+토큰 호버) |
 | Hourly | 최근 30일의 시간대별 토큰 분포 |
 | Weekly | 최근 4주 가로 바 차트 |
-| Rhythm | 시간대별 코딩 패턴 — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙, 그라데이션 바 (7일, 로컬 타임존) |
+| Rhythm | 시간대별 비용 분포 — Morning ☀️ / Afternoon 🔥 / Evening 🌆 / Night 🌙, 피크 표시 (30일, 로컬 타임존) |
 
 ---
 
