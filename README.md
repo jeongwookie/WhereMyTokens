@@ -12,7 +12,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Release](https://img.shields.io/github/v/release/jeongwookie/WhereMyTokens)
 
-> [한국어](README.ko.md) | [日本語](README.ja.md)
+> [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh-CN.md) | [Español](README.es.md)
 
 > 💾 **No cloud sync** — reads only local Claude files. Your data never leaves your machine.
 
@@ -44,7 +44,7 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 **[⬇ Download Latest Release](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
-1. Download `WhereMyTokens-v1.9.0-win-x64.zip`
+1. Download `WhereMyTokens-v1.9.1-win-x64.zip`
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 

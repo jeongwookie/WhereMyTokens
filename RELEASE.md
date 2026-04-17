@@ -114,6 +114,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.9.1 | 2026-04-17 | Fix 7d heatmap hover tooltip, README refactoring (screenshot grid, categorized features, download button), add Chinese (zh-CN) and Spanish (es) READMEs |
 | v1.9.0 | 2026-04-17 | Teal theme refresh (purple→teal), Auto/Light/Dark system theme, incremental JSONL caching, CSS custom properties, idle 6h+ auto-hide, Activity Breakdown color redesign, Rhythm peak detail stats, Settings/Alerts dark theme fix |
 | v1.8.0 | 2026-04-17 | Header today/all toggle (cost, calls, sessions, cache %, savings, In/Out/Cache tokens), Code Output $/100 lines replacing ROI labels, Rhythm tab cost-based with 30-day data, Plan Usage card cleanup |
 | v1.7.3 | 2026-04-16 | fix: Code Output 이중 집계 — Windows 경로 대소문자 정규화, cross-file dedup 결정적 처리, 워크트리 삭제 시 빈 stats 덮어쓰기 방지 |
