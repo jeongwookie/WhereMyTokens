@@ -57,15 +57,11 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
   const avgPerLine   = totalLinesAdded > 0 && allTimeCost > 0 ? allTimeCost / totalLinesAdded : null;
   const effRatio     = todayPerLine != null && avgPerLine != null ? todayPerLine / avgPerLine : null;
 
-  // 효율 레이블 (ratio = today$/line ÷ avg$/line, 낮을수록 효율적)
+  // $/100 lines 표시 (today: 오늘 단가, all: 전체 평균 단가)
   const effInfo: { text: string; color: string } = (() => {
-    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 1000, currency, usdToKrw) : '—', color: C.textDim };
-    if (linesAdded === 0 || effRatio === null) return { text: 'Exploring', color: C.textDim };
-    if (effRatio < 0.5)  return { text: 'Excellent', color: C.active };
-    if (effRatio < 0.8)  return { text: 'Good',      color: C.active };
-    if (effRatio < 1.2)  return { text: 'Normal',    color: '#f59e0b' };
-    if (effRatio < 2.0)  return { text: 'Low',       color: '#f97316' };
-    return { text: 'Very Low',   color: '#ef4444' };
+    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 100, currency, usdToKrw) : '—', color: C.textDim };
+    if (linesAdded === 0 || todayPerLine === null) return { text: '—', color: C.textDim };
+    return { text: fmtCost(todayPerLine * 100, currency, usdToKrw), color: C.text };
   })();
 
   // all 탭 서브텍스트용 라인 수 포맷 (+247K lines)
@@ -73,16 +69,15 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
     ? `+${(totalLinesAdded / 1000).toFixed(0)}K lines`
     : `+${totalLinesAdded} lines`;
 
-  // KPI 서브텍스트: ×N.N vs avg (today) / +247K lines (all)
+  // KPI 서브텍스트: avg 비교 (today) / +247K lines (all)
   const effSub = (() => {
     if (period === 'all') return totalLinesFormatted;
-    if (effRatio === null) return '';
-    if (effRatio < 1) return `×${(1 / effRatio).toFixed(1)} vs avg`;
-    return `${effRatio.toFixed(1)}x avg cost`;
+    if (avgPerLine === null) return '';
+    return `avg ${fmtCost(avgPerLine * 100, currency, usdToKrw)}`;
   })();
 
-  // 하단 바용 $/1K lines (기간별, ×1000으로 환산)
-  const perLine = data.added > 0 && periodCost > 0 ? (periodCost / data.added) * 1000 : null;
+  // 하단 $/100 lines (기간별)
+  const perLine = data.added > 0 && periodCost > 0 ? (periodCost / data.added) * 100 : null;
 
   // COMMITS 서브텍스트
   const commitsSub = period === 'today' ? `${totalCommits} total` : 'all time';
@@ -112,7 +107,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
         <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
         <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
-        <KPI label="Claude ROI"
+        <KPI label="$/100 Lines"
           value={effInfo.text}
           sub={effSub} color={effInfo.color} C={C} />
       </div>
@@ -126,7 +121,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
         }}>
           <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
             {data.commits} commit{data.commits > 1 ? 's' : ''} · {netLines >= 0 ? '+' : ''}{netLines} net lines
-            {perLine ? ` · ${fmtCost(perLine, currency, usdToKrw)}/1K lines` : ''}
+            {perLine ? ` · ${fmtCost(perLine, currency, usdToKrw)}/100 lines` : ''}
           </span>
         </div>
       )}
