@@ -80,7 +80,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
 
         <SectionHeader label="General" />
         <div style={row}>
-          <span style={labelStyle}>Launch at login</span>
+          <span style={labelStyle}>Start with Windows</span>
           <input type="checkbox" style={chk} checked={s.openAtLogin} onChange={e => setS({ ...s, openAtLogin: e.target.checked })} />
         </div>
         <div style={row}>
