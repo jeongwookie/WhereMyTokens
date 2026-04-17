@@ -172,12 +172,12 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). Shows how well prompt caching is being utilized.</div>
         <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
         <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click the <B>Breakdown</B> button on any session row to expand a per-category output token breakdown. One panel open at a time — clicking another session auto-closes the previous.</div>
-        <CatRow icon="💭" label="Thinking" color="#a78bfa">Extended thinking blocks</CatRow>
+        <CatRow icon="💭" label="Thinking" color="#2dd4bf">Extended thinking blocks</CatRow>
         <CatRow icon="💬" label="Response" color="#8b90a0">Text blocks — the final answer text</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read tool</CatRow>
         <CatRow icon="✏️" label="Edit/Write" color="#34d399">Edit · Write · MultiEdit · NotebookEdit</CatRow>
         <CatRow icon="🔍" label="Search" color="#22d3ee">Grep · Glob · LS · TodoRead · TodoWrite</CatRow>
-        <CatRow icon="🌿" label="Git" color="#c084fc">Bash — commands starting with git</CatRow>
+        <CatRow icon="🌿" label="Git" color="#f59e0b">Bash — commands starting with git</CatRow>
         <CatRow icon="⚙️" label="Build/Test" color="#fb923c">Bash — npm, tsc, jest, cargo, python, go build…</CatRow>
         <CatRow icon="💻" label="Terminal" color="#fbbf24">Other Bash commands · mcp__* tools</CatRow>
         <CatRow icon="🤖" label="Subagents" color="#f472b6">Agent tool</CatRow>
@@ -256,12 +256,12 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). 프롬프트 캐싱 활용도.</div>
         <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
         <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Breakdown</B> 버튼을 누르면 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션 클릭 시 자동으로 닫힙니다.</div>
-        <CatRow icon="💭" label="Thinking" color="#a78bfa">확장 사고 블록</CatRow>
+        <CatRow icon="💭" label="Thinking" color="#2dd4bf">확장 사고 블록</CatRow>
         <CatRow icon="💬" label="Response" color="#8b90a0">텍스트 블록 — 최종 응답 텍스트</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read 툴</CatRow>
         <CatRow icon="✏️" label="Edit/Write" color="#34d399">Edit · Write · MultiEdit · NotebookEdit</CatRow>
         <CatRow icon="🔍" label="Search" color="#22d3ee">Grep · Glob · LS · TodoRead · TodoWrite</CatRow>
-        <CatRow icon="🌿" label="Git" color="#c084fc">Bash — git 명령</CatRow>
+        <CatRow icon="🌿" label="Git" color="#f59e0b">Bash — git 명령</CatRow>
         <CatRow icon="⚙️" label="Build/Test" color="#fb923c">Bash — npm, tsc, jest, cargo, python 등</CatRow>
         <CatRow icon="💻" label="Terminal" color="#fbbf24">기타 Bash 명령 · mcp__* 툴</CatRow>
         <CatRow icon="🤖" label="Subagents" color="#f472b6">Agent 툴</CatRow>
@@ -340,12 +340,12 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Excellent (80%+)、Good (60%+)、Fair (40%+)、Poor (&lt;40%)。プロンプトキャッシングの活用度。</div>
         <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
         <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Breakdown</B> ボタンをクリックすると、カテゴリ別の output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。</div>
-        <CatRow icon="💭" label="Thinking" color="#a78bfa">拡張思考ブロック</CatRow>
+        <CatRow icon="💭" label="Thinking" color="#2dd4bf">拡張思考ブロック</CatRow>
         <CatRow icon="💬" label="Response" color="#8b90a0">テキストブロック — 最終回答テキスト</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read ツール</CatRow>
         <CatRow icon="✏️" label="Edit/Write" color="#34d399">Edit · Write · MultiEdit · NotebookEdit</CatRow>
         <CatRow icon="🔍" label="Search" color="#22d3ee">Grep · Glob · LS · TodoRead · TodoWrite</CatRow>
-        <CatRow icon="🌿" label="Git" color="#c084fc">Bash — git コマンド</CatRow>
+        <CatRow icon="🌿" label="Git" color="#f59e0b">Bash — git コマンド</CatRow>
         <CatRow icon="⚙️" label="Build/Test" color="#fb923c">Bash — npm, tsc, jest, cargo, python など</CatRow>
         <CatRow icon="💻" label="Terminal" color="#fbbf24">その他の Bash コマンド · mcp__* ツール</CatRow>
         <CatRow icon="🤖" label="Subagents" color="#f472b6">Agent ツール</CatRow>

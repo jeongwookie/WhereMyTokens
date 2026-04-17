@@ -85,7 +85,7 @@ export default function SessionRow({ session, expanded, onToggle }: {
           padding: isCompact ? '6px 10px' : '7px 10px',
           marginLeft: 8, marginRight: 8, marginTop: 3,
           background: C.bgRow,
-          border: `1px solid ${isExpanded ? 'rgba(167,139,250,0.35)' : C.border}`,
+          border: `1px solid ${isExpanded ? 'rgba(13,148,136,0.35)' : C.border}`,
           borderRadius: isExpanded ? '6px 6px 0 0' : 6,
           borderBottom: isExpanded ? `1px solid ${C.border}` : undefined,
           opacity: isCompact ? 0.65 : 1,

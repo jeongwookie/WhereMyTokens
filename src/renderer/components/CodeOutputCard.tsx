@@ -92,7 +92,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
             <button key={p} onClick={() => setPeriod(p)} style={{
               padding: '2px 6px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
               fontFamily: "'JetBrains Mono', monospace",
-              border: period === p ? '1px solid rgba(167,139,250,0.15)' : '1px solid transparent',
+              border: period === p ? '1px solid rgba(13,148,136,0.15)' : '1px solid transparent',
               background: period === p ? C.accent + '22' : 'none',
               color: period === p ? C.accent : C.textMuted,
               fontWeight: period === p ? 700 : 400,

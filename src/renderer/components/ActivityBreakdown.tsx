@@ -8,11 +8,11 @@ const CATEGORIES = [
   { key: 'read',      label: 'Read',        icon: '📄', color: '#60a5fa' },
   { key: 'editWrite', label: 'Edit / Write', icon: '✏️', color: '#34d399' },
   { key: 'search',    label: 'Search',       icon: '🔍', color: '#22d3ee' },
-  { key: 'git',       label: 'Git',          icon: '🌿', color: '#c084fc' },
+  { key: 'git',       label: 'Git',          icon: '🌿', color: '#f59e0b' },
   { key: 'buildTest', label: 'Build / Test', icon: '⚙️', color: '#fb923c' },
   { key: 'terminal',  label: 'Terminal',     icon: '💻', color: '#fbbf24' },
   { key: 'subagents', label: 'Subagents',    icon: '🤖', color: '#f472b6' },
-  { key: 'thinking',  label: 'Thinking',     icon: '💭', color: '#a78bfa' },
+  { key: 'thinking',  label: 'Thinking',     icon: '💭', color: '#2dd4bf' },
   { key: 'response',  label: 'Response',     icon: '💬', color: '#8b90a0' },
   { key: 'web',       label: 'Web',          icon: '🌐', color: '#38bdf8' },
 ] as const;
@@ -39,7 +39,7 @@ export default function ActivityBreakdown({ session }: Props) {
     <div style={{
       marginLeft: 8, marginRight: 8,
       background: C.bgCard,
-      border: `1px solid rgba(167,139,250,0.3)`,
+      border: `1px solid rgba(13,148,136,0.3)`,
       borderTop: 'none',
       borderRadius: '0 0 6px 6px',
       padding: '8px 10px 10px',

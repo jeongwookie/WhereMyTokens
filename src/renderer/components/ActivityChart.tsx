@@ -415,7 +415,7 @@ const TOD_ORDER: TimeOfDayBucket['period'][] = ['morning', 'afternoon', 'evening
 const TOD_INFO: Record<string, { icon: string; name: string; time: string; gradient: string; color: string }> = {
   morning:   { icon: '☀️', name: 'Morning',   time: '6–12h',  gradient: 'linear-gradient(90deg, #fbbf24, #f59e0b)', color: '#fbbf24' },
   afternoon: { icon: '🔥', name: 'Afternoon', time: '12–18h', gradient: 'linear-gradient(90deg, #fb923c, #f87171)', color: '#fb923c' },
-  evening:   { icon: '🌆', name: 'Evening',   time: '18–24h', gradient: 'linear-gradient(90deg, #a78bfa, #f472b6)', color: '#a78bfa' },
+  evening:   { icon: '🌆', name: 'Evening',   time: '18–24h', gradient: 'linear-gradient(90deg, #2dd4bf, #f472b6)', color: '#2dd4bf' },
   night:     { icon: '🌙', name: 'Night',     time: '0–6h',   gradient: 'linear-gradient(90deg, #60a5fa, #818cf8)', color: '#60a5fa' },
 };
 
@@ -534,7 +534,7 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
                 padding: '4px 8px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
                 fontFamily: "'JetBrains Mono', monospace",
                 border: isActive && isRhythm ? '1px solid rgba(251,191,36,0.2)' :
-                        isActive ? `1px solid rgba(167,139,250,0.15)` : '1px solid transparent',
+                        isActive ? `1px solid rgba(13,148,136,0.15)` : '1px solid transparent',
                 background: isActive && isRhythm ? 'rgba(251,191,36,0.1)' :
                             isActive ? C.accent + '22' : 'none',
                 color: isActive && isRhythm ? '#fbbf24' :
