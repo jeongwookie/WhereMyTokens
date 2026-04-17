@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { JsonlCache, CacheEntry } from './jsonlCache';
 
 export interface ParsedEntry {
   requestId: string;
@@ -246,6 +247,206 @@ export function parseJsonlFile(filePath: string): ParsedFile {
 
 function emptyResult(): ParsedFile {
   return { entries: [], modelName: '', rawModel: '', latestInputTokens: 0, latestCacheCreationTokens: 0, latestCacheReadTokens: 0, toolCounts: {}, activityBreakdown: emptyBreakdown() };
+}
+
+/**
+ * mtime 기반 캐시 + 증분 파싱 지원 버전.
+ * - mtime 동일 → 캐시 반환 (I/O 제로)
+ * - 파일 커짐 → 새 바이트만 읽어서 기존 결과에 merge
+ * - 파일 줄어듦 → 캐시 무효화 후 전체 재파싱
+ */
+export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFile {
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(filePath);
+    if (stat.isSymbolicLink()) return emptyResult();
+  } catch {
+    cache.invalidate(filePath);
+    return emptyResult();
+  }
+
+  const cached = cache.get(filePath);
+
+  // 캐시 히트: mtime 동일 → 즉시 반환
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return cached.parsed;
+  }
+
+  // 파일이 줄어들었거나 캐시 없음 → 전체 재파싱
+  if (!cached || stat.size < cached.byteOffset) {
+    const result = parseJsonlFile(filePath);
+    // 전체 파싱 후 캐시 저장 (seen map 재구축)
+    const seenMap = new Map<string, number>();
+    for (let i = 0; i < result.entries.length; i++) {
+      seenMap.set(result.entries[i].requestId, i);
+    }
+    cache.set(filePath, {
+      mtimeMs: stat.mtimeMs,
+      fileSize: stat.size,
+      byteOffset: stat.size,
+      parsed: result,
+      seenMap,
+    });
+    return result;
+  }
+
+  // 증분 파싱: 새 바이트만 읽기
+  if (stat.size > cached.byteOffset) {
+    const newSize = stat.size - cached.byteOffset;
+    const buf = Buffer.alloc(newSize);
+    let fd: number;
+    try {
+      fd = fs.openSync(filePath, 'r');
+      fs.readSync(fd, buf, 0, newSize, cached.byteOffset);
+      fs.closeSync(fd);
+    } catch {
+      // 읽기 실패 시 전체 재파싱 fallback
+      cache.invalidate(filePath);
+      return parseJsonlCached(filePath, cache);
+    }
+
+    const newText = buf.toString('utf-8');
+    // 첫 번째 줄이 불완전할 수 있음 — 첫 \n 이후부터 파싱
+    const firstNewline = newText.indexOf('\n');
+    const textToParse = firstNewline === -1 ? '' : newText.substring(firstNewline + 1);
+
+    if (textToParse.trim()) {
+      // 기존 결과를 복사하여 merge
+      const entries = [...cached.parsed.entries];
+      const seenMap = new Map(cached.seenMap);
+      const toolCounts = { ...cached.parsed.toolCounts };
+      const activityBreakdown = { ...cached.parsed.activityBreakdown };
+      let latestModel = cached.parsed.modelName;
+      let latestRawModel = cached.parsed.rawModel;
+      let latestInputTokens = cached.parsed.latestInputTokens;
+      let latestCacheCreationTokens = cached.parsed.latestCacheCreationTokens;
+      let latestCacheReadTokens = cached.parsed.latestCacheReadTokens;
+
+      const lines = textToParse.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        let obj: Record<string, unknown>;
+        try { obj = JSON.parse(line) as Record<string, unknown>; }
+        catch { continue; }
+
+        if (obj.type !== 'assistant') continue;
+
+        const msgUsage = (obj.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+        const msgModel = (obj.message as Record<string, unknown>)?.model as string | undefined;
+        const reqId = (obj.message as Record<string, unknown>)?.id as string | undefined;
+        const topUsage = obj.usage as Record<string, number> | undefined;
+        const topModel = obj.model as string | undefined;
+
+        const usage = msgUsage ?? topUsage;
+        const rawModel = msgModel ?? topModel ?? '';
+        const timestamp = obj.timestamp as string | undefined;
+
+        if (!usage || !rawModel) continue;
+
+        const inp = (usage.input_tokens ?? 0) + 0;
+        const out = usage.output_tokens ?? 0;
+        const cw  = usage.cache_creation_input_tokens ?? 0;
+        const cr  = usage.cache_read_input_tokens ?? usage.cached_prompt_tokens ?? 0;
+
+        if (inp + out + cw + cr === 0) continue;
+
+        const id = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
+        if (seenMap.has(id)) {
+          const prevIdx = seenMap.get(id)!;
+          if (out > entries[prevIdx].outputTokens) {
+            const updatedCost = calcCost(rawModel, inp, out, cw, cr);
+            entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost };
+          }
+          continue;
+        }
+        seenMap.set(id, entries.length);
+
+        // toolCounts + activityBreakdown 집계
+        const content = (obj.message as Record<string, unknown>)?.content as unknown[];
+        if (Array.isArray(content)) {
+          for (const c of content) {
+            const item = c as Record<string, unknown>;
+            if (item?.type === 'tool_use' && typeof item.name === 'string') {
+              toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1;
+            }
+          }
+          if (out > 0) {
+            const blockData: Array<{ cat: keyof typeof activityBreakdown; chars: number }> = [];
+            for (const c of content) {
+              const item = c as Record<string, unknown>;
+              let chars = 0;
+              let cat: keyof typeof activityBreakdown = 'response';
+              if (item.type === 'thinking') {
+                chars = (item.thinking as string ?? '').length;
+                cat = 'thinking';
+              } else if (item.type === 'text') {
+                chars = (item.text as string ?? '').length;
+                cat = 'response';
+              } else if (item.type === 'tool_use' && typeof item.name === 'string') {
+                chars = JSON.stringify(item.input ?? {}).length + item.name.length;
+                cat = classifyToolUse(item.name, item.input);
+              }
+              if (chars > 0) blockData.push({ cat, chars });
+            }
+            const totalChars = blockData.reduce((s, b) => s + b.chars, 0);
+            if (totalChars > 0) {
+              for (const { cat, chars } of blockData) {
+                activityBreakdown[cat] += Math.round((chars / totalChars) * out);
+              }
+            }
+          }
+        }
+
+        const cost = calcCost(rawModel, inp, out, cw, cr);
+        const ts = timestamp ? new Date(timestamp) : new Date(0);
+
+        entries.push({
+          requestId: id,
+          timestamp: ts,
+          model: normalizeModel(rawModel),
+          provider: getProvider(rawModel),
+          inputTokens: inp,
+          outputTokens: out,
+          cacheCreationTokens: cw,
+          cacheReadTokens: cr,
+          costUSD: cost,
+        });
+
+        latestModel = normalizeModel(rawModel);
+        latestRawModel = rawModel;
+        latestInputTokens = inp;
+        latestCacheCreationTokens = cw;
+        latestCacheReadTokens = cr;
+      }
+
+      // 마지막 엔트리 기준으로 latest 갱신
+      if (entries.length > 0) {
+        const last = entries[entries.length - 1];
+        latestModel = last.model;
+        latestRawModel = entries[entries.length - 1]?.model ?? '';
+        latestInputTokens = last.inputTokens;
+        latestCacheCreationTokens = last.cacheCreationTokens;
+        latestCacheReadTokens = last.cacheReadTokens;
+      }
+
+      const result: ParsedFile = {
+        entries, modelName: latestModel, rawModel: latestRawModel,
+        latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens,
+        toolCounts, activityBreakdown,
+      };
+      cache.set(filePath, {
+        mtimeMs: stat.mtimeMs,
+        fileSize: stat.size,
+        byteOffset: stat.size,
+        parsed: result,
+        seenMap,
+      });
+      return result;
+    }
+  }
+
+  // 새 데이터 없음 — mtime만 갱신하고 캐시 반환
+  cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
+  return cached.parsed;
 }
 
 export { normalizeModel, getProvider };

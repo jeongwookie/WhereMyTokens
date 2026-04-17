@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as os from 'os';
 import chokidar from 'chokidar';
 import { discoverSessions, DiscoveredSession } from './sessionDiscovery';
-import { parseJsonlFile, ParsedEntry, ActivityBreakdown } from './jsonlParser';
+import { parseJsonlFile, parseJsonlCached, ParsedEntry, ActivityBreakdown } from './jsonlParser';
+import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS } from './ipc';
 import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimitedError } from './rateLimitFetcher';
@@ -64,6 +65,7 @@ export class StateManager {
   private apiBackoffMs = 0;
   private bridgeWatcher: BridgeWatcher;
   private liveSession: LiveSessionData | null = null;
+  private jsonlCache = new JsonlCache();
   private static readonly API_MIN_INTERVAL_MS = 180_000; // 3분 간격 (429 방지)
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
@@ -231,7 +233,10 @@ export class StateManager {
       if (filePath.endsWith('.jsonl')) this.debouncedHeavyRefresh();
       else this.fastRefresh();
     });
-    this.watcher.on('unlink', () => this.fastRefresh());
+    this.watcher.on('unlink', (filePath: string) => {
+      if (filePath.endsWith('.jsonl')) this.jsonlCache.invalidate(filePath);
+      this.fastRefresh();
+    });
 
     // Watch for JSONL changes — 디바운스 적용
     if (fs.existsSync(PROJECTS_DIR)) {
@@ -353,7 +358,7 @@ export class StateManager {
           const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
           sessionCount += files.length;
           for (const file of files) {
-            const parsed = parseJsonlFile(path.join(dirPath, file));
+            const parsed = parseJsonlCached(path.join(dirPath, file), this.jsonlCache);
             for (const e of parsed.entries) {
               const prevIdx = seen.get(e.requestId);
               if (prevIdx === undefined) {
@@ -387,7 +392,7 @@ export class StateManager {
       let activityBreakdown: SessionInfo['activityBreakdown'] = null;
       if (s.jsonlPath) {
         try {
-          const parsed = parseJsonlFile(s.jsonlPath);
+          const parsed = parseJsonlCached(s.jsonlPath, this.jsonlCache);
           modelName = parsed.modelName;
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
@@ -418,7 +423,7 @@ export class StateManager {
       let activityBreakdown: SessionInfo['activityBreakdown'] = null;
       if (s.jsonlPath) {
         try {
-          const parsed = parseJsonlFile(s.jsonlPath);
+          const parsed = parseJsonlCached(s.jsonlPath, this.jsonlCache);
           modelName = parsed.modelName;
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
