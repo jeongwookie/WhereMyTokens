@@ -16,20 +16,14 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 > 💾 **No cloud sync** — reads only local Claude files. Your data never leaves your machine.
 
-<div align="center">
-
-https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
-
-</div>
-
 <table>
   <tr>
-    <th width="50%">Dashboard — Today</th>
-    <th width="50%">Dashboard — All Time</th>
+    <th width="50%">Light Mode</th>
+    <th width="50%">Dark Mode</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-dark-today.png" alt="Today view" /></td>
-    <td><img src="assets/screenshot-dark-all.png" alt="All time view" /></td>
+    <td><img src="assets/screenshot-light.png" alt="Light mode dashboard" /></td>
+    <td><img src="assets/screenshot-dark.png" alt="Dark mode dashboard" /></td>
   </tr>
 </table>
 
@@ -255,6 +249,16 @@ src/
     views/                MainView, SettingsView, NotificationsView, HelpView
     components/           SessionRow, TokenStatsCard, ActivityChart, CodeOutputCard, ...
 ```
+
+---
+
+## Demo
+
+<div align="center">
+
+https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
+
+</div>
 
 ---
 
