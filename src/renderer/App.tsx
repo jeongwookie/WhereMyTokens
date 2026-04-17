@@ -4,7 +4,7 @@ import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
 import HelpView from './views/HelpView';
-import { getTheme } from './theme';
+import { getTheme, applyThemeCssVars } from './theme';
 import { ThemeProvider } from './ThemeContext';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
@@ -101,6 +101,10 @@ export default function App() {
   }
 
   const theme = getTheme(resolvedTheme);
+
+  // CSS 커스텀 프로퍼티 동기화 — body/scrollbar 등 CSS 레벨에서 var(--wmt-*) 사용 가능
+  useEffect(() => { applyThemeCssVars(theme); }, [resolvedTheme]);
+
   const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
 
   if (view === 'settings') {

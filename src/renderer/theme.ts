@@ -267,4 +267,37 @@ export function fmtRelative(isoStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// ─── CSS Custom Properties ──────────────────────────────────────────────────
+
+// Theme 토큰 → CSS 변수 이름 매핑
+const CSS_VAR_MAP: Record<keyof Theme, string> = {
+  headerBg: '--wmt-header-bg', headerText: '--wmt-header-text', headerAccent: '--wmt-header-accent',
+  headerSub: '--wmt-header-sub', headerBorder: '--wmt-header-border',
+  bg: '--wmt-bg', bgCard: '--wmt-bg-card', bgRow: '--wmt-bg-row', bgHover: '--wmt-bg-hover',
+  border: '--wmt-border', borderSub: '--wmt-border-sub',
+  text: '--wmt-text', textDim: '--wmt-text-dim', textMuted: '--wmt-text-muted',
+  accent: '--wmt-accent', accentDim: '--wmt-accent-dim',
+  active: '--wmt-active', waiting: '--wmt-waiting', idle: '--wmt-idle', compacting: '--wmt-compacting',
+  input: '--wmt-input', output: '--wmt-output', cacheW: '--wmt-cache-w', cacheR: '--wmt-cache-r',
+  opus: '--wmt-opus', sonnet: '--wmt-sonnet', haiku: '--wmt-haiku', gpt: '--wmt-gpt',
+  barGreen: '--wmt-bar-green', barOrange: '--wmt-bar-orange', barRed: '--wmt-bar-red', barYellow: '--wmt-bar-yellow',
+  gradeExcellentBg: '--wmt-grade-excellent-bg', gradeExcellentColor: '--wmt-grade-excellent-color',
+  gradeGoodBg: '--wmt-grade-good-bg', gradeGoodColor: '--wmt-grade-good-color',
+  gradeFairBg: '--wmt-grade-fair-bg', gradeFairColor: '--wmt-grade-fair-color',
+  gradePoorBg: '--wmt-grade-poor-bg', gradePoorColor: '--wmt-grade-poor-color',
+  etaWarning: '--wmt-eta-warning',
+  fontMono: '--wmt-font-mono', fontSans: '--wmt-font-sans',
+};
+
+/**
+ * 현재 테마의 색상값을 CSS 커스텀 프로퍼티로 :root에 설정.
+ * index.html의 body/scrollbar 등 CSS 레벨 스타일에서 var(--wmt-*) 참조 가능.
+ */
+export function applyThemeCssVars(theme: Theme): void {
+  const root = document.documentElement;
+  for (const [key, varName] of Object.entries(CSS_VAR_MAP)) {
+    root.style.setProperty(varName, theme[key as keyof Theme]);
+  }
+}
+
 // 새 코드는 useTheme() 훅 사용 권장

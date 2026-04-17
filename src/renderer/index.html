@@ -50,11 +50,11 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* 커스텀 스크롤바 — Soft Accent */
+    /* 커스텀 스크롤바 — CSS 변수 기반 (applyThemeCssVars가 :root에 설정) */
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 6px; }
-    ::-webkit-scrollbar-thumb { background: rgba(13,148,136,0.35); border-radius: 6px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(13,148,136,0.55); }
+    ::-webkit-scrollbar-track { background: var(--wmt-border-sub, rgba(255,255,255,0.03)); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb { background: var(--wmt-accent-dim, rgba(13,148,136,0.35)); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--wmt-accent, rgba(13,148,136,0.55)); opacity: 0.55; }
   </style>
 </head>
 <body>
