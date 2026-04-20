@@ -1,0 +1,352 @@
+WhereMyTokens -- End-User License Agreement (EULA)
+====================================================
+Last updated: April 2026
+
+PLEASE READ THIS AGREEMENT CAREFULLY BEFORE INSTALLING OR USING WHEREMYTOKENS.
+BY INSTALLING, COPYING, OR OTHERWISE USING THE SOFTWARE, YOU AGREE TO BE
+BOUND BY THE TERMS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT INSTALL
+OR USE THE SOFTWARE.
+
+
+1. ABOUT THIS SOFTWARE
+----------------------
+WhereMyTokens (the "Software") is a Windows system tray application that
+reads locally stored Claude Code session and usage files on your computer
+and displays token usage, costs, session activity, and rate-limit
+information in a dashboard. The Software is developed and maintained by an
+individual developer, jeongwookie (the "Author"), and is distributed free
+of charge as an open-source project.
+
+The Software is NOT affiliated with, endorsed by, sponsored by, or
+officially connected in any way with Anthropic, PBC or its products,
+including but not limited to Claude and Claude Code. All product names,
+trademarks, and registered trademarks referenced in the Software are the
+property of their respective owners and are used for identification
+purposes only.
+
+"Claude Code" is used solely to describe the tool that produces the local
+data files the Software reads; no trademark use beyond nominative fair use
+is intended or claimed.
+
+
+2. RELATIONSHIP BETWEEN THIS EULA AND THE MIT LICENSE
+------------------------------------------------------
+The source code of the Software is released under the MIT License (the
+full text is reproduced in Section 10). The MIT License governs your
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the source code.
+
+This EULA is an additional agreement that governs your use of the
+compiled, pre-built binary distributions of the Software (for example,
+installers and portable executables downloaded from the Author's GitHub
+Releases page), together with any accompanying documentation, icons, and
+branding assets.
+
+To the extent any provision of this EULA conflicts with the MIT License
+with respect to the source code, the MIT License prevails. To the extent
+any provision of this EULA conflicts with the license terms of a
+third-party open-source component bundled with the Software, the terms of
+that third-party license prevail with respect to that component.
+
+
+3. GRANT OF LICENSE
+-------------------
+Subject to your compliance with this Agreement, the Author grants you a
+non-exclusive, non-transferable, worldwide, royalty-free license to:
+
+  a) Install and use the Software on any number of devices that you own
+     or control, for any lawful personal or internal business purpose.
+  b) Make copies of the Software solely for backup purposes.
+
+The Software is licensed, not sold. The Author reserves all rights not
+expressly granted to you by this Agreement or by the MIT License.
+
+
+4. RESTRICTIONS
+---------------
+You may not:
+
+  a) Sell, rent, lease, sublicense, or otherwise commercially distribute
+     the compiled binary of the Software or any modified compiled version
+     of it as a stand-alone paid product, while representing it as an
+     official WhereMyTokens release.
+  b) Remove, alter, or obscure any copyright, trademark, or other
+     proprietary notices contained in the Software.
+  c) Represent the Software as your own original work when redistributing.
+  d) Use the Software in any way that violates applicable local, national,
+     or international laws or regulations, including export-control and
+     sanctions laws.
+  e) Use the Software to access, process, or transmit data in a manner
+     that violates the rights of third parties or the terms of service of
+     any third-party platform (including Anthropic's terms).
+
+Open-source redistribution of the source code under the terms of the MIT
+License (Section 10) is explicitly permitted and encouraged. Forks and
+derivative works are welcome, provided they do not use the name
+"WhereMyTokens" or the Author's associated icons/branding in a manner
+likely to cause confusion about the origin of the derivative work.
+
+
+5. DATA PRIVACY AND LOCAL OPERATION
+------------------------------------
+The Software is designed with privacy as a core principle.
+
+  5.1 FILES READ LOCALLY
+      The Software reads the following files on your local machine and
+      does not upload, sync, or transmit their contents to any external
+      server controlled by the Author:
+
+        - ~/.claude/sessions/*.json         (session metadata)
+        - ~/.claude/projects/**/*.jsonl     (conversation logs)
+        - ~/.claude/.credentials.json       (OAuth token; see 5.3)
+        - %APPDATA%\WhereMyTokens\*         (local app data, including
+                                             live-session.json written by
+                                             the optional statusLine
+                                             bridge plugin)
+
+  5.2 FILES MODIFIED LOCALLY (OPT-IN)
+      If -- and only if -- you explicitly enable the "Claude Code
+      Integration" feature from within the Software's Settings, the
+      Software will modify the file ~/.claude/settings.json on your
+      machine to register itself as a Claude Code statusLine plugin.
+      This modification is reversible from within the Settings screen.
+      The Software will not modify this file without your explicit action.
+
+      Additionally, if you enable "Launch at login," the Software will
+      register a standard Windows auto-start entry for the current user.
+
+  5.3 ANTHROPIC API REQUESTS
+      If Anthropic credentials are present on your system in the location
+      referenced above, and you have not disabled rate-limit polling, the
+      Software makes periodic HTTPS requests to Anthropic's usage API
+      endpoint on your behalf using your own credentials, to retrieve
+      your own rate-limit information. These requests are functionally
+      equivalent to requests you would make yourself by logging into the
+      Anthropic Console.
+
+      You are solely responsible for ensuring that your use of the
+      Software in combination with your Anthropic credentials complies
+      with Anthropic's applicable terms of service, usage policies, and
+      rate limits. The Author is not a party to any agreement between
+      you and Anthropic and accepts no responsibility for any
+      consequences arising from such use, including but not limited to
+      account suspension, throttling, or termination.
+
+  5.4 NO TELEMETRY, NO CLOUD SYNC
+      The Software does not collect crash reports, usage statistics,
+      analytics, or any other diagnostic data. No account, registration,
+      or internet connection is required for the core local functionality
+      of the Software.
+
+  5.5 THIRD-PARTY SERVICES
+      The Software does not communicate with any third-party services
+      other than Anthropic's own API using your own credentials as
+      described in Section 5.3.
+
+  5.6 LOCAL SECURITY
+      You are solely responsible for the security of your local machine
+      and any credentials stored on it.
+
+
+6. THIRD-PARTY COMPONENTS
+--------------------------
+The Software incorporates open-source libraries including, but not limited
+to, the Electron framework (which itself bundles Chromium and Node.js),
+React, and various npm packages. Each third-party component is subject to
+its own license terms. A list of third-party components and their licenses
+is available in the Software's source repository at:
+
+  https://github.com/jeongwookie/WhereMyTokens
+
+To the extent there is any conflict between a third-party open-source
+license and this EULA, the third-party license prevails with respect to
+the component it covers.
+
+
+7. INTELLECTUAL PROPERTY
+-------------------------
+The Software, including its source code, compiled binaries, design, and
+documentation, is the intellectual property of the Author and is
+protected by copyright laws. The MIT License (Section 10) grants broad
+rights to use, copy, modify, and distribute the source code. However, the
+name "WhereMyTokens" and any associated logos, icons, or branding are not
+licensed for use in derivative works or third-party materials in a manner
+likely to cause confusion about the origin or endorsement of such works,
+without prior written consent from the Author.
+
+
+8. DISCLAIMER OF WARRANTIES
+----------------------------
+THE SOFTWARE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS, WITHOUT
+WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT
+PERMITTED BY APPLICABLE LAW, THE AUTHOR EXPRESSLY DISCLAIMS ALL
+WARRANTIES, INCLUDING BUT NOT LIMITED TO:
+
+  - IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+    PURPOSE, AND NON-INFRINGEMENT;
+  - WARRANTIES THAT THE SOFTWARE WILL BE UNINTERRUPTED, ERROR-FREE, OR
+    FREE OF VIRUSES OR OTHER HARMFUL COMPONENTS;
+  - WARRANTIES REGARDING THE ACCURACY, COMPLETENESS, OR RELIABILITY OF
+    ANY INFORMATION OBTAINED THROUGH THE SOFTWARE, INCLUDING COST
+    ESTIMATES, TOKEN COUNTS, AND RATE-LIMIT INFORMATION.
+
+COST AND TOKEN FIGURES DISPLAYED BY THE SOFTWARE ARE ESTIMATES DERIVED
+FROM LOCAL DATA AND FROM ANTHROPIC'S API RESPONSES. THEY ARE NOT YOUR
+ACTUAL ANTHROPIC BILL AND MUST NOT BE USED AS THE BASIS FOR FINANCIAL,
+BILLING, OR CONTRACTUAL DECISIONS. ALWAYS REFER TO THE OFFICIAL ANTHROPIC
+CONSOLE FOR AUTHORITATIVE BILLING AND USAGE INFORMATION.
+
+Because some jurisdictions do not allow the exclusion of certain implied
+warranties, the above exclusions may not apply to you in their entirety.
+In that case, such warranties are limited to the minimum scope and
+shortest duration permitted by applicable law.
+
+
+9. LIMITATION OF LIABILITY
+---------------------------
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY:
+
+  - INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, PUNITIVE, OR CONSEQUENTIAL
+    DAMAGES;
+  - LOSS OF DATA, PROFITS, REVENUE, GOODWILL, OR BUSINESS OPPORTUNITIES;
+  - DAMAGES ARISING FROM YOUR RELIANCE ON COST ESTIMATES, TOKEN COUNTS,
+    OR RATE-LIMIT INFORMATION DISPLAYED BY THE SOFTWARE;
+  - DAMAGES ARISING FROM YOUR USE OF YOUR OWN ANTHROPIC CREDENTIALS
+    THROUGH THE SOFTWARE, INCLUDING ACCOUNT SUSPENSION, THROTTLING,
+    TERMINATION, OR ANY DISPUTE WITH ANTHROPIC;
+  - DAMAGES RESULTING FROM UNAUTHORIZED ACCESS TO YOUR LOCAL FILES OR
+    CREDENTIALS BY THIRD PARTIES;
+  - DAMAGES RESULTING FROM MODIFICATIONS MADE TO LOCAL CONFIGURATION
+    FILES (INCLUDING ~/.claude/settings.json) PURSUANT TO FEATURES YOU
+    HAVE ENABLED;
+
+EVEN IF THE AUTHOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES,
+AND REGARDLESS OF THE LEGAL THEORY (CONTRACT, TORT, STRICT LIABILITY, OR
+OTHERWISE) ON WHICH THE CLAIM IS BASED.
+
+IN JURISDICTIONS WHERE LIMITATION OF LIABILITY FOR CONSEQUENTIAL OR
+INCIDENTAL DAMAGES IS NOT PERMITTED, THE AUTHOR'S LIABILITY SHALL BE
+LIMITED TO THE FULLEST EXTENT PERMITTED BY LAW. IN ALL CASES, THE
+AUTHOR'S TOTAL CUMULATIVE LIABILITY TO YOU FOR ANY AND ALL CLAIMS
+ARISING UNDER OR RELATED TO THIS AGREEMENT SHALL NOT EXCEED FIVE U.S.
+DOLLARS (USD $5.00).
+
+Because the Software is provided free of charge, you acknowledge that
+this limitation of liability is a fundamental element of the bargain
+between you and the Author, and that the Author would not provide the
+Software without it.
+
+
+10. MIT LICENSE (SOURCE CODE)
+------------------------------
+The source code of WhereMyTokens is licensed under the MIT License:
+
+  Copyright (c) 2026 jeongwookie
+
+  Permission is hereby granted, free of charge, to any person obtaining
+  a copy of this software and associated documentation files (the
+  "Software"), to deal in the Software without restriction, including
+  without limitation the rights to use, copy, modify, merge, publish,
+  distribute, sublicense, and/or sell copies of the Software, and to
+  permit persons to whom the Software is furnished to do so, subject to
+  the following conditions:
+
+  The above copyright notice and this permission notice shall be
+  included in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+11. INDEMNIFICATION
+-------------------
+You agree to indemnify, defend, and hold harmless the Author from and
+against any and all claims, liabilities, damages, losses, and expenses
+(including reasonable attorneys' fees) arising out of or in any way
+connected with:
+
+  a) your use or misuse of the Software;
+  b) your violation of this Agreement;
+  c) your violation of any applicable law or regulation, or of any
+     third-party terms (including Anthropic's terms of service); or
+  d) your violation of any rights of a third party.
+
+
+12. ELIGIBILITY
+---------------
+You represent that you are at least the age of majority in your
+jurisdiction of residence, or that you have obtained parental or legal
+guardian consent to enter into this Agreement. The Software is not
+directed at children.
+
+
+13. TERMINATION
+---------------
+This license is effective until terminated. Your rights under this
+Agreement will terminate automatically and without notice if you fail to
+comply with any of its terms. Upon termination, you must cease all use
+of the Software and destroy all copies in your possession.
+
+Sections 7 (Intellectual Property), 8 (Disclaimer of Warranties),
+9 (Limitation of Liability), 11 (Indemnification), 14 (Governing Law),
+and 16 (Entire Agreement) shall survive termination.
+
+
+14. GOVERNING LAW AND DISPUTE RESOLUTION
+-----------------------------------------
+This Agreement shall be governed by and construed in accordance with the
+laws of the Republic of Korea, without regard to its conflict-of-law
+principles. Any dispute arising out of or in connection with this
+Agreement that cannot be resolved amicably shall be subject to the
+exclusive jurisdiction of the courts located in the Republic of Korea.
+
+Notwithstanding the above, if you are a consumer resident in a
+jurisdiction whose mandatory consumer-protection laws grant you rights
+that cannot be overridden by contract, nothing in this Agreement shall
+be construed to deprive you of those rights.
+
+If any provision of this Agreement is held to be unenforceable, that
+provision shall be modified to the minimum extent necessary to make it
+enforceable, and the remaining provisions shall continue in full force
+and effect.
+
+
+15. EXPORT CONTROL
+------------------
+You agree to comply with all applicable export-control and sanctions
+laws and regulations in your use of the Software, and you represent
+that you are not located in, and are not a national of, any country or
+on any list to which such export is prohibited.
+
+
+16. ENTIRE AGREEMENT AND UPDATES
+---------------------------------
+This Agreement, together with the MIT License reproduced in Section 10
+and the licenses of bundled third-party components, constitutes the
+entire agreement between you and the Author with respect to the
+Software and supersedes all prior or contemporaneous understandings.
+
+The Author reserves the right to update this Agreement for future
+versions of the Software. The updated Agreement will be included with
+future releases and posted in the Software's source repository.
+Continued use of an updated version of the Software constitutes
+acceptance of the revised terms. Your use of the version of the
+Software you already have installed remains governed by the version of
+this Agreement distributed with it.
+
+
+17. CONTACT
+-----------
+For questions, bug reports, or feature requests, please visit:
+
+  https://github.com/jeongwookie/WhereMyTokens/issues
+
+---
+WhereMyTokens is an independent, open-source project. Thank you for
+using it.

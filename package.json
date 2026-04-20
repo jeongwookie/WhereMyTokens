@@ -34,7 +34,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": false,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "license": "assets/license.txt"
     },
     "extraResources": [
       {

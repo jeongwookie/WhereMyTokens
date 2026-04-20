@@ -3,7 +3,7 @@
 ## 배포 흐름 요약
 
 ```
-버전 bump → 빌드 → ZIP 생성 → 커밋 → 푸시 → GitHub Release
+버전 bump → 빌드 → ZIP + 인스톨러 생성 → 커밋 → 푸시 → GitHub Release
 ```
 
 ---
@@ -29,18 +29,18 @@ v1.x.0  — 신기능 추가
 
 ---
 
-## 릴리즈 ZIP 파일명 규칙
+## 릴리즈 파일명 규칙
 
 **반드시 아래 형식 유지:**
 
-```
-WhereMyTokens-v{VERSION}-win-x64.zip
-```
+| 종류 | 파일명 | 비고 |
+|------|--------|------|
+| 포터블 ZIP | `WhereMyTokens-v{VERSION}-win-x64.zip` | 버전 포함 — 로컬 보관 구분용 |
+| NSIS 인스톨러 | `WhereMyTokens-Setup.exe` | 버전 생략 — 릴리즈 태그가 버전 보장 |
 
-예: `WhereMyTokens-v1.6.0-win-x64.zip`
-
-- `portable`, `unpacked`, `win-unpacked` 등 임의 접미사 금지
-- README.md / README.ko.md / README.ja.md / RELEASE.md 이력의 파일명도 동일 형식 사용
+- ZIP: `portable`, `unpacked` 등 임의 접미사 금지
+- 인스톨러: electron-builder 기본 생성 파일명(`WhereMyTokens Setup {VERSION}.exe`)을 `WhereMyTokens-Setup.exe`로 rename 후 업로드
+- 모든 README / RELEASE.md 이력의 파일명도 동일 형식 사용
 
 ---
 
@@ -61,6 +61,14 @@ npm run dist
 ```
 
 성공하면 `release/` 아래 `.exe` 인스톨러와 portable `.exe` 생성.
+
+빌드 후 인스톨러 파일명 변환:
+
+```powershell
+# electron-builder 기본 → 배포 파일명으로 rename
+$ver = (Get-Content package.json | ConvertFrom-Json).version
+Rename-Item "release\WhereMyTokens Setup $ver.exe" "release\WhereMyTokens-Setup.exe"
+```
 
 ### Developer Mode 없이 포터블 ZIP만 배포
 
@@ -91,6 +99,7 @@ git push origin main
 ```bash
 gh release create vX.Y.Z \
   "release/WhereMyTokens-vX.Y.Z-win-x64.zip" \
+  "release/WhereMyTokens-Setup.exe" \
   --title "WhereMyTokens vX.Y.Z" \
   --notes "## What's New
 ..."

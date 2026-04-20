@@ -1,0 +1,212 @@
+WhereMyTokens -- End-User License Agreement (EULA)
+====================================================
+Last updated: April 2026
+
+PLEASE READ THIS AGREEMENT CAREFULLY BEFORE INSTALLING OR USING WHEREMYTOKENS.
+BY CLICKING "AGREE" OR INSTALLING THE SOFTWARE, YOU ACCEPT ALL TERMS BELOW.
+IF YOU DO NOT ACCEPT THESE TERMS, DO NOT INSTALL OR USE THE SOFTWARE.
+
+
+1. ABOUT THIS SOFTWARE
+----------------------
+WhereMyTokens is a Windows system tray application that reads locally stored
+Claude Code session and usage files on your computer and displays token usage,
+costs, and session activity in a dashboard. The software is developed and
+maintained by an individual developer (the "Author") and is provided free of
+charge as an open-source project under the MIT License.
+
+This software is NOT affiliated with, endorsed by, or in any way officially
+connected with Anthropic, PBC or its products (Claude, Claude Code, etc.).
+All product names, trademarks, and registered trademarks are the property of
+their respective owners.
+
+
+2. GRANT OF LICENSE
+-------------------
+Subject to the terms of this Agreement, the Author grants you a non-exclusive,
+non-transferable, royalty-free license to:
+
+  a) Install and use the software on any number of personal devices you own
+     or control.
+  b) Make copies of the software solely for backup purposes.
+
+The software is licensed, not sold. This agreement only gives you some rights
+to use the software; the Author reserves all other rights.
+
+
+3. RESTRICTIONS
+---------------
+You may not:
+
+  a) Sell, rent, lease, sublicense, or otherwise commercially distribute the
+     software or any modified version of it without prior written permission.
+  b) Remove, alter, or obscure any copyright, trademark, or other proprietary
+     notices contained in the software.
+  c) Represent the software as your own original work when redistributing.
+  d) Use the software in any way that violates applicable local, national, or
+     international laws or regulations.
+
+Open-source redistribution under the terms of the MIT License (see Section 9)
+is explicitly permitted and encouraged.
+
+
+4. DATA PRIVACY AND LOCAL OPERATION
+------------------------------------
+WhereMyTokens is designed with privacy as a core principle:
+
+  - LOCAL FILES ONLY: The software reads the following files solely on your
+    local machine and does not upload, sync, or transmit their contents to
+    any external server:
+      * ~/.claude/sessions/*.json         (session metadata)
+      * ~/.claude/projects/**/*.jsonl     (conversation logs)
+      * ~/.claude/.credentials.json      (OAuth token, used only to fetch
+                                          your own usage data from Anthropic)
+      * %APPDATA%\WhereMyTokens\*        (local app data)
+
+  - NO TELEMETRY: The software does not collect crash reports, usage
+    statistics, analytics, or any other diagnostic data.
+
+  - NO CLOUD SYNC: No account, registration, or internet connection is
+    required for the core functionality of this software.
+
+  - ANTHROPIC API: If your Anthropic credentials are present, the software
+    makes periodic requests to Anthropic's usage API endpoint on your behalf
+    (as if you were viewing your own dashboard) to retrieve rate limit
+    information. These requests are identical to requests you would make
+    yourself by logging into the Anthropic Console.
+
+  - THIRD-PARTY SERVICES: The software does not communicate with any
+    third-party services other than Anthropic's own API using your own
+    credentials.
+
+You are solely responsible for the security of your local machine and any
+credentials stored therein.
+
+
+5. THIRD-PARTY COMPONENTS
+--------------------------
+This software incorporates open-source libraries including, but not limited to,
+Electron, React, and various Node.js packages. Each third-party component is
+subject to its own license terms. To the extent there is any conflict between
+those open-source license terms and this EULA, the open-source license terms
+shall prevail with respect to those components.
+
+A full list of third-party licenses is available in the software's source
+repository at: https://github.com/jeongwookie/WhereMyTokens
+
+
+6. INTELLECTUAL PROPERTY
+-------------------------
+The software, including its source code, design, and documentation, is the
+intellectual property of the Author and is protected by copyright laws. The
+MIT License (Section 9) grants broad rights to use, copy, modify, and
+distribute the source code. However, the "WhereMyTokens" name and any
+associated logos or branding are not licensed for use in derivative works
+without prior written consent.
+
+
+7. DISCLAIMER OF WARRANTIES
+----------------------------
+THE SOFTWARE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS, WITHOUT
+WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT
+PERMITTED BY APPLICABLE LAW, THE AUTHOR EXPRESSLY DISCLAIMS ALL WARRANTIES,
+INCLUDING BUT NOT LIMITED TO:
+
+  - IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  - WARRANTIES THAT THE SOFTWARE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE
+    OF VIRUSES OR OTHER HARMFUL COMPONENTS
+  - WARRANTIES REGARDING THE ACCURACY OR RELIABILITY OF ANY INFORMATION
+    OBTAINED THROUGH THE SOFTWARE, INCLUDING COST ESTIMATES AND TOKEN COUNTS
+
+COST AND TOKEN FIGURES DISPLAYED BY THIS SOFTWARE ARE ESTIMATES DERIVED FROM
+LOCAL DATA. THEY ARE NOT YOUR ACTUAL ANTHROPIC BILL AND SHOULD NOT BE USED
+FOR FINANCIAL OR BILLING DECISIONS. ALWAYS REFER TO THE OFFICIAL ANTHROPIC
+CONSOLE FOR AUTHORITATIVE BILLING INFORMATION.
+
+Because some jurisdictions do not allow the exclusion of implied warranties,
+the above exclusions may not apply to you. In that case, such warranties are
+limited to the minimum scope and shortest duration permitted by applicable law.
+
+
+8. LIMITATION OF LIABILITY
+---------------------------
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY:
+
+  - INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES
+  - LOSS OF DATA, PROFITS, REVENUE, OR BUSINESS OPPORTUNITIES
+  - DAMAGES ARISING FROM YOUR RELIANCE ON COST ESTIMATES OR USAGE DATA
+    DISPLAYED BY THE SOFTWARE
+  - DAMAGES RESULTING FROM UNAUTHORIZED ACCESS TO YOUR LOCAL FILES OR
+    CREDENTIALS DUE TO THIRD-PARTY ACTIONS BEYOND THE AUTHOR'S CONTROL
+
+EVEN IF THE AUTHOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+IN JURISDICTIONS WHERE LIMITATION OF LIABILITY FOR CONSEQUENTIAL OR INCIDENTAL
+DAMAGES IS NOT PERMITTED, THE AUTHOR'S LIABILITY SHALL BE LIMITED TO THE
+FULLEST EXTENT PERMITTED BY LAW. IN ALL CASES, THE AUTHOR'S TOTAL CUMULATIVE
+LIABILITY TO YOU FOR ANY CLAIMS ARISING UNDER OR RELATED TO THIS AGREEMENT
+SHALL NOT EXCEED FIVE U.S. DOLLARS (USD $5.00).
+
+
+9. MIT LICENSE (SOURCE CODE)
+-----------------------------
+The source code of WhereMyTokens is licensed under the MIT License:
+
+  Copyright (c) 2026 jeongwookie
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+
+
+10. TERMINATION
+---------------
+This license is effective until terminated. Your rights under this Agreement
+will terminate automatically and without notice if you fail to comply with any
+of its terms. Upon termination, you must cease all use of the software and
+destroy all copies in your possession. Sections 7, 8, and 10 shall survive
+termination.
+
+
+11. GOVERNING LAW AND DISPUTE RESOLUTION
+-----------------------------------------
+This Agreement shall be governed by and construed in accordance with applicable
+law, without regard to conflict-of-law principles. Any dispute arising out of
+or in connection with this Agreement that cannot be resolved amicably shall be
+subject to the exclusive jurisdiction of the courts of the Author's country of
+residence. If any provision of this Agreement is held unenforceable, that
+provision shall be modified to the minimum extent necessary to make it
+enforceable, and the remaining provisions shall continue in full force.
+
+
+12. ENTIRE AGREEMENT
+---------------------
+This Agreement constitutes the entire agreement between you and the Author
+with respect to the software and supersedes all prior or contemporaneous
+understandings. The Author reserves the right to update this Agreement for
+future versions of the software. Continued use of updated versions constitutes
+acceptance of the revised terms.
+
+
+13. CONTACT
+-----------
+For questions, bug reports, or feature requests, please visit:
+https://github.com/jeongwookie/WhereMyTokens/issues
+
+---
+WhereMyTokens is an independent open-source project. Thank you for using it.
