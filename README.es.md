@@ -40,15 +40,33 @@ Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code
   </tr>
 </table>
 
+## Novedades
+
+| Versión | Fecha | Cambios destacados |
+|---------|-------|-------------------|
+| **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | 17 abr | Corrección del tooltip del mapa de calor 7d; nuevos READMEs zh-CN & es |
+| **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | 17 abr | Tema teal, modo oscuro del sistema, caché JSONL incremental, ocultación auto 6h+ |
+| **[v1.8.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.8.0)** | 17 abr | Alternancia today/all en encabezado, métrica $/100 Lines, pestaña Rhythm por coste |
+
+[→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
+
+---
+
 ## Descargar
 
 **[⬇ Descargar Última Versión](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
+Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
+
+**Opción A — Instalador** _(recomendado)_
+1. Descarga `WhereMyTokens-Setup.exe`
+2. Ejecuta el instalador y sigue el asistente
+3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
+
+**Opción B — ZIP Portable** _(sin instalación)_
 1. Descarga `WhereMyTokens-v1.9.1-win-x64.zip`
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
-
-Sin instalador necesario — la aplicación se abre automáticamente y se ubica en la bandeja del sistema.
 
 ---
 

@@ -40,15 +40,33 @@
   </tr>
 </table>
 
+## 最新更新
+
+| 版本 | 日期 | 主要变更 |
+|------|------|--------|
+| **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | 4/17 | 修复 7d 热力图悬停提示；新增 zh-CN & es README |
+| **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | 4/17 | 青色主题、系统深色模式、增量 JSONL 缓存、空闲 6h+ 自动隐藏 |
+| **[v1.8.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.8.0)** | 4/17 | 标题栏 today/all 切换、$/100 Lines 指标、Rhythm 成本标签页 |
+
+[→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
+
+---
+
 ## 下载
 
 **[⬇ 下载最新版本](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
+下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
+
+**方式 A — 安装程序** _(推荐)_
+1. 下载 `WhereMyTokens-Setup.exe`
+2. 运行安装程序并按向导完成安装
+3. 应用自动打开并驻留在系统托盘中
+
+**方式 B — 便携 ZIP** _(无需安装)_
 1. 下载 `WhereMyTokens-v1.9.1-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
-
-无需安装 — 应用自动打开并驻留在系统托盘中。
 
 ---
 
