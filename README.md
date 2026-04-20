@@ -44,9 +44,9 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | Apr 20 | NSIS installer, improved session tracking accuracy and stability |
 | **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | Apr 17 | Fix 7d heatmap hover tooltip; add zh-CN & es READMEs |
 | **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | Apr 17 | Teal theme, system dark mode, incremental JSONL caching, idle 6h+ auto-hide |
-| **[v1.8.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.8.0)** | Apr 17 | Header today/all toggle, $/100 Lines metric, Rhythm cost-based tab |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -64,7 +64,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.9.1-win-x64.zip`
+1. Download `WhereMyTokens-v1.9.2-win-x64.zip`
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 

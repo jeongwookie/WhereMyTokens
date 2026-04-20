@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.9.2 | 2026-04-20 | NSIS installer added to release, session tracking accuracy and stability improvements |
 | v1.9.1 | 2026-04-17 | Fix 7d heatmap hover tooltip, README overhaul with screenshot grid, add zh-CN and es translations |
 | v1.9.0 | 2026-04-17 | Teal theme refresh (purple→teal), Auto/Light/Dark system theme, incremental JSONL caching, CSS custom properties, idle 6h+ auto-hide, Activity Breakdown color redesign, Rhythm peak detail stats, Settings/Alerts dark theme fix |
 | v1.8.0 | 2026-04-17 | Header today/all toggle (cost, calls, sessions, cache %, savings, In/Out/Cache tokens), Code Output $/100 lines replacing ROI labels, Rhythm tab cost-based with 30-day data, Plan Usage card cleanup |
