@@ -239,8 +239,10 @@ export class StateManager {
     });
 
     // Watch for JSONL changes — 디바운스 적용
+    // Windows에서 path.join이 백슬래시를 사용하면 chokidar glob이 동작하지 않으므로 슬래시로 변환
     if (fs.existsSync(PROJECTS_DIR)) {
-      this.watcher.add(path.join(PROJECTS_DIR, '**', '*.jsonl'));
+      const jsonlGlob = PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl';
+      this.watcher.add(jsonlGlob);
       this.watcher.on('change', () => this.debouncedHeavyRefresh());
     }
   }
