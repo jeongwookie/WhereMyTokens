@@ -13,13 +13,19 @@ export interface ParsedEntry {
   costUSD: number;
 }
 
-// Per-model pricing (USD / 1M tokens)
+// Per-model pricing (USD / 1M tokens) — 구체적 키가 먼저 와야 includes() 매칭이 올바름
 const PRICING: Record<string, { in: number; out: number; cw: number; cr: number }> = {
-  'claude-opus':    { in: 15,   out: 75,  cw: 18.75, cr: 1.50 },
-  'claude-sonnet':  { in: 3,    out: 15,  cw: 3.75,  cr: 0.30 },
-  'claude-haiku':   { in: 0.8,  out: 4,   cw: 1.0,   cr: 0.08 },
-  'gpt-4':          { in: 2,    out: 8,   cw: 0,     cr: 0.5  },
-  'gpt-4o':         { in: 2.5,  out: 10,  cw: 0,     cr: 1.25 },
+  // Claude 4.x
+  'claude-opus-4':   { in: 5,   out: 25,  cw: 6.25,  cr: 0.50 },
+  'claude-sonnet-4': { in: 3,   out: 15,  cw: 3.75,  cr: 0.30 },
+  'claude-haiku-4':  { in: 1,   out: 5,   cw: 1.25,  cr: 0.10 },
+  // Claude 3.x 레거시 fallback
+  'claude-opus':     { in: 15,  out: 75,  cw: 18.75, cr: 1.50 },
+  'claude-sonnet':   { in: 3,   out: 15,  cw: 3.75,  cr: 0.30 },
+  'claude-haiku':    { in: 0.8, out: 4,   cw: 1.0,   cr: 0.08 },
+  // Non-Claude
+  'gpt-4':           { in: 2,   out: 8,   cw: 0,     cr: 0.5  },
+  'gpt-4o':          { in: 2.5, out: 10,  cw: 0,     cr: 1.25 },
 };
 const DEFAULT_PRICE = { in: 3, out: 15, cw: 3.75, cr: 0.30 };
 
@@ -306,9 +312,9 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
     }
 
     const newText = buf.toString('utf-8');
-    // 첫 번째 줄이 불완전할 수 있음 — 첫 \n 이후부터 파싱
-    const firstNewline = newText.indexOf('\n');
-    const textToParse = firstNewline === -1 ? '' : newText.substring(firstNewline + 1);
+    // byteOffset은 항상 완전한 줄 끝(\n) 위치이므로 전체 newText 파싱
+    // 불완전 줄은 JSON.parse catch로 자동 스킵됨
+    const textToParse = newText;
 
     if (textToParse.trim()) {
       // 기존 결과를 복사하여 merge
