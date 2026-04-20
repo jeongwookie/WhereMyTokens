@@ -54,17 +54,19 @@ Sits quietly in your taskbar and shows Claude Code usage — tokens, costs, sess
 
 ## Download
 
-**[⬇ Download Latest Release](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.9.2/WhereMyTokens-Setup.exe)** — just run and done
+
+**[⬇ Download Latest Release](https://github.com/jeongwookie/WhereMyTokens/releases/latest)** — all files
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
 **Option A — Installer** _(recommended)_
-1. Download `WhereMyTokens-Setup.exe`
+1. Download `WhereMyTokens-Setup.exe` (link above)
 2. Run the installer and follow the wizard
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.9.2-win-x64.zip`
+1. Download `WhereMyTokens-v1.9.2-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 

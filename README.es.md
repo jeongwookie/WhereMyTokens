@@ -54,17 +54,19 @@ Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code
 
 ## Descargar
 
-**[⬇ Descargar Última Versión](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.9.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+
+**[⬇ Descargar Última Versión (todos los archivos)](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
 **Opción A — Instalador** _(recomendado)_
-1. Descarga `WhereMyTokens-Setup.exe`
+1. Descarga `WhereMyTokens-Setup.exe` desde el enlace de arriba
 2. Ejecuta el instalador y sigue el asistente
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.9.2-win-x64.zip`
+1. Descarga `WhereMyTokens-v1.9.2-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

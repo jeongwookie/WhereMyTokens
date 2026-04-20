@@ -54,17 +54,19 @@
 
 ## 下载
 
-**[⬇ 下载最新版本](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.9.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+
+**[⬇ 下载最新版本（所有文件）](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
 **方式 A — 安装程序** _(推荐)_
-1. 下载 `WhereMyTokens-Setup.exe`
+1. 点击上方链接下载 `WhereMyTokens-Setup.exe`
 2. 运行安装程序并按向导完成安装
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 下载 `WhereMyTokens-v1.9.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.9.2-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
