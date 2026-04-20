@@ -13,6 +13,7 @@ export interface CacheEntry {
 }
 
 export class JsonlCache {
+  private readonly MAX_SIZE = 30;
   private cache = new Map<string, CacheEntry>();
 
   get(filePath: string): CacheEntry | null {
@@ -20,6 +21,16 @@ export class JsonlCache {
   }
 
   set(filePath: string, entry: CacheEntry): void {
+    // LRU: 기존 항목이면 삭제 후 재삽입하여 최신으로 올림
+    if (this.cache.has(filePath)) {
+      this.cache.delete(filePath);
+    } else {
+      // 새 항목 추가 전 용량 초과 시 가장 오래된 항목 제거
+      while (this.cache.size >= this.MAX_SIZE) {
+        const oldest = this.cache.keys().next().value as string;
+        this.cache.delete(oldest);
+      }
+    }
     this.cache.set(filePath, entry);
   }
 
