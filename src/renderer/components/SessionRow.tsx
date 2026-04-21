@@ -55,6 +55,9 @@ export default function SessionRow({ session, expanded, onToggle }: {
               {session.modelName}
             </span>
           )}
+          <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '20' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+            {session.provider === 'codex' ? 'Codex' : 'Claude'}
+          </span>
           <span style={{ fontSize: 10, color: C.textMuted }}>{session.source}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -101,6 +104,9 @@ export default function SessionRow({ session, expanded, onToggle }: {
                 {session.modelName}
               </span>
             )}
+            <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '20' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+              {session.provider === 'codex' ? 'Codex' : 'Claude'}
+            </span>
             <span style={{ fontSize: 10, color: C.textMuted }}>{session.source}</span>
           </div>
           <div style={{ textAlign: 'right' }}>

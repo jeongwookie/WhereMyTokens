@@ -32,6 +32,8 @@ interface Props {
   burnRate?: BurnRate;  // ETA 예측 (h5 카드에만 전달)
   hero?: boolean;       // true = 히어로 대형 % 레이아웃
   borderRight?: boolean;
+  limitSourceLabel?: string;
+  cacheMetricMode?: 'grade' | 'cachedInput';
 }
 
 function TokenDotRow({ label, value, color }: { label: string; value: number; color: string }) {
@@ -47,7 +49,7 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
 export default function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, apiConnected, hideCost, burnRate,
-  hero, borderRight,
+  hero, borderRight, limitSourceLabel, cacheMetricMode = 'grade',
 }: Props) {
   const C = useTheme();
 
@@ -75,8 +77,18 @@ export default function TokenStatsCard({
   }
 
   const grade = cacheGrade(stats.cacheEfficiency, C);
+  const cacheBadge = cacheMetricMode === 'cachedInput'
+    ? (stats.inputTokens + stats.cacheReadTokens > 0
+      ? { label: `Cached ${Math.round(stats.cacheEfficiency)}%`, bg: C.accentDim, color: C.cacheR }
+      : null)
+    : grade;
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && burnRate.h5EtaMs < (resetMs ?? Infinity);
+  const sourceChip = limitSourceLabel ? (
+    <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}` }}>
+      {limitSourceLabel}
+    </span>
+  ) : null;
 
   // ── 히어로 레이아웃 (대형 % 숫자 + 토큰 breakdown) ──────────────────────────
   if (hero && showLimitBar) {
@@ -91,15 +103,18 @@ export default function TokenStatsCard({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
             {provider} {period}
-            {apiConnected === false && limitPct != null && limitPct > 0 && (
+            {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
             )}
           </span>
-          {grade && (
-            <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: grade.bg, color: grade.color }}>
-              {grade.label}
-            </span>
-          )}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {sourceChip}
+            {cacheBadge && (
+              <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cacheBadge.bg, color: cacheBadge.color }}>
+                {cacheBadge.label}
+              </span>
+            )}
+          </span>
         </div>
 
         {/* 대형 퍼센트 */}
@@ -155,12 +170,13 @@ export default function TokenStatsCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: showLimitBar ? 5 : 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontSize: 11, color: C.textMuted }}>{provider} · {period}</span>
-          {apiConnected === false && limitPct != null && limitPct > 0 && (
+          {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
             <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
           )}
-          {grade && (
-            <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: grade.bg, color: grade.color }}>
-              {grade.label}
+          {sourceChip}
+          {cacheBadge && (
+            <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: cacheBadge.bg, color: cacheBadge.color }}>
+              {cacheBadge.label}
             </span>
           )}
         </div>

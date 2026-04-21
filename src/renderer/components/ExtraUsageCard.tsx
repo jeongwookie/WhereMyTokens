@@ -23,6 +23,7 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
   const { monthlyLimit, usedCredits, utilization } = extraUsage;
   const barPct = Math.min(100, utilization);
   const barColor = barPct >= 90 ? C.barRed : barPct >= 75 ? C.barOrange : barPct >= 50 ? C.barYellow : C.barOrange;
+  const isHigh = barPct >= 90;
 
   // cent → USD 변환
   const usedUSD = (usedCredits / 100).toFixed(2);
@@ -30,10 +31,10 @@ export default function ExtraUsageCard({ extraUsage }: Props) {
   const resetStr = fmtMonthlyReset();
 
   return (
-    <div style={{ padding: '7px 14px' }}>
+    <div style={{ padding: '7px 14px', background: isHigh ? `${C.barRed}12` : 'transparent' }}>
       {/* 헤더: 레이블 왼쪽, 금액+% 오른쪽 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-        <span style={{ fontSize: 11, color: C.textMuted }}>Extra Usage · monthly</span>
+        <span style={{ fontSize: 11, color: isHigh ? C.barRed : C.textMuted, fontWeight: isHigh ? 700 : 400 }}>Extra Usage · monthly</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
           <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>${usedUSD} / ${limitUSD}</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: barPct >= 99 ? C.barRed : barColor, fontFamily: C.fontMono }}>{Math.round(barPct)}%</span>

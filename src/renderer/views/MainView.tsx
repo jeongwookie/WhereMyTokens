@@ -23,6 +23,35 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const C = useTheme();
   const { sessions, usage, limits, settings, apiConnected, apiError, extraUsage } = state;
   const { currency, usdToKrw } = settings;
+  const providerMode = settings.provider ?? 'both';
+  const showClaudeUsage = providerMode !== 'codex';
+  const showCodexUsage = providerMode !== 'claude';
+  const cacheHeaderLabel = providerMode === 'codex' ? 'Cached Input' : providerMode === 'both' ? 'Cache Share' : 'Cache Efficiency';
+  const sourceLabel = (source?: string) => {
+    if (source === 'api') return 'API';
+    if (source === 'statusLine') return 'statusLine';
+    if (source === 'localLog') return 'Local log';
+    if (source === 'cache') return 'cache';
+    return undefined;
+  };
+  const trackedH5 = (() => {
+    if (providerMode === 'codex') return usage.h5Codex;
+    if (providerMode === 'claude') return usage.h5;
+    const cacheTokens = usage.h5.cacheReadTokens + usage.h5.cacheCreationTokens + usage.h5Codex.inputTokens + usage.h5Codex.cacheReadTokens;
+    const cacheRead = usage.h5.cacheReadTokens + usage.h5Codex.cacheReadTokens;
+    return {
+      ...usage.h5,
+      inputTokens: usage.h5.inputTokens + usage.h5Codex.inputTokens,
+      outputTokens: usage.h5.outputTokens + usage.h5Codex.outputTokens,
+      cacheCreationTokens: usage.h5.cacheCreationTokens + usage.h5Codex.cacheCreationTokens,
+      cacheReadTokens: usage.h5.cacheReadTokens + usage.h5Codex.cacheReadTokens,
+      totalTokens: usage.h5.totalTokens + usage.h5Codex.totalTokens,
+      costUSD: usage.h5.costUSD + usage.h5Codex.costUSD,
+      requestCount: usage.h5.requestCount + usage.h5Codex.requestCount,
+      cacheEfficiency: cacheTokens > 0 ? (cacheRead / cacheTokens) * 100 : 0,
+      cacheSavingsUSD: usage.h5.cacheSavingsUSD + usage.h5Codex.cacheSavingsUSD,
+    };
+  })();
   const hiddenProjects: string[] = settings.hiddenProjects ?? [];
   const excludedProjects: string[] = settings.excludedProjects ?? [];
   const [refreshing, setRefreshing] = useState(false);
@@ -155,6 +184,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
 
   const showSonnet = settings.provider !== 'codex' &&
     (limits.so.pct > 0 || usage.sonnetWeekTokens > 0);
+  const showExtraUsage = showClaudeUsage && !!extraUsage?.isEnabled;
+  const extraUsageHigh = showExtraUsage && (extraUsage?.utilization ?? 0) >= 90;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
@@ -179,14 +210,14 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             ))}
           </div>
           <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-            {state.autoLimits && (
+            {showClaudeUsage && state.autoLimits && (
               <span style={{ fontSize: 9, color: C.headerSub, background: 'rgba(255,255,255,0.1)', borderRadius: 3, padding: '1px 6px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)' }}>
                 {state.autoLimits.plan}
               </span>
             )}
             <span
               title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` — ${apiError}` : ''}`}
-              style={{ width: 6, height: 6, borderRadius: '50%', background: apiConnected ? '#4ade80' : '#f87171', display: 'inline-block', flexShrink: 0 }}
+              style={{ width: 6, height: 6, borderRadius: '50%', background: apiConnected ? '#4ade80' : '#f87171', display: showClaudeUsage ? 'inline-block' : 'none', flexShrink: 0 }}
             />
             <button onClick={() => window.wmt.minimize().catch(() => {})} title="Minimize" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
             <button onClick={onQuit} title="Quit" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
@@ -199,8 +230,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           const cost = isAll ? usage.allTimeCost : usage.todayCost;
           const calls = isAll ? usage.allTimeRequestCount : usage.todayRequestCount;
           const sess = isAll ? state.allTimeSessions : sessions.length;
-          const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : usage.h5.cacheEfficiency;
-          const saved = isAll ? usage.allTimeSavedUSD : usage.h5.cacheSavingsUSD;
+          const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : trackedH5.cacheEfficiency;
+          const saved = isAll ? usage.allTimeSavedUSD : trackedH5.cacheSavingsUSD;
           const inTok = isAll ? usage.allTimeInputTokens : usage.todayInputTokens;
           const outTok = isAll ? usage.allTimeOutputTokens : usage.todayOutputTokens;
           const cacheTok = isAll ? usage.allTimeCacheTokens : usage.todayCacheTokens;
@@ -222,7 +253,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               {/* 우: 캐시 효율 */}
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
-                  {isAll ? 'Avg Cache Hit' : 'Cache Efficiency'}
+                  {isAll ? `Avg ${cacheHeaderLabel}` : cacheHeaderLabel}
                 </div>
                 <div style={{ fontSize: 26, fontWeight: 800, color: C.active, lineHeight: 1, fontFamily: C.fontMono }}>
                   {Math.round(cacheEff)}%
@@ -263,21 +294,33 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
             <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
           </div>
 
+          {extraUsageHigh && extraUsage && (
+            <div style={{ borderBottom: `1px solid ${C.border}` }}>
+              <ExtraUsageCard extraUsage={extraUsage} />
+            </div>
+          )}
+
           {/* Claude: 5h | 1w 나란히 (CSS Grid 2열, 동일 폭) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-            <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-              limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-              hero borderRight />
-            <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
-              limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-              hero />
-          </div>
+          {showClaudeUsage && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+              <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
+                limitSourceLabel={sourceLabel(limits.h5.source)} hero borderRight />
+              <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
+                limitSourceLabel={sourceLabel(limits.week.source)} hero />
+            </div>
+          )}
 
           {/* Codex: 5h | 1w (데이터 있을 때만) */}
-          {(usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0) && (
+          {showCodexUsage && (providerMode === 'codex' || usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0 || limits.codexH5.pct > 0 || limits.codexWeek.pct > 0) && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-              <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw} borderRight />
-              <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw} />
+              <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} apiConnected={true}
+                limitSourceLabel={sourceLabel(limits.codexH5.source)} cacheMetricMode="cachedInput" hero borderRight />
+              <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
+                limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} apiConnected={true}
+                limitSourceLabel={sourceLabel(limits.codexWeek.source)} cacheMetricMode="cachedInput" hero />
             </div>
           )}
 
@@ -288,12 +331,13 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                 inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
                 totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
               }} currency={currency} usdToKrw={usdToKrw}
-                limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected} hideCost />
+                limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected}
+                limitSourceLabel={sourceLabel(limits.so.source)} hideCost />
             </div>
           )}
 
           {/* Extra Usage (Plan Usage 내부, 동일 행 패턴) */}
-          {extraUsage?.isEnabled && (
+          {showExtraUsage && !extraUsageHigh && extraUsage && (
             <div>
               <ExtraUsageCard extraUsage={extraUsage} />
             </div>
@@ -394,7 +438,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
               </div>
             ))
             : sessions.length === 0
-              ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active Claude Code sessions</div>
+              ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active {providerMode === 'codex' ? 'Codex' : providerMode === 'claude' ? 'Claude Code' : 'Claude Code or Codex'} sessions</div>
               : null
           }
 

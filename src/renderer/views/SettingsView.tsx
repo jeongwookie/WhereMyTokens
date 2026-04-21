@@ -88,6 +88,27 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <input style={{ ...inp, width: 160 }} value={s.globalHotkey} onChange={e => setS({ ...s, globalHotkey: e.target.value })} />
         </div>
 
+        <SectionHeader label="Tracking" />
+        <div style={row}>
+          <span style={labelStyle}>Provider</span>
+          <div style={{ display: 'flex', gap: 2 }}>
+            {([
+              ['both', 'Claude + Codex'],
+              ['claude', 'Claude'],
+              ['codex', 'Codex'],
+            ] as Array<[AppSettings['provider'], string]>).map(([value, label]) => (
+              <button key={value} onClick={() => setS({ ...s, provider: value })} style={{
+                padding: '3px 8px', fontSize: 11, border: `1px solid ${(s.provider ?? 'both') === value ? C.accent + '88' : C.border}`,
+                borderRadius: 4, cursor: 'pointer', fontWeight: (s.provider ?? 'both') === value ? 700 : 400,
+                background: (s.provider ?? 'both') === value ? C.accent + '22' : 'transparent',
+                color: (s.provider ?? 'both') === value ? C.accent : C.textDim,
+              }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <SectionHeader label="Currency" />
         <div style={row}>
           <span style={labelStyle}>Currency</span>

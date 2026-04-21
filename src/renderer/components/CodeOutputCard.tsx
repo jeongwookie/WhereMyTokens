@@ -57,7 +57,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
   const avgPerLine   = totalLinesAdded > 0 && allTimeCost > 0 ? allTimeCost / totalLinesAdded : null;
   const effRatio     = todayPerLine != null && avgPerLine != null ? todayPerLine / avgPerLine : null;
 
-  // $/100 lines 표시 (today: 오늘 단가, all: 전체 평균 단가)
+  // $/100 added 표시 (today: 오늘 단가, all: 전체 평균 단가)
   const effInfo: { text: string; color: string } = (() => {
     if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 100, currency, usdToKrw) : '—', color: C.accent };
     if (linesAdded === 0 || todayPerLine === null) return { text: '—', color: C.textDim };
@@ -76,7 +76,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
     return `avg ${fmtCost(avgPerLine * 100, currency, usdToKrw)}`;
   })();
 
-  // 하단 $/100 lines (기간별)
+  // 하단 $/100 added (기간별)
   const perLine = data.added > 0 && periodCost > 0 ? (periodCost / data.added) * 100 : null;
 
   // COMMITS 서브텍스트
@@ -107,7 +107,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
         <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
         <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
-        <KPI label="$/100 Lines"
+        <KPI label="$/100 Added"
           value={effInfo.text}
           sub={effSub} color={effInfo.color} C={C} />
       </div>
@@ -121,7 +121,7 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
         }}>
           <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
             {data.commits} commit{data.commits > 1 ? 's' : ''} · {netLines >= 0 ? '+' : ''}{netLines} net lines
-            {perLine ? ` · ${fmtCost(perLine, currency, usdToKrw)}/100 lines` : ''}
+            {perLine ? ` · ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
           </span>
         </div>
       )}
