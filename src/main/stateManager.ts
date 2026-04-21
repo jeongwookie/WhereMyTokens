@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import chokidar from 'chokidar';
-import { discoverSessions, DiscoveredSession } from './sessionDiscovery';
-import { parseJsonlFile, parseJsonlCached, ParsedEntry, ActivityBreakdown } from './jsonlParser';
+import { discoverSessions, DiscoveredSession, TrackingProvider, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR } from './sessionDiscovery';
+import { parseJsonlFile, parseJsonlCached, parseCodexJsonlCached, ParsedEntry, ActivityBreakdown, ParsedFile } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS } from './ipc';
@@ -23,10 +23,20 @@ export interface SessionInfo extends DiscoveredSession {
   activityBreakdown: ActivityBreakdown | null;
 }
 
+export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
+
+export interface UsageLimitWindow {
+  pct: number;
+  resetMs: number;
+  source?: UsageLimitSource;
+}
+
 export interface UsageLimits {
-  h5: { pct: number; resetMs: number };
-  week: { pct: number; resetMs: number };
-  so: { pct: number; resetMs: number };
+  h5: UsageLimitWindow;
+  week: UsageLimitWindow;
+  so: UsageLimitWindow;
+  codexH5: UsageLimitWindow;
+  codexWeek: UsageLimitWindow;
 }
 
 export interface AppState {
@@ -44,8 +54,8 @@ export interface AppState {
   allTimeSessions: number;
 }
 
-const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
+const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 
 export class StateManager {
   private store: Store<AppSettings>;
@@ -66,6 +76,7 @@ export class StateManager {
   private bridgeWatcher: BridgeWatcher;
   private liveSession: LiveSessionData | null = null;
   private jsonlCache = new JsonlCache();
+  private codexRateLimits: ParsedFile['codexRateLimits'] | null = null;
   private static readonly API_MIN_INTERVAL_MS = 180_000; // 3분 간격 (429 방지)
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
@@ -118,9 +129,11 @@ export class StateManager {
         todBuckets: [],
       },
       limits: {
-        h5: { pct: 0, resetMs: 0 },
-        week: { pct: 0, resetMs: 0 },
-        so: { pct: 0, resetMs: 0 },
+        h5: { pct: 0, resetMs: 0, source: 'cache' },
+        week: { pct: 0, resetMs: 0, source: 'cache' },
+        so: { pct: 0, resetMs: 0, source: 'cache' },
+        codexH5: { pct: 0, resetMs: 0, source: 'cache' },
+        codexWeek: { pct: 0, resetMs: 0, source: 'cache' },
       },
       settings: this.getSettings(),
       autoLimits: null,
@@ -227,8 +240,24 @@ export class StateManager {
   }
 
   private startWatcher() {
-    if (!fs.existsSync(SESSIONS_DIR)) return;
-    this.watcher = chokidar.watch(SESSIONS_DIR, { ignoreInitial: true, depth: 0 });
+    this.watcher?.close();
+    this.watcher = null;
+
+    const provider = this.getSettings().provider ?? 'both';
+    const watchTargets: string[] = [];
+
+    if ((provider === 'claude' || provider === 'both') && fs.existsSync(SESSIONS_DIR)) {
+      watchTargets.push(SESSIONS_DIR);
+    }
+    if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
+      watchTargets.push(PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+    }
+    if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
+      watchTargets.push(CODEX_SESSIONS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+    }
+    if (watchTargets.length === 0) return;
+
+    this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
     this.watcher.on('add', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) this.debouncedHeavyRefresh();
       else this.fastRefresh();
@@ -240,11 +269,7 @@ export class StateManager {
 
     // Watch for JSONL changes — 디바운스 적용
     // Windows에서 path.join이 백슬래시를 사용하면 chokidar glob이 동작하지 않으므로 슬래시로 변환
-    if (fs.existsSync(PROJECTS_DIR)) {
-      const jsonlGlob = PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl';
-      this.watcher.add(jsonlGlob);
-      this.watcher.on('change', () => this.debouncedHeavyRefresh());
-    }
+    this.watcher.on('change', () => this.debouncedHeavyRefresh());
   }
 
   private fastRefresh() {
@@ -263,8 +288,9 @@ export class StateManager {
 
   private async heavyRefresh() {
     await this.refreshApiUsagePct();
-    const loaded = this.loadAllEntries();
+    const loaded = this.loadProviderEntries();
     this.allEntries = loaded.entries;
+    this.codexRateLimits = loaded.codexRateLimits;
 
     const settings = this.getSettings();
     const effectiveLimits = this.autoLimits
@@ -278,14 +304,18 @@ export class StateManager {
       ?? (bridgeActive && rl?.five_hour?.resets_at ? rl.five_hour.resets_at - now : 0);
     const weekResetMs = this.apiUsagePct?.weekResetMs
       ?? (bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : 0);
-    const usage = computeUsage(this.allEntries, effectiveLimits, weekResetMs, h5ResetMs);
+    const codexResetMs = this.getCodexResetMs(now);
+    const usage = computeUsage(this.allEntries, effectiveLimits, {
+      claude: { weekResetMs, h5ResetMs },
+      codex: { weekResetMs: codexResetMs.week.resetMs, h5ResetMs: codexResetMs.h5.resetMs },
+    });
     const limits = this.buildLimits();
     const sessions = await this.buildSessionInfosAsync();
 
     const extraUsage = this.apiUsagePct?.extraUsage ?? null;
 
     // ~/.claude/projects/ 기반으로 모든 Claude 작업 repo의 git stats 수집
-    const allCwds = discoverAllProjectCwds();
+    const allCwds = discoverAllProjectCwds(settings.provider);
     const rawStats = await Promise.all(allCwds.map(cwd => getGitStatsAsync(cwd).catch(() => null)));
     const repoGitStats: Record<string, GitStats> = {};
 
@@ -313,13 +343,19 @@ export class StateManager {
   /** API 데이터 항상 우선 (서버 권위값); API 없을 때만 bridge fallback */
   private buildLimits(): UsageLimits {
     const now = Date.now();
+    const codexResetMs = this.getCodexResetMs(now);
+    const codexH5 = codexResetMs.h5;
+    const codexWeek = codexResetMs.week;
 
     // API 데이터가 있으면 항상 우선 — 웹 대시보드와 동일한 서버 권위값
     if (this.apiUsagePct) {
+      const source: UsageLimitSource = this.apiConnected ? 'api' : 'cache';
       return {
-        h5:   { pct: this.apiUsagePct.h5Pct,   resetMs: this.apiUsagePct.h5ResetMs },
-        week: { pct: this.apiUsagePct.weekPct,  resetMs: this.apiUsagePct.weekResetMs },
-        so:   { pct: this.apiUsagePct.soPct,    resetMs: this.apiUsagePct.soResetMs },
+        h5:   { pct: this.apiUsagePct.h5Pct,   resetMs: this.apiUsagePct.h5ResetMs, source },
+        week: { pct: this.apiUsagePct.weekPct,  resetMs: this.apiUsagePct.weekResetMs, source },
+        so:   { pct: this.apiUsagePct.soPct,    resetMs: this.apiUsagePct.soResetMs, source },
+        codexH5,
+        codexWeek,
       };
     }
 
@@ -328,14 +364,53 @@ export class StateManager {
     const rl = this.liveSession?.rate_limits;
     if (rl && this.liveSession?._ts && now - this.liveSession._ts < 300_000) {
       return {
-        h5:   { pct: rl.five_hour?.used_percentage ?? 0, resetMs: rl.five_hour?.resets_at  ? rl.five_hour.resets_at  - now : 0 },
-        week: { pct: rl.seven_day?.used_percentage  ?? 0, resetMs: rl.seven_day?.resets_at ? rl.seven_day.resets_at  - now : 0 },
-        so:   { pct: 0, resetMs: 0 },
+        h5:   { pct: rl.five_hour?.used_percentage ?? 0, resetMs: rl.five_hour?.resets_at  ? rl.five_hour.resets_at  - now : 0, source: 'statusLine' },
+        week: { pct: rl.seven_day?.used_percentage  ?? 0, resetMs: rl.seven_day?.resets_at ? rl.seven_day.resets_at  - now : 0, source: 'statusLine' },
+        so:   { pct: 0, resetMs: 0, source: 'statusLine' },
+        codexH5,
+        codexWeek,
       };
     }
 
     // 모두 없으면 이전 상태 유지 (재시작/오프라인 시 0 대신 마지막 값 표시)
-    return this.state?.limits ?? { h5: { pct: 0, resetMs: 0 }, week: { pct: 0, resetMs: 0 }, so: { pct: 0, resetMs: 0 } };
+    const previous = this.state?.limits ?? {
+      h5: { pct: 0, resetMs: 0 },
+      week: { pct: 0, resetMs: 0 },
+      so: { pct: 0, resetMs: 0 },
+      codexH5,
+      codexWeek,
+    };
+    return {
+      h5: { ...previous.h5, source: 'cache' },
+      week: { ...previous.week, source: 'cache' },
+      so: { ...previous.so, source: 'cache' },
+      codexH5,
+      codexWeek,
+    };
+  }
+
+  private getCodexResetMs(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
+    const previousH5 = this.state?.limits.codexH5 ?? { pct: 0, resetMs: 0, source: 'cache' as UsageLimitSource };
+    const previousWeek = this.state?.limits.codexWeek ?? { pct: 0, resetMs: 0, source: 'cache' as UsageLimitSource };
+    return {
+      h5: this.codexRateLimits?.h5
+        ? { pct: this.codexRateLimits.h5.pct, resetMs: Math.max(0, this.codexRateLimits.h5.resetsAt * 1000 - now), source: 'localLog' }
+        : { ...previousH5, source: previousH5.source ?? 'cache' },
+      week: this.codexRateLimits?.week
+        ? { pct: this.codexRateLimits.week.pct, resetMs: Math.max(0, this.codexRateLimits.week.resetsAt * 1000 - now), source: 'localLog' }
+        : { ...previousWeek, source: previousWeek.source ?? 'cache' },
+    };
+  }
+
+  private mergeCodexRateLimits(
+    current: ParsedFile['codexRateLimits'] | null,
+    next: ParsedFile['codexRateLimits'] | undefined,
+  ): ParsedFile['codexRateLimits'] | null {
+    if (!next?.h5 && !next?.week) return current;
+    const merged: ParsedFile['codexRateLimits'] = { ...(current ?? {}) };
+    if (next.h5 && (!merged.h5 || next.h5.observedAt >= merged.h5.observedAt)) merged.h5 = next.h5;
+    if (next.week && (!merged.week || next.week.observedAt >= merged.week.observedAt)) merged.week = next.week;
+    return merged;
   }
 
   private loadAllEntries(): { entries: ParsedEntry[]; sessionCount: number } {
@@ -381,10 +456,76 @@ export class StateManager {
     return { entries, sessionCount };
   }
 
+  private loadProviderEntries(): { entries: ParsedEntry[]; sessionCount: number; codexRateLimits: ParsedFile['codexRateLimits'] | null } {
+    const settings = this.getSettings();
+    const entries: ParsedEntry[] = [];
+    const excluded = new Set(settings.excludedProjects ?? []);
+    const seen = new Map<string, number>();
+    let sessionCount = 0;
+    let codexRateLimits: ParsedFile['codexRateLimits'] | null = null;
+
+    const addEntries = (parsed: ParsedFile) => {
+      for (const e of parsed.entries) {
+        const prevIdx = seen.get(e.requestId);
+        if (prevIdx === undefined) {
+          seen.set(e.requestId, entries.length);
+          entries.push(e);
+        } else if (e.outputTokens > entries[prevIdx].outputTokens) {
+          entries[prevIdx] = e;
+        }
+      }
+    };
+
+    if ((settings.provider === 'claude' || settings.provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
+      try {
+        const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name);
+
+        for (const dir of projectDirs) {
+          if (excluded.has(dir)) continue;
+          const dirPath = path.join(PROJECTS_DIR, dir);
+          try {
+            const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
+            sessionCount += files.length;
+            for (const file of files) addEntries(parseJsonlCached(path.join(dirPath, file), this.jsonlCache));
+          } catch { /* skip */ }
+        }
+      } catch { /* skip */ }
+    }
+
+    if ((settings.provider === 'codex' || settings.provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
+      for (const filePath of this.listJsonlFiles(CODEX_SESSIONS_DIR)) {
+        const parsed = parseCodexJsonlCached(filePath, this.jsonlCache);
+        if (parsed.entries.length === 0 && !parsed.codexRateLimits) continue;
+        sessionCount += 1;
+        codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, parsed.codexRateLimits);
+        addEntries(parsed);
+      }
+    }
+
+    return { entries, sessionCount, codexRateLimits };
+  }
+
+  private listJsonlFiles(dir: string): string[] {
+    const files: string[] = [];
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) files.push(...this.listJsonlFiles(fullPath));
+        else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fullPath);
+      }
+    } catch { /* skip */ }
+    return files;
+  }
+
   private buildSessionInfos(): SessionInfo[] {
     const settings = this.getSettings();
     const excluded = new Set(settings.excludedProjects ?? []);
-    const discovered = discoverSessions().filter(s => !excluded.has(s.projectName));
+    const discovered = discoverSessions(settings.provider).filter(s => {
+      const key = s.mainRepoName ?? s.projectName;
+      return !excluded.has(key) && !excluded.has(s.projectName);
+    });
     return discovered.map(s => {
       let modelName = '';
       let contextUsed = 0;
@@ -394,14 +535,17 @@ export class StateManager {
       let activityBreakdown: SessionInfo['activityBreakdown'] = null;
       if (s.jsonlPath) {
         try {
-          const parsed = parseJsonlCached(s.jsonlPath, this.jsonlCache);
+          const parsed = s.provider === 'codex'
+            ? parseCodexJsonlCached(s.jsonlPath, this.jsonlCache)
+            : parseJsonlCached(s.jsonlPath, this.jsonlCache);
           modelName = parsed.modelName;
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
           activityBreakdown = parsed.activityBreakdown;
 
           const raw = parsed.rawModel.toLowerCase();
-          if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
+          if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
+          else if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
           else contextMax = 200_000;
         } catch { /* skip */ }
       }
@@ -415,7 +559,10 @@ export class StateManager {
   private async buildSessionInfosAsync(): Promise<SessionInfo[]> {
     const settings = this.getSettings();
     const excluded = new Set(settings.excludedProjects ?? []);
-    const discovered = discoverSessions().filter(s => !excluded.has(s.projectName));
+    const discovered = discoverSessions(settings.provider).filter(s => {
+      const key = s.mainRepoName ?? s.projectName;
+      return !excluded.has(key) && !excluded.has(s.projectName);
+    });
     return Promise.all(discovered.map(async s => {
       let modelName = '';
       let contextUsed = 0;
@@ -425,14 +572,17 @@ export class StateManager {
       let activityBreakdown: SessionInfo['activityBreakdown'] = null;
       if (s.jsonlPath) {
         try {
-          const parsed = parseJsonlCached(s.jsonlPath, this.jsonlCache);
+          const parsed = s.provider === 'codex'
+            ? parseCodexJsonlCached(s.jsonlPath, this.jsonlCache)
+            : parseJsonlCached(s.jsonlPath, this.jsonlCache);
           modelName = parsed.modelName;
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
           activityBreakdown = parsed.activityBreakdown;
 
           const raw = parsed.rawModel.toLowerCase();
-          if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
+          if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
+          else if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
           else contextMax = 200_000;
         } catch { /* skip */ }
       }
@@ -450,6 +600,14 @@ export class StateManager {
   // Called after hide/exclude changes so the UI reflects immediately.
   applySettingsChange() {
     const settings = this.getSettings();
+    const providerChanged = settings.provider !== this.state.settings.provider;
+    if (providerChanged) {
+      this.jsonlCache.clear();
+      this.codexRateLimits = null;
+      this.startWatcher();
+      void this.heavyRefresh();
+      return;
+    }
     const excluded = new Set(settings.excludedProjects ?? []);
     const sessions = this.state.sessions.filter(s => {
       const key = s.mainRepoName ?? s.projectName;

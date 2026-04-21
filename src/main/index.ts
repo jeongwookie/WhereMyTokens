@@ -69,17 +69,27 @@ function showPopup() {
 function buildTrayTitle(state: AppState): string {
   const settings = state.settings ?? DEFAULT_SETTINGS;
   const display = settings.trayDisplay ?? 'h5pct';
+  const provider = settings.provider ?? 'both';
+  const h5Tokens = (provider === 'codex')
+    ? state.usage.h5Codex.totalTokens
+    : (provider === 'both' ? state.usage.h5.totalTokens + state.usage.h5Codex.totalTokens : state.usage.h5.totalTokens);
+  const h5Cost = (provider === 'codex')
+    ? state.usage.h5Codex.costUSD
+    : (provider === 'both' ? state.usage.h5.costUSD + state.usage.h5Codex.costUSD : state.usage.h5.costUSD);
+  const h5Pct = provider === 'codex'
+    ? state.limits.codexH5.pct
+    : (provider === 'both' ? Math.max(state.limits.h5.pct, state.limits.codexH5.pct) : state.limits.h5.pct);
   switch (display) {
     case 'h5pct':
-      return state.limits.h5.pct > 0 ? `${Math.round(state.limits.h5.pct)}%` : '';
+      return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
-      const t = state.usage.h5.totalTokens;
+      const t = h5Tokens;
       if (t >= 1_000_000) return `${(t/1_000_000).toFixed(1)}M`;
       if (t >= 1_000) return `${(t/1_000).toFixed(0)}K`;
       return t > 0 ? String(t) : '';
     }
     case 'cost': {
-      const c = state.usage.h5.costUSD;
+      const c = h5Cost;
       return settings.currency === 'KRW'
         ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
         : `$${c.toFixed(2)}`;

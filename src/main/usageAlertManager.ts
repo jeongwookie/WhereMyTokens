@@ -47,6 +47,8 @@ export function checkAlerts(
     { key: 'h5',   pct: limits.h5.pct,   resetMs: limits.h5.resetMs,   label: '5h usage' },
     { key: 'week', pct: limits.week.pct, resetMs: limits.week.resetMs, label: 'Weekly usage' },
     { key: 'so',   pct: limits.so.pct,   resetMs: limits.so.resetMs,   label: 'Sonnet weekly' },
+    { key: 'codex-h5',   pct: limits.codexH5.pct,   resetMs: limits.codexH5.resetMs,   label: 'Codex 5h usage' },
+    { key: 'codex-week', pct: limits.codexWeek.pct, resetMs: limits.codexWeek.resetMs, label: 'Codex weekly usage' },
   ];
 
   const now = Date.now();

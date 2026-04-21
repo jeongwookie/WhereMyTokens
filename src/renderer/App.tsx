@@ -28,6 +28,7 @@ const DEFAULT_STATE: AppState = {
   },
   limits: {
     h5: { pct:0, resetMs:0 }, week: { pct:0, resetMs:0 }, so: { pct:0, resetMs:0 },
+    codexH5: { pct:0, resetMs:0 }, codexWeek: { pct:0, resetMs:0 },
   },
   settings: {
     usageLimits: { h5:100, week:2000, sonnetWeek:100_000_000 },

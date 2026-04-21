@@ -3,9 +3,12 @@ import * as path from 'path';
 import * as os from 'os';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
+export type TrackingProvider = 'claude' | 'codex' | 'both';
+export type SessionProvider = 'claude' | 'codex';
 
 export interface DiscoveredSession {
-  pid: number;
+  provider: SessionProvider;
+  pid: number | null;
   sessionId: string;
   cwd: string;
   projectName: string;
@@ -22,6 +25,7 @@ export interface DiscoveredSession {
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
 
 function encodeCwd(cwd: string): string {
   // "C:\dev\app" → "C--dev-app" (encode path to flat name)
@@ -56,9 +60,11 @@ function detectWorktree(cwd: string): { mainName: string; branch: string } | nul
   }
 }
 
-function entrypointToSource(entrypoint: string): string {
+function entrypointToSource(entrypoint: string, provider: SessionProvider = 'claude'): string {
   const map: Record<string, string> = {
     'cli': 'Terminal',
+    'exec': provider === 'codex' ? 'Codex Exec' : 'Terminal',
+    'vscode': provider === 'codex' ? 'VS Code' : 'VS Code',
     'claude-vscode': 'VS Code',
     'claude-cursor': 'Cursor',
     'claude-jetbrains': 'JetBrains',
@@ -113,8 +119,8 @@ function getJsonlLastModified(jsonlPath: string | null): Date | null {
   }
 }
 
-function calcState(alive: boolean, lastModified: Date | null): SessionState {
-  if (!alive) return 'idle';
+function calcState(alive: boolean | null, lastModified: Date | null): SessionState {
+  if (alive === false) return 'idle';
   if (!lastModified) return 'idle';
   const diffMs = Date.now() - lastModified.getTime();
   const diffMin = diffMs / 60000;
@@ -123,7 +129,11 @@ function calcState(alive: boolean, lastModified: Date | null): SessionState {
   return 'idle';
 }
 
-export function discoverSessions(): DiscoveredSession[] {
+function shouldIncludeProvider(filter: TrackingProvider, provider: SessionProvider): boolean {
+  return filter === 'both' || filter === provider;
+}
+
+function discoverClaudeSessions(): DiscoveredSession[] {
   if (!fs.existsSync(SESSIONS_DIR)) return [];
 
   const results: DiscoveredSession[] = [];
@@ -152,13 +162,14 @@ export function discoverSessions(): DiscoveredSession[] {
       const worktreeInfo = detectWorktree(cwd);
 
       results.push({
+        provider: 'claude',
         pid,
         sessionId,
         cwd,
         projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
         startedAt: new Date(startedAt),
         entrypoint,
-        source: entrypointToSource(entrypoint),
+        source: entrypointToSource(entrypoint, 'claude'),
         state,
         jsonlPath,
         lastModified,
@@ -176,3 +187,93 @@ export function discoverSessions(): DiscoveredSession[] {
     return tb - ta;
   });
 }
+
+function listCodexJsonlFiles(dir: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) results.push(...listCodexJsonlFiles(fullPath));
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) results.push(fullPath);
+    }
+  } catch { /* ignore */ }
+  return results;
+}
+
+function readFirstJsonObject(filePath: string): Record<string, unknown> | null {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try { return JSON.parse(line) as Record<string, unknown>; }
+      catch { return null; }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function discoverCodexSessions(): DiscoveredSession[] {
+  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
+
+  const results: DiscoveredSession[] = [];
+  const files = listCodexJsonlFiles(CODEX_SESSIONS_DIR);
+
+  for (const filePath of files) {
+    try {
+      const first = readFirstJsonObject(filePath);
+      const payload = first?.payload as Record<string, unknown> | undefined;
+      if (first?.type !== 'session_meta' || !payload) continue;
+
+      const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+      if (!cwd) continue;
+
+      const stat = fs.statSync(filePath);
+      const sessionId = typeof payload.id === 'string' ? payload.id : path.basename(filePath, '.jsonl');
+      const startedAtRaw = typeof payload.timestamp === 'string'
+        ? payload.timestamp
+        : (typeof first.timestamp === 'string' ? first.timestamp : '');
+      const startedAt = startedAtRaw ? new Date(startedAtRaw) : stat.birthtime;
+      const sourceRaw = payload.source;
+      const entrypoint = typeof sourceRaw === 'string' ? sourceRaw : 'codex';
+      const projectName = path.basename(cwd);
+      const worktreeInfo = detectWorktree(cwd);
+
+      results.push({
+        provider: 'codex',
+        pid: null,
+        sessionId,
+        cwd,
+        projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
+        startedAt,
+        entrypoint,
+        source: entrypointToSource(entrypoint, 'codex'),
+        state: calcState(null, stat.mtime),
+        jsonlPath: filePath,
+        lastModified: stat.mtime,
+        isWorktree: !!worktreeInfo,
+        worktreeBranch: worktreeInfo?.branch ?? null,
+        mainRepoName: worktreeInfo?.mainName ?? null,
+      });
+    } catch { /* skip malformed */ }
+  }
+
+  return results.sort((a, b) => {
+    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
+    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
+    return tb - ta;
+  });
+}
+
+export function discoverSessions(provider: TrackingProvider = 'both'): DiscoveredSession[] {
+  const results: DiscoveredSession[] = [];
+  if (shouldIncludeProvider(provider, 'claude')) results.push(...discoverClaudeSessions());
+  if (shouldIncludeProvider(provider, 'codex')) results.push(...discoverCodexSessions());
+
+  return results.sort((a, b) => {
+    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
+    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
+    return tb - ta;
+  });
+}
+
+export { CODEX_SESSIONS_DIR, PROJECTS_DIR as CLAUDE_PROJECTS_DIR, SESSIONS_DIR as CLAUDE_SESSIONS_DIR };

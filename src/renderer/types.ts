@@ -19,7 +19,8 @@ export interface GitStats {
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 
 export interface SessionInfo {
-  pid: number;
+  provider: 'claude' | 'codex';
+  pid: number | null;
   sessionId: string;
   cwd: string;
   projectName: string;
@@ -58,6 +59,7 @@ export interface WindowStats {
 
 export interface ModelUsage {
   model: string;
+  provider: 'claude' | 'codex' | 'other';
   tokens: number;
   costUSD: number;
 }
@@ -119,9 +121,11 @@ export interface UsageData {
 }
 
 export interface UsageLimits {
-  h5: { pct: number; resetMs: number };
-  week: { pct: number; resetMs: number };
-  so: { pct: number; resetMs: number };
+  h5: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  week: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  so: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  codexH5: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  codexWeek: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
 }
 
 export interface AppSettings {
