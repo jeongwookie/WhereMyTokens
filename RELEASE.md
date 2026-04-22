@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.10.1 | 2026-04-22 | Fix Codex repo discovery for Code Output, share session metadata parsing, add bounded cache and regression tests |
 | v1.10.0 | 2026-04-22 | Claude + Codex tracking, Codex usage accounting, scoped stats, session UX/performance improvements |
 | v1.9.2 | 2026-04-20 | NSIS installer added to release, session tracking accuracy and stability improvements |
 | v1.9.1 | 2026-04-17 | Fix 7d heatmap hover tooltip, README overhaul with screenshot grid, add zh-CN and es translations |

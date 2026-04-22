@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.10.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.10.1</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -68,6 +68,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | 22 abr | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 22 abr | Seguimiento Claude + Codex, cálculo de uso Codex, estadísticas con alcance, mejoras de UX/rendimiento de sesiones |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | 20 abr | Instalador NSIS, mejoras en precisión y estabilidad del seguimiento de sesiones |
 | **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | 17 abr | Corrección del tooltip del mapa de calor 7d; nuevos READMEs zh-CN & es |
@@ -79,7 +80,7 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
 **[⬇ Descargar Última Versión (todos los archivos)](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
@@ -91,7 +92,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.10.0-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.10.1-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
