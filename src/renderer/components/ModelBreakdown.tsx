@@ -19,7 +19,7 @@ function providerLabel(provider: ModelUsage['provider']): string {
   return 'Other';
 }
 
-export default function ModelBreakdown({ models, currency, usdToKrw }: { models: ModelUsage[]; currency: string; usdToKrw: number }) {
+function ModelBreakdown({ models, currency, usdToKrw }: { models: ModelUsage[]; currency: string; usdToKrw: number }) {
   const C = useTheme();
   if (models.length === 0) return null;
   const maxT = Math.max(...models.map(m => m.tokens), 1);
@@ -60,3 +60,5 @@ export default function ModelBreakdown({ models, currency, usdToKrw }: { models:
     </div>
   );
 }
+
+export default React.memo(ModelBreakdown);

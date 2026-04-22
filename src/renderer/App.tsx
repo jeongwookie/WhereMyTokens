@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { AppState, AppSettings } from './types';
 import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
@@ -53,18 +53,49 @@ export default function App() {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [view, setView] = useState<View>('main');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
+  const scrollingRef = useRef(false);
+  const pendingStateRef = useRef<AppState | null>(null);
+  const scrollTimerRef = useRef<number | null>(null);
+
+  const applyState = useCallback((next: AppState) => {
+    if (scrollingRef.current) {
+      pendingStateRef.current = next;
+      return;
+    }
+    setState(next);
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
       const s = await window.wmt.getState();
-      if (s) setState(s);
+      if (s) applyState(s);
     } catch (e) { console.error('state:get failed', e); }
-  }, []);
+  }, [applyState]);
 
   useEffect(() => {
     refresh();
-    const cleanup = window.wmt.onUpdated(refresh);
+    const cleanup = window.wmt.onUpdated(applyState);
     return cleanup;
-  }, [refresh]);
+  }, [refresh, applyState]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      scrollingRef.current = true;
+      if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = window.setTimeout(() => {
+        scrollingRef.current = false;
+        if (pendingStateRef.current) {
+          setState(pendingStateRef.current);
+          pendingStateRef.current = null;
+        }
+      }, 220);
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('scroll', onScroll, true);
+      if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
+    };
+  }, []);
 
   // 시스템 테마 감지: 초기 resolve + 실시간 변경 리스너
   useEffect(() => {

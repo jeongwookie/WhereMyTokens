@@ -46,7 +46,7 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
   );
 }
 
-export default function TokenStatsCard({
+function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, apiConnected, hideCost, burnRate,
   hero, borderRight, limitSourceLabel, cacheMetricMode = 'grade',
@@ -153,7 +153,7 @@ export default function TokenStatsCard({
             <span style={{ fontSize: 9, color: C.textMuted }}>{resetStr}</span>
           ) : <span />}
           {!hideCost && stats.costUSD > 0 && (
-            <span style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
+            <span title="Usage window cost" style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
           )}
         </div>
       </div>
@@ -186,7 +186,7 @@ export default function TokenStatsCard({
             <span style={{ fontSize: 10, color: C.textMuted }}>{stats.requestCount} req</span>
           )}
           {!hideCost && (
-            <span style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
+            <span title="Usage window cost" style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
           )}
         </div>
       </div>
@@ -224,3 +224,5 @@ export default function TokenStatsCard({
     </div>
   );
 }
+
+export default React.memo(TokenStatsCard);

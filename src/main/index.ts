@@ -112,7 +112,7 @@ function updateTray(state: AppState) {
   if (title) tray.setTitle(title);
 
   if (popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible()) {
-    popupWindow.webContents.send('state:updated');
+    popupWindow.webContents.send('state:updated', state);
   }
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
 }

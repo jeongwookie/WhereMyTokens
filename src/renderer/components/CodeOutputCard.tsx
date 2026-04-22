@@ -15,7 +15,7 @@ interface Props {
   usdToKrw: number;
 }
 
-export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, currency, usdToKrw }: Props) {
+function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [period, setPeriod] = useState<Period>('today');
 
@@ -128,6 +128,8 @@ export default function CodeOutputCard({ sessions, repoGitStats, todayCost, allT
     </div>
   );
 }
+
+export default React.memo(CodeOutputCard);
 
 function KPI({ label, value, sub, subColor, color, C, borderRight }: {
   label: string; value: string; sub: string; subColor?: string; color: string;

@@ -198,7 +198,7 @@ declare global {
       getIntegrationStatus: () => Promise<{ configured: boolean; command?: string }>;
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
-      onUpdated:          (cb: () => void) => () => void;
+      onUpdated:          (cb: (state: AppState) => void) => () => void;
       getResolvedTheme:   () => Promise<'light' | 'dark'>;
       onThemeChanged:     (cb: (theme: 'light' | 'dark') => void) => () => void;
     };

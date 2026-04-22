@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
-import { stateColor, stateLabel, modelColor, fmtRelative, fmtTokens } from '../theme';
+import { stateLabel, modelColor, fmtRelative, fmtTokens } from '../theme';
 import ActivityBreakdown from './ActivityBreakdown';
 
 // idle 시간(분) 계산
@@ -11,7 +11,18 @@ function idleMinutes(session: SessionInfo): number {
   return (Date.now() - new Date(session.lastModified).getTime()) / 60000;
 }
 
-export default function SessionRow({ session, expanded, onToggle }: {
+function compactToolLabel(name: string): string {
+  const map: Record<string, string> = {
+    shell_command: 'shell',
+    request_user_input: 'ask',
+    list_mcp_resources: 'mcp:list',
+    read_mcp_resource: 'mcp:read',
+    apply_patch: 'patch',
+  };
+  return map[name] ?? name.replace(/^functions\./, '').replace(/^multi_tool_use\./, '');
+}
+
+function SessionRow({ session, expanded, onToggle }: {
   session: SessionInfo;
   expanded?: boolean;
   onToggle?: () => void;
@@ -19,11 +30,12 @@ export default function SessionRow({ session, expanded, onToggle }: {
   const C = useTheme();
   const TOOL_COLORS = [C.input, C.output, C.cacheW, C.cacheR, C.sonnet, C.idle];
 
-  const sc = stateColor(session.state, C);
   const mc = modelColor(session.modelName, C);
 
-  const toolEntries = Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const totalTools = toolEntries.reduce((s, [, n]) => s + n, 0);
+  const toolEntries = useMemo(() => (
+    Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6)
+  ), [session.toolCounts]);
+  const totalTools = useMemo(() => toolEntries.reduce((s, [, n]) => s + n, 0), [toolEntries]);
 
   // Context usage
   const ctxPct = session.contextMax > 0
@@ -38,7 +50,7 @@ export default function SessionRow({ session, expanded, onToggle }: {
   else if (ctxPct >= 80) ctxLabel = 'compact soon';
   else ctxLabel = `${fmtTokens(ctxRemaining)} left`;
 
-  const idle = idleMinutes(session);
+  const idle = useMemo(() => idleMinutes(session), [session]);
 
   // ── idle 6h+ → 한 줄 인라인 ──
   if (idle >= 360) {
@@ -131,7 +143,7 @@ export default function SessionRow({ session, expanded, onToggle }: {
               <div style={{
                 width: `${ctxPct}%`, height: '100%',
                 background: `linear-gradient(90deg, ${ctxColor}, ${ctxColor}cc)`,
-                borderRadius: 2, transition: 'width 0.4s',
+                borderRadius: 2,
               }} />
             </div>
             <span style={{
@@ -164,8 +176,9 @@ export default function SessionRow({ session, expanded, onToggle }: {
                   fontSize: 10, fontFamily: C.fontMono, padding: '2px 5px', borderRadius: 3,
                   background: 'rgba(255,255,255,0.04)', color: C.textMuted,
                   border: '1px solid rgba(255,255,255,0.05)',
+                  maxWidth: 132, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
-                  {name}×<span style={{ color: C.textDim }}>{count}</span>
+                  {compactToolLabel(name)}×<span style={{ color: C.textDim }}>{count}</span>
                 </span>
               ))}
             </div>
@@ -208,3 +221,5 @@ export default function SessionRow({ session, expanded, onToggle }: {
     </>
   );
 }
+
+export default React.memo(SessionRow);

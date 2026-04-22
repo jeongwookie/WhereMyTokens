@@ -598,7 +598,7 @@ interface Props {
   usdToKrw: number;
 }
 
-export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets, currency, usdToKrw }: Props) {
+function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [tab, setTab] = useState<ChartTab>('7d');
 
@@ -671,3 +671,5 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
     </div>
   );
 }
+
+export default React.memo(ActivityChart);

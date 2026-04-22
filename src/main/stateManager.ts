@@ -77,7 +77,10 @@ export class StateManager {
   private liveSession: LiveSessionData | null = null;
   private jsonlCache = new JsonlCache();
   private codexRateLimits: ParsedFile['codexRateLimits'] | null = null;
+  private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private static readonly API_MIN_INTERVAL_MS = 180_000; // 3분 간격 (429 방지)
+
+  private static readonly GIT_STATS_TTL_MS = 60_000;
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
     this.store = store;
@@ -236,7 +239,7 @@ export class StateManager {
     this.heavyDebounce = setTimeout(() => {
       this.heavyDebounce = null;
       void this.heavyRefresh();
-    }, 3000);
+    }, 8000);
   }
 
   private startWatcher() {
@@ -259,7 +262,10 @@ export class StateManager {
 
     this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
     this.watcher.on('add', (filePath: string) => {
-      if (filePath.endsWith('.jsonl')) this.debouncedHeavyRefresh();
+      if (filePath.endsWith('.jsonl')) {
+        this.fastRefresh();
+        this.debouncedHeavyRefresh();
+      }
       else this.fastRefresh();
     });
     this.watcher.on('unlink', (filePath: string) => {
@@ -269,7 +275,10 @@ export class StateManager {
 
     // Watch for JSONL changes — 디바운스 적용
     // Windows에서 path.join이 백슬래시를 사용하면 chokidar glob이 동작하지 않으므로 슬래시로 변환
-    this.watcher.on('change', () => this.debouncedHeavyRefresh());
+    this.watcher.on('change', () => {
+      this.fastRefresh();
+      this.debouncedHeavyRefresh();
+    });
   }
 
   private fastRefresh() {
@@ -316,7 +325,7 @@ export class StateManager {
 
     // ~/.claude/projects/ 기반으로 모든 Claude 작업 repo의 git stats 수집
     const allCwds = discoverAllProjectCwds(settings.provider);
-    const rawStats = await Promise.all(allCwds.map(cwd => getGitStatsAsync(cwd).catch(() => null)));
+    const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
     const repoGitStats: Record<string, GitStats> = {};
 
     // 1단계: fresh 수집 결과 먼저 적용 (신선도 우선, 중복 제거)
@@ -519,6 +528,24 @@ export class StateManager {
     return files;
   }
 
+  private getCachedGitStats(cwd: string): GitStats | null {
+    const now = Date.now();
+    const cached = this.gitStatsCache.get(cwd);
+    if (cached && now - cached.ts < StateManager.GIT_STATS_TTL_MS) return cached.stats;
+    const stats = getGitStats(cwd);
+    this.gitStatsCache.set(cwd, { stats, ts: now });
+    return stats;
+  }
+
+  private async getCachedGitStatsAsync(cwd: string): Promise<GitStats | null> {
+    const now = Date.now();
+    const cached = this.gitStatsCache.get(cwd);
+    if (cached && now - cached.ts < StateManager.GIT_STATS_TTL_MS) return cached.stats;
+    const stats = await getGitStatsAsync(cwd).catch(() => null);
+    this.gitStatsCache.set(cwd, { stats, ts: now });
+    return stats;
+  }
+
   private buildSessionInfos(): SessionInfo[] {
     const settings = this.getSettings();
     const excluded = new Set(settings.excludedProjects ?? []);
@@ -550,7 +577,7 @@ export class StateManager {
         } catch { /* skip */ }
       }
 
-      const gitStats = getGitStats(s.cwd);
+      const gitStats = this.getCachedGitStats(s.cwd);
       return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown };
     });
   }
@@ -587,7 +614,7 @@ export class StateManager {
         } catch { /* skip */ }
       }
 
-      const gitStats = await getGitStatsAsync(s.cwd);
+      const gitStats = await this.getCachedGitStatsAsync(s.cwd);
       return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown };
     }));
   }

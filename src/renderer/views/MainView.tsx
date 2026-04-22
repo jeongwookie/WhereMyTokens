@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { AppState } from '../types';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { AppState, SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
-import { fmtTokens, fmtCost } from '../theme';
+import { fmtTokens, fmtCost, fmtRelative } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
@@ -19,6 +19,192 @@ interface Props {
 const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
+type SessionListItem =
+  | { type: 'session'; session: SessionInfo }
+  | {
+      type: 'stack';
+      key: string;
+      sessions: SessionInfo[];
+      provider: SessionInfo['provider'];
+      source: string;
+      state: SessionInfo['state'];
+      latest: string | null;
+      maxCtxPct: number;
+    };
+
+function sourceLabel(source?: string) {
+  if (source === 'api') return 'API';
+  if (source === 'statusLine') return 'statusLine';
+  if (source === 'localLog') return 'Local log';
+  if (source === 'cache') return 'cache';
+  return undefined;
+}
+
+function joinedSourceLabel(...sources: (string | undefined)[]) {
+  const labels = Array.from(new Set(sources.map(sourceLabel).filter(Boolean))) as string[];
+  return labels.length > 0 ? labels.join(' / ') : undefined;
+}
+
+function formatRefreshLabel(lastUpdated: number): string {
+  if (!lastUpdated) return 'Refresh';
+  const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
+  if (elapsed < 5) return 'just now';
+  if (elapsed < 60) return `${elapsed}s ago`;
+  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m ago`;
+  return `${Math.floor(elapsed / 3600)}h ago`;
+}
+
+const RefreshStatus = React.memo(function RefreshStatus({ lastUpdated, refreshing }: { lastUpdated: number; refreshing: boolean }) {
+  const [label, setLabel] = useState(() => formatRefreshLabel(lastUpdated));
+
+  useEffect(() => {
+    if (refreshing) {
+      setLabel('refreshing...');
+      return;
+    }
+    setLabel(formatRefreshLabel(lastUpdated));
+    const t = setInterval(() => setLabel(formatRefreshLabel(lastUpdated)), 1000);
+    return () => clearInterval(t);
+  }, [lastUpdated, refreshing]);
+
+  return <>{label}</>;
+});
+
+const LimitSectionHeader = React.memo(function LimitSectionHeader({ title, source }: { title: string; source?: string }) {
+  const C = useTheme();
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px 4px', background: C.bgCard, borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: 9, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>{title}</span>
+      {source && (
+        <span title="Limit source" style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}` }}>
+          {source}
+        </span>
+      )}
+    </div>
+  );
+});
+
+const LazySection = React.memo(function LazySection({ minHeight, children }: { minHeight: number; children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (visible) return;
+    const node = ref.current;
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { root: null, rootMargin: '280px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  return (
+    <div ref={ref} style={{ minHeight: visible ? undefined : minHeight }}>
+      {visible ? children : null}
+    </div>
+  );
+});
+
+function latestTime(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+}
+
+function sessionCtxPct(s: SessionInfo): number {
+  return s.contextMax > 0 ? Math.min(100, (s.contextUsed / s.contextMax) * 100) : 0;
+}
+
+function buildSessionItems(branch: string, sessions: SessionInfo[]): SessionListItem[] {
+  const items: SessionListItem[] = [];
+  const stackable = new Map<string, SessionInfo[]>();
+
+  for (const session of sessions) {
+    if (session.state === 'waiting' || session.state === 'idle') {
+      const key = `${branch}|${session.provider}|${session.source}|${session.state}`;
+      if (!stackable.has(key)) stackable.set(key, []);
+      stackable.get(key)!.push(session);
+    } else {
+      items.push({ type: 'session', session });
+    }
+  }
+
+  for (const [key, grouped] of stackable) {
+    if (grouped.length < 3) {
+      for (const session of grouped) items.push({ type: 'session', session });
+      continue;
+    }
+    const first = grouped[0];
+    items.push({
+      type: 'stack',
+      key,
+      sessions: grouped,
+      provider: first.provider,
+      source: first.source,
+      state: first.state,
+      latest: grouped.reduce<string | null>((acc, s) => latestTime(acc, s.lastModified), null),
+      maxCtxPct: Math.max(...grouped.map(sessionCtxPct)),
+    });
+  }
+
+  return items.sort((a, b) => {
+    const aTime = a.type === 'session' ? a.session.lastModified : a.latest;
+    const bTime = b.type === 'session' ? b.session.lastModified : b.latest;
+    return (bTime ? new Date(bTime).getTime() : 0) - (aTime ? new Date(aTime).getTime() : 0);
+  });
+}
+
+const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, onToggle }: {
+  item: Extract<SessionListItem, { type: 'stack' }>;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const C = useTheme();
+  const provider = item.provider === 'codex' ? 'Codex' : 'Claude';
+  const chipColor = item.state === 'waiting' ? C.waiting : C.textMuted;
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        width: 'calc(100% - 16px)',
+        margin: '3px 8px 0',
+        padding: '7px 10px',
+        borderRadius: 6,
+        border: `1px solid ${C.border}`,
+        background: C.bgRow,
+        color: C.text,
+        cursor: 'pointer',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        textAlign: 'left',
+      }}
+    >
+      <span style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>
+          {item.sessions.length} {provider} {item.state} sessions
+        </span>
+        <span style={{ display: 'block', fontSize: 9, color: C.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {item.source} - latest {fmtRelative(item.latest)} - max ctx {Math.round(item.maxCtxPct)}%
+        </span>
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 3, background: `${chipColor}1a`, color: chipColor, fontWeight: 700 }}>
+          {expanded ? 'open' : 'stack'}
+        </span>
+        <span style={{ fontSize: 12, color: C.textMuted }}>{expanded ? '^' : 'v'}</span>
+      </span>
+    </button>
+  );
+});
+
 export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const C = useTheme();
   const { sessions, usage, limits, settings, apiConnected, apiError, extraUsage } = state;
@@ -27,14 +213,9 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const showClaudeUsage = providerMode !== 'codex';
   const showCodexUsage = providerMode !== 'claude';
   const cacheHeaderLabel = providerMode === 'codex' ? 'Cached Input' : providerMode === 'both' ? 'Cache Share' : 'Cache Efficiency';
-  const sourceLabel = (source?: string) => {
-    if (source === 'api') return 'API';
-    if (source === 'statusLine') return 'statusLine';
-    if (source === 'localLog') return 'Local log';
-    if (source === 'cache') return 'cache';
-    return undefined;
-  };
-  const trackedH5 = (() => {
+  const cacheHeroColor = providerMode === 'claude' ? C.active : C.headerText;
+  const cacheSavedColor = providerMode === 'claude' ? C.active : C.headerSub;
+  const trackedH5 = useMemo(() => {
     if (providerMode === 'codex') return usage.h5Codex;
     if (providerMode === 'claude') return usage.h5;
     const cacheTokens = usage.h5.cacheReadTokens + usage.h5.cacheCreationTokens + usage.h5Codex.inputTokens + usage.h5Codex.cacheReadTokens;
@@ -51,39 +232,26 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       cacheEfficiency: cacheTokens > 0 ? (cacheRead / cacheTokens) * 100 : 0,
       cacheSavingsUSD: usage.h5.cacheSavingsUSD + usage.h5Codex.cacheSavingsUSD,
     };
-  })();
+  }, [providerMode, usage.h5, usage.h5Codex]);
   const hiddenProjects: string[] = settings.hiddenProjects ?? [];
   const excludedProjects: string[] = settings.excludedProjects ?? [];
   const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshLabel, setLastRefreshLabel] = useState('');
   const [showHiddenManager, setShowHiddenManager] = useState(false);
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('all');
+  const [projectMenuOpen, setProjectMenuOpen] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active'>('active');
   // 확장된 세션 ID (한 번에 하나만 — 새 세션 클릭 시 이전 자동 닫힘)
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [expandedStacks, setExpandedStacks] = useState<Set<string>>(() => new Set());
   const [showStale, setShowStale] = useState(false);
   const [headerPeriod, setHeaderPeriod] = useState<'today' | 'all'>('today');
 
-  useEffect(() => {
-    if (state.lastUpdated === 0) return;
-
-    function tick() {
-      const elapsed = Math.round((Date.now() - state.lastUpdated) / 1000);
-      if (elapsed < 5) setLastRefreshLabel('just now');
-      else if (elapsed < 60) setLastRefreshLabel(`${elapsed}s ago`);
-      else if (elapsed < 3600) setLastRefreshLabel(`${Math.floor(elapsed / 60)}m ago`);
-      else setLastRefreshLabel(`${Math.floor(elapsed / 3600)}h ago`);
-    }
-
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, [state.lastUpdated]);
+  const claudeLimitSource = useMemo(() => joinedSourceLabel(limits.h5.source, limits.week.source), [limits.h5.source, limits.week.source]);
+  const codexLimitSource = useMemo(() => joinedSourceLabel(limits.codexH5.source, limits.codexWeek.source), [limits.codexH5.source, limits.codexWeek.source]);
+  const allTimeCost = useMemo(() => usage.models.reduce((sum, model) => sum + model.costUSD, 0), [usage.models]);
 
   async function handleRefresh() {
     if (refreshing) return;
     setRefreshing(true);
-    setLastRefreshLabel('refreshing...');
     try {
       await window.wmt.forceRefresh();
       onRefresh();
@@ -93,45 +261,61 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
     setRefreshing(false);
   }
 
-  function hideProject(name: string) {
+  const hideProject = useCallback((name: string) => {
     const next = [...hiddenProjects, name];
+    setProjectMenuOpen(null);
     window.wmt.setSettings({ hiddenProjects: next }).catch(() => {});
-  }
+  }, [hiddenProjects]);
 
-  function unhideProject(name: string) {
+  const unhideProject = useCallback((name: string) => {
     const next = hiddenProjects.filter(p => p !== name);
     window.wmt.setSettings({ hiddenProjects: next }).catch(() => {});
-  }
+  }, [hiddenProjects]);
 
-  function excludeProject(name: string) {
+  const excludeProject = useCallback((name: string) => {
     const next = [...excludedProjects, name];
+    setProjectMenuOpen(null);
     window.wmt.setSettings({ excludedProjects: next }).catch(() => {});
-  }
+  }, [excludedProjects]);
 
-  function unexcludeProject(name: string) {
+  const unexcludeProject = useCallback((name: string) => {
     const next = excludedProjects.filter(p => p !== name);
     window.wmt.setSettings({ excludedProjects: next }).catch(() => {});
-  }
+  }, [excludedProjects]);
+
+  const toggleSession = useCallback((sessionId: string) => {
+    setExpandedSession(prev => prev === sessionId ? null : sessionId);
+  }, []);
+
+  const toggleStack = useCallback((key: string) => {
+    setExpandedStacks(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   // idle 6h+ 세션 자동 숨김 (active 필터 시에도 적용)
   const STALE_MS = 6 * 60 * 60 * 1000; // 6시간
-  const isStale = (s: typeof sessions[number]) => {
+  const nowForSessions = state.lastUpdated || Date.now();
+  const isStale = useCallback((s: typeof sessions[number]) => {
     if (s.state === 'active' || s.state === 'waiting') return false;
     if (!s.lastModified) return true;
-    return Date.now() - new Date(s.lastModified).getTime() > STALE_MS;
-  };
-  const staleSessions = sessions.filter(isStale);
-  const freshSessions = sessions.filter(s => !isStale(s));
+    return nowForSessions - new Date(s.lastModified).getTime() > STALE_MS;
+  }, [nowForSessions]);
+  const staleSessions = useMemo(() => sessions.filter(isStale), [sessions, isStale]);
+  const freshSessions = useMemo(() => sessions.filter(s => !isStale(s)), [sessions, isStale]);
 
-  const filteredSessions = activeFilter === 'active'
+  const filteredSessions = useMemo(() => activeFilter === 'active'
     ? freshSessions.filter(s => s.state === 'active' || s.state === 'waiting')
-    : showStale ? sessions : freshSessions;
+    : showStale ? sessions : freshSessions, [activeFilter, freshSessions, sessions, showStale]);
 
   // 2단계 그루핑: Project → Branch → Sessions
   // toplevel(git root)이 같으면 같은 프로젝트로 합치기 (worktree 통합)
-  type BranchGroup = { branch: string; sessions: typeof sessions; commits: number; added: number; removed: number };
+  type BranchGroup = { branch: string; sessions: SessionInfo[]; items: SessionListItem[]; commits: number; added: number; removed: number };
   type ProjectGroup = { name: string; branches: BranchGroup[]; totalCommits: number; totalAdded: number; totalRemoved: number };
-  const projectGroups: ProjectGroup[] = (() => {
+  const projectGroups: ProjectGroup[] = useMemo(() => {
     // gitCommonDir → 대표 프로젝트명 매핑
     // gitCommonDir은 같은 저장소의 모든 워크트리에서 동일한 값을 가짐
     const repoNames = new Map<string, string>();
@@ -167,6 +351,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           return {
             branch,
             sessions: bSess,
+            items: buildSessionItems(branch, bSess),
             commits: first?.commitsToday ?? 0,
             added: first?.linesAdded ?? 0,
             removed: first?.linesRemoved ?? 0,
@@ -177,7 +362,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         const totalRemoved = branches.reduce((s, b) => s + b.removed, 0);
         return { name, branches, totalCommits, totalAdded, totalRemoved };
       });
-  })();
+  }, [filteredSessions, hiddenProjects]);
 
   // all known project names (for unhide UI, include ones not currently in sessions)
   const allHidden = hiddenProjects;
@@ -255,10 +440,10 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                 <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
                   {isAll ? `Avg ${cacheHeaderLabel}` : cacheHeaderLabel}
                 </div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: C.active, lineHeight: 1, fontFamily: C.fontMono }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: cacheHeroColor, lineHeight: 1, fontFamily: C.fontMono }}>
                   {Math.round(cacheEff)}%
                 </div>
-                <div style={{ fontSize: 9, color: C.active, marginTop: 3 }}>
+                <div style={{ fontSize: 9, color: cacheSavedColor, marginTop: 3 }}>
                   ✦ {fmtCost(saved, currency, usdToKrw)} saved{isAll ? ' total' : ' today'}
                 </div>
               </div>
@@ -288,40 +473,46 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8 }}>
 
         {/* ── Plan Usage 카드 ───────────────────────────────────────────── */}
+        {extraUsageHigh && extraUsage && (
+          <div style={{ margin: '10px 8px 0' }}>
+            <ExtraUsageCard extraUsage={extraUsage} variant="banner" />
+          </div>
+        )}
+
         <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
           {/* 헤더 */}
           <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
           </div>
 
-          {extraUsageHigh && extraUsage && (
-            <div style={{ borderBottom: `1px solid ${C.border}` }}>
-              <ExtraUsageCard extraUsage={extraUsage} />
-            </div>
-          )}
-
           {/* Claude: 5h | 1w 나란히 (CSS Grid 2열, 동일 폭) */}
           {showClaudeUsage && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+            <>
+              <LimitSectionHeader title="Claude limits" source={claudeLimitSource} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
               <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
                 limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-                limitSourceLabel={sourceLabel(limits.h5.source)} hero borderRight />
+                hero borderRight />
               <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
                 limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-                limitSourceLabel={sourceLabel(limits.week.source)} hero />
-            </div>
+                hero />
+              </div>
+            </>
           )}
 
           {/* Codex: 5h | 1w (데이터 있을 때만) */}
           {showCodexUsage && (providerMode === 'codex' || usage.h5Codex.totalTokens > 0 || usage.weekCodex.totalTokens > 0 || limits.codexH5.pct > 0 || limits.codexWeek.pct > 0) && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+            <>
+              <LimitSectionHeader title="Codex local limits" source={codexLimitSource} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
               <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
                 limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} apiConnected={true}
-                limitSourceLabel={sourceLabel(limits.codexH5.source)} cacheMetricMode="cachedInput" hero borderRight />
+                cacheMetricMode="cachedInput" hero borderRight />
               <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
                 limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} apiConnected={true}
-                limitSourceLabel={sourceLabel(limits.codexWeek.source)} cacheMetricMode="cachedInput" hero />
-            </div>
+                cacheMetricMode="cachedInput" hero />
+              </div>
+            </>
           )}
 
           {/* Sonnet 1w (Plan Usage 내부, 동일 행 패턴) */}
@@ -332,7 +523,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                 totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
               }} currency={currency} usdToKrw={usdToKrw}
                 limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected}
-                limitSourceLabel={sourceLabel(limits.so.source)} hideCost />
+                hideCost />
             </div>
           )}
 
@@ -345,7 +536,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         </div>
 
         {/* ── Code Output 카드 ────────────────────────────────────────── */}
-        <CodeOutputCard sessions={sessions} repoGitStats={state.repoGitStats} todayCost={usage.todayCost} allTimeCost={usage.models.reduce((s, m) => s + m.costUSD, 0)} currency={currency} usdToKrw={usdToKrw} />
+        <CodeOutputCard sessions={sessions} repoGitStats={state.repoGitStats} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
 
         {/* ── Sessions 카드 ─────────────────────────────────────────────── */}
         <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, paddingBottom: 16 }}>
@@ -373,10 +564,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           {/* 세션 목록 — 2단계 그루핑 */}
           {projectGroups.length > 0
             ? projectGroups.map(proj => (
-              <div key={proj.name}
-                onMouseEnter={() => setHoveredGroup(proj.name)}
-                onMouseLeave={() => setHoveredGroup(null)}
-              >
+              <div key={proj.name}>
                 {/* 프로젝트 헤더 */}
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -390,14 +578,21 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                         {proj.totalCommits} commit{proj.totalCommits > 1 ? 's' : ''} · +{proj.totalAdded} / -{proj.totalRemoved}
                       </span>
                     )}
-                    {hoveredGroup === proj.name && (
-                      <div style={{ display: 'flex', gap: 2 }}>
-                        <button onClick={() => hideProject(proj.name)} title="Hide"
-                          style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>✕</button>
-                        <button onClick={() => excludeProject(proj.name)} title="Exclude"
-                          style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 2px', lineHeight: 1 }}>⊘</button>
-                      </div>
-                    )}
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        onClick={() => setProjectMenuOpen(open => open === proj.name ? null : proj.name)}
+                        title="Project actions"
+                        style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 6px', lineHeight: 1.4, borderRadius: 4 }}
+                      >
+                        ...
+                      </button>
+                      {projectMenuOpen === proj.name && (
+                        <div style={{ position: 'absolute', right: 0, top: 20, zIndex: 5, display: 'grid', gap: 2, padding: 4, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: '0 8px 20px rgba(0,0,0,0.25)' }}>
+                          <button onClick={() => hideProject(proj.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Hide</button>
+                          <button onClick={() => excludeProject(proj.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Exclude</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -423,14 +618,28 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
                     </div>
 
                     {/* 세션 카드들 */}
-                    {br.sessions.map(s => (
+                    {br.items.map(item => item.type === 'stack' ? (
+                      <React.Fragment key={item.key}>
+                        <SessionStackRow
+                          item={item}
+                          expanded={expandedStacks.has(item.key)}
+                          onToggle={() => toggleStack(item.key)}
+                        />
+                        {expandedStacks.has(item.key) && item.sessions.map(s => (
+                          <SessionRow
+                            key={s.sessionId}
+                            session={s}
+                            expanded={expandedSession === s.sessionId}
+                            onToggle={() => toggleSession(s.sessionId)}
+                          />
+                        ))}
+                      </React.Fragment>
+                    ) : (
                       <SessionRow
-                        key={s.sessionId}
-                        session={s}
-                        expanded={expandedSession === s.sessionId}
-                        onToggle={() => setExpandedSession(
-                          expandedSession === s.sessionId ? null : s.sessionId
-                        )}
+                        key={item.session.sessionId}
+                        session={item.session}
+                        expanded={expandedSession === item.session.sessionId}
+                        onToggle={() => toggleSession(item.session.sessionId)}
                       />
                     ))}
                   </div>
@@ -485,22 +694,26 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
         </div>
 
         {/* ── Activity 카드 (Rhythm 탭 통합) ──────────────────────────── */}
-        <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-          <ActivityChart
-            heatmap={usage.heatmap}
-            heatmap30={usage.heatmap30}
-            heatmap90={usage.heatmap90}
-            weeklyTimeline={usage.weeklyTimeline}
-            todBuckets={usage.todBuckets}
-            currency={currency}
-            usdToKrw={usdToKrw}
-          />
-        </div>
+        <LazySection minHeight={220}>
+          <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+            <ActivityChart
+              heatmap={usage.heatmap}
+              heatmap30={usage.heatmap30}
+              heatmap90={usage.heatmap90}
+              weeklyTimeline={usage.weeklyTimeline}
+              todBuckets={usage.todBuckets}
+              currency={currency}
+              usdToKrw={usdToKrw}
+            />
+          </div>
+        </LazySection>
 
         {/* ── Model Usage 카드 ──────────────────────────────────────────── */}
-        <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-          <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
-        </div>
+        <LazySection minHeight={130}>
+          <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+            <ModelBreakdown models={usage.models} currency={currency} usdToKrw={usdToKrw} />
+          </div>
+        </LazySection>
 
       </div>
 
@@ -510,7 +723,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
           { key: 'settings',      icon: '⚙',  label: 'Settings' },
           { key: 'notifications', icon: '🔔', label: 'Alerts' },
           { key: 'help',          icon: '?',  label: 'Help' },
-          { key: 'refresh',       icon: '↺',  label: lastRefreshLabel || 'Refresh' },
+          { key: 'refresh',       icon: '↺',  label: <RefreshStatus lastUpdated={state.lastUpdated} refreshing={refreshing} /> },
         ].map(({ key, icon, label }) => (
           <button
             key={key}
