@@ -11,7 +11,7 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
-import { getGitStats, getGitStatsAsync, GitStats, getAllPersistedStatsByRepo } from './gitStatsCollector';
+import { getGitStatsAsync, GitStats, getAllPersistedStatsByRepo } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
 
 export interface SessionInfo extends DiscoveredSession {
@@ -22,6 +22,11 @@ export interface SessionInfo extends DiscoveredSession {
   gitStats: GitStats | null;
   activityBreakdown: ActivityBreakdown | null;
   activityBreakdownKind: ActivityBreakdownKind | null;
+}
+
+export interface CodeOutputStats {
+  today: { commits: number; added: number; removed: number };
+  all: { commits: number; added: number; removed: number };
 }
 
 export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
@@ -52,11 +57,22 @@ export interface AppState {
   bridgeActive: boolean;  // whether the Claude Code statusLine bridge is connected
   extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
+  codeOutputStats: CodeOutputStats;
   allTimeSessions: number;
 }
 
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
+
+function getJsonlMtime(filePath: string): Date | null {
+  try { return fs.statSync(filePath).mtime; }
+  catch { return null; }
+}
+
+function gitStatsCacheKey(cwd: string): string {
+  const key = path.resolve(cwd);
+  return process.platform === 'win32' ? key.toLowerCase() : key;
+}
 
 export class StateManager {
   private store: Store<AppSettings>;
@@ -80,9 +96,15 @@ export class StateManager {
   private jsonlCache = new JsonlCache();
   private codexRateLimits: ParsedFile['codexRateLimits'] | null = null;
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
+  private dirtySessionFiles = new Set<string>();
+  private deferredFastFiles = new Set<string>();
+  private heavyInFlight = false;
+  private heavyPending = false;
+  private uiBusy = false;
+  private repoGitStatsLastRefresh = 0;
   private static readonly API_MIN_INTERVAL_MS = 180_000; // 3분 간격 (429 방지)
 
-  private static readonly GIT_STATS_TTL_MS = 60_000;
+  private static readonly GIT_STATS_TTL_MS = 600_000;
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
     this.store = store;
@@ -147,12 +169,20 @@ export class StateManager {
       bridgeActive: false,
       extraUsage: null,
       repoGitStats: {},
+      codeOutputStats: this.emptyCodeOutputStats(),
       allTimeSessions: 0,
     };
   }
 
   private emptyWindow() {
     return { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0 };
+  }
+
+  private emptyCodeOutputStats(): CodeOutputStats {
+    return {
+      today: { commits: 0, added: 0, removed: 0 },
+      all: { commits: 0, added: 0, removed: 0 },
+    };
   }
 
   start() {
@@ -182,6 +212,20 @@ export class StateManager {
     if (this.heavyDebounce) clearTimeout(this.heavyDebounce);
     this.watcher?.close();
     this.bridgeWatcher.stop();
+  }
+
+  setUiBusy(busy: boolean): void {
+    this.uiBusy = busy;
+    if (busy) return;
+    if (this.deferredFastFiles.size > 0) {
+      const files = new Set(this.deferredFastFiles);
+      this.deferredFastFiles.clear();
+      this.fastRefresh(files);
+    }
+    if (this.heavyPending) {
+      this.heavyPending = false;
+      void this.heavyRefresh();
+    }
   }
 
   private async refreshAutoLimits(): Promise<void> {
@@ -226,7 +270,7 @@ export class StateManager {
   // Renderer refresh button → immediate API + JSONL re-parse
   async forceRefresh(): Promise<void> {
     await this.refreshApiUsagePct(true);
-    await this.heavyRefresh();
+    await this.heavyRefresh(true);
   }
 
   private startTimers() {
@@ -246,11 +290,14 @@ export class StateManager {
     }, 8000);
   }
 
-  private debouncedFastRefresh() {
+  private debouncedFastRefresh(filePath?: string) {
+    if (filePath) this.dirtySessionFiles.add(path.normalize(filePath));
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
     this.fastDebounce = setTimeout(() => {
       this.fastDebounce = null;
-      this.fastRefresh();
+      const files = this.dirtySessionFiles.size > 0 ? new Set(this.dirtySessionFiles) : undefined;
+      this.dirtySessionFiles.clear();
+      this.fastRefresh(files);
     }, 1200);
   }
 
@@ -275,7 +322,7 @@ export class StateManager {
     this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
     this.watcher.on('add', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) {
-        this.debouncedFastRefresh();
+        this.debouncedFastRefresh(filePath);
         this.debouncedHeavyRefresh();
       }
       else this.fastRefresh();
@@ -287,15 +334,22 @@ export class StateManager {
 
     // Watch for JSONL changes — 디바운스 적용
     // Windows에서 path.join이 백슬래시를 사용하면 chokidar glob이 동작하지 않으므로 슬래시로 변환
-    this.watcher.on('change', () => {
-      this.debouncedFastRefresh();
+    this.watcher.on('change', (filePath: string) => {
+      this.debouncedFastRefresh(filePath);
       this.debouncedHeavyRefresh();
     });
   }
 
-  private fastRefresh() {
-    const sessions = this.buildSessionInfos();
-    this.state = { ...this.state, sessions, lastUpdated: Date.now() };
+  private fastRefresh(changedFiles?: Set<string>) {
+    if (this.uiBusy) {
+      if (changedFiles) for (const file of changedFiles) this.deferredFastFiles.add(path.normalize(file));
+      return;
+    }
+    const sessions = changedFiles && changedFiles.size > 0
+      ? this.updateChangedSessionInfos(changedFiles)
+      : this.buildSessionInfos();
+    const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+    this.state = { ...this.state, sessions, codeOutputStats, lastUpdated: Date.now() };
     this.onUpdate(this.state);
     // Also refresh usage limit API periodically (independent of heavyRefresh)
     void this.refreshApiUsagePct().then(() => {
@@ -307,58 +361,57 @@ export class StateManager {
     });
   }
 
-  private async heavyRefresh() {
-    await this.refreshApiUsagePct();
-    const loaded = this.loadProviderEntries();
-    this.allEntries = loaded.entries;
-    this.codexRateLimits = loaded.codexRateLimits;
-
-    const settings = this.getSettings();
-    const effectiveLimits = this.autoLimits
-      ? { h5: this.autoLimits.h5, week: this.autoLimits.week, sonnetWeek: this.autoLimits.sonnetWeek }
-      : settings.usageLimits;
-    // API 기준으로 각 창의 실제 시작 시각 역산 (API 우선, bridge fallback, calendar 최후)
-    const now = Date.now();
-    const rl = this.liveSession?.rate_limits;
-    const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
-    const h5ResetMs = this.apiUsagePct?.h5ResetMs
-      ?? (bridgeActive && rl?.five_hour?.resets_at ? rl.five_hour.resets_at - now : 0);
-    const weekResetMs = this.apiUsagePct?.weekResetMs
-      ?? (bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : 0);
-    const codexResetMs = this.getCodexResetMs(now);
-    const usage = computeUsage(this.allEntries, effectiveLimits, {
-      claude: { weekResetMs, h5ResetMs },
-      codex: { weekResetMs: codexResetMs.week.resetMs, h5ResetMs: codexResetMs.h5.resetMs },
-    });
-    const limits = this.buildLimits();
-    const sessions = await this.buildSessionInfosAsync();
-
-    const extraUsage = this.apiUsagePct?.extraUsage ?? null;
-
-    // ~/.claude/projects/ 기반으로 모든 Claude 작업 repo의 git stats 수집
-    const allCwds = discoverAllProjectCwds(settings.provider);
-    const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
-    const repoGitStats: Record<string, GitStats> = {};
-
-    // 1단계: fresh 수집 결과 먼저 적용 (신선도 우선, 중복 제거)
-    for (const stats of rawStats) {
-      if (!stats?.gitCommonDir) continue;
-      if (repoGitStats[stats.gitCommonDir]) continue;
-      repoGitStats[stats.gitCommonDir] = stats;
+  private async heavyRefresh(force = false) {
+    if (this.uiBusy && !force) {
+      this.heavyPending = true;
+      return;
     }
+    if (this.heavyInFlight) {
+      this.heavyPending = true;
+      return;
+    }
+    this.heavyInFlight = true;
+    try {
+      await this.refreshApiUsagePct(force);
+      const loaded = this.loadProviderEntries();
+      this.allEntries = loaded.entries;
+      this.codexRateLimits = loaded.codexRateLimits;
 
-    // 2단계: 영속 캐시로 누락 repo 보충 (삭제된 워크트리 복원)
-    const persisted = getAllPersistedStatsByRepo();
-    for (const [gitCommonDir, stats] of Object.entries(persisted)) {
-      if (!repoGitStats[gitCommonDir]) {
-        repoGitStats[gitCommonDir] = stats;
+      const settings = this.getSettings();
+      const effectiveLimits = this.autoLimits
+        ? { h5: this.autoLimits.h5, week: this.autoLimits.week, sonnetWeek: this.autoLimits.sonnetWeek }
+        : settings.usageLimits;
+      // API 기준으로 각 창의 실제 시작 시각 역산 (API 우선, bridge fallback, calendar 최후)
+      const now = Date.now();
+      const rl = this.liveSession?.rate_limits;
+      const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
+      const h5ResetMs = this.apiUsagePct?.h5ResetMs
+        ?? (bridgeActive && rl?.five_hour?.resets_at ? rl.five_hour.resets_at - now : 0);
+      const weekResetMs = this.apiUsagePct?.weekResetMs
+        ?? (bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : 0);
+      const codexResetMs = this.getCodexResetMs(now);
+      const usage = computeUsage(this.allEntries, effectiveLimits, {
+        claude: { weekResetMs, h5ResetMs },
+        codex: { weekResetMs: codexResetMs.week.resetMs, h5ResetMs: codexResetMs.h5.resetMs },
+      });
+      const limits = this.buildLimits();
+      let sessions = this.buildSessionInfos();
+      const extraUsage = this.apiUsagePct?.extraUsage ?? null;
+      const repoGitStats = await this.getRepoGitStats(settings, force);
+      sessions = this.attachCachedGitStats(sessions);
+      const codeOutputStats = this.buildCodeOutputStats(sessions, repoGitStats);
+
+      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, codeOutputStats, allTimeSessions: loaded.sessionCount };
+      this.onUpdate(this.state);
+
+      checkAlerts(limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+    } finally {
+      this.heavyInFlight = false;
+      if (this.heavyPending && !this.uiBusy) {
+        this.heavyPending = false;
+        void this.heavyRefresh();
       }
     }
-
-    this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, allTimeSessions: loaded.sessionCount };
-    this.onUpdate(this.state);
-
-    checkAlerts(limits, settings.alertThresholds, settings.enableAlerts);
   }
 
   /** API 데이터 항상 우선 (서버 권위값); API 없을 때만 bridge fallback */
@@ -540,22 +593,130 @@ export class StateManager {
     return files;
   }
 
-  private getCachedGitStats(cwd: string): GitStats | null {
+  private peekCachedGitStats(cwd: string): GitStats | null {
     const now = Date.now();
-    const cached = this.gitStatsCache.get(cwd);
+    const cached = this.gitStatsCache.get(gitStatsCacheKey(cwd));
     if (cached && now - cached.ts < StateManager.GIT_STATS_TTL_MS) return cached.stats;
-    const stats = getGitStats(cwd);
-    this.gitStatsCache.set(cwd, { stats, ts: now });
-    return stats;
+    return null;
   }
 
   private async getCachedGitStatsAsync(cwd: string): Promise<GitStats | null> {
     const now = Date.now();
-    const cached = this.gitStatsCache.get(cwd);
+    const key = gitStatsCacheKey(cwd);
+    const cached = this.gitStatsCache.get(key);
     if (cached && now - cached.ts < StateManager.GIT_STATS_TTL_MS) return cached.stats;
     const stats = await getGitStatsAsync(cwd).catch(() => null);
-    this.gitStatsCache.set(cwd, { stats, ts: now });
+    this.gitStatsCache.set(key, { stats, ts: now });
     return stats;
+  }
+
+  private async getRepoGitStats(settings: AppSettings, force = false): Promise<Record<string, GitStats>> {
+    const now = Date.now();
+    if (!force && this.repoGitStatsLastRefresh > 0 && now - this.repoGitStatsLastRefresh < StateManager.GIT_STATS_TTL_MS) {
+      return this.state.repoGitStats;
+    }
+
+    const allCwds = discoverAllProjectCwds(settings.provider);
+    const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
+    const repoGitStats: Record<string, GitStats> = {};
+
+    for (const stats of rawStats) {
+      if (!stats?.gitCommonDir) continue;
+      if (repoGitStats[stats.gitCommonDir]) continue;
+      repoGitStats[stats.gitCommonDir] = stats;
+    }
+
+    const persisted = getAllPersistedStatsByRepo();
+    for (const [gitCommonDir, stats] of Object.entries(persisted)) {
+      if (!repoGitStats[gitCommonDir]) repoGitStats[gitCommonDir] = stats;
+    }
+
+    this.repoGitStatsLastRefresh = now;
+    return repoGitStats;
+  }
+
+  private buildCodeOutputStats(sessions: SessionInfo[], repoGitStats: Record<string, GitStats>): CodeOutputStats {
+    const today = { commits: 0, added: 0, removed: 0 };
+
+    const repoStats = Object.values(repoGitStats);
+    if (repoStats.length > 0) {
+      for (const stats of repoStats) {
+        today.commits += stats.commitsToday;
+        today.added += stats.linesAdded;
+        today.removed += stats.linesRemoved;
+      }
+    } else {
+      const seenToday = new Set<string>();
+      for (const s of sessions) {
+        if (!s.gitStats) continue;
+        const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
+        if (seenToday.has(repoKey)) continue;
+        seenToday.add(repoKey);
+        today.commits += s.gitStats.commitsToday;
+        today.added += s.gitStats.linesAdded;
+        today.removed += s.gitStats.linesRemoved;
+      }
+    }
+
+    const all = { commits: 0, added: 0, removed: 0 };
+    for (const stats of repoStats) {
+      all.commits += stats.totalCommits;
+      all.added += stats.totalLinesAdded;
+      all.removed += stats.totalLinesRemoved ?? 0;
+    }
+
+    return { today, all };
+  }
+
+  private attachCachedGitStats(sessions: SessionInfo[]): SessionInfo[] {
+    let changed = false;
+    const next = sessions.map(session => {
+      const gitStats = this.peekCachedGitStats(session.cwd);
+      if (gitStats === session.gitStats) return session;
+      changed = true;
+      return { ...session, gitStats };
+    });
+    return changed ? next : sessions;
+  }
+
+  private buildSessionInfo(s: DiscoveredSession, gitStats: GitStats | null = this.peekCachedGitStats(s.cwd)): SessionInfo {
+    let modelName = '';
+    let contextUsed = 0;
+    let contextMax = 200_000;
+    let toolCounts: Record<string, number> = {};
+    let activityBreakdown: SessionInfo['activityBreakdown'] = null;
+    let activityBreakdownKind: SessionInfo['activityBreakdownKind'] = null;
+
+    if (s.jsonlPath) {
+      try {
+        const parsed = s.provider === 'codex'
+          ? parseCodexJsonlCached(s.jsonlPath, this.jsonlCache)
+          : parseJsonlCached(s.jsonlPath, this.jsonlCache);
+        modelName = parsed.modelName;
+        contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
+        toolCounts = parsed.toolCounts;
+        activityBreakdown = parsed.activityBreakdown;
+        activityBreakdownKind = parsed.activityBreakdownKind;
+
+        const raw = parsed.rawModel.toLowerCase();
+        if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
+        else if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
+      } catch { /* skip */ }
+    }
+
+    return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
+  }
+
+  private updateChangedSessionInfos(changedFiles: Set<string>): SessionInfo[] {
+    const normalized = new Set([...changedFiles].map(file => path.normalize(file)));
+    let matched = false;
+    const sessions = this.state.sessions.map(session => {
+      if (!session.jsonlPath || !normalized.has(path.normalize(session.jsonlPath))) return session;
+      matched = true;
+      const lastModified = getJsonlMtime(session.jsonlPath) ?? session.lastModified;
+      return this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
+    });
+    return matched ? sessions : this.buildSessionInfos();
   }
 
   private buildSessionInfos(): SessionInfo[] {
@@ -565,74 +726,7 @@ export class StateManager {
       const key = s.mainRepoName ?? s.projectName;
       return !excluded.has(key) && !excluded.has(s.projectName);
     });
-    return discovered.map(s => {
-      let modelName = '';
-      let contextUsed = 0;
-      let contextMax = 200_000;
-      let toolCounts: Record<string, number> = {};
-
-      let activityBreakdown: SessionInfo['activityBreakdown'] = null;
-      let activityBreakdownKind: SessionInfo['activityBreakdownKind'] = null;
-      if (s.jsonlPath) {
-        try {
-          const parsed = s.provider === 'codex'
-            ? parseCodexJsonlCached(s.jsonlPath, this.jsonlCache)
-            : parseJsonlCached(s.jsonlPath, this.jsonlCache);
-          modelName = parsed.modelName;
-          contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
-          toolCounts = parsed.toolCounts;
-          activityBreakdown = parsed.activityBreakdown;
-          activityBreakdownKind = parsed.activityBreakdownKind;
-
-          const raw = parsed.rawModel.toLowerCase();
-          if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
-          else if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
-          else contextMax = 200_000;
-        } catch { /* skip */ }
-      }
-
-      const gitStats = this.getCachedGitStats(s.cwd);
-      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
-    });
-  }
-
-  // heavyRefresh용 — git stats를 async로 확보하여 첫 렌더링에 브랜치명 포함
-  private async buildSessionInfosAsync(): Promise<SessionInfo[]> {
-    const settings = this.getSettings();
-    const excluded = new Set(settings.excludedProjects ?? []);
-    const discovered = discoverSessions(settings.provider).filter(s => {
-      const key = s.mainRepoName ?? s.projectName;
-      return !excluded.has(key) && !excluded.has(s.projectName);
-    });
-    return Promise.all(discovered.map(async s => {
-      let modelName = '';
-      let contextUsed = 0;
-      let contextMax = 200_000;
-      let toolCounts: Record<string, number> = {};
-
-      let activityBreakdown: SessionInfo['activityBreakdown'] = null;
-      let activityBreakdownKind: SessionInfo['activityBreakdownKind'] = null;
-      if (s.jsonlPath) {
-        try {
-          const parsed = s.provider === 'codex'
-            ? parseCodexJsonlCached(s.jsonlPath, this.jsonlCache)
-            : parseJsonlCached(s.jsonlPath, this.jsonlCache);
-          modelName = parsed.modelName;
-          contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
-          toolCounts = parsed.toolCounts;
-          activityBreakdown = parsed.activityBreakdown;
-          activityBreakdownKind = parsed.activityBreakdownKind;
-
-          const raw = parsed.rawModel.toLowerCase();
-          if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
-          else if (raw.includes('1m') || raw.includes('1-000k')) contextMax = 1_000_000;
-          else contextMax = 200_000;
-        } catch { /* skip */ }
-      }
-
-      const gitStats = await this.getCachedGitStatsAsync(s.cwd);
-      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
-    }));
+    return discovered.map(s => this.buildSessionInfo(s));
   }
 
   getState(): AppState {
@@ -647,6 +741,7 @@ export class StateManager {
     if (providerChanged) {
       this.jsonlCache.clear();
       this.codexRateLimits = null;
+      this.repoGitStatsLastRefresh = 0;
       this.startWatcher();
       void this.heavyRefresh();
       return;
@@ -656,7 +751,8 @@ export class StateManager {
       const key = s.mainRepoName ?? s.projectName;
       return !excluded.has(key) && !excluded.has(s.projectName);
     });
-    this.state = { ...this.state, sessions, settings, lastUpdated: Date.now() };
+    const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+    this.state = { ...this.state, sessions, settings, codeOutputStats, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 }

@@ -14,6 +14,7 @@ interface Props {
   onNav: (view: 'settings' | 'notifications' | 'help') => void;
   onQuit: () => void;
   onRefresh: () => void;
+  onScrollActivity: () => void;
 }
 
 type NavView = 'settings' | 'notifications' | 'help';
@@ -352,10 +353,10 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} apiConnected={true}
-            cacheMetricMode="cachedInput" hero borderRight />
+            cacheMetricMode="codex" hero borderRight />
           <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} apiConnected={true}
-            cacheMetricMode="cachedInput" hero />
+            cacheMetricMode="codex" hero />
         </div>
       )}
     </div>
@@ -436,11 +437,10 @@ const SessionItem = React.memo(function SessionItem({ session, expanded, onToggl
   return <SessionRow session={session} expanded={expanded} onToggle={handleToggle} />;
 });
 
-const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, providerMode, lastUpdated }: {
+const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, providerMode }: {
   sessions: SessionInfo[];
   settings: AppState['settings'];
   providerMode: ProviderMode;
-  lastUpdated: number;
 }) {
   const C = useTheme();
   const hiddenProjects = settings.hiddenProjects ?? [];
@@ -492,8 +492,8 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
   const isStale = useCallback((s: SessionInfo) => {
     if (s.state === 'active' || s.state === 'waiting') return false;
     if (!s.lastModified) return true;
-    return (lastUpdated || Date.now()) - new Date(s.lastModified).getTime() > STALE_MS;
-  }, [lastUpdated]);
+    return Date.now() - new Date(s.lastModified).getTime() > STALE_MS;
+  }, []);
   const staleSessions = useMemo(() => sessions.filter(isStale), [sessions, isStale]);
   const freshSessions = useMemo(() => sessions.filter(s => !isStale(s)), [sessions, isStale]);
   const filteredSessions = useMemo(() => activeFilter === 'active'
@@ -524,7 +524,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
       .map(([name, projectSessions]) => {
         const branchMap = new Map<string, SessionInfo[]>();
         for (const s of projectSessions) {
-          const branch = s.gitStats?.branch ?? '(unknown)';
+          const branch = s.worktreeBranch ?? s.gitBranch ?? s.gitStats?.branch ?? '(unknown)';
           if (!branchMap.has(branch)) branchMap.set(branch, []);
           branchMap.get(branch)!.push(s);
         }
@@ -818,7 +818,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, onRef
   );
 });
 
-export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
+export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActivity }: Props) {
   const C = useTheme();
   const { sessions, usage, settings } = state;
   const { currency, usdToKrw } = settings;
@@ -827,11 +827,16 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const lastScrollTopRef = useRef(0);
+  const sessionLayoutKey = useMemo(
+    () => sessions.map(s => `${s.sessionId}:${s.provider}:${s.source}:${s.state}:${s.projectName}:${s.worktreeBranch ?? s.gitBranch ?? ''}:${s.modelName}`).join('|'),
+    [sessions]
+  );
 
   const handleScroll = useCallback(() => {
     const node = scrollRef.current;
     if (node) lastScrollTopRef.current = node.scrollTop;
-  }, []);
+    onScrollActivity();
+  }, [onScrollActivity]);
 
   useLayoutEffect(() => {
     const node = scrollRef.current;
@@ -841,7 +846,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       if (scrollRef.current) scrollRef.current.scrollTop = top;
     });
     return () => cancelAnimationFrame(frame);
-  }, [sessions, state.lastUpdated]);
+  }, [sessionLayoutKey]);
 
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -860,8 +865,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh }: Props) {
       <HeaderMetrics state={state} onQuit={onQuit} />
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
         <PlanUsagePanel usage={usage} limits={state.limits} settings={settings} apiConnected={state.apiConnected} extraUsage={state.extraUsage} />
-        <CodeOutputCard sessions={sessions} repoGitStats={state.repoGitStats} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
-        <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} lastUpdated={state.lastUpdated} />
+        <CodeOutputCard stats={state.codeOutputStats} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
+        <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
         <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
         <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />
       </div>

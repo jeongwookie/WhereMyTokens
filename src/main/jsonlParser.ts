@@ -554,6 +554,17 @@ function parseCodexRateLimits(payload: Record<string, unknown>, observedAt: numb
   return result;
 }
 
+function mergeCodexRateLimits(
+  current: ParsedFile['codexRateLimits'],
+  next: ParsedFile['codexRateLimits'],
+): ParsedFile['codexRateLimits'] {
+  if (!next?.h5 && !next?.week) return current;
+  const merged: ParsedFile['codexRateLimits'] = { ...(current ?? {}) };
+  if (next.h5 && (!merged.h5 || next.h5.observedAt >= merged.h5.observedAt)) merged.h5 = next.h5;
+  if (next.week && (!merged.week || next.week.observedAt >= merged.week.observedAt)) merged.week = next.week;
+  return merged;
+}
+
 export function parseCodexJsonlFile(filePath: string): ParsedFile {
   let raw: string;
   try {
@@ -688,6 +699,147 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
   const cached = cache.get(filePath);
   if (cached && cached.mtimeMs === stat.mtimeMs) {
     return cached.parsed;
+  }
+
+  if (cached && stat.size >= cached.byteOffset) {
+    const newSize = stat.size - cached.byteOffset;
+    if (newSize === 0) {
+      cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
+      return cached.parsed;
+    }
+
+    let fd: number | null = null;
+    try {
+      const buf = Buffer.alloc(newSize);
+      fd = fs.openSync(filePath, 'r');
+      fs.readSync(fd, buf, 0, newSize, cached.byteOffset);
+      const newText = buf.toString('utf-8');
+
+      if (!newText.trim()) {
+        cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
+        return cached.parsed;
+      }
+
+      const entries = [...cached.parsed.entries];
+      const seenMap = new Map(cached.seenMap);
+      let latestModel = cached.parsed.modelName;
+      let latestRawModel = cached.parsed.rawModel;
+      let latestInputTokens = cached.parsed.latestInputTokens;
+      let latestCacheCreationTokens = cached.parsed.latestCacheCreationTokens;
+      let latestCacheReadTokens = cached.parsed.latestCacheReadTokens;
+      let contextMax = cached.parsed.contextMax ?? 0;
+      let codexRateLimits = cached.parsed.codexRateLimits;
+      const toolCounts = { ...cached.parsed.toolCounts };
+      const activityBreakdown = { ...cached.parsed.activityBreakdown };
+
+      const lines = newText.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        let obj: Record<string, unknown>;
+        try { obj = JSON.parse(line) as Record<string, unknown>; }
+        catch { continue; }
+
+        const timestamp = obj.timestamp as string | undefined;
+        const payload = obj.payload as Record<string, unknown> | undefined;
+        if (!payload) continue;
+
+        if (obj.type === 'turn_context') {
+          const model = payload.model as string | undefined;
+          if (model) {
+            latestRawModel = model;
+            latestModel = normalizeModel(model);
+          }
+          continue;
+        }
+
+        if (obj.type === 'event_msg' && payload.type === 'task_started') {
+          contextMax = asNumber(payload.model_context_window);
+          continue;
+        }
+
+        if (obj.type === 'response_item' && payload.type === 'function_call') {
+          const name = payload.name as string | undefined;
+          if (name) {
+            toolCounts[name] = (toolCounts[name] ?? 0) + 1;
+            const cat = classifyToolUse(name, payload.arguments);
+            activityBreakdown[cat] += 1;
+          }
+          continue;
+        }
+
+        if (obj.type !== 'event_msg' || payload.type !== 'token_count') continue;
+
+        const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
+        const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
+        codexRateLimits = mergeCodexRateLimits(codexRateLimits, parseCodexRateLimits(payload, observedAt));
+
+        const info = payload.info as Record<string, unknown> | null | undefined;
+        const usage = info?.last_token_usage as Record<string, unknown> | undefined;
+        if (!usage) continue;
+
+        const rawInput = asNumber(usage.input_tokens);
+        const cachedInput = Math.min(rawInput, asNumber(usage.cached_input_tokens));
+        const inp = Math.max(0, rawInput - cachedInput);
+        const out = asNumber(usage.output_tokens);
+        const cw = 0;
+        const cr = cachedInput;
+
+        if (inp + out + cr === 0) continue;
+
+        const rawModel = latestRawModel || 'codex';
+        const ts = timestamp ? new Date(timestamp) : new Date(0);
+        const id = `${filePath}-${timestamp ?? entries.length}-${entries.length}`;
+        if (seenMap.has(id)) continue;
+        seenMap.set(id, entries.length);
+
+        entries.push({
+          requestId: id,
+          timestamp: ts,
+          model: normalizeModel(rawModel),
+          provider: 'codex',
+          inputTokens: inp,
+          outputTokens: out,
+          cacheCreationTokens: cw,
+          cacheReadTokens: cr,
+          costUSD: calcCost(rawModel, inp, out, cw, cr),
+          cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+        });
+
+        latestModel = normalizeModel(rawModel);
+        latestInputTokens = inp;
+        latestCacheCreationTokens = cw;
+        latestCacheReadTokens = cr;
+        contextMax = contextMax || asNumber(info?.model_context_window);
+      }
+
+      const result: ParsedFile = {
+        entries,
+        modelName: latestModel,
+        rawModel: latestRawModel,
+        latestInputTokens,
+        latestCacheCreationTokens,
+        latestCacheReadTokens,
+        contextMax,
+        codexRateLimits,
+        toolCounts,
+        activityBreakdown,
+        activityBreakdownKind: 'events',
+      };
+      cache.set(filePath, {
+        mtimeMs: stat.mtimeMs,
+        fileSize: stat.size,
+        byteOffset: stat.size,
+        parsed: result,
+        seenMap,
+      });
+      return result;
+    } catch {
+      cache.invalidate(filePath);
+      return parseCodexJsonlCached(filePath, cache);
+    } finally {
+      if (fd !== null) {
+        try { fs.closeSync(fd); } catch { /* ignore */ }
+      }
+    }
   }
 
   const result = parseCodexJsonlFile(filePath);

@@ -13,7 +13,7 @@ export interface CacheEntry {
 }
 
 export class JsonlCache {
-  private readonly MAX_SIZE = 30;
+  private readonly MAX_SIZE = 2000;
   private cache = new Map<string, CacheEntry>();
 
   get(filePath: string): CacheEntry | null {

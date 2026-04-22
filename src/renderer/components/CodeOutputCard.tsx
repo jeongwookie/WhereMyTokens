@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SessionInfo, GitStats } from '../types';
+import { CodeOutputStats } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtCost } from '../theme';
 
@@ -7,84 +7,47 @@ type Period = 'today' | 'all';
 const PERIODS: Period[] = ['today', 'all'];
 
 interface Props {
-  sessions: SessionInfo[];
-  repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (전체 repo, 세션 무관)
+  stats: CodeOutputStats;
   todayCost: number;
   allTimeCost: number;
   currency: string;
   usdToKrw: number;
 }
 
-function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, currency, usdToKrw }: Props) {
+function CodeOutputCard({ stats, todayCost, allTimeCost, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [period, setPeriod] = useState<Period>('today');
 
-  // today: sessions 기반, repo별 중복제거 (--branches로 수집하므로 branch 구분 불필요)
-  // → 같은 repo의 여러 워크트리/세션에서 공유 커밋이 중복 집계되는 것을 방지
-  const seenToday = new Set<string>();
-  let commitsToday = 0, linesAdded = 0, linesRemoved = 0;
-  for (const s of sessions) {
-    if (!s.gitStats) continue;
-    const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
-    if (!seenToday.has(repoKey)) {
-      seenToday.add(repoKey);
-      commitsToday += s.gitStats.commitsToday;
-      linesAdded += s.gitStats.linesAdded;
-      linesRemoved += s.gitStats.linesRemoved;
-    }
-  }
+  if (stats.all.commits === 0 && stats.today.commits === 0) return null;
 
-  // all-time: repoGitStats 기반 — ~/.claude/projects/ 전체에서 발견된 모든 repo 포함
-  let totalCommits = 0, totalLinesAdded = 0, totalLinesRemoved = 0;
-  for (const stats of Object.values(repoGitStats)) {
-    totalCommits += stats.totalCommits;
-    totalLinesAdded += stats.totalLinesAdded;
-    totalLinesRemoved += stats.totalLinesRemoved ?? 0;
-  }
-
-  if (totalCommits === 0 && commitsToday === 0) return null;
-
-  // 기간별 데이터 선택
-  const data = period === 'today'
-    ? { commits: commitsToday, added: linesAdded, removed: linesRemoved }
-    : { commits: totalCommits, added: totalLinesAdded, removed: totalLinesRemoved };
-
+  const data = period === 'today' ? stats.today : stats.all;
   const periodCost = period === 'today' ? todayCost : allTimeCost;
   const netLines = data.added - data.removed;
 
-  // $/line 효율 계산 (today 기준 vs all-time 평균)
-  const todayPerLine = linesAdded > 0 && todayCost > 0 ? todayCost / linesAdded : null;
-  const avgPerLine   = totalLinesAdded > 0 && allTimeCost > 0 ? allTimeCost / totalLinesAdded : null;
-  const effRatio     = todayPerLine != null && avgPerLine != null ? todayPerLine / avgPerLine : null;
+  const todayPerLine = stats.today.added > 0 && todayCost > 0 ? todayCost / stats.today.added : null;
+  const avgPerLine = stats.all.added > 0 && allTimeCost > 0 ? allTimeCost / stats.all.added : null;
 
-  // $/100 added 표시 (today: 오늘 단가, all: 전체 평균 단가)
   const effInfo: { text: string; color: string } = (() => {
-    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 100, currency, usdToKrw) : '—', color: C.accent };
-    if (linesAdded === 0 || todayPerLine === null) return { text: '—', color: C.textDim };
+    if (period === 'all') return { text: avgPerLine ? fmtCost(avgPerLine * 100, currency, usdToKrw) : '-', color: C.accent };
+    if (stats.today.added === 0 || todayPerLine === null) return { text: '-', color: C.textDim };
     return { text: fmtCost(todayPerLine * 100, currency, usdToKrw), color: C.text };
   })();
 
-  // all 탭 서브텍스트용 라인 수 포맷 (+247K lines)
-  const totalLinesFormatted = totalLinesAdded >= 1000
-    ? `+${(totalLinesAdded / 1000).toFixed(0)}K lines`
-    : `+${totalLinesAdded} lines`;
+  const totalLinesFormatted = stats.all.added >= 1000
+    ? `+${(stats.all.added / 1000).toFixed(0)}K lines`
+    : `+${stats.all.added} lines`;
 
-  // KPI 서브텍스트: avg 비교 (today) / +247K lines (all)
   const effSub = (() => {
     if (period === 'all') return totalLinesFormatted;
     if (avgPerLine === null) return '';
     return `avg ${fmtCost(avgPerLine * 100, currency, usdToKrw)}`;
   })();
 
-  // 하단 $/100 added (기간별)
   const perLine = data.added > 0 && periodCost > 0 ? (periodCost / data.added) * 100 : null;
-
-  // COMMITS 서브텍스트
-  const commitsSub = period === 'today' ? `${totalCommits} total` : 'all time';
+  const commitsSub = period === 'today' ? `${stats.all.commits} total` : 'all time';
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
-      {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Code Output</span>
         <div style={{ display: 'flex', gap: 2 }}>
@@ -103,7 +66,6 @@ function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, curren
         </div>
       </div>
 
-      {/* 3 KPI 카드 */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
         <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
         <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
@@ -112,7 +74,6 @@ function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, curren
           sub={effSub} color={effInfo.color} C={C} />
       </div>
 
-      {/* 한 줄 요약 */}
       {data.commits > 0 && (
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -120,8 +81,8 @@ function CodeOutputCard({ sessions, repoGitStats, todayCost, allTimeCost, curren
           borderTop: `1px solid ${C.border}`,
         }}>
           <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
-            {data.commits} commit{data.commits > 1 ? 's' : ''} · {netLines >= 0 ? '+' : ''}{netLines} net lines
-            {perLine ? ` · ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
+            {data.commits} commit{data.commits > 1 ? 's' : ''} - {netLines >= 0 ? '+' : ''}{netLines} net lines
+            {perLine ? ` - ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
           </span>
         </div>
       )}

@@ -16,6 +16,11 @@ export interface GitStats {
   totalLinesRemoved: number;
 }
 
+export interface CodeOutputStats {
+  today: { commits: number; added: number; removed: number };
+  all: { commits: number; added: number; removed: number };
+}
+
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 
 export interface SessionInfo {
@@ -36,6 +41,7 @@ export interface SessionInfo {
   toolCounts: Record<string, number>;
   isWorktree?: boolean;
   worktreeBranch?: string | null;
+  gitBranch?: string | null;
   mainRepoName?: string | null;
   gitStats?: GitStats | null;
   activityBreakdown?: {
@@ -183,6 +189,7 @@ export interface AppState {
   bridgeActive: boolean;
   extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
+  codeOutputStats: CodeOutputStats;
   allTimeSessions: number;
 }
 

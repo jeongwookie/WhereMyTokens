@@ -4,12 +4,18 @@ import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtDuration, Theme } from '../theme';
 
 // 캐시 효율 등급 계산
-function cacheGrade(eff: number, C: Theme) {
+function cacheBadge(eff: number, C: Theme) {
   if (eff <= 0) return null;
-  if (eff >= 80) return { label: 'Excellent', bg: C.gradeExcellentBg, color: C.gradeExcellentColor };
-  if (eff >= 60) return { label: 'Good',      bg: C.gradeGoodBg,      color: C.gradeGoodColor };
-  if (eff >= 40) return { label: 'Fair',      bg: C.gradeFairBg,      color: C.gradeFairColor };
-  return           { label: 'Poor',      bg: C.gradePoorBg,      color: C.gradePoorColor };
+  const label = `Cache ${Math.round(eff)}%`;
+  if (eff >= 80) return { label, bg: C.gradeExcellentBg, color: C.gradeExcellentColor };
+  if (eff >= 60) return { label, bg: C.gradeGoodBg, color: C.gradeGoodColor };
+  if (eff >= 40) return { label, bg: C.gradeFairBg, color: C.gradeFairColor };
+  return { label, bg: C.gradePoorBg, color: C.gradePoorColor };
+}
+
+function cacheBadgeTitle(mode: 'claude' | 'codex'): string {
+  if (mode === 'codex') return 'Codex: cached input / input';
+  return 'Claude: cache read / (cache read + cache creation)';
 }
 
 function pctBarColor(pct: number, C: Theme): string {
@@ -33,7 +39,7 @@ interface Props {
   hero?: boolean;       // true = 히어로 대형 % 레이아웃
   borderRight?: boolean;
   limitSourceLabel?: string;
-  cacheMetricMode?: 'grade' | 'cachedInput';
+  cacheMetricMode?: 'claude' | 'codex';
 }
 
 function TokenDotRow({ label, value, color }: { label: string; value: number; color: string }) {
@@ -49,7 +55,7 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
 function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, apiConnected, hideCost, burnRate,
-  hero, borderRight, limitSourceLabel, cacheMetricMode = 'grade',
+  hero, borderRight, limitSourceLabel, cacheMetricMode = 'claude',
 }: Props) {
   const C = useTheme();
 
@@ -76,12 +82,8 @@ function TokenStatsCard({
     }
   }
 
-  const grade = cacheGrade(stats.cacheEfficiency, C);
-  const cacheBadge = cacheMetricMode === 'cachedInput'
-    ? (stats.inputTokens + stats.cacheReadTokens > 0
-      ? { label: `Cached ${Math.round(stats.cacheEfficiency)}%`, bg: C.accentDim, color: C.cacheR }
-      : null)
-    : grade;
+  const cache = cacheBadge(stats.cacheEfficiency, C);
+  const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && burnRate.h5EtaMs < (resetMs ?? Infinity);
   const sourceChip = limitSourceLabel ? (
@@ -109,9 +111,9 @@ function TokenStatsCard({
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {sourceChip}
-            {cacheBadge && (
-              <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cacheBadge.bg, color: cacheBadge.color }}>
-                {cacheBadge.label}
+            {cache && (
+              <span title={cacheTitle} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color }}>
+                {cache.label}
               </span>
             )}
           </span>
@@ -174,9 +176,9 @@ function TokenStatsCard({
             <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
           )}
           {sourceChip}
-          {cacheBadge && (
-            <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: cacheBadge.bg, color: cacheBadge.color }}>
-              {cacheBadge.label}
+          {cache && (
+            <span title={cacheTitle} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: cache.bg, color: cache.color }}>
+              {cache.label}
             </span>
           )}
         </div>

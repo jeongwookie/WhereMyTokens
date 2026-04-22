@@ -20,12 +20,15 @@ export interface DiscoveredSession {
   lastModified: Date | null;
   isWorktree: boolean;
   worktreeBranch: string | null;
+  gitBranch: string | null;
   mainRepoName: string | null;
 }
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
+const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
+const gitBranchCache = new Map<string, string | null>();
 
 function encodeCwd(cwd: string): string {
   // "C:\dev\app" → "C--dev-app" (encode path to flat name)
@@ -83,6 +86,52 @@ function entrypointToSource(entrypoint: string, provider: SessionProvider = 'cla
     'windsurf': 'Windsurf',
   };
   return map[entrypoint] ?? entrypoint;
+}
+
+function detectWorktreeCached(cwd: string): { mainName: string; branch: string } | null {
+  if (worktreeCache.has(cwd)) return worktreeCache.get(cwd) ?? null;
+  const value = detectWorktree(cwd);
+  worktreeCache.set(cwd, value);
+  return value;
+}
+
+function readHeadBranch(gitDir: string): string | null {
+  try {
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf-8').trim();
+    const prefix = 'ref: refs/heads/';
+    if (head.startsWith(prefix)) return head.slice(prefix.length);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function detectGitBranch(cwd: string): string | null {
+  let dir = cwd;
+  while (true) {
+    const marker = path.join(dir, '.git');
+    try {
+      const stat = fs.statSync(marker);
+      if (stat.isDirectory()) return readHeadBranch(marker);
+      if (stat.isFile()) {
+        const content = fs.readFileSync(marker, 'utf-8').trim();
+        const match = content.match(/^gitdir:\s*(.+)$/m);
+        if (!match) return null;
+        const rawGitDir = match[1].trim().replace(/\//g, path.sep);
+        const gitDir = path.isAbsolute(rawGitDir) ? rawGitDir : path.resolve(dir, rawGitDir);
+        return readHeadBranch(gitDir);
+      }
+    } catch { /* keep walking */ }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function detectGitBranchCached(cwd: string): string | null {
+  const key = process.platform === 'win32' ? path.resolve(cwd).toLowerCase() : path.resolve(cwd);
+  if (gitBranchCache.has(key)) return gitBranchCache.get(key) ?? null;
+  const value = detectGitBranch(cwd);
+  gitBranchCache.set(key, value);
+  return value;
 }
 
 function codexEntrypointFromSource(sourceRaw: unknown): string {
@@ -175,7 +224,8 @@ function discoverClaudeSessions(): DiscoveredSession[] {
       const projectName = (meta.name && meta.name.trim()) ? meta.name.trim() : path.basename(cwd);
 
       // Worktree detection: .git is a file when it's a worktree
-      const worktreeInfo = detectWorktree(cwd);
+      const worktreeInfo = detectWorktreeCached(cwd);
+      const gitBranch = detectGitBranchCached(cwd);
 
       results.push({
         provider: 'claude',
@@ -191,6 +241,7 @@ function discoverClaudeSessions(): DiscoveredSession[] {
         lastModified,
         isWorktree: !!worktreeInfo,
         worktreeBranch: worktreeInfo?.branch ?? null,
+        gitBranch,
         mainRepoName: worktreeInfo?.mainName ?? null,
       });
     } catch { /* skip malformed */ }
@@ -217,14 +268,34 @@ function listCodexJsonlFiles(dir: string): string[] {
 }
 
 function readFirstJsonObject(filePath: string): Record<string, unknown> | null {
+  const maxBytes = 512 * 1024;
+  const chunkSize = 16 * 1024;
+  let fd: number | null = null;
   try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    for (const line of raw.split('\n')) {
-      if (!line.trim()) continue;
-      try { return JSON.parse(line) as Record<string, unknown>; }
-      catch { return null; }
+    fd = fs.openSync(filePath, 'r');
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (total < maxBytes) {
+      const buf = Buffer.alloc(Math.min(chunkSize, maxBytes - total));
+      const n = fs.readSync(fd, buf, 0, buf.length, total);
+      if (n <= 0) break;
+      chunks.push(buf.subarray(0, n));
+      total += n;
+      const text = Buffer.concat(chunks).toString('utf-8');
+      const newline = text.indexOf('\n');
+      if (newline >= 0) {
+        const line = text.slice(0, newline).trim();
+        return line ? JSON.parse(line) as Record<string, unknown> : null;
+      }
     }
+    const line = Buffer.concat(chunks).toString('utf-8').trim();
+    return line ? JSON.parse(line) as Record<string, unknown> : null;
   } catch { /* ignore */ }
+  finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch { /* ignore */ }
+    }
+  }
   return null;
 }
 
@@ -253,7 +324,8 @@ function discoverCodexSessions(): DiscoveredSession[] {
       const originator = typeof payload.originator === 'string' ? payload.originator : null;
       const entrypoint = codexEntrypointFromSource(sourceRaw);
       const projectName = path.basename(cwd);
-      const worktreeInfo = detectWorktree(cwd);
+      const worktreeInfo = detectWorktreeCached(cwd);
+      const gitBranch = detectGitBranchCached(cwd);
 
       results.push({
         provider: 'codex',
@@ -269,6 +341,7 @@ function discoverCodexSessions(): DiscoveredSession[] {
         lastModified: stat.mtime,
         isWorktree: !!worktreeInfo,
         worktreeBranch: worktreeInfo?.branch ?? null,
+        gitBranch,
         mainRepoName: worktreeInfo?.mainName ?? null,
       });
     } catch { /* skip malformed */ }
