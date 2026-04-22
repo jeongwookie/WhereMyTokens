@@ -29,15 +29,14 @@ function SessionRow({ session, expanded, onToggle }: {
 }) {
   const C = useTheme();
   const TOOL_COLORS = [C.input, C.output, C.cacheW, C.cacheR, C.sonnet, C.idle];
-
   const mc = modelColor(session.modelName, C);
 
   const toolEntries = useMemo(() => (
-    Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 6)
+    Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1])
   ), [session.toolCounts]);
+  const visibleToolEntries = useMemo(() => toolEntries.slice(0, 6), [toolEntries]);
   const totalTools = useMemo(() => toolEntries.reduce((s, [, n]) => s + n, 0), [toolEntries]);
 
-  // Context usage
   const ctxPct = session.contextMax > 0
     ? Math.min(100, (session.contextUsed / session.contextMax) * 100)
     : 0;
@@ -45,14 +44,17 @@ function SessionRow({ session, expanded, onToggle }: {
   const ctxColor = ctxPct >= 90 ? C.barRed : ctxPct >= 80 ? C.barOrange : ctxPct >= 50 ? C.barYellow : C.accent;
   const ctxRemaining = session.contextMax - session.contextUsed;
   let ctxLabel = '';
-  if (ctxPct >= 100) ctxLabel = '⚠ at limit';
-  else if (ctxPct >= 95) ctxLabel = '⚠ near limit';
+  if (ctxPct >= 100) ctxLabel = 'at limit';
+  else if (ctxPct >= 95) ctxLabel = 'near limit';
   else if (ctxPct >= 80) ctxLabel = 'compact soon';
   else ctxLabel = `${fmtTokens(ctxRemaining)} left`;
 
   const idle = useMemo(() => idleMinutes(session), [session]);
+  const isCompact = idle >= 60;
+  const hasBreakdown = !!session.activityBreakdown &&
+    Object.values(session.activityBreakdown).some(v => v > 0);
+  const isExpanded = expanded && hasBreakdown;
 
-  // ── idle 6h+ → 한 줄 인라인 ──
   if (idle >= 360) {
     return (
       <div style={{
@@ -60,19 +62,20 @@ function SessionRow({ session, expanded, onToggle }: {
         background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 6,
         opacity: 0.45,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        contain: 'layout paint style', overflowAnchor: 'none',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           {session.modelName && (
-            <span style={{ fontSize: 8, background: mc + '22', color: mc, border: `1px solid ${mc}44`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+            <span title={session.modelName} style={{ fontSize: 8, background: mc + '18', color: mc, border: `1px solid ${mc}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {session.modelName}
             </span>
           )}
-          <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '20' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+          <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
             {session.provider === 'codex' ? 'Codex' : 'Claude'}
           </span>
-          <span style={{ fontSize: 10, color: C.textMuted }}>{session.source}</span>
+          <span title={session.source} style={{ fontSize: 10, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {showCtx && (
             <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono }}>{Math.round(ctxPct)}% ctx</span>
           )}
@@ -84,13 +87,6 @@ function SessionRow({ session, expanded, onToggle }: {
       </div>
     );
   }
-
-  // ── idle 1-6h → 축소 표시 (ctx만, tool bar 숨김) ──
-  const isCompact = idle >= 60;
-  // 활동 분석 패널 표시 가능 여부 (데이터 있을 때만)
-  const hasBreakdown = !!session.activityBreakdown &&
-    Object.values(session.activityBreakdown).some(v => v > 0);
-  const isExpanded = expanded && hasBreakdown;
 
   return (
     <>
@@ -105,40 +101,72 @@ function SessionRow({ session, expanded, onToggle }: {
           borderBottom: isExpanded ? `1px solid ${C.border}` : undefined,
           opacity: isCompact ? 0.65 : 1,
           cursor: hasBreakdown ? 'pointer' : 'default',
-          transition: 'border-color 0.15s',
+          contain: 'layout paint style',
+          overflowAnchor: 'none',
         }}
       >
-        {/* 헤더: 모델 + 환경 ... 상태 + 시간 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
             {session.modelName && (
-              <span style={{ fontSize: 8, background: mc + '22', color: mc, border: `1px solid ${mc}44`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+              <span title={session.modelName} style={{ fontSize: 8, background: mc + '18', color: mc, border: `1px solid ${mc}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {session.modelName}
               </span>
             )}
-            <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '20' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+            <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
               {session.provider === 'codex' ? 'Codex' : 'Claude'}
             </span>
-            <span style={{ fontSize: 10, color: C.textMuted }}>{session.source}</span>
+            <span title={session.source} style={{ fontSize: 10, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
           </div>
-          <div style={{ textAlign: 'right' }}>
-              <span style={{
-                fontSize: 8, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
-                fontFamily: C.fontMono,
-                background: session.state === 'active' ? C.active + '1a' :
-                            session.state === 'waiting' ? C.waiting + '1a' : 'rgba(255,255,255,0.04)',
-                color: session.state === 'active' ? C.active :
-                       session.state === 'waiting' ? C.waiting : C.textMuted,
-              }}>
-                {stateLabel(session.state)}
-              </span>
-              <div style={{ fontSize: 8, color: C.textMuted, marginTop: 1 }}>{fmtRelative(session.lastModified)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+            {hasBreakdown && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
+                title="Breakdown"
+                style={{
+                  width: 22, height: 18,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 4,
+                  background: isExpanded ? C.accent + '20' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${isExpanded ? C.accent + '55' : C.border}`,
+                  color: isExpanded ? C.accent : C.textMuted,
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                <span style={{ display: 'inline-flex', gap: 1, alignItems: 'flex-end', height: 8 }} aria-hidden="true">
+                  {[3, 6, 4].map((h, i) => (
+                    <span key={i} style={{ display: 'inline-block', width: 2, height: h, background: 'currentColor', borderRadius: '1px 1px 0 0' }} />
+                  ))}
+                </span>
+              </button>
+            )}
+            <span style={{
+              fontSize: 8, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
+              fontFamily: C.fontMono,
+              background: session.state === 'active' ? C.active + '1a' :
+                          session.state === 'waiting' ? C.waiting + '1a' : 'rgba(255,255,255,0.04)',
+              color: session.state === 'active' ? C.active :
+                     session.state === 'waiting' ? C.waiting : C.textMuted,
+            }}>
+              {stateLabel(session.state)}
+            </span>
+            <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
           </div>
         </div>
 
-        {/* Context bar */}
         {showCtx && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+            <span style={{ fontSize: 9, color: ctxPct >= 95 ? C.barRed : C.textMuted, fontFamily: C.fontMono }}>
+              {Math.round(ctxPct)}% ctx
+            </span>
+            <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {ctxLabel}
+            </span>
+          </div>
+        )}
+
+        {isExpanded && showCtx && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
             <div style={{ flex: 1, height: 3, background: C.accentDim, borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
                 width: `${ctxPct}%`, height: '100%',
@@ -156,15 +184,14 @@ function SessionRow({ session, expanded, onToggle }: {
           </div>
         )}
 
-        {/* Tool bar + chips */}
-        {!isCompact && totalTools > 0 && (() => {
+        {isExpanded && !isCompact && totalTools > 0 && (() => {
           const isIdle = session.state === 'idle';
-          const displayEntries = isIdle ? toolEntries.slice(0, 3) : toolEntries;
+          const displayEntries = isIdle ? visibleToolEntries.slice(0, 3) : visibleToolEntries;
           return (
           <>
             {!isIdle && (
             <div style={{ display: 'flex', height: 3, borderRadius: 2, overflow: 'hidden', marginTop: 3, gap: 0 }}>
-              {toolEntries.map(([name, count], i) => (
+              {visibleToolEntries.map(([name, count], i) => (
                 <div key={name} title={`${name}: ${count}`}
                   style={{ flex: count, background: TOOL_COLORS[i % TOOL_COLORS.length], minWidth: 2 }} />
               ))}
@@ -185,38 +212,8 @@ function SessionRow({ session, expanded, onToggle }: {
           </>
           );
         })()}
-        {/* Activity Breakdown 토글 버튼 — 데이터 있을 때만 표시 */}
-        {hasBreakdown && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 5 }}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                fontSize: 9, padding: '2px 8px 2px 6px',
-                borderRadius: 10,
-                background: isExpanded ? C.accent + '20' : C.accentDim,
-                border: `1px solid ${isExpanded ? C.accent + '55' : C.accent + '30'}`,
-                color: isExpanded ? C.accent : C.textDim,
-                cursor: 'pointer',
-                fontWeight: isExpanded ? 600 : 400,
-                fontFamily: C.fontSans,
-                transition: 'all 0.15s',
-              }}
-            >
-              {/* CSS 미니 바 차트 아이콘 */}
-              <span style={{ display: 'inline-flex', gap: 1.5, alignItems: 'flex-end', height: 8 }}>
-                {[3, 6, 4, 7, 5].map((h, i) => (
-                  <span key={i} style={{ display: 'inline-block', width: 2, height: h, background: 'currentColor', borderRadius: '1px 1px 0 0' }} />
-                ))}
-              </span>
-              Breakdown
-              <span style={{ fontSize: 7, opacity: 0.75 }}>{isExpanded ? '▲' : '▼'}</span>
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* 활동 분석 패널 — 클릭 토글 */}
       {isExpanded && <ActivityBreakdown session={session} />}
     </>
   );

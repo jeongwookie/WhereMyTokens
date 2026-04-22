@@ -10,6 +10,10 @@ if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 let tray: Tray | null = null;
 let popupWindow: BrowserWindow | null = null;
 const store = new Store<AppSettings>() as Store<AppSettings>;
+let pendingStateUpdate: AppState | null = null;
+let stateUpdateTimer: NodeJS.Timeout | null = null;
+let popupMoving = false;
+let popupMoveEndTimer: NodeJS.Timeout | null = null;
 
 function createTray(): Tray {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
@@ -47,6 +51,7 @@ function createPopupWindow(): BrowserWindow {
 
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath);
+  win.on('move', markPopupMoving);
 
   // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
 
@@ -111,10 +116,40 @@ function updateTray(state: AppState) {
   const title = buildTrayTitle(state);
   if (title) tray.setTitle(title);
 
-  if (popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible()) {
-    popupWindow.webContents.send('state:updated', state);
-  }
+  queueRendererStateUpdate(state);
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
+}
+
+function queueRendererStateUpdate(state: AppState) {
+  if (!popupWindow || popupWindow.isDestroyed() || !popupWindow.isVisible()) return;
+  pendingStateUpdate = state;
+  if (stateUpdateTimer) clearTimeout(stateUpdateTimer);
+  stateUpdateTimer = setTimeout(flushRendererStateUpdate, popupMoving ? 250 : 150);
+}
+
+function flushRendererStateUpdate() {
+  if (popupMoving) {
+    stateUpdateTimer = setTimeout(flushRendererStateUpdate, 250);
+    return;
+  }
+  stateUpdateTimer = null;
+  const next = pendingStateUpdate;
+  pendingStateUpdate = null;
+  if (next && popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible()) {
+    popupWindow.webContents.send('state:updated', next);
+  }
+}
+
+function markPopupMoving() {
+  popupMoving = true;
+  if (popupMoveEndTimer) clearTimeout(popupMoveEndTimer);
+  popupMoveEndTimer = setTimeout(() => {
+    popupMoving = false;
+    if (pendingStateUpdate) {
+      if (stateUpdateTimer) clearTimeout(stateUpdateTimer);
+      stateUpdateTimer = setTimeout(flushRendererStateUpdate, 250);
+    }
+  }, 250);
 }
 
 app.whenReady().then(() => {

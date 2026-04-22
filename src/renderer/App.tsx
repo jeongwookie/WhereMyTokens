@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { AppState, AppSettings } from './types';
 import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
@@ -128,14 +128,14 @@ export default function App() {
     setState(prev => ({ ...prev, settings: updated }));
   }
 
-  function handleQuit() {
+  const handleQuit = useCallback(() => {
     window.wmt.quit().catch(() => window.close());
-  }
+  }, []);
 
-  const theme = getTheme(resolvedTheme);
+  const theme = useMemo(() => getTheme(resolvedTheme), [resolvedTheme]);
 
   // CSS 커스텀 프로퍼티 동기화 — body/scrollbar 등 CSS 레벨에서 var(--wmt-*) 사용 가능
-  useEffect(() => { applyThemeCssVars(theme); }, [resolvedTheme]);
+  useEffect(() => { applyThemeCssVars(theme); }, [theme]);
 
   const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
 

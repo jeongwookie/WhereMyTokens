@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import chokidar from 'chokidar';
 import { discoverSessions, DiscoveredSession, TrackingProvider, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR } from './sessionDiscovery';
-import { parseJsonlFile, parseJsonlCached, parseCodexJsonlCached, ParsedEntry, ActivityBreakdown, ParsedFile } from './jsonlParser';
+import { parseJsonlFile, parseJsonlCached, parseCodexJsonlCached, ParsedEntry, ActivityBreakdown, ActivityBreakdownKind, ParsedFile } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS } from './ipc';
@@ -21,6 +21,7 @@ export interface SessionInfo extends DiscoveredSession {
   toolCounts: Record<string, number>;
   gitStats: GitStats | null;
   activityBreakdown: ActivityBreakdown | null;
+  activityBreakdownKind: ActivityBreakdownKind | null;
 }
 
 export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
@@ -65,6 +66,7 @@ export class StateManager {
   private heavyTimer: NodeJS.Timeout | null = null;
   private autoLimitTimer: NodeJS.Timeout | null = null;
   private watcher: chokidar.FSWatcher | null = null;
+  private fastDebounce: NodeJS.Timeout | null = null;
   private heavyDebounce: NodeJS.Timeout | null = null;
   private onUpdate: (s: AppState) => void;
   private autoLimits: AutoLimits | null = null;
@@ -176,6 +178,8 @@ export class StateManager {
     if (this.fastTimer) clearInterval(this.fastTimer);
     if (this.heavyTimer) clearInterval(this.heavyTimer);
     if (this.autoLimitTimer) clearInterval(this.autoLimitTimer);
+    if (this.fastDebounce) clearTimeout(this.fastDebounce);
+    if (this.heavyDebounce) clearTimeout(this.heavyDebounce);
     this.watcher?.close();
     this.bridgeWatcher.stop();
   }
@@ -242,6 +246,14 @@ export class StateManager {
     }, 8000);
   }
 
+  private debouncedFastRefresh() {
+    if (this.fastDebounce) clearTimeout(this.fastDebounce);
+    this.fastDebounce = setTimeout(() => {
+      this.fastDebounce = null;
+      this.fastRefresh();
+    }, 1200);
+  }
+
   private startWatcher() {
     this.watcher?.close();
     this.watcher = null;
@@ -263,20 +275,20 @@ export class StateManager {
     this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
     this.watcher.on('add', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) {
-        this.fastRefresh();
+        this.debouncedFastRefresh();
         this.debouncedHeavyRefresh();
       }
       else this.fastRefresh();
     });
     this.watcher.on('unlink', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) this.jsonlCache.invalidate(filePath);
-      this.fastRefresh();
+      this.debouncedFastRefresh();
     });
 
     // Watch for JSONL changes — 디바운스 적용
     // Windows에서 path.join이 백슬래시를 사용하면 chokidar glob이 동작하지 않으므로 슬래시로 변환
     this.watcher.on('change', () => {
-      this.fastRefresh();
+      this.debouncedFastRefresh();
       this.debouncedHeavyRefresh();
     });
   }
@@ -560,6 +572,7 @@ export class StateManager {
       let toolCounts: Record<string, number> = {};
 
       let activityBreakdown: SessionInfo['activityBreakdown'] = null;
+      let activityBreakdownKind: SessionInfo['activityBreakdownKind'] = null;
       if (s.jsonlPath) {
         try {
           const parsed = s.provider === 'codex'
@@ -569,6 +582,7 @@ export class StateManager {
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
           activityBreakdown = parsed.activityBreakdown;
+          activityBreakdownKind = parsed.activityBreakdownKind;
 
           const raw = parsed.rawModel.toLowerCase();
           if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
@@ -578,7 +592,7 @@ export class StateManager {
       }
 
       const gitStats = this.getCachedGitStats(s.cwd);
-      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown };
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
     });
   }
 
@@ -597,6 +611,7 @@ export class StateManager {
       let toolCounts: Record<string, number> = {};
 
       let activityBreakdown: SessionInfo['activityBreakdown'] = null;
+      let activityBreakdownKind: SessionInfo['activityBreakdownKind'] = null;
       if (s.jsonlPath) {
         try {
           const parsed = s.provider === 'codex'
@@ -606,6 +621,7 @@ export class StateManager {
           contextUsed = parsed.latestInputTokens + parsed.latestCacheCreationTokens + parsed.latestCacheReadTokens;
           toolCounts = parsed.toolCounts;
           activityBreakdown = parsed.activityBreakdown;
+          activityBreakdownKind = parsed.activityBreakdownKind;
 
           const raw = parsed.rawModel.toLowerCase();
           if (parsed.contextMax && parsed.contextMax > 0) contextMax = parsed.contextMax;
@@ -615,7 +631,7 @@ export class StateManager {
       }
 
       const gitStats = await this.getCachedGitStatsAsync(s.cwd);
-      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown };
+      return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
     }));
   }
 
