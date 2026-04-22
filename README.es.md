@@ -118,12 +118,13 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, desglose de tokens (In/Out/Cache)
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
-- **Desglose por modelo** — totales de tokens y costos por modelo con barras de gradiente
+- **Desglose por modelo** — tokens y costos de los modelos principales con barras de gradiente
 - **Activity Breakdown** — Claude se analiza por output tokens; Codex por tool events en 10 categorías (Thinking, Edit/Write, Read, Search, Git, etc.)
 
 ### Producción de Código y Productividad
 - **Métricas basadas en Git** — commits, líneas netas cambiadas, **$/100 Added** (costo por 100 líneas añadidas)
 - **Hoy vs todo el tiempo** — hoy muestra el costo real por línea añadida con el promedio para comparación
+- **Histórico por ramas** — Code Output histórico cuenta commits y cambios de líneas en todas las ramas locales, usando tu email local de git
 - **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` y sesiones Codex desde `~/.codex/sessions/`
 - **Solo tus commits** — filtrado por `git config user.email`
 

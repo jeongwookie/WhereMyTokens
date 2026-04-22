@@ -106,7 +106,7 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
       execGitAsync(['rev-parse', '--git-common-dir'], cwd).catch(() => null),
       execGitAsync(['log', '--since=midnight', '--branches', '--format=%H', ...authorArgs], cwd).catch(() => ''),
       execGitAsync(['log', '--since=midnight', '--branches', '--numstat', '--format=', ...authorArgs], cwd).catch(() => ''),
-      execGitAsync(['rev-list', '--count', 'HEAD', ...authorArgs], cwd).catch(() => '0'),
+      execGitAsync(['rev-list', '--count', '--branches', ...authorArgs], cwd).catch(() => '0'),
     ]);
     // cwd가 유효한 git 저장소가 아닌 경우(삭제된 워크트리 등) null 반환 → 영속 stats 복원
     if (!gitCommonDirRaw) return null;
@@ -136,7 +136,7 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
     const d30 = parseNumstat(numstat30d);
 
     // 전체 numstat — 가장 무거움, shortstat으로 대체
-    const allStat = await execGitAsync(['log', '--format=', '--numstat', ...authorArgs], cwd).catch(() => '');
+    const allStat = await execGitAsync(['log', '--branches', '--format=', '--numstat', ...authorArgs], cwd).catch(() => '');
     const total = parseNumstat(allStat);
 
     return {

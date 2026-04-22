@@ -159,7 +159,7 @@ function ContentEN() {
             ['Header (all)', 'All time', 'In/Out/Cache + calls, sessions', 'API-equiv + cache savings'],
             ['Plan Usage', 'Current billing window', 'All types', 'API-equiv'],
             ['Code Output', 'Today / All time', 'Git stats', '$/100 added'],
-            ['Model Usage', 'All time, per model', 'All types', 'API-equiv'],
+            ['Model Usage', 'All time, top 4 models', 'All types', 'API-equiv'],
           ]}
         />
         <Note>
@@ -174,6 +174,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-added-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 added. Lower = more efficient.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
+        <div style={{ marginBottom: 5 }}><B>All-time scope</B> — counts commits and line changes across local branches, not only the current HEAD.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
 
@@ -259,7 +260,7 @@ function ContentKO() {
             ['헤더 (all)', '전체 기간', 'In/Out/Cache + 호출·세션', 'API 환산 + 캐시 절약'],
             ['Plan Usage', '현재 빌링 창', '전체', 'API 환산'],
             ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/100 added'],
-            ['Model Usage', '전체 기간, 모델별', '전체', 'API 환산'],
+            ['Model Usage', '전체 기간, 상위 4개 모델', '전체', 'API 환산'],
           ]}
         />
         <Note>
@@ -274,6 +275,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 추가 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 added. 값이 낮을수록 효율적.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
+        <div style={{ marginBottom: 5 }}><B>전체 기간 범위</B> — 현재 HEAD만이 아니라 로컬 브랜치 전체의 커밋과 라인 변경을 집계합니다.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
 
@@ -359,7 +361,7 @@ function ContentJA() {
             ['ヘッダー (all)', '全期間', 'In/Out/Cache + 呼出数・セッション', 'API換算 + キャッシュ節約'],
             ['Plan Usage', '現在の請求ウィンドウ', '全種別', 'API換算'],
             ['Code Output', '今日 / 全期間', 'Git統計', '$/100 added'],
-            ['Model Usage', '全期間・モデル別', '全種別', 'API換算'],
+            ['Model Usage', '全期間・上位4モデル', '全種別', 'API換算'],
           ]}
         />
         <Note>
@@ -374,6 +376,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の追加行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 added。値が低いほど効率的。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
+        <div style={{ marginBottom: 5 }}><B>全期間の範囲</B> — 現在の HEAD だけでなく、ローカルブランチ全体のコミットと行変更を集計します。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>
 

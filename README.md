@@ -118,12 +118,13 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Header stats** — today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, token breakdown (In/Out/Cache)
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
-- **Model breakdown** — per-model token and cost totals with gradient bars
+- **Model breakdown** — top per-model token and cost totals with gradient bars
 - **Activity Breakdown** — Claude output-token categories and Codex tool-event categories (Thinking, Edit/Write, Read, Search, Git, etc.)
 
 ### Code Output & Productivity
 - **Git-based metrics** — commits, net lines changed, **$/100 Added** (cost per 100 added lines)
 - **Today vs all-time** — today shows actual cost per added line with average for comparison
+- **Branch-aware all-time** — all-time Code Output counts commits and line changes across local branches, using your local git author email
 - **Auto-discovery** — Claude projects from `~/.claude/projects/` and Codex sessions from `~/.codex/sessions/`
 - **Your commits only** — filtered by `git config user.email`
 
@@ -220,7 +221,7 @@ Claude reports input, output, cache creation, and cache reads. Codex reports raw
 | Header (all) | All time | In/Out/Cache + calls, sessions, cache savings |
 | Plan Usage (Claude 5h / 1w) | Claude reset window | Claude token types + API/statusLine limits |
 | Plan Usage (Codex 5h / 1w) | Codex reset window | Codex token types + local rate-limit events |
-| Model Usage | All time, per model and provider | All token types |
+| Model Usage | All time, top 4 models by provider | All token types |
 
 > **Note:** `$` values are estimates — not your actual bill. Claude Max/Pro subscriptions are flat monthly fees. The cost display shows how much usage value you are getting.
 

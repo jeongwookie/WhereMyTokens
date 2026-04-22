@@ -118,12 +118,13 @@
 - **ヘッダー統計** — today/all-time トグル：コスト、API 呼び出し、セッション、キャッシュ効率、節約額、トークン内訳（In/Out/Cache）
 - **アクティビティタブ** — 7 日間ヒートマップ、5 ヶ月カレンダー（GitHub スタイル）、時間帯別分布、4 週間比較
 - **Rhythm タブ** — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、グラデーションバー、ピーク詳細統計、ローカルタイムゾーン
-- **モデル別分析** — モデルごとのトークン・コスト合計、グラデーションバー
+- **モデル別分析** — 上位モデルごとのトークン・コスト合計、グラデーションバー
 - **Activity Breakdown** — Claude は output token、Codex は tool event を基準に 10 カテゴリ分析（Thinking、Edit/Write、Read、Search、Git など）
 
 ### Code Output & 生産性
 - **Git ベース指標** — コミット数、純変更行数、**$/100 Added**（100 追加行あたりのコスト）
 - **Today vs All-time** — 今日の追加行あたり実コストと全期間平均を比較
+- **ブランチ対応の全期間** — Code Output の全期間は、ローカルブランチ全体のコミットと行変更をローカル git author email 基準で集計
 - **自動検出** — Claude プロジェクトは `~/.claude/projects/`、Codex セッションは `~/.codex/sessions/` から自動検出
 - **自分のコミットのみ** — `git config user.email` でフィルタリング
 
@@ -220,7 +221,7 @@ Claude は input、output、cache creation、cache read を提供します。Cod
 | ヘッダー (all) | 全期間 | In/Out/Cache + 呼び出し数、セッション数、キャッシュ節約 |
 | Plan Usage (Claude 5h / 1w) | Claude reset window | Claude トークン種別 + API/statusLine 制限 |
 | Plan Usage (Codex 5h / 1w) | Codex reset window | Codex トークン種別 + ローカル rate-limit イベント |
-| Model Usage | 全期間、モデル・provider 別 | すべてのトークン種別 |
+| Model Usage | 全期間、provider 別の上位 4 モデル | すべてのトークン種別 |
 
 > **注意：** `$` 値は推定値であり、実際の請求額ではありません。Claude Max/Pro サブスクリプションは月額固定料金であり、コスト表示はサブスクリプションから得られる使用価値を示します。
 

@@ -118,12 +118,13 @@
 - **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、令牌分析（In/Out/Cache）
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
-- **模型分析** — 按模型的令牌和费用总计，渐变条
+- **模型分析** — 按热门模型的令牌和费用总计，渐变条
 - **Activity Breakdown** — Claude 按 output token 分析，Codex 按 tool event 分析 10 个类别（Thinking、Edit/Write、Read、Search、Git 等）
 
 ### 代码产出与生产力
 - **Git 指标** — 提交数、净变更行数、**$/100 Added**（每100行新增的成本）
 - **今日 vs 全部** — 今日显示每新增行实际成本与历史平均对比
+- **分支感知的全时段** — Code Output 的全时段会按本地 git 作者邮箱统计所有本地分支的提交和行变更
 - **自动发现** — Claude 项目来自 `~/.claude/projects/`，Codex 会话来自 `~/.codex/sessions/`
 - **仅统计您的提交** — 按 `git config user.email` 过滤
 

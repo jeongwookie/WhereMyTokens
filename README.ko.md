@@ -118,12 +118,13 @@
 - **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 적중률, 절약 비용, 토큰 분석(In/Out/Cache)
 - **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교
 - **Rhythm 탭** — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 그라데이션 바, 피크 상세 통계, 로컬 타임존
-- **모델별 분석** — 모델별 토큰·비용 합계, 그라데이션 바
+- **모델별 분석** — 상위 모델별 토큰·비용 합계, 그라데이션 바
 - **Activity Breakdown** — Claude는 output 토큰 기준, Codex는 tool event 기준으로 10개 카테고리 분석 (Thinking, Edit/Write, Read, Search, Git 등)
 
 ### Code Output & 생산성
 - **Git 기반 지표** — 커밋 수, 순 라인 변경, **$/100 Added** (100 추가 라인당 비용)
 - **Today vs All-time** — 오늘의 추가 라인당 실제 비용과 전체 평균 비교
+- **브랜치 반영 전체 기간** — Code Output의 전체 기간은 로컬 브랜치 전체의 커밋과 라인 변경을 로컬 git 작성자 이메일 기준으로 집계
 - **자동 발견** — Claude 프로젝트는 `~/.claude/projects/`, Codex 세션은 `~/.codex/sessions/`에서 자동 포함
 - **본인 커밋만** — `git config user.email` 기준 필터링
 
@@ -220,7 +221,7 @@ Claude는 input, output, cache creation, cache read를 제공합니다. Codex는
 | 헤더 (all) | 전체 기간 | In/Out/Cache + 호출 수, 세션 수, 캐시 절약 |
 | Plan Usage (Claude 5h / 1w) | Claude reset window | Claude 토큰 유형 + API/statusLine 한도 |
 | Plan Usage (Codex 5h / 1w) | Codex reset window | Codex 토큰 유형 + 로컬 rate-limit 이벤트 |
-| Model Usage | 전체 기간, 모델·provider별 | 모든 토큰 유형 |
+| Model Usage | 전체 기간, provider별 상위 4개 모델 | 모든 토큰 유형 |
 
 > **참고:** `$` 값은 추정값으로 실제 청구액이 아닙니다. Claude Max/Pro 구독은 월정액이며, 비용 표시는 구독에서 얻는 사용 가치를 보여줍니다.
 

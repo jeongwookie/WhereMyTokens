@@ -5,6 +5,8 @@ import { modelColor, fmtTokens, fmtCost } from '../theme';
 
 function displayModelName(model: string): string {
   return model
+    .replace(/^GPT-5\.4-MINI$/i, 'GPT-5.4 Mini')
+    .replace(/^GPT-5\.4-NANO$/i, 'GPT-5.4 Nano')
     .replace(/^GPT-5\.3-CODEX$/i, 'GPT-5.3 Codex')
     .replace(/^GPT-5\.2-CODEX$/i, 'GPT-5.2 Codex')
     .replace(/^GPT-5\.1-CODEX-MAX$/i, 'GPT-5.1 Codex Max')
@@ -28,7 +30,7 @@ function ModelBreakdown({ models, currency, usdToKrw }: { models: ModelUsage[]; 
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Model Usage</span>
-        <span style={{ fontSize: 9, color: C.textMuted }}>All time</span>
+        <span style={{ fontSize: 9, color: C.textMuted }}>Top 4 · All time</span>
       </div>
       <div style={{ padding: '6px 14px 8px' }}>
       {models.slice(0, 4).map(m => {

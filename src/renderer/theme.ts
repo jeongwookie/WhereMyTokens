@@ -210,6 +210,8 @@ export function modelColor(model: string, C: Theme): string {
   if (lower.includes('opus'))   return C.opus;
   if (lower.includes('sonnet')) return C.sonnet;
   if (lower.includes('haiku'))  return C.haiku;
+  if (lower.includes('gpt-5.4') && lower.includes('mini')) return C.codexMini;
+  if (lower.includes('gpt-5.4') && lower.includes('nano')) return C.gpt;
   if (lower.includes('codex-mini')) return C.codexMini;
   if (lower.includes('gpt-5') && lower.includes('codex')) return C.gptCodex;
   if (lower.includes('gpt-5')) return C.gpt5;
