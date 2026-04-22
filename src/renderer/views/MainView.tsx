@@ -418,6 +418,24 @@ const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, on
   );
 });
 
+const SessionStackItem = React.memo(function SessionStackItem({ item, expanded, onToggleStack }: {
+  item: Extract<SessionListItem, { type: 'stack' }>;
+  expanded: boolean;
+  onToggleStack: (key: string) => void;
+}) {
+  const handleToggle = useCallback(() => onToggleStack(item.key), [onToggleStack, item.key]);
+  return <SessionStackRow item={item} expanded={expanded} onToggle={handleToggle} />;
+});
+
+const SessionItem = React.memo(function SessionItem({ session, expanded, onToggleSession }: {
+  session: SessionInfo;
+  expanded: boolean;
+  onToggleSession: (sessionId: string) => void;
+}) {
+  const handleToggle = useCallback(() => onToggleSession(session.sessionId), [onToggleSession, session.sessionId]);
+  return <SessionRow session={session} expanded={expanded} onToggle={handleToggle} />;
+});
+
 const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, providerMode, lastUpdated }: {
   sessions: SessionInfo[];
   settings: AppState['settings'];
@@ -612,26 +630,26 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
 
                 {visibleItems.map(item => item.type === 'stack' ? (
                   <React.Fragment key={item.key}>
-                    <SessionStackRow
+                    <SessionStackItem
                       item={item}
                       expanded={expandedStacks.has(item.key)}
-                      onToggle={() => toggleStack(item.key)}
+                      onToggleStack={toggleStack}
                     />
                     {expandedStacks.has(item.key) && item.sessions.map(session => (
-                      <SessionRow
+                      <SessionItem
                         key={session.sessionId}
                         session={session}
                         expanded={expandedSession === session.sessionId}
-                        onToggle={() => toggleSession(session.sessionId)}
+                        onToggleSession={toggleSession}
                       />
                     ))}
                   </React.Fragment>
                 ) : (
-                  <SessionRow
+                  <SessionItem
                     key={item.session.sessionId}
                     session={item.session}
                     expanded={expandedSession === item.session.sessionId}
-                    onToggle={() => toggleSession(item.session.sessionId)}
+                    onToggleSession={toggleSession}
                   />
                 ))}
                 {hiddenCount > 0 && (

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { stateLabel, modelColor, fmtRelative, fmtTokens } from '../theme';
@@ -54,6 +54,13 @@ function SessionRow({ session, expanded, onToggle }: {
   const hasBreakdown = !!session.activityBreakdown &&
     Object.values(session.activityBreakdown).some(v => v > 0);
   const isExpanded = expanded && hasBreakdown;
+  const previewToolLimit = isExpanded && !isCompact ? 6 : 3;
+  const displayToolEntries = useMemo(() => toolEntries.slice(0, previewToolLimit), [toolEntries, previewToolLimit]);
+  const hiddenToolCount = Math.max(0, toolEntries.length - displayToolEntries.length);
+  const handleBreakdownClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    onToggle?.();
+  }, [onToggle]);
 
   if (idle >= 360) {
     return (
@@ -91,16 +98,14 @@ function SessionRow({ session, expanded, onToggle }: {
   return (
     <>
       <div
-        onClick={hasBreakdown ? onToggle : undefined}
         style={{
           padding: isCompact ? '6px 10px' : '7px 10px',
           marginLeft: 8, marginRight: 8, marginTop: 3,
           background: C.bgRow,
           border: `1px solid ${isExpanded ? 'rgba(13,148,136,0.35)' : C.border}`,
-          borderRadius: isExpanded ? '6px 6px 0 0' : 6,
-          borderBottom: isExpanded ? `1px solid ${C.border}` : undefined,
+          borderRadius: 6,
           opacity: isCompact ? 0.65 : 1,
-          cursor: hasBreakdown ? 'pointer' : 'default',
+          cursor: 'default',
           contain: 'layout paint style',
           overflowAnchor: 'none',
         }}
@@ -120,7 +125,7 @@ function SessionRow({ session, expanded, onToggle }: {
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
             {hasBreakdown && (
               <button
-                onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
+                onClick={handleBreakdownClick}
                 title="Breakdown"
                 style={{
                   width: 22, height: 18,
@@ -165,7 +170,7 @@ function SessionRow({ session, expanded, onToggle }: {
           </div>
         )}
 
-        {isExpanded && showCtx && (
+        {showCtx && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
             <div style={{ flex: 1, height: 3, background: C.accentDim, borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
@@ -179,14 +184,14 @@ function SessionRow({ session, expanded, onToggle }: {
               color: ctxPct >= 95 ? C.barRed : C.textMuted,
               fontWeight: ctxPct >= 95 ? 600 : 400,
             }}>
-              {Math.round(ctxPct)}% {ctxLabel}
+              {isExpanded ? `${Math.round(ctxPct)}% ${ctxLabel}` : ctxLabel}
             </span>
           </div>
         )}
 
-        {isExpanded && !isCompact && totalTools > 0 && (() => {
+        {totalTools > 0 && (() => {
           const isIdle = session.state === 'idle';
-          const displayEntries = isIdle ? visibleToolEntries.slice(0, 3) : visibleToolEntries;
+          const displayEntries = displayToolEntries;
           return (
           <>
             {!isIdle && (
@@ -208,6 +213,15 @@ function SessionRow({ session, expanded, onToggle }: {
                   {compactToolLabel(name)}×<span style={{ color: C.textDim }}>{count}</span>
                 </span>
               ))}
+              {hiddenToolCount > 0 && (
+                <span style={{
+                  fontSize: 10, fontFamily: C.fontMono, padding: '2px 5px', borderRadius: 3,
+                  background: 'rgba(255,255,255,0.03)', color: C.textMuted,
+                  border: '1px solid rgba(255,255,255,0.04)',
+                }}>
+                  +{hiddenToolCount}
+                </span>
+              )}
             </div>
           </>
           );

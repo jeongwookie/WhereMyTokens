@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens } from '../theme';
@@ -26,15 +26,20 @@ interface Props {
 function ActivityBreakdown({ session }: Props) {
   const C = useTheme();
   const bd = session.activityBreakdown;
-  if (!bd) return null;
   const kind = session.activityBreakdownKind ?? 'tokens';
 
   // 총계 계산 및 값이 있는 카테고리만 필터링
-  const total = CATEGORIES.reduce((s, c) => s + (bd[c.key] ?? 0), 0);
+  const { total, active } = useMemo(() => {
+    if (!bd) return { total: 0, active: [] as typeof CATEGORIES[number][] };
+    const nextTotal = CATEGORIES.reduce((s, c) => s + (bd[c.key] ?? 0), 0);
+    const nextActive = CATEGORIES
+      .filter(c => (bd[c.key] ?? 0) > 0)
+      .sort((a, b) => (bd[b.key] ?? 0) - (bd[a.key] ?? 0));
+    return { total: nextTotal, active: nextActive };
+  }, [bd]);
+  if (!bd) return null;
   if (total === 0) return null;
 
-  const active = CATEGORIES.filter(c => (bd[c.key] ?? 0) > 0)
-    .sort((a, b) => (bd[b.key] ?? 0) - (bd[a.key] ?? 0));
   const fmtValue = (value: number) => kind === 'events' ? String(Math.round(value)) : fmtTokens(value);
   const totalLabel = kind === 'events' ? 'tool events this session' : 'output tokens this session';
 
