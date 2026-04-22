@@ -7,14 +7,21 @@ assets/icon-128.png
 assets/icon-256.png
 *.log
 *.html
+gitleaks-report*.json
+privacy-scan*.json
+.gitleaks.toml
 .DS_Store
 Thumbs.db
 
 # 로컬 협업 문서 (Claude + 정욱)
+AGENTS.md
 CLAUDE.md
 RELEASE.md
 TODO.md
 
-# Claude Code 로컬 설정 (커밋 제외)
+# 로컬 AI/브라우저 도구 설정 (커밋 제외)
 .claude/settings.local.json
+.codex/
+.playwright-mcp/
 .mcp.json
+scripts/review-privacy.ps1
