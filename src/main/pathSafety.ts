@@ -6,8 +6,11 @@ export function isSafeLocalCwd(cwd: string): boolean {
 
   const normalized = cwd.replace(/\//g, '\\');
   if (process.platform === 'win32') {
-    if (normalized.startsWith('\\\\')) return false;
     if (/^\\\\[.?]\\/.test(normalized)) return false;
+    if (normalized.startsWith('\\\\')) {
+      return /^\\\\wsl(?:\.localhost|\$)\\[^\\]+\\/i.test(normalized);
+    }
+    return /^[a-z]:\\/i.test(normalized);
   } else if (cwd.startsWith('//')) {
     return false;
   }

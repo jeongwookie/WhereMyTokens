@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import chokidar from 'chokidar';
-import { discoverSessions, DiscoveredSession, TrackingProvider, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, projectKeysForCwd } from './sessionDiscovery';
+import { discoverSessions, DiscoveredSession, TrackingProvider, CLAUDE_PROJECTS_DIR, projectKeysForCwd } from './sessionDiscovery';
 import { parseJsonlFile, parseJsonlCached, parseCodexJsonlCached, ParsedEntry, ActivityBreakdown, ActivityBreakdownKind, ParsedFile } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
@@ -15,6 +15,7 @@ import { getGitStatsAsync, GitStats } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readJsonlCwd } from './sessionMetadata';
+import { getUsageLogSources, refreshUsageLogSources, UsageLogSource } from './wslPaths';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -63,7 +64,6 @@ export interface AppState {
   allTimeSessions: number;
 }
 
-const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 
 function getJsonlMtime(filePath: string): Date | null {
@@ -148,6 +148,14 @@ export class StateManager {
 
   private getSettings(): AppSettings {
     return { ...DEFAULT_SETTINGS, ...this.store.store };
+  }
+
+  private getLogSources(): UsageLogSource[] {
+    return getUsageLogSources(this.getSettings().enableWslTracking);
+  }
+
+  private async refreshLogSources(force = false): Promise<void> {
+    await refreshUsageLogSources(this.getSettings().enableWslTracking, force);
   }
 
   private emptyState(): AppState {
@@ -327,18 +335,26 @@ export class StateManager {
     const provider = this.getSettings().provider ?? 'both';
     const watchTargets: string[] = [];
 
-    if ((provider === 'claude' || provider === 'both') && fs.existsSync(SESSIONS_DIR)) {
-      watchTargets.push(SESSIONS_DIR);
-    }
-    if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      watchTargets.push(PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
-    }
-    if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-      watchTargets.push(CODEX_SESSIONS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+    for (const source of this.getLogSources()) {
+      if ((provider === 'claude' || provider === 'both') && fs.existsSync(source.claudeSessionsDir)) {
+        watchTargets.push(source.claudeSessionsDir);
+      }
+      if ((provider === 'claude' || provider === 'both') && fs.existsSync(source.claudeProjectsDir)) {
+        watchTargets.push(source.claudeProjectsDir.replace(/\\/g, '/') + '/**/*.jsonl');
+      }
+      if ((provider === 'codex' || provider === 'both') && fs.existsSync(source.codexSessionsDir)) {
+        watchTargets.push(source.codexSessionsDir.replace(/\\/g, '/') + '/**/*.jsonl');
+      }
     }
     if (watchTargets.length === 0) return;
 
-    this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
+    try {
+      this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
+    } catch {
+      this.watcher = null;
+      return;
+    }
+    this.watcher.on('error', () => { /* watcher 실패 시 타이머/수동 새로고침으로 폴백 */ });
     this.watcher.on('add', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) {
         this.debouncedFastRefresh(filePath);
@@ -392,6 +408,8 @@ export class StateManager {
     }
     this.heavyInFlight = true;
     try {
+      await this.refreshLogSources(force);
+      this.startWatcher();
       await this.refreshApiUsagePct(force);
       const loaded = this.loadProviderEntries();
       this.allEntries = loaded.entries;
@@ -570,34 +588,36 @@ export class StateManager {
       }
     };
 
-    if ((settings.provider === 'claude' || settings.provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      try {
-        const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-          .filter(d => d.isDirectory())
-          .map(d => d.name);
+    for (const source of this.getLogSources()) {
+      if ((settings.provider === 'claude' || settings.provider === 'both') && fs.existsSync(source.claudeProjectsDir)) {
+        try {
+          const projectDirs = fs.readdirSync(source.claudeProjectsDir, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name);
 
-        for (const dir of projectDirs) {
-          const dirPath = path.join(PROJECTS_DIR, dir);
-          try {
-            const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
-            const cwd = files.length > 0 ? readJsonlCwd(path.join(dirPath, files[0]), 'claude') : null;
-            if (isExcluded([dir, ...(cwd ? projectKeysForCwd(cwd) : [])])) continue;
-            sessionCount += files.length;
-            for (const file of files) addEntries(parseJsonlCached(path.join(dirPath, file), this.jsonlCache));
-          } catch { /* skip */ }
+          for (const dir of projectDirs) {
+            const dirPath = path.join(source.claudeProjectsDir, dir);
+            try {
+              const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
+              const cwd = files.length > 0 ? readJsonlCwd(path.join(dirPath, files[0]), 'claude', source) : null;
+              if (isExcluded([dir, ...(cwd ? projectKeysForCwd(cwd) : [])])) continue;
+              sessionCount += files.length;
+              for (const file of files) addEntries(parseJsonlCached(path.join(dirPath, file), this.jsonlCache));
+            } catch { /* skip */ }
+          }
+        } catch { /* skip */ }
+      }
+
+      if ((settings.provider === 'codex' || settings.provider === 'both') && fs.existsSync(source.codexSessionsDir)) {
+        for (const filePath of this.listJsonlFiles(source.codexSessionsDir)) {
+          const cwd = readJsonlCwd(filePath, 'codex', source);
+          if (cwd && isExcluded(projectKeysForCwd(cwd))) continue;
+          const parsed = parseCodexJsonlCached(filePath, this.jsonlCache);
+          if (parsed.entries.length === 0 && !parsed.codexRateLimits) continue;
+          sessionCount += 1;
+          codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, parsed.codexRateLimits);
+          addEntries(parsed);
         }
-      } catch { /* skip */ }
-    }
-
-    if ((settings.provider === 'codex' || settings.provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-      for (const filePath of this.listJsonlFiles(CODEX_SESSIONS_DIR)) {
-        const cwd = readJsonlCwd(filePath, 'codex');
-        if (cwd && isExcluded(projectKeysForCwd(cwd))) continue;
-        const parsed = parseCodexJsonlCached(filePath, this.jsonlCache);
-        if (parsed.entries.length === 0 && !parsed.codexRateLimits) continue;
-        sessionCount += 1;
-        codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, parsed.codexRateLimits);
-        addEntries(parsed);
       }
     }
 
@@ -640,7 +660,7 @@ export class StateManager {
     }
 
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const allCwds = discoverAllProjectCwds(settings.provider)
+    const allCwds = discoverAllProjectCwds(settings.provider, settings.enableWslTracking)
       .filter(cwd => isSafeLocalCwd(cwd) && !isExcluded(projectKeysForCwd(cwd)));
     const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
     const repoGitStats: Record<string, GitStats> = {};
@@ -749,7 +769,7 @@ export class StateManager {
   private buildSessionInfos(): SessionInfo[] {
     const settings = this.getSettings();
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const discovered = discoverSessions(settings.provider).filter(s => {
+    const discovered = discoverSessions(settings.provider, settings.enableWslTracking).filter(s => {
       return !isExcluded(this.sessionProjectKeys(s));
     });
     return discovered.map(s => this.buildSessionInfo(s));
@@ -764,7 +784,8 @@ export class StateManager {
   applySettingsChange() {
     const settings = this.getSettings();
     const providerChanged = settings.provider !== this.state.settings.provider;
-    if (providerChanged) {
+    const wslChanged = settings.enableWslTracking !== this.state.settings.enableWslTracking;
+    if (providerChanged || wslChanged) {
       this.jsonlCache.clear();
       clearSessionMetadataCache();
       this.codexRateLimits = null;

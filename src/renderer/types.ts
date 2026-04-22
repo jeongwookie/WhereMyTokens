@@ -28,10 +28,12 @@ export interface SessionInfo {
   pid: number | null;
   sessionId: string;
   cwd: string;
+  rawCwd?: string | null;
   projectName: string;
   startedAt: string;
   entrypoint: string;
   source: string;
+  logSource?: string;
   state: SessionState;
   jsonlPath: string | null;
   lastModified: string | null;
@@ -148,6 +150,7 @@ export interface AppSettings {
   hiddenProjects: string[];
   excludedProjects: string[];
   theme: 'auto' | 'light' | 'dark';
+  enableWslTracking: boolean;
 }
 
 export type NotifType = 'alert';

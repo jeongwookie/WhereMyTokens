@@ -39,6 +39,7 @@ const DEFAULT_STATE: AppState = {
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     trayDisplay: 'h5pct', theme: 'auto',
     hiddenProjects: [], excludedProjects: [],
+    enableWslTracking: false,
   },
   autoLimits: null,
   lastUpdated: 0,
@@ -85,10 +86,12 @@ function sameSession(a: AppState['sessions'][number], b: AppState['sessions'][nu
     && a.pid === b.pid
     && a.sessionId === b.sessionId
     && a.cwd === b.cwd
+    && a.rawCwd === b.rawCwd
     && a.projectName === b.projectName
     && String(a.startedAt) === String(b.startedAt)
     && a.entrypoint === b.entrypoint
     && a.source === b.source
+    && a.logSource === b.logSource
     && a.state === b.state
     && a.jsonlPath === b.jsonlPath
     && String(a.lastModified) === String(b.lastModified)

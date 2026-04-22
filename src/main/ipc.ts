@@ -22,6 +22,7 @@ export interface AppSettings {
   hiddenProjects: string[];
   excludedProjects: string[];
   theme: 'auto' | 'light' | 'dark';
+  enableWslTracking: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hiddenProjects: [],
   excludedProjects: [],
   theme: 'auto',
+  enableWslTracking: false,
 };
 
 export function registerIpcHandlers(

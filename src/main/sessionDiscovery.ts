@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { isSafeLocalCwd } from './pathSafety';
 import { readCodexSessionHeader } from './sessionMetadata';
+import { getUsageLogSources, mapCwdForSource, sourceLabel, UsageLogSource } from './wslPaths';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 export type TrackingProvider = 'claude' | 'codex' | 'both';
@@ -13,10 +13,12 @@ export interface DiscoveredSession {
   pid: number | null;
   sessionId: string;
   cwd: string;
+  rawCwd: string | null;
   projectName: string;
   startedAt: Date;
   entrypoint: string;
   source: string;
+  logSource: string;
   state: SessionState;
   jsonlPath: string | null;
   lastModified: Date | null;
@@ -26,9 +28,10 @@ export interface DiscoveredSession {
   mainRepoName: string | null;
 }
 
-const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
+const WINDOWS_SOURCE = getUsageLogSources(false)[0];
+const SESSIONS_DIR = WINDOWS_SOURCE.claudeSessionsDir;
+const PROJECTS_DIR = WINDOWS_SOURCE.claudeProjectsDir;
+const CODEX_SESSIONS_DIR = WINDOWS_SOURCE.codexSessionsDir;
 const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
 
 function encodeCwd(cwd: string): string {
@@ -166,17 +169,17 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function findJsonlPath(cwd: string, sessionId: string): string | null {
+function findJsonlPath(cwd: string, sessionId: string, source: UsageLogSource): string | null {
   const encoded = encodeCwd(cwd);
-  const candidate = path.join(PROJECTS_DIR, encoded, `${sessionId}.jsonl`);
+  const candidate = path.join(source.claudeProjectsDir, encoded, `${sessionId}.jsonl`);
   if (fs.existsSync(candidate)) return candidate;
 
   // Case mismatch correction: scan directory directly
   try {
-    const dirs = fs.readdirSync(PROJECTS_DIR);
+    const dirs = fs.readdirSync(source.claudeProjectsDir);
     const match = dirs.find(d => d.toLowerCase() === encoded.toLowerCase());
     if (match) {
-      const p = path.join(PROJECTS_DIR, match, `${sessionId}.jsonl`);
+      const p = path.join(source.claudeProjectsDir, match, `${sessionId}.jsonl`);
       if (fs.existsSync(p)) return p;
     }
   } catch { /* ignore */ }
@@ -206,26 +209,27 @@ function shouldIncludeProvider(filter: TrackingProvider, provider: SessionProvid
   return filter === 'both' || filter === provider;
 }
 
-function discoverClaudeSessions(): DiscoveredSession[] {
-  if (!fs.existsSync(SESSIONS_DIR)) return [];
+function discoverClaudeSessions(source: UsageLogSource): DiscoveredSession[] {
+  if (!fs.existsSync(source.claudeSessionsDir)) return [];
 
   const results: DiscoveredSession[] = [];
 
   let files: string[] = [];
   try {
-    files = fs.readdirSync(SESSIONS_DIR).filter(f => f.endsWith('.json'));
+    files = fs.readdirSync(source.claudeSessionsDir).filter(f => f.endsWith('.json'));
   } catch { return []; }
 
   for (const file of files) {
     try {
-      const raw = fs.readFileSync(path.join(SESSIONS_DIR, file), 'utf-8');
+      const raw = fs.readFileSync(path.join(source.claudeSessionsDir, file), 'utf-8');
       const meta = JSON.parse(raw);
-      const { pid, sessionId, cwd, startedAt, entrypoint = 'cli', name: _name } = meta;
-      if (!pid || !sessionId || !cwd) continue;
-      if (!isSafeLocalCwd(cwd)) continue;
+      const { pid, sessionId, cwd: rawCwd, startedAt, entrypoint = 'cli', name: _name } = meta;
+      if (!pid || !sessionId || !rawCwd) continue;
+      const cwd = mapCwdForSource(source, rawCwd);
+      if (!cwd || !isSafeLocalCwd(cwd)) continue;
 
-      const alive = isProcessAlive(pid);
-      const jsonlPath = findJsonlPath(cwd, sessionId);
+      const alive = source.kind === 'wsl' ? null : isProcessAlive(pid);
+      const jsonlPath = findJsonlPath(rawCwd, sessionId, source);
       const lastModified = getJsonlLastModified(jsonlPath);
       const state = calcState(alive, lastModified);
 
@@ -241,10 +245,12 @@ function discoverClaudeSessions(): DiscoveredSession[] {
         pid,
         sessionId,
         cwd,
+        rawCwd,
         projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
         startedAt: new Date(startedAt),
         entrypoint,
-        source: entrypointToSource(entrypoint, 'claude'),
+        source: sourceLabel(source, entrypointToSource(entrypoint, 'claude')),
+        logSource: source.label,
         state,
         jsonlPath,
         lastModified,
@@ -276,19 +282,21 @@ function listCodexJsonlFiles(dir: string): string[] {
   return results;
 }
 
-function discoverCodexSessions(): DiscoveredSession[] {
-  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
+function discoverCodexSessions(source: UsageLogSource): DiscoveredSession[] {
+  if (!fs.existsSync(source.codexSessionsDir)) return [];
 
   const results: DiscoveredSession[] = [];
-  const files = listCodexJsonlFiles(CODEX_SESSIONS_DIR);
+  const files = listCodexJsonlFiles(source.codexSessionsDir);
 
   for (const filePath of files) {
     try {
-      const header = readCodexSessionHeader(filePath);
+      const header = readCodexSessionHeader(filePath, source);
       const payload = header?.payload;
       if (!payload) continue;
 
-      const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+      const rawCwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+      if (!rawCwd) continue;
+      const cwd = mapCwdForSource(source, rawCwd);
       if (!cwd) continue;
       if (!isSafeLocalCwd(cwd)) continue;
 
@@ -310,10 +318,12 @@ function discoverCodexSessions(): DiscoveredSession[] {
         pid: null,
         sessionId,
         cwd,
+        rawCwd,
         projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
         startedAt,
         entrypoint,
-        source: codexSourceLabel(entrypoint, originator),
+        source: sourceLabel(source, codexSourceLabel(entrypoint, originator)),
+        logSource: source.label,
         state: calcState(null, stat.mtime),
         jsonlPath: filePath,
         lastModified: stat.mtime,
@@ -332,10 +342,12 @@ function discoverCodexSessions(): DiscoveredSession[] {
   });
 }
 
-export function discoverSessions(provider: TrackingProvider = 'both'): DiscoveredSession[] {
+export function discoverSessions(provider: TrackingProvider = 'both', enableWslTracking = false): DiscoveredSession[] {
   const results: DiscoveredSession[] = [];
-  if (shouldIncludeProvider(provider, 'claude')) results.push(...discoverClaudeSessions());
-  if (shouldIncludeProvider(provider, 'codex')) results.push(...discoverCodexSessions());
+  for (const source of getUsageLogSources(enableWslTracking)) {
+    if (shouldIncludeProvider(provider, 'claude')) results.push(...discoverClaudeSessions(source));
+    if (shouldIncludeProvider(provider, 'codex')) results.push(...discoverCodexSessions(source));
+  }
 
   return results.sort((a, b) => {
     const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSafeLocalCwd } from './pathSafety';
+import { mapCwdForSource, UsageLogSource } from './wslPaths';
 
 export type JsonlProvider = 'claude' | 'codex';
 
@@ -85,21 +86,22 @@ function readFilePrefix(filePath: string, maxBytes: number): string | null {
   }
 }
 
-function safeCwd(value: unknown): string | null {
+function safeCwd(value: unknown, source?: UsageLogSource): string | null {
   if (typeof value !== 'string') return null;
+  if (source) return mapCwdForSource(source, value);
   return isSafeLocalCwd(value) ? value : null;
 }
 
-export function readCodexSessionHeader(filePath: string): CodexSessionHeader | null {
-  return readCodexSessionHeaderResult(filePath).value;
+export function readCodexSessionHeader(filePath: string, source?: UsageLogSource): CodexSessionHeader | null {
+  return readCodexSessionHeaderResult(filePath, source).value;
 }
 
-function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<CodexSessionHeader | null> {
+function readCodexSessionHeaderResult(filePath: string, source?: UsageLogSource): MetadataReadResult<CodexSessionHeader | null> {
   let stat: fs.Stats;
   try { stat = fs.statSync(filePath); }
   catch { return { ok: false, value: null }; }
 
-  const key = cacheKey(filePath, 'codex-header');
+  const key = cacheKey(filePath, `codex-header-${source?.id ?? 'default'}`);
   const cached = getCached(codexHeaderCache, key, stat);
   if (cached !== undefined) return { ok: true, value: cached };
 
@@ -116,13 +118,13 @@ function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<Code
       const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
       if (obj.type === 'session_meta') {
         const header = { payload, timestamp };
-        if (safeCwd(payload.cwd)) {
+        if (safeCwd(payload.cwd, source)) {
           return { ok: true, value: setCached(codexHeaderCache, key, stat, header) };
         }
         sessionMetaWithoutCwd = header;
         continue;
       }
-      if (!fallback && obj.type === 'turn_context' && safeCwd(payload.cwd)) {
+      if (!fallback && obj.type === 'turn_context' && safeCwd(payload.cwd, source)) {
         fallback = { payload, timestamp };
       }
     } catch {
@@ -133,19 +135,19 @@ function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<Code
   return { ok: true, value: setCached(codexHeaderCache, key, stat, fallback ?? sessionMetaWithoutCwd) };
 }
 
-export function readJsonlCwd(filePath: string, provider: JsonlProvider): string | null {
+export function readJsonlCwd(filePath: string, provider: JsonlProvider, source?: UsageLogSource): string | null {
   let stat: fs.Stats;
   try { stat = fs.statSync(filePath); }
   catch { return null; }
 
-  const key = cacheKey(filePath, `cwd-${provider}`);
+  const key = cacheKey(filePath, `cwd-${provider}-${source?.id ?? 'default'}`);
   const cached = getCached(cwdCache, key, stat);
   if (cached !== undefined) return cached;
 
   if (provider === 'codex') {
-    const headerResult = readCodexSessionHeaderResult(filePath);
+    const headerResult = readCodexSessionHeaderResult(filePath, source);
     if (!headerResult.ok) return null;
-    const cwd = safeCwd(headerResult.value?.payload.cwd);
+    const cwd = safeCwd(headerResult.value?.payload.cwd, source);
     return setCached(cwdCache, key, stat, cwd);
   }
 
@@ -155,7 +157,7 @@ export function readJsonlCwd(filePath: string, provider: JsonlProvider): string 
     if (!line.trim()) continue;
     try {
       const data = JSON.parse(line) as Record<string, unknown>;
-      const cwd = safeCwd(data.cwd);
+      const cwd = safeCwd(data.cwd, source);
       if (cwd) return setCached(cwdCache, key, stat, cwd);
     } catch {
       continue;
@@ -166,9 +168,13 @@ export function readJsonlCwd(filePath: string, provider: JsonlProvider): string 
 }
 
 export function invalidateSessionMetadataCache(filePath: string): void {
-  codexHeaderCache.delete(cacheKey(filePath, 'codex-header'));
-  cwdCache.delete(cacheKey(filePath, 'cwd-codex'));
-  cwdCache.delete(cacheKey(filePath, 'cwd-claude'));
+  const normalized = normalizedCacheKey(filePath);
+  for (const key of [...codexHeaderCache.keys()]) {
+    if (key.endsWith(`:${normalized}`)) codexHeaderCache.delete(key);
+  }
+  for (const key of [...cwdCache.keys()]) {
+    if (key.endsWith(`:${normalized}`)) cwdCache.delete(key);
+  }
 }
 
 export function clearSessionMetadataCache(): void {
