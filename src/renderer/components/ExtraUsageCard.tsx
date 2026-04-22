@@ -31,8 +31,8 @@ function ExtraUsageCard({ extraUsage, variant = 'row' }: Props) {
   const limitUSD = (monthlyLimit / 100).toFixed(0);
   const resetStr = fmtMonthlyReset();
   const title = isBanner
-    ? (barPct >= 100 ? 'Extra Usage over monthly cap' : 'Extra Usage near monthly cap')
-    : 'Extra Usage - monthly';
+    ? (barPct >= 100 ? 'Claude Extra Usage over monthly cap' : 'Claude Extra Usage near monthly cap')
+    : 'Claude Extra Usage - monthly';
 
   return (
     <div style={{

@@ -41,12 +41,12 @@ function SessionRow({ session, expanded, onToggle }: {
     ? Math.min(100, (session.contextUsed / session.contextMax) * 100)
     : 0;
   const showCtx = session.contextUsed > 0 && session.contextMax > 0;
-  const ctxColor = ctxPct >= 90 ? C.barRed : ctxPct >= 80 ? C.barOrange : ctxPct >= 50 ? C.barYellow : C.accent;
+  const ctxColor = ctxPct >= 95 ? C.barRed : ctxPct >= 85 ? C.barOrange : ctxPct >= 70 ? C.barYellow : C.accent;
   const ctxRemaining = session.contextMax - session.contextUsed;
   let ctxLabel = '';
   if (ctxPct >= 100) ctxLabel = 'at limit';
   else if (ctxPct >= 95) ctxLabel = 'near limit';
-  else if (ctxPct >= 80) ctxLabel = 'compact soon';
+  else if (ctxPct >= 85) ctxLabel = 'compact soon';
   else ctxLabel = `${fmtTokens(ctxRemaining)} left`;
 
   const idle = useMemo(() => idleMinutes(session), [session]);
@@ -126,16 +126,21 @@ function SessionRow({ session, expanded, onToggle }: {
             {hasBreakdown && (
               <button
                 onClick={handleBreakdownClick}
-                title="Breakdown"
+                title={isExpanded ? 'Hide breakdown' : 'Show breakdown'}
+                aria-label={isExpanded ? 'Hide session breakdown' : 'Show session breakdown'}
                 style={{
-                  width: 22, height: 18,
+                  height: 18,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 4,
                   borderRadius: 4,
-                  background: isExpanded ? C.accent + '20' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${isExpanded ? C.accent + '55' : C.border}`,
-                  color: isExpanded ? C.accent : C.textMuted,
+                  background: isExpanded ? C.accent + '24' : C.accent + '10',
+                  border: `1px solid ${isExpanded ? C.accent + '70' : C.accent + '38'}`,
+                  color: isExpanded ? C.accent : C.textDim,
                   cursor: 'pointer',
-                  padding: 0,
+                  padding: '0 6px',
+                  fontSize: 8,
+                  fontFamily: C.fontMono,
+                  fontWeight: 700,
                 }}
               >
                 <span style={{ display: 'inline-flex', gap: 1, alignItems: 'flex-end', height: 8 }} aria-hidden="true">
@@ -143,6 +148,7 @@ function SessionRow({ session, expanded, onToggle }: {
                     <span key={i} style={{ display: 'inline-block', width: 2, height: h, background: 'currentColor', borderRadius: '1px 1px 0 0' }} />
                   ))}
                 </span>
+                {isExpanded ? 'Hide' : 'Details'}
               </button>
             )}
             <span style={{
@@ -161,8 +167,8 @@ function SessionRow({ session, expanded, onToggle }: {
 
         {showCtx && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: ctxPct >= 95 ? C.barRed : C.textMuted, fontFamily: C.fontMono }}>
-              {Math.round(ctxPct)}% ctx
+            <span style={{ fontSize: 9, color: ctxPct >= 95 ? C.barRed : C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Context {Math.round(ctxPct)}%
             </span>
             <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {ctxLabel}
@@ -179,13 +185,6 @@ function SessionRow({ session, expanded, onToggle }: {
                 borderRadius: 2,
               }} />
             </div>
-            <span style={{
-              fontSize: 9, fontFamily: C.fontMono, flexShrink: 0,
-              color: ctxPct >= 95 ? C.barRed : C.textMuted,
-              fontWeight: ctxPct >= 95 ? 600 : 400,
-            }}>
-              {isExpanded ? `${Math.round(ctxPct)}% ${ctxLabel}` : ctxLabel}
-            </span>
           </div>
         )}
 
