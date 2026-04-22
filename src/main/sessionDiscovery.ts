@@ -65,6 +65,7 @@ function entrypointToSource(entrypoint: string, provider: SessionProvider = 'cla
     'cli': 'Terminal',
     'exec': provider === 'codex' ? 'Codex Exec' : 'Terminal',
     'vscode': provider === 'codex' ? 'VS Code' : 'VS Code',
+    'codex': 'Codex',
     'claude-vscode': 'VS Code',
     'claude-cursor': 'Cursor',
     'claude-jetbrains': 'JetBrains',
@@ -82,6 +83,21 @@ function entrypointToSource(entrypoint: string, provider: SessionProvider = 'cla
     'windsurf': 'Windsurf',
   };
   return map[entrypoint] ?? entrypoint;
+}
+
+function codexEntrypointFromSource(sourceRaw: unknown): string {
+  if (typeof sourceRaw === 'string' && sourceRaw.trim()) return sourceRaw.trim();
+  if (sourceRaw && typeof sourceRaw === 'object') {
+    const subagent = (sourceRaw as Record<string, unknown>).subagent;
+    if (typeof subagent === 'string' && subagent.trim()) return `subagent:${subagent.trim()}`;
+  }
+  return 'codex';
+}
+
+function codexSourceLabel(entrypoint: string, originator: string | null): string {
+  if (originator?.toLowerCase().includes('codex desktop')) return 'Codex Desktop';
+  if (entrypoint.startsWith('subagent:')) return 'Codex Subagent';
+  return entrypointToSource(entrypoint, 'codex');
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -234,7 +250,8 @@ function discoverCodexSessions(): DiscoveredSession[] {
         : (typeof first.timestamp === 'string' ? first.timestamp : '');
       const startedAt = startedAtRaw ? new Date(startedAtRaw) : stat.birthtime;
       const sourceRaw = payload.source;
-      const entrypoint = typeof sourceRaw === 'string' ? sourceRaw : 'codex';
+      const originator = typeof payload.originator === 'string' ? payload.originator : null;
+      const entrypoint = codexEntrypointFromSource(sourceRaw);
       const projectName = path.basename(cwd);
       const worktreeInfo = detectWorktree(cwd);
 
@@ -246,7 +263,7 @@ function discoverCodexSessions(): DiscoveredSession[] {
         projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
         startedAt,
         entrypoint,
-        source: entrypointToSource(entrypoint, 'codex'),
+        source: codexSourceLabel(entrypoint, originator),
         state: calcState(null, stat.mtime),
         jsonlPath: filePath,
         lastModified: stat.mtime,
