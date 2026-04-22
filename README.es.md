@@ -1,33 +1,42 @@
-<img src="assets/source-icon.png" width="80" align="right" />
+<p align="center">
+  <img src="assets/source-icon.png" width="88" alt="WhereMyTokens icon" />
+</p>
 
-# WhereMyTokens
+<h1 align="center">WhereMyTokens</h1>
 
-<table>
-  <tr>
-    <td>
-      <h2>Ahora también rastrea Codex</h2>
-      <p><strong>WhereMyTokens ahora monitorea Claude Code y Codex juntos desde la bandeja de Windows.</strong></p>
-      <p>Elige solo Claude, solo Codex o ambos. Consulta tokens, costos, reutilización de caché, sesiones, límites y uso por modelo sin sincronizar tus datos con la nube.</p>
-      <p><a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.10.0</strong></a> · <a href="#características">Ver características</a></p>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <strong>Ahora también rastrea Codex.</strong>
+</p>
 
-**Aplicación de bandeja del sistema de Windows para monitorear el uso de tokens de Claude Code y Codex en tiempo real.**
+<p align="center">
+  <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-new-4f46e5?style=for-the-badge">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
+  <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
+</p>
 
-Creada por un desarrollador coreano que usa Claude Code a diario — resolviendo mi propia necesidad.
+<p align="center">
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
+  <img alt="Release" src="https://img.shields.io/github/v/release/jeongwookie/WhereMyTokens?style=for-the-badge">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge">
+</p>
 
-Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code y Codex — tokens, costos, actividad de sesiones, caché, uso por modelo y límites de uso — de un vistazo.
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">中文</a>
+</p>
 
-![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Release](https://img.shields.io/github/v/release/jeongwookie/WhereMyTokens)
+<p align="center">
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.10.0</strong></a>
+  ·
+  <a href="#características">Características</a>
+  ·
+  <a href="#screenshots">Capturas</a>
+</p>
 
-> [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh-CN.md)
+<p align="center">
+  Una app local-first para la bandeja de Windows que muestra tokens, costos, sesiones, caché, uso por modelo y límites de Claude Code y Codex de un vistazo.
+</p>
 
-> ⭐ **Seguimiento Claude + Codex** — elige solo Claude, solo Codex o ambos desde Settings.
-
-> 💾 **Sin sincronización en la nube** — solo lee archivos locales de Claude/Codex. Tus datos nunca salen de tu máquina.
+<a id="screenshots"></a>
 
 <table>
   <tr>
@@ -52,6 +61,8 @@ Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code
     <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
   </tr>
 </table>
+
+> Creada por un desarrollador coreano que usa Claude Code a diario — resolviendo mi propia necesidad.
 
 ## Novedades
 

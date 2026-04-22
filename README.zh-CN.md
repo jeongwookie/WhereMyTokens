@@ -1,33 +1,42 @@
-<img src="assets/source-icon.png" width="80" align="right" />
+<p align="center">
+  <img src="assets/source-icon.png" width="88" alt="WhereMyTokens icon" />
+</p>
 
-# WhereMyTokens
+<h1 align="center">WhereMyTokens</h1>
 
-<table>
-  <tr>
-    <td>
-      <h2>现已支持 Codex 追踪</h2>
-      <p><strong>WhereMyTokens 现在可以在 Windows 托盘中同时监控 Claude Code 与 Codex 使用量。</strong></p>
-      <p>你可以只追踪 Claude、只追踪 Codex，或同时追踪两者。无需云同步即可查看令牌、费用、缓存复用、会话、限制和模型使用量。</p>
-      <p><a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>下载 v1.10.0</strong></a> · <a href="#功能特性">查看功能特性</a></p>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <strong>现已支持 Codex 追踪。</strong>
+</p>
 
-**实时监控 Claude Code 与 Codex 令牌使用量的 Windows 系统托盘应用。**
+<p align="center">
+  <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-new-4f46e5?style=for-the-badge">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
+  <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
+</p>
 
-由每天使用 Claude Code 的韩国开发者打造 — 为自己而做。
+<p align="center">
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
+  <img alt="Release" src="https://img.shields.io/github/v/release/jeongwookie/WhereMyTokens?style=for-the-badge">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge">
+</p>
 
-安静地驻留在任务栏中，一目了然地展示 Claude Code 与 Codex 使用情况 — 令牌数、费用、会话活动、缓存、模型使用量和速率限制。
+<p align="center">
+  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.es.md">Español</a>
+</p>
 
-![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Release](https://img.shields.io/github/v/release/jeongwookie/WhereMyTokens)
+<p align="center">
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>下载 v1.10.0</strong></a>
+  ·
+  <a href="#功能特性">功能特性</a>
+  ·
+  <a href="#screenshots">截图</a>
+</p>
 
-> [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Español](README.es.md)
+<p align="center">
+  一个本地优先的 Windows 托盘应用，可一目了然地查看 Claude Code 与 Codex 的令牌、费用、会话、缓存、模型使用量和速率限制。
+</p>
 
-> ⭐ **Claude + Codex 同时追踪** — 可在 Settings 中选择仅 Claude、仅 Codex，或两者一起追踪。
-
-> 💾 **无云同步** — 仅读取本地 Claude/Codex 文件。您的数据绝不会离开您的设备。
+<a id="screenshots"></a>
 
 <table>
   <tr>
@@ -52,6 +61,8 @@
     <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
   </tr>
 </table>
+
+> 由每天使用 Claude Code 的韩国开发者打造 — 为自己而做。
 
 ## 最新更新
 
