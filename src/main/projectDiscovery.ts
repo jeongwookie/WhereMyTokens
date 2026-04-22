@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { TrackingProvider } from './sessionDiscovery';
+import { isSafeLocalCwd } from './pathSafety';
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
@@ -12,6 +13,7 @@ export function discoverAllProjectCwds(provider: TrackingProvider = 'both'): str
   if (provider === 'codex' || provider === 'both') addCodexProjectCwds(cwds);
 
   return [...cwds].filter(cwd => {
+    if (!isSafeLocalCwd(cwd)) return false;
     try { return fs.statSync(cwd).isDirectory(); } catch { return false; }
   });
 }
@@ -28,7 +30,7 @@ function addClaudeProjectCwds(cwds: Set<string>): void {
           .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
         if (jsonlFiles.length === 0) continue;
         const cwd = extractCwdFromClaudeJsonl(path.join(dirPath, jsonlFiles[0]));
-        if (cwd) cwds.add(cwd);
+        if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
       } catch { /* skip */ }
     }
   } catch { /* skip */ }
@@ -38,7 +40,7 @@ function addCodexProjectCwds(cwds: Set<string>): void {
   if (!fs.existsSync(CODEX_SESSIONS_DIR)) return;
   for (const filePath of listJsonlFiles(CODEX_SESSIONS_DIR)) {
     const cwd = extractCwdFromCodexJsonl(filePath);
-    if (cwd) cwds.add(cwd);
+    if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
   }
 }
 
@@ -64,7 +66,7 @@ function extractCwdFromClaudeJsonl(filePath: string): string | null {
       if (!line.trim()) continue;
       try {
         const data = JSON.parse(line);
-        if (typeof data.cwd === 'string' && data.cwd) return data.cwd;
+        if (typeof data.cwd === 'string' && isSafeLocalCwd(data.cwd)) return data.cwd;
       } catch { /* skip */ }
     }
   } catch { /* skip */ }
@@ -81,8 +83,8 @@ function extractCwdFromCodexJsonl(filePath: string): string | null {
       if (!line.trim()) continue;
       try {
         const data = JSON.parse(line);
-        if (data.type === 'session_meta' && typeof data.payload?.cwd === 'string') return data.payload.cwd;
-        if (data.type === 'turn_context' && typeof data.payload?.cwd === 'string') return data.payload.cwd;
+        if (data.type === 'session_meta' && typeof data.payload?.cwd === 'string' && isSafeLocalCwd(data.payload.cwd)) return data.payload.cwd;
+        if (data.type === 'turn_context' && typeof data.payload?.cwd === 'string' && isSafeLocalCwd(data.payload.cwd)) return data.payload.cwd;
       } catch { /* skip */ }
     }
   } catch { /* skip */ }

@@ -169,7 +169,7 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     return emptyResult();
   }
 
-  const lines = raw.split('\n').filter(l => l.trim());
+  const lines = splitCompleteJsonlLines(raw, false).lines;
   const entries: ParsedEntry[] = [];
   // key: message id, value: entries 배열 인덱스
   // Set 대신 Map을 써서 동일 id 중 output_tokens 최대값 보존
@@ -534,6 +534,65 @@ function asNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+function asString(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function inferCodexModel(...records: Array<Record<string, unknown> | null | undefined>): string {
+  const keys = ['model', 'model_name', 'model_slug', 'model_id', 'requested_model', 'default_model'];
+  for (const record of records) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = asString(record[key]);
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
+function hashString(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function codexEntryId(filePath: string, line: string, timestamp?: string): string {
+  return `${filePath}-${timestamp ?? 'no-ts'}-${hashString(line)}`;
+}
+
+function splitCompleteJsonlLines(text: string, holdOpenLastLine: boolean): { lines: string[]; pendingText: string } {
+  const parts = text.split('\n');
+  let pendingText = '';
+  if (holdOpenLastLine && !text.endsWith('\n')) {
+    pendingText = parts.pop() ?? '';
+  }
+  return {
+    lines: parts.map(line => line.replace(/\r$/, '')).filter(line => line.trim()),
+    pendingText,
+  };
+}
+
+function readInvalidTrailingJsonlText(filePath: string): string {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    if (raw.endsWith('\n')) return '';
+    const tail = raw.slice(raw.lastIndexOf('\n') + 1);
+    if (!tail.trim()) return '';
+    JSON.parse(tail);
+    return '';
+  } catch {
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return raw.slice(raw.lastIndexOf('\n') + 1);
+    } catch {
+      return '';
+    }
+  }
+}
+
 function parseCodexRateLimits(payload: Record<string, unknown>, observedAt: number): ParsedFile['codexRateLimits'] {
   const rateLimits = payload.rate_limits as Record<string, unknown> | undefined;
   if (!rateLimits) return undefined;
@@ -575,7 +634,7 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
     return emptyResult();
   }
 
-  const lines = raw.split('\n').filter(l => l.trim());
+  const lines = splitCompleteJsonlLines(raw, false).lines;
   const entries: ParsedEntry[] = [];
   let latestModel = '';
   let latestRawModel = '';
@@ -596,8 +655,17 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
     const payload = obj.payload as Record<string, unknown> | undefined;
     if (!payload) continue;
 
+    if (obj.type === 'session_meta') {
+      const model = inferCodexModel(payload);
+      if (model) {
+        latestRawModel = model;
+        latestModel = normalizeModel(model);
+      }
+      continue;
+    }
+
     if (obj.type === 'turn_context') {
-      const model = payload.model as string | undefined;
+      const model = inferCodexModel(payload);
       if (model) {
         latestRawModel = model;
         latestModel = normalizeModel(model);
@@ -606,6 +674,11 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
     }
 
     if (obj.type === 'event_msg' && payload.type === 'task_started') {
+      const model = inferCodexModel(payload);
+      if (model) {
+        latestRawModel = model;
+        latestModel = normalizeModel(model);
+      }
       contextMax = asNumber(payload.model_context_window);
       continue;
     }
@@ -645,9 +718,10 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
 
     if (inp + out + cr === 0) continue;
 
-    const rawModel = latestRawModel || 'codex';
+    const rawModel = latestRawModel || inferCodexModel(payload, info, usage);
+    if (!rawModel) continue;
     const ts = timestamp ? new Date(timestamp) : new Date(0);
-    const id = `${filePath}-${timestamp ?? entries.length}-${entries.length}`;
+    const id = codexEntryId(filePath, line, timestamp);
     const cost = calcCost(rawModel, inp, out, cw, cr);
     const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
 
@@ -665,6 +739,7 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
     });
 
     latestModel = normalizeModel(rawModel);
+    latestRawModel = rawModel;
     latestInputTokens = inp;
     latestCacheCreationTokens = cw;
     latestCacheReadTokens = cr;
@@ -714,8 +789,9 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
       fd = fs.openSync(filePath, 'r');
       fs.readSync(fd, buf, 0, newSize, cached.byteOffset);
       const newText = buf.toString('utf-8');
+      const textToParse = `${cached.pendingText ?? ''}${newText}`;
 
-      if (!newText.trim()) {
+      if (!textToParse.trim()) {
         cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
         return cached.parsed;
       }
@@ -732,7 +808,7 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
       const toolCounts = { ...cached.parsed.toolCounts };
       const activityBreakdown = { ...cached.parsed.activityBreakdown };
 
-      const lines = newText.split('\n').filter(l => l.trim());
+      const { lines, pendingText } = splitCompleteJsonlLines(textToParse, true);
       for (const line of lines) {
         let obj: Record<string, unknown>;
         try { obj = JSON.parse(line) as Record<string, unknown>; }
@@ -742,8 +818,17 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
         const payload = obj.payload as Record<string, unknown> | undefined;
         if (!payload) continue;
 
+        if (obj.type === 'session_meta') {
+          const model = inferCodexModel(payload);
+          if (model) {
+            latestRawModel = model;
+            latestModel = normalizeModel(model);
+          }
+          continue;
+        }
+
         if (obj.type === 'turn_context') {
-          const model = payload.model as string | undefined;
+          const model = inferCodexModel(payload);
           if (model) {
             latestRawModel = model;
             latestModel = normalizeModel(model);
@@ -752,6 +837,11 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
         }
 
         if (obj.type === 'event_msg' && payload.type === 'task_started') {
+          const model = inferCodexModel(payload);
+          if (model) {
+            latestRawModel = model;
+            latestModel = normalizeModel(model);
+          }
           contextMax = asNumber(payload.model_context_window);
           continue;
         }
@@ -785,9 +875,10 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
 
         if (inp + out + cr === 0) continue;
 
-        const rawModel = latestRawModel || 'codex';
+        const rawModel = latestRawModel || inferCodexModel(payload, info, usage);
+        if (!rawModel) continue;
         const ts = timestamp ? new Date(timestamp) : new Date(0);
-        const id = `${filePath}-${timestamp ?? entries.length}-${entries.length}`;
+        const id = codexEntryId(filePath, line, timestamp);
         if (seenMap.has(id)) continue;
         seenMap.set(id, entries.length);
 
@@ -805,6 +896,7 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
         });
 
         latestModel = normalizeModel(rawModel);
+        latestRawModel = rawModel;
         latestInputTokens = inp;
         latestCacheCreationTokens = cw;
         latestCacheReadTokens = cr;
@@ -828,6 +920,7 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
         mtimeMs: stat.mtimeMs,
         fileSize: stat.size,
         byteOffset: stat.size,
+        pendingText,
         parsed: result,
         seenMap,
       });
@@ -851,6 +944,7 @@ export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): Pars
     mtimeMs: stat.mtimeMs,
     fileSize: stat.size,
     byteOffset: stat.size,
+    pendingText: readInvalidTrailingJsonlText(filePath) || undefined,
     parsed: result,
     seenMap,
   });

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import chokidar from 'chokidar';
-import { discoverSessions, DiscoveredSession, TrackingProvider, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR } from './sessionDiscovery';
+import { discoverSessions, DiscoveredSession, TrackingProvider, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, projectKeysForCwd } from './sessionDiscovery';
 import { parseJsonlFile, parseJsonlCached, parseCodexJsonlCached, ParsedEntry, ActivityBreakdown, ActivityBreakdownKind, ParsedFile } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
@@ -11,8 +11,9 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
-import { getGitStatsAsync, GitStats, getAllPersistedStatsByRepo } from './gitStatsCollector';
+import { getGitStatsAsync, GitStats } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
+import { isSafeLocalCwd } from './pathSafety';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -72,6 +73,41 @@ function getJsonlMtime(filePath: string): Date | null {
 function gitStatsCacheKey(cwd: string): string {
   const key = path.resolve(cwd);
   return process.platform === 'win32' ? key.toLowerCase() : key;
+}
+
+function makeExcludedMatcher(excludedProjects: readonly string[] = []) {
+  const exact = new Set(excludedProjects.filter(Boolean));
+  const folded = new Set([...exact].map(name => name.toLowerCase()));
+  return (keys: Array<string | null | undefined>) => keys.some(key => {
+    if (!key) return false;
+    return exact.has(key) || folded.has(key.toLowerCase());
+  });
+}
+
+function readJsonlCwd(filePath: string, provider: 'claude' | 'codex'): string | null {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(64 * 1024);
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+    const lines = buf.subarray(0, bytesRead).toString('utf-8').split('\n').slice(0, 64);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const data = JSON.parse(line) as Record<string, unknown>;
+        const cwd = provider === 'codex'
+          ? (data.payload as Record<string, unknown> | undefined)?.cwd
+          : data.cwd;
+        if (typeof cwd === 'string' && isSafeLocalCwd(cwd)) return cwd;
+      } catch { /* skip */ }
+    }
+  } catch { /* skip */ }
+  finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch { /* skip */ }
+    }
+  }
+  return null;
 }
 
 export class StateManager {
@@ -183,6 +219,14 @@ export class StateManager {
       today: { commits: 0, added: 0, removed: 0 },
       all: { commits: 0, added: 0, removed: 0 },
     };
+  }
+
+  private sessionProjectKeys(session: Pick<DiscoveredSession, 'cwd' | 'mainRepoName' | 'projectName'>): string[] {
+    return [
+      session.mainRepoName,
+      session.projectName,
+      ...projectKeysForCwd(session.cwd),
+    ].filter((key): key is string => !!key);
   }
 
   start() {
@@ -533,7 +577,7 @@ export class StateManager {
   private loadProviderEntries(): { entries: ParsedEntry[]; sessionCount: number; codexRateLimits: ParsedFile['codexRateLimits'] | null } {
     const settings = this.getSettings();
     const entries: ParsedEntry[] = [];
-    const excluded = new Set(settings.excludedProjects ?? []);
+    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const seen = new Map<string, number>();
     let sessionCount = 0;
     let codexRateLimits: ParsedFile['codexRateLimits'] | null = null;
@@ -557,10 +601,11 @@ export class StateManager {
           .map(d => d.name);
 
         for (const dir of projectDirs) {
-          if (excluded.has(dir)) continue;
           const dirPath = path.join(PROJECTS_DIR, dir);
           try {
             const files = fs.readdirSync(dirPath).filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
+            const cwd = files.length > 0 ? readJsonlCwd(path.join(dirPath, files[0]), 'claude') : null;
+            if (isExcluded([dir, ...(cwd ? projectKeysForCwd(cwd) : [])])) continue;
             sessionCount += files.length;
             for (const file of files) addEntries(parseJsonlCached(path.join(dirPath, file), this.jsonlCache));
           } catch { /* skip */ }
@@ -570,6 +615,8 @@ export class StateManager {
 
     if ((settings.provider === 'codex' || settings.provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
       for (const filePath of this.listJsonlFiles(CODEX_SESSIONS_DIR)) {
+        const cwd = readJsonlCwd(filePath, 'codex');
+        if (cwd && isExcluded(projectKeysForCwd(cwd))) continue;
         const parsed = parseCodexJsonlCached(filePath, this.jsonlCache);
         if (parsed.entries.length === 0 && !parsed.codexRateLimits) continue;
         sessionCount += 1;
@@ -616,7 +663,9 @@ export class StateManager {
       return this.state.repoGitStats;
     }
 
-    const allCwds = discoverAllProjectCwds(settings.provider);
+    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+    const allCwds = discoverAllProjectCwds(settings.provider)
+      .filter(cwd => isSafeLocalCwd(cwd) && !isExcluded(projectKeysForCwd(cwd)));
     const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
     const repoGitStats: Record<string, GitStats> = {};
 
@@ -626,11 +675,6 @@ export class StateManager {
       repoGitStats[stats.gitCommonDir] = stats;
     }
 
-    const persisted = getAllPersistedStatsByRepo();
-    for (const [gitCommonDir, stats] of Object.entries(persisted)) {
-      if (!repoGitStats[gitCommonDir]) repoGitStats[gitCommonDir] = stats;
-    }
-
     this.repoGitStatsLastRefresh = now;
     return repoGitStats;
   }
@@ -638,7 +682,14 @@ export class StateManager {
   private buildCodeOutputStats(sessions: SessionInfo[], repoGitStats: Record<string, GitStats>): CodeOutputStats {
     const today = { commits: 0, added: 0, removed: 0 };
 
-    const repoStats = Object.values(repoGitStats);
+    const scopedRepoKeys = new Set<string>();
+    for (const session of sessions) {
+      const key = session.gitStats?.gitCommonDir ?? session.gitStats?.toplevel ?? null;
+      if (key) scopedRepoKeys.add(key);
+    }
+    const repoStats = Object.entries(repoGitStats)
+      .filter(([key, stats]) => scopedRepoKeys.size === 0 || scopedRepoKeys.has(key) || (!!stats.toplevel && scopedRepoKeys.has(stats.toplevel)))
+      .map(([, stats]) => stats);
     if (repoStats.length > 0) {
       for (const stats of repoStats) {
         today.commits += stats.commitsToday;
@@ -721,10 +772,9 @@ export class StateManager {
 
   private buildSessionInfos(): SessionInfo[] {
     const settings = this.getSettings();
-    const excluded = new Set(settings.excludedProjects ?? []);
+    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const discovered = discoverSessions(settings.provider).filter(s => {
-      const key = s.mainRepoName ?? s.projectName;
-      return !excluded.has(key) && !excluded.has(s.projectName);
+      return !isExcluded(this.sessionProjectKeys(s));
     });
     return discovered.map(s => this.buildSessionInfo(s));
   }
@@ -746,11 +796,8 @@ export class StateManager {
       void this.heavyRefresh();
       return;
     }
-    const excluded = new Set(settings.excludedProjects ?? []);
-    const sessions = this.state.sessions.filter(s => {
-      const key = s.mainRepoName ?? s.projectName;
-      return !excluded.has(key) && !excluded.has(s.projectName);
-    });
+    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+    const sessions = this.state.sessions.filter(s => !isExcluded(this.sessionProjectKeys(s)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     this.state = { ...this.state, sessions, settings, codeOutputStats, lastUpdated: Date.now() };
     this.onUpdate(this.state);

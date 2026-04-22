@@ -314,6 +314,8 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
     limits.codexH5.pct > 0 ||
     limits.codexWeek.pct > 0
   );
+  const codexH5HasLimit = limits.codexH5.source === 'localLog' || limits.codexH5.pct > 0 || limits.codexH5.resetMs > 0;
+  const codexWeekHasLimit = limits.codexWeek.source === 'localLog' || limits.codexWeek.pct > 0 || limits.codexWeek.resetMs > 0;
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -352,10 +354,10 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
       {showCodexPanel && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} apiConnected={true}
+            limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} apiConnected={codexH5HasLimit}
             cacheMetricMode="codex" hero borderRight />
           <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} apiConnected={true}
+            limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} apiConnected={codexWeekHasLimit}
             cacheMetricMode="codex" hero />
         </div>
       )}
@@ -522,9 +524,15 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
     return Array.from(projectMap.entries())
       .filter(([name]) => !hiddenProjects.includes(name))
       .map(([name, projectSessions]) => {
+        const uniqueProjectStats = new Map<string, NonNullable<SessionInfo['gitStats']>>();
+        for (const s of projectSessions) {
+          if (!s.gitStats) continue;
+          const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
+          if (!uniqueProjectStats.has(repoKey)) uniqueProjectStats.set(repoKey, s.gitStats);
+        }
         const branchMap = new Map<string, SessionInfo[]>();
         for (const s of projectSessions) {
-          const branch = s.worktreeBranch ?? s.gitBranch ?? s.gitStats?.branch ?? '(unknown)';
+          const branch = s.worktreeBranch ?? s.gitStats?.branch ?? s.gitBranch ?? '(unknown)';
           if (!branchMap.has(branch)) branchMap.set(branch, []);
           branchMap.get(branch)!.push(s);
         }
@@ -541,9 +549,9 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
         return {
           name,
           branches,
-          totalCommits: branches.reduce((sum, branch) => sum + branch.commits, 0),
-          totalAdded: branches.reduce((sum, branch) => sum + branch.added, 0),
-          totalRemoved: branches.reduce((sum, branch) => sum + branch.removed, 0),
+          totalCommits: [...uniqueProjectStats.values()].reduce((sum, stats) => sum + stats.commitsToday, 0),
+          totalAdded: [...uniqueProjectStats.values()].reduce((sum, stats) => sum + stats.linesAdded, 0),
+          totalRemoved: [...uniqueProjectStats.values()].reduce((sum, stats) => sum + stats.linesRemoved, 0),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));

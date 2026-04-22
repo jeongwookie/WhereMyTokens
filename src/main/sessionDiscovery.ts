@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { isSafeLocalCwd } from './pathSafety';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 export type TrackingProvider = 'claude' | 'codex' | 'both';
@@ -28,7 +29,6 @@ const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
 const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
-const gitBranchCache = new Map<string, string | null>();
 
 function encodeCwd(cwd: string): string {
   // "C:\dev\app" → "C--dev-app" (encode path to flat name)
@@ -127,11 +127,18 @@ function detectGitBranch(cwd: string): string | null {
 }
 
 function detectGitBranchCached(cwd: string): string | null {
-  const key = process.platform === 'win32' ? path.resolve(cwd).toLowerCase() : path.resolve(cwd);
-  if (gitBranchCache.has(key)) return gitBranchCache.get(key) ?? null;
-  const value = detectGitBranch(cwd);
-  gitBranchCache.set(key, value);
-  return value;
+  return detectGitBranch(cwd);
+}
+
+export function projectKeysForCwd(cwd: string): string[] {
+  if (!isSafeLocalCwd(cwd)) return [];
+  const keys = new Set<string>();
+  const worktreeInfo = detectWorktreeCached(cwd);
+  if (worktreeInfo?.mainName) keys.add(worktreeInfo.mainName);
+  const baseName = path.basename(cwd);
+  if (baseName) keys.add(baseName);
+  keys.add(encodeCwd(cwd));
+  return [...keys];
 }
 
 function codexEntrypointFromSource(sourceRaw: unknown): string {
@@ -214,6 +221,7 @@ function discoverClaudeSessions(): DiscoveredSession[] {
       const meta = JSON.parse(raw);
       const { pid, sessionId, cwd, startedAt, entrypoint = 'cli', name: _name } = meta;
       if (!pid || !sessionId || !cwd) continue;
+      if (!isSafeLocalCwd(cwd)) continue;
 
       const alive = isProcessAlive(pid);
       const jsonlPath = findJsonlPath(cwd, sessionId);
@@ -267,29 +275,35 @@ function listCodexJsonlFiles(dir: string): string[] {
   return results;
 }
 
-function readFirstJsonObject(filePath: string): Record<string, unknown> | null {
+interface CodexSessionHeader {
+  payload: Record<string, unknown>;
+  timestamp: string | null;
+}
+
+function readCodexSessionHeader(filePath: string): CodexSessionHeader | null {
   const maxBytes = 512 * 1024;
-  const chunkSize = 16 * 1024;
   let fd: number | null = null;
   try {
     fd = fs.openSync(filePath, 'r');
-    const chunks: Buffer[] = [];
-    let total = 0;
-    while (total < maxBytes) {
-      const buf = Buffer.alloc(Math.min(chunkSize, maxBytes - total));
-      const n = fs.readSync(fd, buf, 0, buf.length, total);
-      if (n <= 0) break;
-      chunks.push(buf.subarray(0, n));
-      total += n;
-      const text = Buffer.concat(chunks).toString('utf-8');
-      const newline = text.indexOf('\n');
-      if (newline >= 0) {
-        const line = text.slice(0, newline).trim();
-        return line ? JSON.parse(line) as Record<string, unknown> : null;
+    const buf = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
+    let fallback: CodexSessionHeader | null = null;
+    for (const line of buf.subarray(0, bytesRead).toString('utf-8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line) as Record<string, unknown>;
+        const payload = obj.payload as Record<string, unknown> | undefined;
+        if (!payload) continue;
+        const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
+        if (obj.type === 'session_meta') return { payload, timestamp };
+        if (!fallback && obj.type === 'turn_context' && typeof payload.cwd === 'string') {
+          fallback = { payload, timestamp };
+        }
+      } catch {
+        continue;
       }
     }
-    const line = Buffer.concat(chunks).toString('utf-8').trim();
-    return line ? JSON.parse(line) as Record<string, unknown> : null;
+    return fallback;
   } catch { /* ignore */ }
   finally {
     if (fd !== null) {
@@ -307,18 +321,19 @@ function discoverCodexSessions(): DiscoveredSession[] {
 
   for (const filePath of files) {
     try {
-      const first = readFirstJsonObject(filePath);
-      const payload = first?.payload as Record<string, unknown> | undefined;
-      if (first?.type !== 'session_meta' || !payload) continue;
+      const header = readCodexSessionHeader(filePath);
+      const payload = header?.payload;
+      if (!payload) continue;
 
       const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
       if (!cwd) continue;
+      if (!isSafeLocalCwd(cwd)) continue;
 
       const stat = fs.statSync(filePath);
       const sessionId = typeof payload.id === 'string' ? payload.id : path.basename(filePath, '.jsonl');
       const startedAtRaw = typeof payload.timestamp === 'string'
         ? payload.timestamp
-        : (typeof first.timestamp === 'string' ? first.timestamp : '');
+        : (header.timestamp ?? '');
       const startedAt = startedAtRaw ? new Date(startedAtRaw) : stat.birthtime;
       const sourceRaw = payload.source;
       const originator = typeof payload.originator === 'string' ? payload.originator : null;
