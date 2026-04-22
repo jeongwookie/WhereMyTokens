@@ -44,6 +44,10 @@ export interface Theme {
   sonnet: string;
   haiku:  string;
   gpt:    string;
+  gpt5:   string;
+  gptCodex: string;
+  gpt4:   string;
+  codexMini: string;
 
   // 진행 바
   barGreen:  string;
@@ -106,7 +110,11 @@ export const LIGHT: Theme = {
   opus:   '#b45309',
   sonnet: '#1878b4',
   haiku:  '#2a9040',
-  gpt:    '#d4602a',
+  gpt:    '#6d28d9',
+  gpt5:   '#4f46e5',
+  gptCodex: '#d4602a',
+  gpt4:   '#0891b2',
+  codexMini: '#7c3aed',
 
   barGreen:  '#2a7a48',
   barOrange: '#a06010',
@@ -161,7 +169,11 @@ export const DARK: Theme = {
   opus:   '#f59e0b',
   sonnet: '#60a5fa',
   haiku:  '#34d399',
-  gpt:    '#fb923c',
+  gpt:    '#a78bfa',
+  gpt5:   '#818cf8',
+  gptCodex: '#fb923c',
+  gpt4:   '#38bdf8',
+  codexMini: '#c084fc',
 
   barGreen:  '#34d399',
   barOrange: '#fbbf24',
@@ -198,6 +210,10 @@ export function modelColor(model: string, C: Theme): string {
   if (lower.includes('opus'))   return C.opus;
   if (lower.includes('sonnet')) return C.sonnet;
   if (lower.includes('haiku'))  return C.haiku;
+  if (lower.includes('codex-mini')) return C.codexMini;
+  if (lower.includes('gpt-5') && lower.includes('codex')) return C.gptCodex;
+  if (lower.includes('gpt-5')) return C.gpt5;
+  if (lower.includes('gpt-4')) return C.gpt4;
   if (lower.includes('gpt'))    return C.gpt;
   return C.accent;
 }
@@ -280,6 +296,7 @@ const CSS_VAR_MAP: Record<keyof Theme, string> = {
   active: '--wmt-active', waiting: '--wmt-waiting', idle: '--wmt-idle', compacting: '--wmt-compacting',
   input: '--wmt-input', output: '--wmt-output', cacheW: '--wmt-cache-w', cacheR: '--wmt-cache-r',
   opus: '--wmt-opus', sonnet: '--wmt-sonnet', haiku: '--wmt-haiku', gpt: '--wmt-gpt',
+  gpt5: '--wmt-gpt-5', gptCodex: '--wmt-gpt-codex', gpt4: '--wmt-gpt-4', codexMini: '--wmt-codex-mini',
   barGreen: '--wmt-bar-green', barOrange: '--wmt-bar-orange', barRed: '--wmt-bar-red', barYellow: '--wmt-bar-yellow',
   gradeExcellentBg: '--wmt-grade-excellent-bg', gradeExcellentColor: '--wmt-grade-excellent-color',
   gradeGoodBg: '--wmt-grade-good-bg', gradeGoodColor: '--wmt-grade-good-color',
