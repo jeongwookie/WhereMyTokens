@@ -2,6 +2,17 @@
 
 # WhereMyTokens
 
+<table>
+  <tr>
+    <td>
+      <h2>现已支持 Codex 追踪</h2>
+      <p><strong>WhereMyTokens 现在可以在 Windows 托盘中同时监控 Claude Code 与 Codex 使用量。</strong></p>
+      <p>你可以只追踪 Claude、只追踪 Codex，或同时追踪两者。无需云同步即可查看令牌、费用、缓存复用、会话、限制和模型使用量。</p>
+      <p><a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>下载 v1.10.0</strong></a> · <a href="#功能特性">查看功能特性</a></p>
+    </td>
+  </tr>
+</table>
+
 **实时监控 Claude Code 与 Codex 令牌使用量的 Windows 系统托盘应用。**
 
 由每天使用 Claude Code 的韩国开发者打造 — 为自己而做。

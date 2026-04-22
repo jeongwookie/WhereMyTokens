@@ -2,6 +2,17 @@
 
 # WhereMyTokens
 
+<table>
+  <tr>
+    <td>
+      <h2>Codex の追跡に対応しました</h2>
+      <p><strong>WhereMyTokens は Claude Code と Codex の使用量を Windows トレイで並べて表示します。</strong></p>
+      <p>Claude のみ、Codex のみ、または両方を選択できます。トークン、コスト、キャッシュ再利用、セッション、制限、モデル別使用量をクラウド同期なしで確認できます。</p>
+      <p><a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>v1.10.0 をダウンロード</strong></a> · <a href="#主な機能">主な機能を見る</a></p>
+    </td>
+  </tr>
+</table>
+
 **Claude Code と Codex のトークン使用量をリアルタイムで監視する Windows システムトレイアプリ。**
 
 Claude Code を毎日使う韓国人開発者が、自分のために作って使い続けているアプリです。

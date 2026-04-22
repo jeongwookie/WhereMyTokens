@@ -2,6 +2,17 @@
 
 # WhereMyTokens
 
+<table>
+  <tr>
+    <td>
+      <h2>Codex tracking is here</h2>
+      <p><strong>WhereMyTokens now monitors Claude Code and Codex side by side from the Windows tray.</strong></p>
+      <p>Choose Claude only, Codex only, or both together. Track tokens, cost, cache reuse, sessions, rate limits, and model usage without sending your data to the cloud.</p>
+      <p><a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>Download v1.10.0</strong></a> · <a href="#features">See features</a></p>
+    </td>
+  </tr>
+</table>
+
 **Windows system tray app for monitoring Claude Code and Codex token usage in real time.**
 
 Built by a Korean developer who uses Claude Code daily — scratching my own itch.

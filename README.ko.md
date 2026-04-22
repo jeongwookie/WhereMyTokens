@@ -2,6 +2,17 @@
 
 # WhereMyTokens
 
+<table>
+  <tr>
+    <td>
+      <h2>이제 Codex도 추적합니다</h2>
+      <p><strong>WhereMyTokens가 Claude Code와 Codex 사용량을 Windows 트레이에서 함께 보여줍니다.</strong></p>
+      <p>Claude만, Codex만, 또는 둘 다 선택하세요. 토큰, 비용, 캐시 재사용, 세션, 제한, 모델별 사용량을 클라우드 동기화 없이 확인할 수 있습니다.</p>
+      <p><a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe"><strong>v1.10.0 다운로드</strong></a> · <a href="#주요-기능">주요 기능 보기</a></p>
+    </td>
+  </tr>
+</table>
+
 **Claude Code와 Codex 토큰 사용량을 실시간으로 모니터링하는 Windows 시스템 트레이 앱.**
 
 Claude Code를 매일 사용하는 한국인 개발자가 직접 만들고 쓰고 있는 앱입니다.
