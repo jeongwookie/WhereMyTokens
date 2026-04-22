@@ -97,6 +97,8 @@ export interface ActivityBreakdown {
   web: number;        // WebFetch / WebSearch
 }
 
+export type ActivityBreakdownKind = 'tokens' | 'events';
+
 export interface ParsedFile {
   entries: ParsedEntry[];
   modelName: string;        // normalized model name of latest entry
@@ -111,6 +113,7 @@ export interface ParsedFile {
   };
   toolCounts: Record<string, number>;
   activityBreakdown: ActivityBreakdown;
+  activityBreakdownKind: ActivityBreakdownKind;
 }
 
 function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown {
@@ -297,11 +300,31 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     latestCacheReadTokens = last.cacheReadTokens;
   }
 
-  return { entries, modelName: latestModel, rawModel: latestRawModel, latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens, toolCounts, activityBreakdown };
+  return {
+    entries,
+    modelName: latestModel,
+    rawModel: latestRawModel,
+    latestInputTokens,
+    latestCacheCreationTokens,
+    latestCacheReadTokens,
+    toolCounts,
+    activityBreakdown,
+    activityBreakdownKind: 'tokens',
+  };
 }
 
 function emptyResult(): ParsedFile {
-  return { entries: [], modelName: '', rawModel: '', latestInputTokens: 0, latestCacheCreationTokens: 0, latestCacheReadTokens: 0, toolCounts: {}, activityBreakdown: emptyBreakdown() };
+  return {
+    entries: [],
+    modelName: '',
+    rawModel: '',
+    latestInputTokens: 0,
+    latestCacheCreationTokens: 0,
+    latestCacheReadTokens: 0,
+    toolCounts: {},
+    activityBreakdown: emptyBreakdown(),
+    activityBreakdownKind: 'tokens',
+  };
 }
 
 /**
@@ -489,7 +512,7 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
       const result: ParsedFile = {
         entries, modelName: latestModel, rawModel: latestRawModel,
         latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens,
-        toolCounts, activityBreakdown,
+        toolCounts, activityBreakdown, activityBreakdownKind: 'tokens',
       };
       cache.set(filePath, {
         mtimeMs: stat.mtimeMs,
@@ -581,7 +604,7 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
       if (name) {
         toolCounts[name] = (toolCounts[name] ?? 0) + 1;
         const cat = classifyToolUse(name, payload.arguments);
-        activityBreakdown[cat] += 0;
+        activityBreakdown[cat] += 1;
       }
       continue;
     }
@@ -648,6 +671,7 @@ export function parseCodexJsonlFile(filePath: string): ParsedFile {
     codexRateLimits,
     toolCounts,
     activityBreakdown,
+    activityBreakdownKind: 'events',
   };
 }
 

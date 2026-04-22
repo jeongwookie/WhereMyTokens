@@ -43,6 +43,7 @@ export interface SessionInfo {
     buildTest: number; terminal: number; thinking: number; response: number;
     subagents: number; web: number;
   } | null;
+  activityBreakdownKind?: 'tokens' | 'events' | null;
 }
 
 export interface WindowStats {
