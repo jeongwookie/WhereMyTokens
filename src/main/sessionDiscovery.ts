@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSafeLocalCwd } from './pathSafety';
-import { readCodexSessionHeader } from './sessionMetadata';
+import { readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
 import { getUsageLogSources, mapCwdForSource, sourceLabel, UsageLogSource } from './wslPaths';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
@@ -169,21 +169,43 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function findJsonlPath(cwd: string, sessionId: string, source: UsageLogSource): string | null {
-  const encoded = encodeCwd(cwd);
-  const candidate = path.join(source.claudeProjectsDir, encoded, `${sessionId}.jsonl`);
-  if (fs.existsSync(candidate)) return candidate;
+function findClaudeProjectDir(rawCwd: string, source: UsageLogSource): string | null {
+  const encoded = encodeCwd(rawCwd);
+  const exact = path.join(source.claudeProjectsDir, encoded);
+  if (fs.existsSync(exact)) return exact;
 
-  // Case mismatch correction: scan directory directly
   try {
     const dirs = fs.readdirSync(source.claudeProjectsDir);
     const match = dirs.find(d => d.toLowerCase() === encoded.toLowerCase());
-    if (match) {
-      const p = path.join(source.claudeProjectsDir, match, `${sessionId}.jsonl`);
-      if (fs.existsSync(p)) return p;
-    }
-  } catch { /* ignore */ }
-  return null;
+    return match ? path.join(source.claudeProjectsDir, match) : null;
+  } catch {
+    return null;
+  }
+}
+
+function newestJsonlForCwd(dirPath: string, mappedCwd: string, source: UsageLogSource): string | null {
+  try {
+    const candidates = fs.readdirSync(dirPath)
+      .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+      .map(file => path.join(dirPath, file))
+      .filter(file => readJsonlCwd(file, 'claude', source) === mappedCwd)
+      .map(file => ({ file, mtime: getJsonlLastModified(file)?.getTime() ?? 0 }))
+      .sort((a, b) => b.mtime - a.mtime);
+    return candidates[0]?.file ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function findJsonlPath(rawCwd: string, mappedCwd: string, sessionId: string, source: UsageLogSource): string | null {
+  const dirPath = findClaudeProjectDir(rawCwd, source);
+  if (!dirPath) return null;
+
+  const candidate = path.join(dirPath, `${sessionId}.jsonl`);
+  if (fs.existsSync(candidate)) return candidate;
+
+  // 최신 Claude Code는 sessions/*.json의 sessionId와 projects/*.jsonl 파일명이 다를 수 있다.
+  return newestJsonlForCwd(dirPath, mappedCwd, source);
 }
 
 function getJsonlLastModified(jsonlPath: string | null): Date | null {
@@ -229,7 +251,7 @@ function discoverClaudeSessions(source: UsageLogSource): DiscoveredSession[] {
       if (!cwd || !isSafeLocalCwd(cwd)) continue;
 
       const alive = source.kind === 'wsl' ? null : isProcessAlive(pid);
-      const jsonlPath = findJsonlPath(rawCwd, sessionId, source);
+      const jsonlPath = findJsonlPath(rawCwd, cwd, sessionId, source);
       const lastModified = getJsonlLastModified(jsonlPath);
       const state = calcState(alive, lastModified);
 
