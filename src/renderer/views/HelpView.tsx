@@ -135,9 +135,22 @@ function UsageTable({ rows, headers }: {
 function ContentEN() {
   return (
     <>
+      <Section icon={<Signal size={15} />} title="Claude + Codex Tracking">
+        <div style={{ marginBottom: 6 }}>
+          WhereMyTokens can track <B>Claude Code only</B>, <B>Codex only</B>, or <B>Claude + Codex together</B>. Choose the provider mode in Settings.
+        </div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B> reads local Claude session/JSONL files and uses the Anthropic API or statusLine bridge for 5h/1w limits.</div>
+        <div><B>Codex</B> reads local <code>~/.codex/sessions/**/*.jsonl</code> logs, including model usage, token counts, cached input, tool events, and Codex rate-limit reset events when present.</div>
+      </Section>
+
+      <Divider />
+
       <Section icon={<Hash size={15} />} title="Numbers & Cost">
         <div style={{ marginBottom: 6 }}>
-          <B>tok</B> = input + output + cache creation + cache reads — every token type Anthropic charges for.
+          <B>tok</B> = input + output + cache creation + cache reads. Claude includes cache creation/read tokens; Codex reports uncached input, cached input, and output from local token_count events.
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <B>Cache Efficiency</B> uses provider-specific math: Claude = cache read ÷ (cache read + cache creation), Codex = cached input ÷ total input.
         </div>
         <UsageTable
           headers={['Display', 'Scope', 'tok', '$']}
@@ -145,7 +158,7 @@ function ContentEN() {
             ['Header (today)', 'Today since midnight', 'In/Out/Cache + calls, sessions', 'API-equiv + cache savings'],
             ['Header (all)', 'All time', 'In/Out/Cache + calls, sessions', 'API-equiv + cache savings'],
             ['Plan Usage', 'Current billing window', 'All types', 'API-equiv'],
-            ['Code Output', 'Today / All time', 'Git stats', '$/100 lines'],
+            ['Code Output', 'Today / All time', 'Git stats', '$/100 added'],
             ['Model Usage', 'All time, per model', 'All types', 'API-equiv'],
           ]}
         />
@@ -159,7 +172,7 @@ function ContentEN() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — number of git commits in the period.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
-        <div style={{ marginBottom: 5 }}><B>$/100 Lines</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 lines. Lower = more efficient.</div>
+        <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-added-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 added. Lower = more efficient.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
@@ -168,10 +181,12 @@ function ContentEN() {
 
       <Section icon={<GitBranch size={15} />} title="Sessions">
         <div style={{ marginBottom: 5 }}><B>Project → Branch → Session</B> — sessions are grouped by git project, then by branch.</div>
-        <div style={{ marginBottom: 5 }}><B>Idle collapse</B> — active/waiting sessions show full details. Idle sessions progressively collapse: &lt;1h shows top-3 tools, 1-6h shows context bar only, 6h+ are auto-hidden (expandable via "Show N idle sessions" button).</div>
-        <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). Shows how well prompt caching is being utilized.</div>
+        <div style={{ marginBottom: 5 }}><B>Provider chips</B> — Claude and Codex sessions can appear in the same project/branch list, with distinct model colors.</div>
+        <div style={{ marginBottom: 5 }}><B>Stack rows</B> — repeated sessions with the same provider/source/model/state are grouped to keep scrolling light. Expand a stack to inspect each session.</div>
+        <div style={{ marginBottom: 5 }}><B>Branch limit</B> — each branch shows the first 3 rows by default; use "Show N more" for the rest.</div>
+        <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Claude and Codex use different local metrics but share the same green/yellow/red header style.</div>
         <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click the <B>Breakdown</B> button on any session row to expand a per-category output token breakdown. One panel open at a time — clicking another session auto-closes the previous.</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — Claude shows per-category output-token breakdown. Codex shows per-category tool event counts because Codex logs expose tool calls rather than per-tool output tokens.</div>
         <CatRow icon="💭" label="Thinking" color="#2dd4bf">Extended thinking blocks</CatRow>
         <CatRow icon="💬" label="Response" color="#94a3b8">Text blocks — the final answer text</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read tool</CatRow>
@@ -199,15 +214,16 @@ function ContentEN() {
 
       <Section icon={<Signal size={15} />} title="Data Sources">
         <SrcRow badge="1st">
-          <B>Anthropic API</B> — authoritative %, same source as the web dashboard. Fetched every 3 min; exponential backoff on 429.
+          <B>Local logs</B> — Claude JSONL and Codex JSONL are parsed locally for tokens, models, cost estimates, sessions, and tool activity.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>Bridge</B> — Claude Code pipes rate limit data via stdin (statusLine plugin). Used as fallback when the API is unavailable.
+          <B>Limit sources</B> — Claude uses Anthropic API first, then statusLine/cache fallback. Codex uses rate-limit events found in local Codex JSONL logs.
         </SrcRow>
         <SrcRow badge="FB">
-          <B>Last cached value</B> — kept on API failure. Stale data past its reset window is auto-cleared on startup.
+          <B>Last cached value</B> — kept when live limit data is unavailable. Stale data past its reset window is auto-cleared on startup.
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
         </div>
       </Section>
@@ -219,9 +235,22 @@ function ContentEN() {
 function ContentKO() {
   return (
     <>
+      <Section icon={<Signal size={15} />} title="Claude + Codex 추적">
+        <div style={{ marginBottom: 6 }}>
+          WhereMyTokens는 <B>Claude Code만</B>, <B>Codex만</B>, 또는 <B>Claude + Codex 동시 추적</B>을 지원합니다. Settings에서 provider 모드를 선택합니다.
+        </div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B>는 로컬 Claude 세션/JSONL 파일을 읽고, 5h/1w 한도는 Anthropic API 또는 statusLine 브리지를 사용합니다.</div>
+        <div><B>Codex</B>는 로컬 <code>~/.codex/sessions/**/*.jsonl</code> 로그에서 모델 사용량, 토큰 수, cached input, 툴 이벤트, Codex rate-limit reset 이벤트를 읽습니다.</div>
+      </Section>
+
+      <Divider />
+
       <Section icon={<Hash size={15} />} title="수치 & 비용">
         <div style={{ marginBottom: 6 }}>
-          <B>tok</B> = input + output + 캐시 생성 + 캐시 읽기 — Anthropic이 과금하는 모든 토큰 유형.
+          <B>tok</B> = input + output + 캐시 생성 + 캐시 읽기. Claude는 cache creation/read를 포함하고, Codex는 로컬 token_count 이벤트의 uncached input, cached input, output을 사용합니다.
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <B>Cache Efficiency</B> 계산식은 provider별로 다릅니다. Claude = cache read ÷ (cache read + cache creation), Codex = cached input ÷ total input.
         </div>
         <UsageTable
           headers={['표시 위치', '범위', 'tok', '$']}
@@ -229,7 +258,7 @@ function ContentKO() {
             ['헤더 (today)', '오늘 자정 이후', 'In/Out/Cache + 호출·세션', 'API 환산 + 캐시 절약'],
             ['헤더 (all)', '전체 기간', 'In/Out/Cache + 호출·세션', 'API 환산 + 캐시 절약'],
             ['Plan Usage', '현재 빌링 창', '전체', 'API 환산'],
-            ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/100 lines'],
+            ['Code Output', '오늘 / 전체 기간', 'Git 통계', '$/100 added'],
             ['Model Usage', '전체 기간, 모델별', '전체', 'API 환산'],
           ]}
         />
@@ -243,7 +272,7 @@ function ContentKO() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 해당 기간의 git 커밋 수.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
-        <div style={{ marginBottom: 5 }}><B>$/100 Lines</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 lines. 값이 낮을수록 효율적.</div>
+        <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 추가 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 added. 값이 낮을수록 효율적.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
@@ -252,10 +281,12 @@ function ContentKO() {
 
       <Section icon={<GitBranch size={15} />} title="세션">
         <div style={{ marginBottom: 5 }}><B>프로젝트 → 브랜치 → 세션</B> — git 프로젝트별, 브랜치별로 그루핑.</div>
-        <div style={{ marginBottom: 5 }}><B>Idle 축소</B> — active/waiting은 전체 표시. idle 세션은 단계별 축소: 1시간 미만은 상위 3개 툴, 1-6시간은 컨텍스트 바만, 6시간 이상은 자동 숨김 ("Show N idle sessions" 버튼으로 펼치기 가능).</div>
-        <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Excellent (80%+), Good (60%+), Fair (40%+), Poor (&lt;40%). 프롬프트 캐싱 활용도.</div>
+        <div style={{ marginBottom: 5 }}><B>Provider 칩</B> — Claude와 Codex 세션이 같은 프로젝트/브랜치 목록에 함께 표시되며, 모델별 색상이 구분됩니다.</div>
+        <div style={{ marginBottom: 5 }}><B>Stack row</B> — provider/source/model/state가 같은 반복 세션은 묶어서 스크롤을 가볍게 유지합니다. stack을 펼치면 개별 세션을 볼 수 있습니다.</div>
+        <div style={{ marginBottom: 5 }}><B>브랜치 제한</B> — 각 브랜치는 기본 3개 행만 표시하고, 나머지는 "Show N more"로 펼칩니다.</div>
+        <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Claude와 Codex는 계산식은 다르지만 헤더에서는 동일한 green/yellow/red 스타일로 표시됩니다.</div>
         <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Breakdown</B> 버튼을 누르면 카테고리별 output 토큰 분석 패널이 펼쳐집니다. 한 번에 하나만 열리며, 다른 세션 클릭 시 자동으로 닫힙니다.</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — Claude는 카테고리별 output token 분석을 표시합니다. Codex는 per-tool output token이 아니라 tool call 로그가 있으므로 카테고리별 tool event count로 표시합니다.</div>
         <CatRow icon="💭" label="Thinking" color="#2dd4bf">확장 사고 블록</CatRow>
         <CatRow icon="💬" label="Response" color="#94a3b8">텍스트 블록 — 최종 응답 텍스트</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read 툴</CatRow>
@@ -283,15 +314,16 @@ function ContentKO() {
 
       <Section icon={<Signal size={15} />} title="데이터 소스">
         <SrcRow badge="1st">
-          <B>Anthropic API</B> — 웹 대시보드와 동일한 권위 있는 수치. 3분마다 갱신, 429 시 지수 백오프.
+          <B>로컬 로그</B> — Claude JSONL과 Codex JSONL을 로컬에서 파싱해 토큰, 모델, 비용 추정, 세션, 툴 활동을 계산합니다.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>Bridge</B> — Claude Code가 stdin으로 실시간 데이터 전달 (statusLine 플러그인). API 불가 시 폴백.
+          <B>한도 소스</B> — Claude는 Anthropic API를 우선 사용하고 statusLine/cache로 폴백합니다. Codex는 로컬 Codex JSONL의 rate-limit 이벤트를 사용합니다.
         </SrcRow>
         <SrcRow badge="FB">
-          <B>마지막 캐시값</B> — API 실패 시 직전 성공값 유지. 리셋 시각이 지난 stale 데이터는 시작 시 자동 초기화.
+          <B>마지막 캐시값</B> — 실시간 한도 데이터를 사용할 수 없을 때 직전 값을 유지합니다. 리셋 시각이 지난 stale 데이터는 시작 시 자동 초기화.
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
         </div>
       </Section>
@@ -303,9 +335,22 @@ function ContentKO() {
 function ContentJA() {
   return (
     <>
+      <Section icon={<Signal size={15} />} title="Claude + Codex 追跡">
+        <div style={{ marginBottom: 6 }}>
+          WhereMyTokens は <B>Claude Code のみ</B>、<B>Codex のみ</B>、または <B>Claude + Codex の同時追跡</B>に対応しています。Settings で provider モードを選択します。
+        </div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B> はローカルの Claude セッション/JSONL ファイルを読み取り、5h/1w 制限は Anthropic API または statusLine ブリッジを使います。</div>
+        <div><B>Codex</B> はローカルの <code>~/.codex/sessions/**/*.jsonl</code> ログから、モデル使用量、トークン数、cached input、ツールイベント、Codex の rate-limit reset イベントを読み取ります。</div>
+      </Section>
+
+      <Divider />
+
       <Section icon={<Hash size={15} />} title="数値とコスト">
         <div style={{ marginBottom: 6 }}>
-          <B>tok</B> = input + output + キャッシュ生成 + キャッシュ読み取り — Anthropic が課金するすべてのトークン種別。
+          <B>tok</B> = input + output + キャッシュ生成 + キャッシュ読み取り。Claude は cache creation/read を含み、Codex はローカル token_count イベントの uncached input、cached input、output を使います。
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <B>Cache Efficiency</B> は provider ごとに計算式が異なります。Claude = cache read ÷ (cache read + cache creation)、Codex = cached input ÷ total input。
         </div>
         <UsageTable
           headers={['表示場所', '集計期間', 'tok', '$']}
@@ -313,7 +358,7 @@ function ContentJA() {
             ['ヘッダー (today)', '当日 0:00 以降', 'In/Out/Cache + 呼出数・セッション', 'API換算 + キャッシュ節約'],
             ['ヘッダー (all)', '全期間', 'In/Out/Cache + 呼出数・セッション', 'API換算 + キャッシュ節約'],
             ['Plan Usage', '現在の請求ウィンドウ', '全種別', 'API換算'],
-            ['Code Output', '今日 / 全期間', 'Git統計', '$/100 lines'],
+            ['Code Output', '今日 / 全期間', 'Git統計', '$/100 added'],
             ['Model Usage', '全期間・モデル別', '全種別', 'API換算'],
           ]}
         />
@@ -327,7 +372,7 @@ function ContentJA() {
       <Section icon={<Code size={15} />} title="Code Output">
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 期間内の git コミット数。</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
-        <div style={{ marginBottom: 5 }}><B>$/100 Lines</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 lines。値が低いほど効率的。</div>
+        <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の追加行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 added。値が低いほど効率的。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>
@@ -336,10 +381,12 @@ function ContentJA() {
 
       <Section icon={<GitBranch size={15} />} title="セッション">
         <div style={{ marginBottom: 5 }}><B>プロジェクト → ブランチ → セッション</B> — git プロジェクト別、ブランチ別にグループ化。</div>
-        <div style={{ marginBottom: 5 }}><B>Idle 折りたたみ</B> — active/waiting は完全表示。idle セッションは段階的に折りたたみ：1 時間未満はトップ 3 ツール、1-6 時間はコンテキストバーのみ、6 時間以上は自動非表示（「Show N idle sessions」ボタンで展開可能）。</div>
-        <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Excellent (80%+)、Good (60%+)、Fair (40%+)、Poor (&lt;40%)。プロンプトキャッシングの活用度。</div>
+        <div style={{ marginBottom: 5 }}><B>Provider チップ</B> — Claude と Codex のセッションを同じプロジェクト/ブランチ一覧に表示し、モデル色も区別します。</div>
+        <div style={{ marginBottom: 5 }}><B>Stack row</B> — provider/source/model/state が同じ繰り返しセッションをまとめ、スクロールを軽くします。stack を展開すると個別セッションを確認できます。</div>
+        <div style={{ marginBottom: 5 }}><B>ブランチ制限</B> — 各ブランチは最初の 3 行だけ表示し、残りは "Show N more" で展開します。</div>
+        <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Claude と Codex は計算式が異なりますが、ヘッダーでは同じ green/yellow/red スタイルで表示します。</div>
         <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Breakdown</B> ボタンをクリックすると、カテゴリ別の output トークン内訳パネルが展開されます。同時に開けるのは 1 つだけ — 別のセッションをクリックすると前のパネルが自動的に閉じます。</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — Claude はカテゴリ別 output token 内訳を表示します。Codex は per-tool output token ではなく tool call ログを持つため、カテゴリ別 tool event count として表示します。</div>
         <CatRow icon="💭" label="Thinking" color="#2dd4bf">拡張思考ブロック</CatRow>
         <CatRow icon="💬" label="Response" color="#94a3b8">テキストブロック — 最終回答テキスト</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read ツール</CatRow>
@@ -367,15 +414,16 @@ function ContentJA() {
 
       <Section icon={<Signal size={15} />} title="データソース">
         <SrcRow badge="1st">
-          <B>Anthropic API</B> — ウェブダッシュボードと同じ権威ある数値。3 分ごとに更新、429 発生時は指数バックオフ。
+          <B>ローカルログ</B> — Claude JSONL と Codex JSONL をローカルで解析し、トークン、モデル、コスト推定、セッション、ツール活動を計算します。
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>Bridge</B> — Claude Code が stdin 経由でリアルタイムデータを送信（statusLine プラグイン）。API 利用不可時のフォールバック。
+          <B>制限ソース</B> — Claude は Anthropic API を優先し、statusLine/cache にフォールバックします。Codex はローカル Codex JSONL 内の rate-limit イベントを使います。
         </SrcRow>
         <SrcRow badge="FB">
-          <B>最後のキャッシュ値</B> — API 障害時も直近の成功値を保持。リセット済みの古いデータは起動時に自動削除。
+          <B>最後のキャッシュ値</B> — ライブ制限データが利用できない場合に直近の値を保持。リセット済みの古いデータは起動時に自動削除。
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both。</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup。</InfoRow>
         </div>
       </Section>
