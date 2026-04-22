@@ -2,11 +2,11 @@
 
 # WhereMyTokens
 
-**Aplicación de bandeja del sistema de Windows para monitorear el uso de tokens de Claude Code en tiempo real.**
+**Aplicación de bandeja del sistema de Windows para monitorear el uso de tokens de Claude Code y Codex en tiempo real.**
 
 Creada por un desarrollador coreano que usa Claude Code a diario — resolviendo mi propia necesidad.
 
-Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code — tokens, costos, actividad de sesiones y límites de uso — de un vistazo.
+Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code y Codex — tokens, costos, actividad de sesiones, caché, uso por modelo y límites de uso — de un vistazo.
 
 ![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -14,7 +14,9 @@ Se instala silenciosamente en la barra de tareas y muestra el uso de Claude Code
 
 > [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh-CN.md)
 
-> 💾 **Sin sincronización en la nube** — solo lee archivos locales de Claude. Tus datos nunca salen de tu máquina.
+> ⭐ **Seguimiento Claude + Codex** — elige solo Claude, solo Codex o ambos desde Settings.
+
+> 💾 **Sin sincronización en la nube** — solo lee archivos locales de Claude/Codex. Tus datos nunca salen de tu máquina.
 
 <table>
   <tr>
@@ -75,29 +77,30 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 ## Características
 
 ### Seguimiento de Sesiones
+- **Modos Claude + Codex** — monitorea Claude, Codex o ambos en un solo panel
 - **Detección en tiempo real** — Terminal, VS Code, Cursor, Windsurf y más con estado en tiempo real: `active` / `waiting` / `idle` / `compacting`
-- **Agrupación en 2 niveles** — sesiones agrupadas por proyecto git → rama, con estadísticas de commits y líneas por proyecto
-- **Ocultación automática de inactivas** — las sesiones inactivas se colapsan progresivamente; las de 6h+ se ocultan automáticamente (expandible)
-- **Advertencias de ventana de contexto** — barra por sesión; ámbar al 50%, naranja al 80%, rojo al 95%+
+- **Agrupación compacta** — por proyecto git → rama; sesiones Claude/Codex repetidas se apilan por provider/source/model/state
+- **Límite por rama** — cada rama muestra las primeras 3 filas por defecto; el resto se abre con "Show N more"
+- **Advertencias de ventana de contexto** — barra por sesión; ámbar al 70%, naranja al 85%, rojo al 95%+
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de límite de uso** — uso de 5h y 1sem desde la API de Anthropic, con barras de progreso, contadores de reinicio y grados de eficiencia de caché
+- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine; Codex 5h/1sem desde eventos locales de rate-limit en los logs
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
-- **Presupuesto Extra Usage** — créditos mensuales usados / límite / utilización %
+- **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
 - **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, desglose de tokens (In/Out/Cache)
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
 - **Desglose por modelo** — totales de tokens y costos por modelo con barras de gradiente
-- **Activity Breakdown** — análisis de tokens de salida por sesión en 10 categorías (Thinking, Edit/Write, Read, Search, Git, etc.)
+- **Activity Breakdown** — Claude se analiza por output tokens; Codex por tool events en 10 categorías (Thinking, Edit/Write, Read, Search, Git, etc.)
 
 ### Producción de Código y Productividad
-- **Métricas basadas en Git** — commits, líneas netas cambiadas, **$/100 Lines** (costo por 100 líneas añadidas)
-- **Hoy vs todo el tiempo** — hoy muestra el costo real por línea con el promedio para comparación
-- **Descubrimiento automático** — todos los proyectos en los que has usado Claude vía `~/.claude/projects/`
+- **Métricas basadas en Git** — commits, líneas netas cambiadas, **$/100 Added** (costo por 100 líneas añadidas)
+- **Hoy vs todo el tiempo** — hoy muestra el costo real por línea añadida con el promedio para comparación
+- **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` y sesiones Codex desde `~/.codex/sessions/`
 - **Solo tus commits** — filtrado por `git config user.email`
 
 ### Personalización
@@ -119,10 +122,46 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 **Settings → Claude Code Integration → Setup** — habilita datos de límite de uso en tiempo real sin sondeo de API.
 
 ### 3. Configurar
+- **Tracking Provider** — Claude / Codex / Both
 - **Moneda** — USD o KRW
 - **Alertas** — establece umbrales de uso (50% / 80% / 90%)
 - **Tema** — Auto (sigue el sistema) / Claro / Oscuro
 - **Etiqueta de bandeja** — elige qué mostrar en la barra de tareas
+
+---
+
+## Seguimiento de Codex
+
+WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`. En Settings, elige **Claude**, **Codex** o **Both**.
+
+**El seguimiento de Codex incluye:**
+- Estado de sesión, agrupación por proyecto/rama y etiquetas de origen como VS Code o Codex Exec
+- Uso por modelo GPT/Codex y estimaciones de costo equivalentes a API
+- Tokens input, cached input y output, ahorro por caché y totales por modelo
+- Porcentajes y tiempos de reset de Codex 5h/1sem cuando el log local contiene eventos `rate_limits`
+- Activity Breakdown basado en tool events, porque los logs de Codex exponen llamadas a herramientas, no output tokens por herramienta
+
+**Cálculo de caché de Codex:** los logs de Codex reportan `input_tokens` y `cached_input_tokens`. WhereMyTokens guarda el input no cacheado como `input_tokens - cached_input_tokens`, guarda el cached input como cache-read tokens y muestra la eficiencia de caché como:
+
+```text
+cached_input_tokens / input_tokens
+```
+
+Claude usa esta fórmula:
+
+```text
+cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)
+```
+
+---
+
+## Cómo se calculan los números
+
+Los tokens incluyen **input + output + cache creation + cache reads** cuando están disponibles. El costo siempre es una estimación equivalente a API usando la tabla de precios local de la app.
+
+Claude reporta input, output, cache creation y cache read. Codex reporta raw input, cached input y output; WhereMyTokens divide el raw input en uncached input y cached input para evitar doble conteo en ahorro de caché y totales por modelo.
+
+Claude y Codex usan ventanas de reset 5h/1sem separadas. Claude usa Anthropic API primero y luego statusLine/cache como respaldo; Codex usa el evento `rate_limits` más reciente en los JSONL locales de Codex.
 
 ---
 
@@ -135,6 +174,7 @@ WhereMyTokens solo lee archivos locales — sin sincronización en la nube, sin 
 | `~/.claude/sessions/*.json` | Metadatos de sesión (pid, cwd, modelo) |
 | `~/.claude/projects/**/*.jsonl` | Registros de conversación (tokens, costos) |
 | `~/.claude/.credentials.json` | Token OAuth — solo para obtener tus estadísticas de uso de Anthropic |
+| `~/.codex/sessions/**/*.jsonl` | Logs de sesión Codex (tokens, cached input, modelos, eventos rate-limit, tool calls) |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Datos del puente escritos por el plugin `statusLine` |
 
 ---

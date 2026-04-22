@@ -9,7 +9,14 @@ if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let tray: Tray | null = null;
 let popupWindow: BrowserWindow | null = null;
+let stateManager: StateManager | null = null;
 const store = new Store<AppSettings>() as Store<AppSettings>;
+let pendingStateUpdate: AppState | null = null;
+let stateUpdateTimer: NodeJS.Timeout | null = null;
+let popupMoving = false;
+let popupMoveEndTimer: NodeJS.Timeout | null = null;
+let lastTrayTitle = '';
+let lastTrayTooltip = '';
 
 function createTray(): Tray {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
@@ -47,6 +54,7 @@ function createPopupWindow(): BrowserWindow {
 
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath);
+  win.on('move', markPopupMoving);
 
   // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
 
@@ -69,17 +77,27 @@ function showPopup() {
 function buildTrayTitle(state: AppState): string {
   const settings = state.settings ?? DEFAULT_SETTINGS;
   const display = settings.trayDisplay ?? 'h5pct';
+  const provider = settings.provider ?? 'both';
+  const h5Tokens = (provider === 'codex')
+    ? state.usage.h5Codex.totalTokens
+    : (provider === 'both' ? state.usage.h5.totalTokens + state.usage.h5Codex.totalTokens : state.usage.h5.totalTokens);
+  const h5Cost = (provider === 'codex')
+    ? state.usage.h5Codex.costUSD
+    : (provider === 'both' ? state.usage.h5.costUSD + state.usage.h5Codex.costUSD : state.usage.h5.costUSD);
+  const h5Pct = provider === 'codex'
+    ? state.limits.codexH5.pct
+    : (provider === 'both' ? Math.max(state.limits.h5.pct, state.limits.codexH5.pct) : state.limits.h5.pct);
   switch (display) {
     case 'h5pct':
-      return state.limits.h5.pct > 0 ? `${Math.round(state.limits.h5.pct)}%` : '';
+      return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
-      const t = state.usage.h5.totalTokens;
+      const t = h5Tokens;
       if (t >= 1_000_000) return `${(t/1_000_000).toFixed(1)}M`;
       if (t >= 1_000) return `${(t/1_000).toFixed(0)}K`;
       return t > 0 ? String(t) : '';
     }
     case 'cost': {
-      const c = state.usage.h5.costUSD;
+      const c = h5Cost;
       return settings.currency === 'KRW'
         ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
         : `$${c.toFixed(2)}`;
@@ -97,26 +115,66 @@ function updateTray(state: AppState) {
   const costStr = settings.currency === 'KRW'
     ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
     : `$${c.toFixed(2)}`;
-  tray.setToolTip(`WhereMyTokens  |  Today ${t.toLocaleString()} tok  ${costStr}`);
-  const title = buildTrayTitle(state);
-  if (title) tray.setTitle(title);
-
-  if (popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible()) {
-    popupWindow.webContents.send('state:updated');
+  const tooltip = `WhereMyTokens  |  Today ${t.toLocaleString()} tok  ${costStr}`;
+  if (tooltip !== lastTrayTooltip) {
+    tray.setToolTip(tooltip);
+    lastTrayTooltip = tooltip;
   }
+  const title = buildTrayTitle(state);
+  if (title !== lastTrayTitle) {
+    tray.setTitle(title);
+    lastTrayTitle = title;
+  }
+
+  queueRendererStateUpdate(state);
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
+}
+
+function queueRendererStateUpdate(state: AppState) {
+  if (!popupWindow || popupWindow.isDestroyed() || !popupWindow.isVisible()) return;
+  pendingStateUpdate = state;
+  if (stateUpdateTimer) clearTimeout(stateUpdateTimer);
+  stateUpdateTimer = setTimeout(flushRendererStateUpdate, popupMoving ? 250 : 150);
+}
+
+function flushRendererStateUpdate() {
+  if (popupMoving) {
+    stateUpdateTimer = setTimeout(flushRendererStateUpdate, 250);
+    return;
+  }
+  stateUpdateTimer = null;
+  const next = pendingStateUpdate;
+  pendingStateUpdate = null;
+  if (next && popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible()) {
+    popupWindow.webContents.send('state:updated', next);
+  }
+}
+
+function markPopupMoving() {
+  popupMoving = true;
+  stateManager?.setUiBusy(true);
+  if (popupMoveEndTimer) clearTimeout(popupMoveEndTimer);
+  popupMoveEndTimer = setTimeout(() => {
+    popupMoving = false;
+    stateManager?.setUiBusy(false);
+    if (pendingStateUpdate) {
+      if (stateUpdateTimer) clearTimeout(stateUpdateTimer);
+      stateUpdateTimer = setTimeout(flushRendererStateUpdate, 250);
+    }
+  }, 250);
 }
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.wheremytokens.app');
 
-  const stateManager = new StateManager(store, (state) => updateTray(state));
-  registerIpcHandlers(store, () => stateManager.getState(), () => stateManager.forceRefresh(), () => stateManager.applySettingsChange());
+  const manager = new StateManager(store, (state) => updateTray(state));
+  stateManager = manager;
+  registerIpcHandlers(store, () => manager.getState(), () => manager.forceRefresh(), () => manager.applySettingsChange());
 
   tray = createTray();
   popupWindow = createPopupWindow();
-  stateManager.start();
-  app.once('before-quit', () => stateManager.stop());
+  manager.start();
+  app.once('before-quit', () => manager.stop());
 
   // Show popup on first launch (after renderer is ready)
   popupWindow.once('ready-to-show', () => showPopup());

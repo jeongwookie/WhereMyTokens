@@ -11,9 +11,10 @@ setupIntegration:     () => ipcRenderer.invoke('integration:setup'),
   getIntegrationStatus: () => ipcRenderer.invoke('integration:status'),
   quit:                 () => ipcRenderer.invoke('app:quit'),
   minimize:             () => ipcRenderer.invoke('window:minimize'),
-  onUpdated:            (cb: () => void) => {
-    ipcRenderer.on('state:updated', cb);
-    return () => ipcRenderer.removeListener('state:updated', cb);
+  onUpdated:            (cb: (state: unknown) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, state: unknown) => cb(state);
+    ipcRenderer.on('state:updated', handler);
+    return () => ipcRenderer.removeListener('state:updated', handler);
   },
   getResolvedTheme:     () => ipcRenderer.invoke('theme:resolved') as Promise<'light' | 'dark'>,
   onThemeChanged:       (cb: (theme: 'light' | 'dark') => void) => {

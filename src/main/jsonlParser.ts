@@ -11,10 +11,28 @@ export interface ParsedEntry {
   cacheCreationTokens: number;
   cacheReadTokens: number;
   costUSD: number;
+  cacheSavingsUSD: number;
 }
 
-// Per-model pricing (USD / 1M tokens) — 구체적 키가 먼저 와야 includes() 매칭이 올바름
+export interface CodexRateLimitWindow {
+  pct: number;
+  resetsAt: number;
+  observedAt: number;
+}
+
+// 모델별 토큰 단가(USD / 1M). cached input은 cacheReadTokens 단가로 계산한다.
 const PRICING: Record<string, { in: number; out: number; cw: number; cr: number }> = {
+  // OpenAI / Codex
+  'gpt-5.4-mini':       { in: 0.75, out: 4.50, cw: 0.75, cr: 0.075 },
+  'gpt-5.4-nano':       { in: 0.20, out: 1.25, cw: 0.20, cr: 0.02  },
+  'gpt-5.4':            { in: 2.50, out: 15,   cw: 2.50, cr: 0.25  },
+  'gpt-5.3-codex':      { in: 1.75, out: 14,   cw: 1.75, cr: 0.175 },
+  'gpt-5.2-codex':      { in: 1.75, out: 14,   cw: 1.75, cr: 0.175 },
+  'gpt-5.1-codex-mini': { in: 0.25, out: 2,    cw: 0.25, cr: 0.025 },
+  'gpt-5.1-codex-max':  { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
+  'gpt-5.1-codex':      { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
+  'gpt-5-codex':        { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
+  'codex-mini-latest':  { in: 1.50, out: 6,    cw: 1.50, cr: 0.375 },
   // Claude 4.x
   'claude-opus-4':   { in: 5,   out: 25,  cw: 6.25,  cr: 0.50 },
   'claude-sonnet-4': { in: 3,   out: 15,  cw: 3.75,  cr: 0.30 },
@@ -31,7 +49,7 @@ const DEFAULT_PRICE = { in: 3, out: 15, cw: 3.75, cr: 0.30 };
 
 function getPrice(model: string) {
   const lower = model.toLowerCase();
-  for (const [key, val] of Object.entries(PRICING)) {
+  for (const [key, val] of Object.entries(PRICING).sort((a, b) => b[0].length - a[0].length)) {
     if (lower.includes(key)) return val;
   }
   return DEFAULT_PRICE;
@@ -39,6 +57,7 @@ function getPrice(model: string) {
 
 function normalizeModel(model: string): string {
   const lower = model.toLowerCase();
+  if (lower.includes('gpt-5'))   return model.toUpperCase();
   if (lower.includes('opus'))   return 'Opus';
   if (lower.includes('sonnet')) return 'Sonnet';
   if (lower.includes('haiku'))  return 'Haiku';
@@ -60,6 +79,11 @@ function calcCost(model: string, inp: number, out: number, cw: number, cr: numbe
   return (inp * p.in + out * p.out + cw * p.cw + cr * p.cr) / 1_000_000;
 }
 
+function calcCacheSavings(model: string, cr: number): number {
+  const p = getPrice(model);
+  return Math.max(0, p.in - p.cr) * cr / 1_000_000;
+}
+
 export interface ActivityBreakdown {
   read: number;       // Read 툴 호출에 귀속된 output 토큰 (비례 배분)
   editWrite: number;  // Edit / Write / MultiEdit / NotebookEdit
@@ -73,6 +97,8 @@ export interface ActivityBreakdown {
   web: number;        // WebFetch / WebSearch
 }
 
+export type ActivityBreakdownKind = 'tokens' | 'events';
+
 export interface ParsedFile {
   entries: ParsedEntry[];
   modelName: string;        // normalized model name of latest entry
@@ -80,8 +106,14 @@ export interface ParsedFile {
   latestInputTokens: number;
   latestCacheCreationTokens: number;
   latestCacheReadTokens: number;
+  contextMax?: number;
+  codexRateLimits?: {
+    h5?: CodexRateLimitWindow;
+    week?: CodexRateLimitWindow;
+  };
   toolCounts: Record<string, number>;
   activityBreakdown: ActivityBreakdown;
+  activityBreakdownKind: ActivityBreakdownKind;
 }
 
 function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown {
@@ -95,6 +127,23 @@ function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown 
     case 'WebFetch': case 'WebSearch':              return 'web';
     case 'Bash': {
       const cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
+      if (/^git\b/.test(cmd))                       return 'git';
+      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd))
+                                                    return 'buildTest';
+      return 'terminal';
+    }
+    case 'shell_command': {
+      let cmd = '';
+      if (typeof input === 'string') {
+        try {
+          const parsed = JSON.parse(input) as Record<string, unknown>;
+          cmd = (parsed.command as string ?? '').trimStart();
+        } catch {
+          cmd = input.trimStart();
+        }
+      } else {
+        cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
+      }
       if (/^git\b/.test(cmd))                       return 'git';
       if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd))
                                                     return 'buildTest';
@@ -120,7 +169,7 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     return emptyResult();
   }
 
-  const lines = raw.split('\n').filter(l => l.trim());
+  const lines = splitCompleteJsonlLines(raw, false).lines;
   const entries: ParsedEntry[] = [];
   // key: message id, value: entries 배열 인덱스
   // Set 대신 Map을 써서 동일 id 중 output_tokens 최대값 보존
@@ -169,7 +218,8 @@ export function parseJsonlFile(filePath: string): ParsedFile {
       const prevIdx = seen.get(id)!;
       if (out > entries[prevIdx].outputTokens) {
         const updatedCost = calcCost(rawModel, inp, out, cw, cr);
-        entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost };
+        const updatedSavings = calcCacheSavings(rawModel, cr);
+        entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost, cacheSavingsUSD: updatedSavings };
       }
       continue;
     }
@@ -215,6 +265,7 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     }
 
     const cost = calcCost(rawModel, inp, out, cw, cr);
+    const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
     const ts = timestamp ? new Date(timestamp) : new Date(0);
 
     entries.push({
@@ -227,6 +278,7 @@ export function parseJsonlFile(filePath: string): ParsedFile {
       cacheCreationTokens: cw,
       cacheReadTokens: cr,
       costUSD: cost,
+      cacheSavingsUSD,
     });
 
     // Track latest entry (for context)
@@ -248,11 +300,31 @@ export function parseJsonlFile(filePath: string): ParsedFile {
     latestCacheReadTokens = last.cacheReadTokens;
   }
 
-  return { entries, modelName: latestModel, rawModel: latestRawModel, latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens, toolCounts, activityBreakdown };
+  return {
+    entries,
+    modelName: latestModel,
+    rawModel: latestRawModel,
+    latestInputTokens,
+    latestCacheCreationTokens,
+    latestCacheReadTokens,
+    toolCounts,
+    activityBreakdown,
+    activityBreakdownKind: 'tokens',
+  };
 }
 
 function emptyResult(): ParsedFile {
-  return { entries: [], modelName: '', rawModel: '', latestInputTokens: 0, latestCacheCreationTokens: 0, latestCacheReadTokens: 0, toolCounts: {}, activityBreakdown: emptyBreakdown() };
+  return {
+    entries: [],
+    modelName: '',
+    rawModel: '',
+    latestInputTokens: 0,
+    latestCacheCreationTokens: 0,
+    latestCacheReadTokens: 0,
+    toolCounts: {},
+    activityBreakdown: emptyBreakdown(),
+    activityBreakdownKind: 'tokens',
+  };
 }
 
 /**
@@ -360,7 +432,8 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
           const prevIdx = seenMap.get(id)!;
           if (out > entries[prevIdx].outputTokens) {
             const updatedCost = calcCost(rawModel, inp, out, cw, cr);
-            entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost };
+            const updatedSavings = calcCacheSavings(rawModel, cr);
+            entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost, cacheSavingsUSD: updatedSavings };
           }
           continue;
         }
@@ -403,6 +476,7 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
         }
 
         const cost = calcCost(rawModel, inp, out, cw, cr);
+        const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
         const ts = timestamp ? new Date(timestamp) : new Date(0);
 
         entries.push({
@@ -415,6 +489,7 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
           cacheCreationTokens: cw,
           cacheReadTokens: cr,
           costUSD: cost,
+          cacheSavingsUSD,
         });
 
         latestModel = normalizeModel(rawModel);
@@ -437,7 +512,7 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
       const result: ParsedFile = {
         entries, modelName: latestModel, rawModel: latestRawModel,
         latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens,
-        toolCounts, activityBreakdown,
+        toolCounts, activityBreakdown, activityBreakdownKind: 'tokens',
       };
       cache.set(filePath, {
         mtimeMs: stat.mtimeMs,
@@ -453,6 +528,427 @@ export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFil
   // 새 데이터 없음 — mtime만 갱신하고 캐시 반환
   cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
   return cached.parsed;
+}
+
+function asNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function inferCodexModel(...records: Array<Record<string, unknown> | null | undefined>): string {
+  const keys = ['model', 'model_name', 'model_slug', 'model_id', 'requested_model', 'default_model'];
+  for (const record of records) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = asString(record[key]);
+      if (value) return value;
+    }
+  }
+  return '';
+}
+
+function hashString(value: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function codexEntryId(filePath: string, line: string, timestamp?: string): string {
+  return `${filePath}-${timestamp ?? 'no-ts'}-${hashString(line)}`;
+}
+
+function splitCompleteJsonlLines(text: string, holdOpenLastLine: boolean): { lines: string[]; pendingText: string } {
+  const parts = text.split('\n');
+  let pendingText = '';
+  if (holdOpenLastLine && !text.endsWith('\n')) {
+    pendingText = parts.pop() ?? '';
+  }
+  return {
+    lines: parts.map(line => line.replace(/\r$/, '')).filter(line => line.trim()),
+    pendingText,
+  };
+}
+
+function readInvalidTrailingJsonlText(filePath: string): string {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    if (raw.endsWith('\n')) return '';
+    const tail = raw.slice(raw.lastIndexOf('\n') + 1);
+    if (!tail.trim()) return '';
+    JSON.parse(tail);
+    return '';
+  } catch {
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return raw.slice(raw.lastIndexOf('\n') + 1);
+    } catch {
+      return '';
+    }
+  }
+}
+
+function parseCodexRateLimits(payload: Record<string, unknown>, observedAt: number): ParsedFile['codexRateLimits'] {
+  const rateLimits = payload.rate_limits as Record<string, unknown> | undefined;
+  if (!rateLimits) return undefined;
+
+  const result: ParsedFile['codexRateLimits'] = {};
+  for (const key of ['primary', 'secondary'] as const) {
+    const win = rateLimits[key] as Record<string, unknown> | undefined;
+    if (!win) continue;
+    const windowMinutes = asNumber(win.window_minutes);
+    const value = {
+      pct: asNumber(win.used_percent),
+      resetsAt: asNumber(win.resets_at),
+      observedAt,
+    };
+    if (windowMinutes === 300) result.h5 = value;
+    else if (windowMinutes === 10080) result.week = value;
+  }
+  return result;
+}
+
+function mergeCodexRateLimits(
+  current: ParsedFile['codexRateLimits'],
+  next: ParsedFile['codexRateLimits'],
+): ParsedFile['codexRateLimits'] {
+  if (!next?.h5 && !next?.week) return current;
+  const merged: ParsedFile['codexRateLimits'] = { ...(current ?? {}) };
+  if (next.h5 && (!merged.h5 || next.h5.observedAt >= merged.h5.observedAt)) merged.h5 = next.h5;
+  if (next.week && (!merged.week || next.week.observedAt >= merged.week.observedAt)) merged.week = next.week;
+  return merged;
+}
+
+export function parseCodexJsonlFile(filePath: string): ParsedFile {
+  let raw: string;
+  try {
+    const stat = fs.lstatSync(filePath);
+    if (stat.isSymbolicLink()) return emptyResult();
+    raw = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return emptyResult();
+  }
+
+  const lines = splitCompleteJsonlLines(raw, false).lines;
+  const entries: ParsedEntry[] = [];
+  let latestModel = '';
+  let latestRawModel = '';
+  let latestInputTokens = 0;
+  let latestCacheCreationTokens = 0;
+  let latestCacheReadTokens = 0;
+  let contextMax = 0;
+  let codexRateLimits: ParsedFile['codexRateLimits'] = undefined;
+  const toolCounts: Record<string, number> = {};
+  const activityBreakdown = emptyBreakdown();
+
+  for (const line of lines) {
+    let obj: Record<string, unknown>;
+    try { obj = JSON.parse(line) as Record<string, unknown>; }
+    catch { continue; }
+
+    const timestamp = obj.timestamp as string | undefined;
+    const payload = obj.payload as Record<string, unknown> | undefined;
+    if (!payload) continue;
+
+    if (obj.type === 'session_meta') {
+      const model = inferCodexModel(payload);
+      if (model) {
+        latestRawModel = model;
+        latestModel = normalizeModel(model);
+      }
+      continue;
+    }
+
+    if (obj.type === 'turn_context') {
+      const model = inferCodexModel(payload);
+      if (model) {
+        latestRawModel = model;
+        latestModel = normalizeModel(model);
+      }
+      continue;
+    }
+
+    if (obj.type === 'event_msg' && payload.type === 'task_started') {
+      const model = inferCodexModel(payload);
+      if (model) {
+        latestRawModel = model;
+        latestModel = normalizeModel(model);
+      }
+      contextMax = asNumber(payload.model_context_window);
+      continue;
+    }
+
+    if (obj.type === 'response_item' && payload.type === 'function_call') {
+      const name = payload.name as string | undefined;
+      if (name) {
+        toolCounts[name] = (toolCounts[name] ?? 0) + 1;
+        const cat = classifyToolUse(name, payload.arguments);
+        activityBreakdown[cat] += 1;
+      }
+      continue;
+    }
+
+    if (obj.type !== 'event_msg' || payload.type !== 'token_count') continue;
+
+    const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
+    const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
+    const nextRateLimits = parseCodexRateLimits(payload, observedAt);
+    if (nextRateLimits?.h5 && (!codexRateLimits?.h5 || nextRateLimits.h5.observedAt >= codexRateLimits.h5.observedAt)) {
+      codexRateLimits = { ...(codexRateLimits ?? {}), h5: nextRateLimits.h5 };
+    }
+    if (nextRateLimits?.week && (!codexRateLimits?.week || nextRateLimits.week.observedAt >= codexRateLimits.week.observedAt)) {
+      codexRateLimits = { ...(codexRateLimits ?? {}), week: nextRateLimits.week };
+    }
+
+    const info = payload.info as Record<string, unknown> | null | undefined;
+    const usage = info?.last_token_usage as Record<string, unknown> | undefined;
+    if (!usage) continue;
+
+    const rawInput = asNumber(usage.input_tokens);
+    const cached = Math.min(rawInput, asNumber(usage.cached_input_tokens));
+    const inp = Math.max(0, rawInput - cached);
+    const out = asNumber(usage.output_tokens);
+    const cw = 0;
+    const cr = cached;
+
+    if (inp + out + cr === 0) continue;
+
+    const rawModel = latestRawModel || inferCodexModel(payload, info, usage);
+    if (!rawModel) continue;
+    const ts = timestamp ? new Date(timestamp) : new Date(0);
+    const id = codexEntryId(filePath, line, timestamp);
+    const cost = calcCost(rawModel, inp, out, cw, cr);
+    const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
+
+    entries.push({
+      requestId: id,
+      timestamp: ts,
+      model: normalizeModel(rawModel),
+      provider: 'codex',
+      inputTokens: inp,
+      outputTokens: out,
+      cacheCreationTokens: cw,
+      cacheReadTokens: cr,
+      costUSD: cost,
+      cacheSavingsUSD,
+    });
+
+    latestModel = normalizeModel(rawModel);
+    latestRawModel = rawModel;
+    latestInputTokens = inp;
+    latestCacheCreationTokens = cw;
+    latestCacheReadTokens = cr;
+    contextMax = contextMax || asNumber(info?.model_context_window);
+  }
+
+  return {
+    entries,
+    modelName: latestModel,
+    rawModel: latestRawModel,
+    latestInputTokens,
+    latestCacheCreationTokens,
+    latestCacheReadTokens,
+    contextMax,
+    codexRateLimits,
+    toolCounts,
+    activityBreakdown,
+    activityBreakdownKind: 'events',
+  };
+}
+
+export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): ParsedFile {
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(filePath);
+    if (stat.isSymbolicLink()) return emptyResult();
+  } catch {
+    cache.invalidate(filePath);
+    return emptyResult();
+  }
+
+  const cached = cache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return cached.parsed;
+  }
+
+  if (cached && stat.size >= cached.byteOffset) {
+    const newSize = stat.size - cached.byteOffset;
+    if (newSize === 0) {
+      cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
+      return cached.parsed;
+    }
+
+    let fd: number | null = null;
+    try {
+      const buf = Buffer.alloc(newSize);
+      fd = fs.openSync(filePath, 'r');
+      fs.readSync(fd, buf, 0, newSize, cached.byteOffset);
+      const newText = buf.toString('utf-8');
+      const textToParse = `${cached.pendingText ?? ''}${newText}`;
+
+      if (!textToParse.trim()) {
+        cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
+        return cached.parsed;
+      }
+
+      const entries = [...cached.parsed.entries];
+      const seenMap = new Map(cached.seenMap);
+      let latestModel = cached.parsed.modelName;
+      let latestRawModel = cached.parsed.rawModel;
+      let latestInputTokens = cached.parsed.latestInputTokens;
+      let latestCacheCreationTokens = cached.parsed.latestCacheCreationTokens;
+      let latestCacheReadTokens = cached.parsed.latestCacheReadTokens;
+      let contextMax = cached.parsed.contextMax ?? 0;
+      let codexRateLimits = cached.parsed.codexRateLimits;
+      const toolCounts = { ...cached.parsed.toolCounts };
+      const activityBreakdown = { ...cached.parsed.activityBreakdown };
+
+      const { lines, pendingText } = splitCompleteJsonlLines(textToParse, true);
+      for (const line of lines) {
+        let obj: Record<string, unknown>;
+        try { obj = JSON.parse(line) as Record<string, unknown>; }
+        catch { continue; }
+
+        const timestamp = obj.timestamp as string | undefined;
+        const payload = obj.payload as Record<string, unknown> | undefined;
+        if (!payload) continue;
+
+        if (obj.type === 'session_meta') {
+          const model = inferCodexModel(payload);
+          if (model) {
+            latestRawModel = model;
+            latestModel = normalizeModel(model);
+          }
+          continue;
+        }
+
+        if (obj.type === 'turn_context') {
+          const model = inferCodexModel(payload);
+          if (model) {
+            latestRawModel = model;
+            latestModel = normalizeModel(model);
+          }
+          continue;
+        }
+
+        if (obj.type === 'event_msg' && payload.type === 'task_started') {
+          const model = inferCodexModel(payload);
+          if (model) {
+            latestRawModel = model;
+            latestModel = normalizeModel(model);
+          }
+          contextMax = asNumber(payload.model_context_window);
+          continue;
+        }
+
+        if (obj.type === 'response_item' && payload.type === 'function_call') {
+          const name = payload.name as string | undefined;
+          if (name) {
+            toolCounts[name] = (toolCounts[name] ?? 0) + 1;
+            const cat = classifyToolUse(name, payload.arguments);
+            activityBreakdown[cat] += 1;
+          }
+          continue;
+        }
+
+        if (obj.type !== 'event_msg' || payload.type !== 'token_count') continue;
+
+        const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
+        const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
+        codexRateLimits = mergeCodexRateLimits(codexRateLimits, parseCodexRateLimits(payload, observedAt));
+
+        const info = payload.info as Record<string, unknown> | null | undefined;
+        const usage = info?.last_token_usage as Record<string, unknown> | undefined;
+        if (!usage) continue;
+
+        const rawInput = asNumber(usage.input_tokens);
+        const cachedInput = Math.min(rawInput, asNumber(usage.cached_input_tokens));
+        const inp = Math.max(0, rawInput - cachedInput);
+        const out = asNumber(usage.output_tokens);
+        const cw = 0;
+        const cr = cachedInput;
+
+        if (inp + out + cr === 0) continue;
+
+        const rawModel = latestRawModel || inferCodexModel(payload, info, usage);
+        if (!rawModel) continue;
+        const ts = timestamp ? new Date(timestamp) : new Date(0);
+        const id = codexEntryId(filePath, line, timestamp);
+        if (seenMap.has(id)) continue;
+        seenMap.set(id, entries.length);
+
+        entries.push({
+          requestId: id,
+          timestamp: ts,
+          model: normalizeModel(rawModel),
+          provider: 'codex',
+          inputTokens: inp,
+          outputTokens: out,
+          cacheCreationTokens: cw,
+          cacheReadTokens: cr,
+          costUSD: calcCost(rawModel, inp, out, cw, cr),
+          cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+        });
+
+        latestModel = normalizeModel(rawModel);
+        latestRawModel = rawModel;
+        latestInputTokens = inp;
+        latestCacheCreationTokens = cw;
+        latestCacheReadTokens = cr;
+        contextMax = contextMax || asNumber(info?.model_context_window);
+      }
+
+      const result: ParsedFile = {
+        entries,
+        modelName: latestModel,
+        rawModel: latestRawModel,
+        latestInputTokens,
+        latestCacheCreationTokens,
+        latestCacheReadTokens,
+        contextMax,
+        codexRateLimits,
+        toolCounts,
+        activityBreakdown,
+        activityBreakdownKind: 'events',
+      };
+      cache.set(filePath, {
+        mtimeMs: stat.mtimeMs,
+        fileSize: stat.size,
+        byteOffset: stat.size,
+        pendingText,
+        parsed: result,
+        seenMap,
+      });
+      return result;
+    } catch {
+      cache.invalidate(filePath);
+      return parseCodexJsonlCached(filePath, cache);
+    } finally {
+      if (fd !== null) {
+        try { fs.closeSync(fd); } catch { /* ignore */ }
+      }
+    }
+  }
+
+  const result = parseCodexJsonlFile(filePath);
+  const seenMap = new Map<string, number>();
+  for (let i = 0; i < result.entries.length; i++) {
+    seenMap.set(result.entries[i].requestId, i);
+  }
+  cache.set(filePath, {
+    mtimeMs: stat.mtimeMs,
+    fileSize: stat.size,
+    byteOffset: stat.size,
+    pendingText: readInvalidTrailingJsonlText(filePath) || undefined,
+    parsed: result,
+    seenMap,
+  });
+  return result;
 }
 
 export { normalizeModel, getProvider };

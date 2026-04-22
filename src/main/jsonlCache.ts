@@ -7,13 +7,14 @@ export interface CacheEntry {
   mtimeMs: number;       // 마지막 확인된 mtime
   fileSize: number;      // 마지막 확인된 파일 크기 (바이트)
   byteOffset: number;    // 마지막으로 파싱 완료한 바이트 위치
+  pendingText?: string;
   parsed: ParsedFile;
   // requestId → entries 배열 인덱스 (증분 파싱 시 dedup 유지)
   seenMap: Map<string, number>;
 }
 
 export class JsonlCache {
-  private readonly MAX_SIZE = 30;
+  private readonly MAX_SIZE = 2000;
   private cache = new Map<string, CacheEntry>();
 
   get(filePath: string): CacheEntry | null {

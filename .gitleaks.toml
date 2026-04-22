@@ -1,0 +1,14 @@
+title = "WhereMyTokens Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore generated and vendored local artifacts."
+paths = [
+  '''(^|[\\/])node_modules[\\/]''',
+  '''(^|[\\/])dist[\\/]''',
+  '''(^|[\\/])release[\\/]''',
+  '''(^|[\\/])\.playwright-mcp[\\/]''',
+  '''(^|[\\/])\.codex[\\/]private[\\/]''',
+]

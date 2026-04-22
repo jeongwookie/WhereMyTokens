@@ -14,6 +14,7 @@ export interface WindowStats {
 
 export interface ModelUsage {
   model: string;
+  provider: 'claude' | 'codex' | 'other';
   tokens: number;
   costUSD: number;
 }
@@ -85,14 +86,15 @@ function addEntry(w: WindowStats, e: ParsedEntry) {
   w.cacheReadTokens += e.cacheReadTokens;
   w.totalTokens += e.inputTokens + e.outputTokens + e.cacheCreationTokens + e.cacheReadTokens;
   w.costUSD += e.costUSD;
+  w.cacheSavingsUSD += e.cacheSavingsUSD;
   w.requestCount += 1;
 }
 
-function finalize(w: WindowStats) {
-  const d = w.cacheReadTokens + w.cacheCreationTokens;
+function finalize(w: WindowStats, provider: 'claude' | 'codex') {
+  const d = provider === 'codex'
+    ? w.inputTokens + w.cacheReadTokens
+    : w.cacheReadTokens + w.cacheCreationTokens;
   w.cacheEfficiency = d > 0 ? (w.cacheReadTokens / d) * 100 : 0;
-  // Sonnet 기준: 일반 input $3.00/M vs cache_read $0.30/M → 차이 $2.70/M
-  w.cacheSavingsUSD = w.cacheReadTokens * 2.70 / 1_000_000;
 }
 
 function getWeekStart(): Date {
@@ -118,22 +120,26 @@ function weekLabel(weeksAgo: number): string {
 export function computeUsage(
   allEntries: ParsedEntry[],
   _userLimits: { h5: number; week: number; sonnetWeek: number },
-  weekResetMs = 0,  // API에서 받은 week 리셋까지 남은 ms (0이면 calendar 기준 fallback)
-  h5ResetMs = 0,   // API에서 받은 5h 리셋까지 남은 ms (0이면 rolling 5h fallback)
+  resets: {
+    claude?: { weekResetMs?: number; h5ResetMs?: number };
+    codex?: { weekResetMs?: number; h5ResetMs?: number };
+  } = {},
 ): UsageData {
   const now = Date.now();
   const dayMs = 24 * 3600 * 1000;
   const weekMs = 7 * dayMs;
   const h5Ms = 5 * 3600 * 1000;
 
-  // API reset 정보가 있으면 실제 창 시작 시각 역산, 없으면 rolling fallback
-  const h5Start = h5ResetMs > 0
-    ? now - (h5Ms - h5ResetMs)
-    : now - h5Ms;
-  // API reset 정보가 있으면 실제 billing 주기 시작 시각, 없으면 calendar 월요일 자정 fallback
-  const weekStart = weekResetMs > 0
-    ? now - (weekMs - weekResetMs)
-    : getWeekStart().getTime();
+  const windowStart = (durationMs: number, resetMs: number | undefined, fallbackStart: number) => {
+    if (resetMs && resetMs > 0 && resetMs <= durationMs) return now - (durationMs - resetMs);
+    return fallbackStart;
+  };
+
+  // Claude와 Codex는 서로 다른 rate-limit reset을 가질 수 있으므로 창을 분리한다.
+  const claudeH5Start = windowStart(h5Ms, resets.claude?.h5ResetMs, now - h5Ms);
+  const claudeWeekStart = windowStart(weekMs, resets.claude?.weekResetMs, getWeekStart().getTime());
+  const codexH5Start = windowStart(h5Ms, resets.codex?.h5ResetMs, now - h5Ms);
+  const codexWeekStart = windowStart(weekMs, resets.codex?.weekResetMs, getWeekStart().getTime());
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
   // 자정 기준 시작점 — 오늘 항목이 오늘 셀에 정확히 들어가도록
@@ -243,26 +249,27 @@ export function computeUsage(
     }
 
     // Per-model
-    const mu = modelMap.get(e.model) ?? { model: e.model, tokens: 0, costUSD: 0 };
+    const modelKey = `${e.provider}:${e.model}`;
+    const mu = modelMap.get(modelKey) ?? { model: e.model, provider: e.provider, tokens: 0, costUSD: 0 };
     mu.tokens += tokens;
     mu.costUSD += e.costUSD;
-    modelMap.set(e.model, mu);
+    modelMap.set(modelKey, mu);
 
     if (e.provider === 'claude') {
-      if (ts >= h5Start) addEntry(h5, e);
-      if (ts >= weekStart) {
+      if (ts >= claudeH5Start) addEntry(h5, e);
+      if (ts >= claudeWeekStart) {
         addEntry(week, e);
         if (e.model.toLowerCase().includes('sonnet')) {
           sonnetWeekTokens += e.inputTokens + e.outputTokens + e.cacheCreationTokens + e.cacheReadTokens;
         }
       }
     } else if (e.provider === 'codex') {
-      if (ts >= h5Start) addEntry(h5Codex, e);
-      if (ts >= weekStart) addEntry(weekCodex, e);
+      if (ts >= codexH5Start) addEntry(h5Codex, e);
+      if (ts >= codexWeekStart) addEntry(weekCodex, e);
     }
   }
 
-  finalize(h5); finalize(week); finalize(h5Codex); finalize(weekCodex);
+  finalize(h5, 'claude'); finalize(week, 'claude'); finalize(h5Codex, 'codex'); finalize(weekCodex, 'codex');
 
   const models = Array.from(modelMap.values())
     .filter(m => m.tokens > 0)
@@ -287,12 +294,15 @@ export function computeUsage(
   // All-time 집계
   const allTimeRequestCount = allEntries.length;
   const allTimeCost = models.reduce((s, m) => s + m.costUSD, 0);
-  // Sonnet 기준: 일반 input $3.00/M vs cache_read $0.30/M → 차이 $2.70/M
   const allTimeCacheRead = allEntries.reduce((s, e) => s + e.cacheReadTokens, 0);
   const allTimeCacheCreation = allEntries.reduce((s, e) => s + e.cacheCreationTokens, 0);
-  const allTimeSavedUSD = allTimeCacheRead * 2.70 / 1_000_000;
-  const allTimeAvgCacheEfficiency = (allTimeCacheRead + allTimeCacheCreation) > 0
-    ? (allTimeCacheRead / (allTimeCacheRead + allTimeCacheCreation)) * 100 : 0;
+  const allTimeSavedUSD = allEntries.reduce((s, e) => s + e.cacheSavingsUSD, 0);
+  const allTimeCacheDenominator = allEntries.reduce((s, e) => {
+    if (e.provider === 'codex') return s + e.inputTokens + e.cacheReadTokens;
+    return s + e.cacheReadTokens + e.cacheCreationTokens;
+  }, 0);
+  const allTimeAvgCacheEfficiency = allTimeCacheDenominator > 0
+    ? (allTimeCacheRead / allTimeCacheDenominator) * 100 : 0;
 
   return {
     h5, week, h5Codex, weekCodex, models,

@@ -5,6 +5,7 @@
 import { Notification } from 'electron';
 import { addNotification } from './notificationHistory';
 import { UsageLimits } from './stateManager';
+import type { AppSettings } from './ipc';
 
 interface AlertState {
   lastAlertTime: number;    // ms timestamp
@@ -36,22 +37,51 @@ function smoothedPct(key: string, rawPct: number): number {
   return hist.reduce((a, b) => a + b, 0) / hist.length;
 }
 
+function shouldCheckProvider(key: string, providerMode: AppSettings['provider']): boolean {
+  if (key.startsWith('codex-')) return providerMode === 'codex' || providerMode === 'both';
+  return providerMode === 'claude' || providerMode === 'both';
+}
+
+function formatReset(resetMs: number): string {
+  if (resetMs <= 0) return '';
+  const minutes = Math.max(1, Math.round(resetMs / 60000));
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours <= 0) return ` · resets in ${mins}m`;
+  if (mins === 0) return ` · resets in ${hours}h`;
+  return ` · resets in ${hours}h ${mins}m`;
+}
+
+function formatSource(source: string | undefined): string {
+  if (!source) return '';
+  const labels: Record<string, string> = {
+    api: 'API',
+    statusLine: 'statusLine',
+    cache: 'cache',
+    localLog: 'local log',
+  };
+  return ` · source: ${labels[source] ?? source}`;
+}
+
 export function checkAlerts(
   limits: UsageLimits,
   thresholds: number[],
   enabled: boolean,
+  providerMode: AppSettings['provider'],
 ): void {
   if (!enabled) return;
 
-  const checks: Array<{ key: string; pct: number; resetMs: number; label: string }> = [
-    { key: 'h5',   pct: limits.h5.pct,   resetMs: limits.h5.resetMs,   label: '5h usage' },
-    { key: 'week', pct: limits.week.pct, resetMs: limits.week.resetMs, label: 'Weekly usage' },
-    { key: 'so',   pct: limits.so.pct,   resetMs: limits.so.resetMs,   label: 'Sonnet weekly' },
+  const checks: Array<{ key: string; pct: number; resetMs: number; label: string; source?: string }> = [
+    { key: 'h5',   pct: limits.h5.pct,   resetMs: limits.h5.resetMs,   label: 'Claude 5h usage', source: limits.h5.source },
+    { key: 'week', pct: limits.week.pct, resetMs: limits.week.resetMs, label: 'Claude weekly usage', source: limits.week.source },
+    { key: 'so',   pct: limits.so.pct,   resetMs: limits.so.resetMs,   label: 'Claude Sonnet weekly', source: limits.so.source },
+    { key: 'codex-h5',   pct: limits.codexH5.pct,   resetMs: limits.codexH5.resetMs,   label: 'Codex 5h usage', source: limits.codexH5.source },
+    { key: 'codex-week', pct: limits.codexWeek.pct, resetMs: limits.codexWeek.resetMs, label: 'Codex weekly usage', source: limits.codexWeek.source },
   ];
 
   const now = Date.now();
 
-  for (const { key, pct, resetMs, label } of checks) {
+  for (const { key, pct, resetMs, label, source } of checks.filter(check => shouldCheckProvider(check.key, providerMode))) {
     if (pct <= 0) continue;
     const state = getState(key);
 
@@ -78,8 +108,8 @@ export function checkAlerts(
         state.firedThresholds.add(threshold);
         state.lastAlertTime = now;
 
-        const title = `⚠️ ${label} reached ${threshold}%`;
-        const body = `Currently at ${Math.round(smoothPct)}% usage`;
+        const title = `Usage alert: ${label} reached ${threshold}%`;
+        const body = `Currently at ${Math.round(smoothPct)}% usage${formatReset(resetMs)}${formatSource(source)}`;
         addNotification('alert', title, body);
         try {
           new Notification({ title: `WhereMyTokens ${title}`, body }).show();

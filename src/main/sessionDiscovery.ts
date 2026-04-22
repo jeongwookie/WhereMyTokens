@@ -1,11 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { isSafeLocalCwd } from './pathSafety';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
+export type TrackingProvider = 'claude' | 'codex' | 'both';
+export type SessionProvider = 'claude' | 'codex';
 
 export interface DiscoveredSession {
-  pid: number;
+  provider: SessionProvider;
+  pid: number | null;
   sessionId: string;
   cwd: string;
   projectName: string;
@@ -17,11 +21,14 @@ export interface DiscoveredSession {
   lastModified: Date | null;
   isWorktree: boolean;
   worktreeBranch: string | null;
+  gitBranch: string | null;
   mainRepoName: string | null;
 }
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
+const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
 
 function encodeCwd(cwd: string): string {
   // "C:\dev\app" → "C--dev-app" (encode path to flat name)
@@ -56,9 +63,12 @@ function detectWorktree(cwd: string): { mainName: string; branch: string } | nul
   }
 }
 
-function entrypointToSource(entrypoint: string): string {
+function entrypointToSource(entrypoint: string, provider: SessionProvider = 'claude'): string {
   const map: Record<string, string> = {
     'cli': 'Terminal',
+    'exec': provider === 'codex' ? 'Codex Exec' : 'Terminal',
+    'vscode': provider === 'codex' ? 'VS Code' : 'VS Code',
+    'codex': 'Codex',
     'claude-vscode': 'VS Code',
     'claude-cursor': 'Cursor',
     'claude-jetbrains': 'JetBrains',
@@ -76,6 +86,74 @@ function entrypointToSource(entrypoint: string): string {
     'windsurf': 'Windsurf',
   };
   return map[entrypoint] ?? entrypoint;
+}
+
+function detectWorktreeCached(cwd: string): { mainName: string; branch: string } | null {
+  if (worktreeCache.has(cwd)) return worktreeCache.get(cwd) ?? null;
+  const value = detectWorktree(cwd);
+  worktreeCache.set(cwd, value);
+  return value;
+}
+
+function readHeadBranch(gitDir: string): string | null {
+  try {
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf-8').trim();
+    const prefix = 'ref: refs/heads/';
+    if (head.startsWith(prefix)) return head.slice(prefix.length);
+  } catch { /* ignore */ }
+  return null;
+}
+
+function detectGitBranch(cwd: string): string | null {
+  let dir = cwd;
+  while (true) {
+    const marker = path.join(dir, '.git');
+    try {
+      const stat = fs.statSync(marker);
+      if (stat.isDirectory()) return readHeadBranch(marker);
+      if (stat.isFile()) {
+        const content = fs.readFileSync(marker, 'utf-8').trim();
+        const match = content.match(/^gitdir:\s*(.+)$/m);
+        if (!match) return null;
+        const rawGitDir = match[1].trim().replace(/\//g, path.sep);
+        const gitDir = path.isAbsolute(rawGitDir) ? rawGitDir : path.resolve(dir, rawGitDir);
+        return readHeadBranch(gitDir);
+      }
+    } catch { /* keep walking */ }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function detectGitBranchCached(cwd: string): string | null {
+  return detectGitBranch(cwd);
+}
+
+export function projectKeysForCwd(cwd: string): string[] {
+  if (!isSafeLocalCwd(cwd)) return [];
+  const keys = new Set<string>();
+  const worktreeInfo = detectWorktreeCached(cwd);
+  if (worktreeInfo?.mainName) keys.add(worktreeInfo.mainName);
+  const baseName = path.basename(cwd);
+  if (baseName) keys.add(baseName);
+  keys.add(encodeCwd(cwd));
+  return [...keys];
+}
+
+function codexEntrypointFromSource(sourceRaw: unknown): string {
+  if (typeof sourceRaw === 'string' && sourceRaw.trim()) return sourceRaw.trim();
+  if (sourceRaw && typeof sourceRaw === 'object') {
+    const subagent = (sourceRaw as Record<string, unknown>).subagent;
+    if (typeof subagent === 'string' && subagent.trim()) return `subagent:${subagent.trim()}`;
+  }
+  return 'codex';
+}
+
+function codexSourceLabel(entrypoint: string, originator: string | null): string {
+  if (originator?.toLowerCase().includes('codex desktop')) return 'Codex Desktop';
+  if (entrypoint.startsWith('subagent:')) return 'Codex Subagent';
+  return entrypointToSource(entrypoint, 'codex');
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -113,8 +191,8 @@ function getJsonlLastModified(jsonlPath: string | null): Date | null {
   }
 }
 
-function calcState(alive: boolean, lastModified: Date | null): SessionState {
-  if (!alive) return 'idle';
+function calcState(alive: boolean | null, lastModified: Date | null): SessionState {
+  if (alive === false) return 'idle';
   if (!lastModified) return 'idle';
   const diffMs = Date.now() - lastModified.getTime();
   const diffMin = diffMs / 60000;
@@ -123,7 +201,11 @@ function calcState(alive: boolean, lastModified: Date | null): SessionState {
   return 'idle';
 }
 
-export function discoverSessions(): DiscoveredSession[] {
+function shouldIncludeProvider(filter: TrackingProvider, provider: SessionProvider): boolean {
+  return filter === 'both' || filter === provider;
+}
+
+function discoverClaudeSessions(): DiscoveredSession[] {
   if (!fs.existsSync(SESSIONS_DIR)) return [];
 
   const results: DiscoveredSession[] = [];
@@ -139,6 +221,7 @@ export function discoverSessions(): DiscoveredSession[] {
       const meta = JSON.parse(raw);
       const { pid, sessionId, cwd, startedAt, entrypoint = 'cli', name: _name } = meta;
       if (!pid || !sessionId || !cwd) continue;
+      if (!isSafeLocalCwd(cwd)) continue;
 
       const alive = isProcessAlive(pid);
       const jsonlPath = findJsonlPath(cwd, sessionId);
@@ -149,21 +232,24 @@ export function discoverSessions(): DiscoveredSession[] {
       const projectName = (meta.name && meta.name.trim()) ? meta.name.trim() : path.basename(cwd);
 
       // Worktree detection: .git is a file when it's a worktree
-      const worktreeInfo = detectWorktree(cwd);
+      const worktreeInfo = detectWorktreeCached(cwd);
+      const gitBranch = detectGitBranchCached(cwd);
 
       results.push({
+        provider: 'claude',
         pid,
         sessionId,
         cwd,
         projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
         startedAt: new Date(startedAt),
         entrypoint,
-        source: entrypointToSource(entrypoint),
+        source: entrypointToSource(entrypoint, 'claude'),
         state,
         jsonlPath,
         lastModified,
         isWorktree: !!worktreeInfo,
         worktreeBranch: worktreeInfo?.branch ?? null,
+        gitBranch,
         mainRepoName: worktreeInfo?.mainName ?? null,
       });
     } catch { /* skip malformed */ }
@@ -176,3 +262,123 @@ export function discoverSessions(): DiscoveredSession[] {
     return tb - ta;
   });
 }
+
+function listCodexJsonlFiles(dir: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) results.push(...listCodexJsonlFiles(fullPath));
+      else if (entry.isFile() && entry.name.endsWith('.jsonl')) results.push(fullPath);
+    }
+  } catch { /* ignore */ }
+  return results;
+}
+
+interface CodexSessionHeader {
+  payload: Record<string, unknown>;
+  timestamp: string | null;
+}
+
+function readCodexSessionHeader(filePath: string): CodexSessionHeader | null {
+  const maxBytes = 512 * 1024;
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(maxBytes);
+    const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
+    let fallback: CodexSessionHeader | null = null;
+    for (const line of buf.subarray(0, bytesRead).toString('utf-8').split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line) as Record<string, unknown>;
+        const payload = obj.payload as Record<string, unknown> | undefined;
+        if (!payload) continue;
+        const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
+        if (obj.type === 'session_meta') return { payload, timestamp };
+        if (!fallback && obj.type === 'turn_context' && typeof payload.cwd === 'string') {
+          fallback = { payload, timestamp };
+        }
+      } catch {
+        continue;
+      }
+    }
+    return fallback;
+  } catch { /* ignore */ }
+  finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch { /* ignore */ }
+    }
+  }
+  return null;
+}
+
+function discoverCodexSessions(): DiscoveredSession[] {
+  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
+
+  const results: DiscoveredSession[] = [];
+  const files = listCodexJsonlFiles(CODEX_SESSIONS_DIR);
+
+  for (const filePath of files) {
+    try {
+      const header = readCodexSessionHeader(filePath);
+      const payload = header?.payload;
+      if (!payload) continue;
+
+      const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+      if (!cwd) continue;
+      if (!isSafeLocalCwd(cwd)) continue;
+
+      const stat = fs.statSync(filePath);
+      const sessionId = typeof payload.id === 'string' ? payload.id : path.basename(filePath, '.jsonl');
+      const startedAtRaw = typeof payload.timestamp === 'string'
+        ? payload.timestamp
+        : (header.timestamp ?? '');
+      const startedAt = startedAtRaw ? new Date(startedAtRaw) : stat.birthtime;
+      const sourceRaw = payload.source;
+      const originator = typeof payload.originator === 'string' ? payload.originator : null;
+      const entrypoint = codexEntrypointFromSource(sourceRaw);
+      const projectName = path.basename(cwd);
+      const worktreeInfo = detectWorktreeCached(cwd);
+      const gitBranch = detectGitBranchCached(cwd);
+
+      results.push({
+        provider: 'codex',
+        pid: null,
+        sessionId,
+        cwd,
+        projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
+        startedAt,
+        entrypoint,
+        source: codexSourceLabel(entrypoint, originator),
+        state: calcState(null, stat.mtime),
+        jsonlPath: filePath,
+        lastModified: stat.mtime,
+        isWorktree: !!worktreeInfo,
+        worktreeBranch: worktreeInfo?.branch ?? null,
+        gitBranch,
+        mainRepoName: worktreeInfo?.mainName ?? null,
+      });
+    } catch { /* skip malformed */ }
+  }
+
+  return results.sort((a, b) => {
+    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
+    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
+    return tb - ta;
+  });
+}
+
+export function discoverSessions(provider: TrackingProvider = 'both'): DiscoveredSession[] {
+  const results: DiscoveredSession[] = [];
+  if (shouldIncludeProvider(provider, 'claude')) results.push(...discoverClaudeSessions());
+  if (shouldIncludeProvider(provider, 'codex')) results.push(...discoverCodexSessions());
+
+  return results.sort((a, b) => {
+    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
+    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
+    return tb - ta;
+  });
+}
+
+export { CODEX_SESSIONS_DIR, PROJECTS_DIR as CLAUDE_PROJECTS_DIR, SESSIONS_DIR as CLAUDE_SESSIONS_DIR };

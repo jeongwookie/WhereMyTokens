@@ -8,6 +8,8 @@ type ChartTab = '7d' | '5mo' | 'Hourly' | 'Weekly' | 'Rhythm';
 const TAB_LABELS: Record<ChartTab, string> = {
   '7d': '7d', '5mo': '5mo', 'Hourly': 'Hourly', 'Weekly': 'Weekly', 'Rhythm': 'Rhythm',
 };
+const CHART_TABS: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly', 'Rhythm'];
+const LOCAL_TIME_ZONE_LABEL = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Local';
 
 function blueIntensity(i: number): string {
   const sat = Math.round(55 + i * 30);
@@ -598,11 +600,9 @@ interface Props {
   usdToKrw: number;
 }
 
-export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets, currency, usdToKrw }: Props) {
+function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [tab, setTab] = useState<ChartTab>('7d');
-
-  const tabs: ChartTab[] = ['7d', '5mo', 'Hourly', 'Weekly', 'Rhythm'];
 
   return (
     <div>
@@ -611,11 +611,11 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
           <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono, background: C.bgRow, padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
-            {Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace(/_/g, ' ') ?? 'Local'}
+            {LOCAL_TIME_ZONE_LABEL}
           </span>
         </span>
         <div style={{ display: 'flex', gap: 2 }}>
-          {tabs.map(t => {
+          {CHART_TABS.map(t => {
             const isRhythm = t === 'Rhythm';
             const isActive = tab === t;
             return (
@@ -671,3 +671,5 @@ export default function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTim
     </div>
   );
 }
+
+export default React.memo(ActivityChart);

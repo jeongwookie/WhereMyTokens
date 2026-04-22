@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens } from '../theme';
@@ -23,17 +23,25 @@ interface Props {
   session: SessionInfo;
 }
 
-export default function ActivityBreakdown({ session }: Props) {
+function ActivityBreakdown({ session }: Props) {
   const C = useTheme();
   const bd = session.activityBreakdown;
-  if (!bd) return null;
+  const kind = session.activityBreakdownKind ?? 'tokens';
 
   // 총계 계산 및 값이 있는 카테고리만 필터링
-  const total = CATEGORIES.reduce((s, c) => s + (bd[c.key] ?? 0), 0);
+  const { total, active } = useMemo(() => {
+    if (!bd) return { total: 0, active: [] as typeof CATEGORIES[number][] };
+    const nextTotal = CATEGORIES.reduce((s, c) => s + (bd[c.key] ?? 0), 0);
+    const nextActive = CATEGORIES
+      .filter(c => (bd[c.key] ?? 0) > 0)
+      .sort((a, b) => (bd[b.key] ?? 0) - (bd[a.key] ?? 0));
+    return { total: nextTotal, active: nextActive };
+  }, [bd]);
+  if (!bd) return null;
   if (total === 0) return null;
 
-  const active = CATEGORIES.filter(c => (bd[c.key] ?? 0) > 0)
-    .sort((a, b) => (bd[b.key] ?? 0) - (bd[a.key] ?? 0));
+  const fmtValue = (value: number) => kind === 'events' ? String(Math.round(value)) : fmtTokens(value);
+  const totalLabel = kind === 'events' ? 'tool events this session' : 'output tokens this session';
 
   return (
     <div style={{
@@ -47,9 +55,9 @@ export default function ActivityBreakdown({ session }: Props) {
       {/* 총계 */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: C.text, fontFamily: C.fontMono, lineHeight: 1 }}>
-          {fmtTokens(total)}
+          {fmtValue(total)}
         </span>
-        <span style={{ fontSize: 9, color: C.textMuted }}>output tokens this session</span>
+        <span style={{ fontSize: 9, color: C.textMuted }}>{totalLabel}</span>
       </div>
 
       {/* 스택 바 */}
@@ -77,14 +85,14 @@ export default function ActivityBreakdown({ session }: Props) {
                 <span style={{ fontSize: 10, width: 14, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
                 <span style={{ fontSize: 10, color: C.textDim, flex: 1 }}>{cat.label}</span>
                 <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 42, textAlign: 'right', flexShrink: 0 }}>
-                  {fmtTokens(tokens)}
+                  {fmtValue(tokens)}
                 </span>
                 <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 26, textAlign: 'right', flexShrink: 0 }}>
                   {Math.round(pct)}%
                 </span>
               </div>
               <div style={{ marginLeft: 19, height: 3, background: `${cat.color}18`, borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', background: cat.color, borderRadius: 2, transition: 'width 0.4s' }} />
+                <div style={{ width: `${pct}%`, height: '100%', background: cat.color, borderRadius: 2 }} />
               </div>
             </div>
           );
@@ -93,3 +101,5 @@ export default function ActivityBreakdown({ session }: Props) {
     </div>
   );
 }
+
+export default React.memo(ActivityBreakdown);

@@ -16,10 +16,16 @@ export interface GitStats {
   totalLinesRemoved: number;
 }
 
+export interface CodeOutputStats {
+  today: { commits: number; added: number; removed: number };
+  all: { commits: number; added: number; removed: number };
+}
+
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 
 export interface SessionInfo {
-  pid: number;
+  provider: 'claude' | 'codex';
+  pid: number | null;
   sessionId: string;
   cwd: string;
   projectName: string;
@@ -35,6 +41,7 @@ export interface SessionInfo {
   toolCounts: Record<string, number>;
   isWorktree?: boolean;
   worktreeBranch?: string | null;
+  gitBranch?: string | null;
   mainRepoName?: string | null;
   gitStats?: GitStats | null;
   activityBreakdown?: {
@@ -42,6 +49,7 @@ export interface SessionInfo {
     buildTest: number; terminal: number; thinking: number; response: number;
     subagents: number; web: number;
   } | null;
+  activityBreakdownKind?: 'tokens' | 'events' | null;
 }
 
 export interface WindowStats {
@@ -58,6 +66,7 @@ export interface WindowStats {
 
 export interface ModelUsage {
   model: string;
+  provider: 'claude' | 'codex' | 'other';
   tokens: number;
   costUSD: number;
 }
@@ -119,9 +128,11 @@ export interface UsageData {
 }
 
 export interface UsageLimits {
-  h5: { pct: number; resetMs: number };
-  week: { pct: number; resetMs: number };
-  so: { pct: number; resetMs: number };
+  h5: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  week: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  so: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  codexH5: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  codexWeek: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
 }
 
 export interface AppSettings {
@@ -178,6 +189,7 @@ export interface AppState {
   bridgeActive: boolean;
   extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
+  codeOutputStats: CodeOutputStats;
   allTimeSessions: number;
 }
 
@@ -194,7 +206,7 @@ declare global {
       getIntegrationStatus: () => Promise<{ configured: boolean; command?: string }>;
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
-      onUpdated:          (cb: () => void) => () => void;
+      onUpdated:          (cb: (state: AppState) => void) => () => void;
       getResolvedTheme:   () => Promise<'light' | 'dark'>;
       onThemeChanged:     (cb: (theme: 'light' | 'dark') => void) => () => void;
     };

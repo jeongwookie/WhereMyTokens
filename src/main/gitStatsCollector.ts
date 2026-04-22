@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import path from 'path';
 import Store from 'electron-store';
+import { isSafeLocalCwd } from './pathSafety';
 
 export interface GitStats {
   branch: string | null;
@@ -92,6 +93,7 @@ function countLines(output: string): number {
 
 async function collectStats(cwd: string): Promise<GitStats | null> {
   try {
+    if (!isSafeLocalCwd(cwd)) return null;
     // 현재 저장소 git user 이메일로 본인 커밋만 필터링 (미설정 시 전체 포함)
     const userEmail = await execGitAsync(['config', 'user.email'], cwd).catch(() => '');
     const authorArgs = userEmail ? [`--author=${userEmail}`] : [];

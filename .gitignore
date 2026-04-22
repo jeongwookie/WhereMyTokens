@@ -9,7 +9,6 @@ assets/icon-256.png
 *.html
 gitleaks-report*.json
 privacy-scan*.json
-.gitleaks.toml
 .DS_Store
 Thumbs.db
 
@@ -24,4 +23,3 @@ TODO.md
 .codex/
 .playwright-mcp/
 .mcp.json
-scripts/review-privacy.ps1

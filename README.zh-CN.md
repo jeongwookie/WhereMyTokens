@@ -2,11 +2,11 @@
 
 # WhereMyTokens
 
-**实时监控 Claude Code 令牌使用量的 Windows 系统托盘应用。**
+**实时监控 Claude Code 与 Codex 令牌使用量的 Windows 系统托盘应用。**
 
 由每天使用 Claude Code 的韩国开发者打造 — 为自己而做。
 
-安静地驻留在任务栏中，一目了然地展示 Claude Code 使用情况 — 令牌数、费用、会话活动和速率限制。
+安静地驻留在任务栏中，一目了然地展示 Claude Code 与 Codex 使用情况 — 令牌数、费用、会话活动、缓存、模型使用量和速率限制。
 
 ![Platform](https://img.shields.io/badge/platform-Windows_10%2F11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -14,7 +14,9 @@
 
 > [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [Español](README.es.md)
 
-> 💾 **无云同步** — 仅读取本地 Claude 文件。您的数据绝不会离开您的设备。
+> ⭐ **Claude + Codex 同时追踪** — 可在 Settings 中选择仅 Claude、仅 Codex，或两者一起追踪。
+
+> 💾 **无云同步** — 仅读取本地 Claude/Codex 文件。您的数据绝不会离开您的设备。
 
 <table>
   <tr>
@@ -75,29 +77,30 @@
 ## 功能特性
 
 ### 会话追踪
+- **Claude + Codex provider 模式** — 可在同一仪表板中追踪 Claude、Codex 或两者
 - **实时会话检测** — 终端、VS Code、Cursor、Windsurf 等，实时状态：`active` / `waiting` / `idle` / `compacting`
-- **两级分组** — 按 git 项目 → 分支分组，含项目级提交统计和行数
-- **空闲自动隐藏** — 空闲会话逐步折叠；6小时以上自动隐藏（可展开）
-- **上下文窗口警告** — 每会话进度条；50% 琥珀色、80% 橙色、95%+ 红色
+- **紧凑分组** — 按 git 项目 → 分支分组，重复的 Claude/Codex 会话会按 provider/source/model/state 堆叠
+- **分支行数限制** — 每个分支默认显示前 3 行，其余通过 "Show N more" 展开
+- **上下文窗口警告** — 每会话进度条；70% 琥珀色、85% 橙色、95%+ 红色
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
-- **速率限制条** — Anthropic API 5小时和1周用量，含进度条、重置倒计时、缓存效率等级
+- **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine；Codex 5h/1w 来自本地 Codex rate-limit 日志事件
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
-- **Extra Usage 预算** — 月度额度使用量 / 限额 / 利用率
+- **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
 
 ### 分析与活动
 - **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、令牌分析（In/Out/Cache）
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
 - **模型分析** — 按模型的令牌和费用总计，渐变条
-- **Activity Breakdown** — 每会话输出令牌 10 类分析（Thinking、Edit/Write、Read、Search、Git 等）
+- **Activity Breakdown** — Claude 按 output token 分析，Codex 按 tool event 分析 10 个类别（Thinking、Edit/Write、Read、Search、Git 等）
 
 ### 代码产出与生产力
-- **Git 指标** — 提交数、净变更行数、**$/100 Lines**（每100行新增的成本）
-- **今日 vs 全部** — 今日显示实际行均成本与历史平均对比
-- **自动发现** — 通过 `~/.claude/projects/` 包含所有使用过 Claude 的项目
+- **Git 指标** — 提交数、净变更行数、**$/100 Added**（每100行新增的成本）
+- **今日 vs 全部** — 今日显示每新增行实际成本与历史平均对比
+- **自动发现** — Claude 项目来自 `~/.claude/projects/`，Codex 会话来自 `~/.codex/sessions/`
 - **仅统计您的提交** — 按 `git config user.email` 过滤
 
 ### 个性化
@@ -119,10 +122,46 @@
 **Settings → Claude Code Integration → Setup** — 无需 API 轮询即可获取实时速率限制数据。
 
 ### 3. 配置
+- **Tracking Provider** — Claude / Codex / Both
 - **货币** — USD 或 KRW
 - **提醒** — 设置使用阈值（50% / 80% / 90%）
 - **主题** — Auto（跟随系统）/ Light / Dark
 - **托盘标签** — 选择任务栏显示内容
+
+---
+
+## Codex 追踪
+
+WhereMyTokens 也可以读取 Codex 的本地 JSONL 日志：`~/.codex/sessions/**/*.jsonl`。在 Settings 中选择 **Claude**、**Codex** 或 **Both**。
+
+**Codex 追踪包含：**
+- 会话状态、项目/分支分组，以及 VS Code、Codex Exec 等 source 标签
+- GPT/Codex 模型使用量与 API 等价费用估算
+- input、cached input、output 令牌、缓存节省金额和全时段模型合计
+- 当本地日志包含 `rate_limits` 事件时，显示 Codex 5h/1w 使用率与 reset 时间
+- Codex 日志提供 tool call，而不是每个工具的 output token，因此 Activity Breakdown 显示 tool event count
+
+**Codex 缓存计算：** Codex 日志提供 `input_tokens` 和 `cached_input_tokens`。WhereMyTokens 将 uncached input 保存为 `input_tokens - cached_input_tokens`，将 cached input 作为 cache-read token，并使用以下公式显示缓存效率：
+
+```text
+cached_input_tokens / input_tokens
+```
+
+Claude 的缓存效率使用：
+
+```text
+cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)
+```
+
+---
+
+## 数字如何计算
+
+令牌数会尽可能包含 **input + output + cache creation + cache reads**。费用始终是基于应用内价格表的 API 等价估算值。
+
+Claude 提供 input、output、cache creation 与 cache read。Codex 提供 raw input、cached input 与 output，因此 WhereMyTokens 会把 raw input 拆成 uncached input 与 cached input，避免缓存节省金额和模型合计重复计算。
+
+Claude 和 Codex 使用独立的 5h/1w reset window。Claude 限额优先使用 Anthropic API，其次使用 statusLine/cache；Codex 限额使用本地 Codex JSONL 中最新的 `rate_limits` 事件。
 
 ---
 
@@ -135,6 +174,7 @@ WhereMyTokens 仅读取本地文件 — 无云同步，无遥测。
 | `~/.claude/sessions/*.json` | 会话元数据（pid、cwd、模型） |
 | `~/.claude/projects/**/*.jsonl` | 对话日志（令牌数、费用） |
 | `~/.claude/.credentials.json` | OAuth 令牌 — 仅用于从 Anthropic 获取您的使用统计 |
+| `~/.codex/sessions/**/*.jsonl` | Codex 会话日志（令牌、cached input、模型、rate-limit 事件、tool call） |
 | `%APPDATA%\WhereMyTokens\live-session.json` | `statusLine` 插件写入的桥接数据 |
 
 ---
