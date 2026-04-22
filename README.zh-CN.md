@@ -46,6 +46,7 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 4/22 | Claude + Codex 同时追踪、Codex 用量计算、按范围统计、会话 UX/性能改进 |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | 4/20 | NSIS 安装程序，改进会话追踪精度与稳定性 |
 | **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | 4/17 | 修复 7d 热力图悬停提示；新增 zh-CN & es README |
 | **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | 4/17 | 青色主题、系统深色模式、增量 JSONL 缓存、空闲 6h+ 自动隐藏 |
@@ -56,7 +57,7 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.9.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
 **[⬇ 下载最新版本（所有文件）](https://github.com/jeongwookie/WhereMyTokens/releases/latest)**
 
@@ -68,7 +69,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.9.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.10.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 

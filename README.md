@@ -46,6 +46,7 @@ Sits quietly in your taskbar and shows Claude Code and Codex usage — tokens, c
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | Apr 22 | Claude + Codex tracking, Codex usage accounting, scoped stats, session UX/performance improvements |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | Apr 20 | NSIS installer, improved session tracking accuracy and stability |
 | **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | Apr 17 | Fix 7d heatmap hover tooltip; add zh-CN & es READMEs |
 | **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | Apr 17 | Teal theme, system dark mode, incremental JSONL caching, idle 6h+ auto-hide |
@@ -56,7 +57,7 @@ Sits quietly in your taskbar and shows Claude Code and Codex usage — tokens, c
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.9.2/WhereMyTokens-Setup.exe)** — just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.0/WhereMyTokens-Setup.exe)** — just run and done
 
 **[⬇ Download Latest Release](https://github.com/jeongwookie/WhereMyTokens/releases/latest)** — all files
 
@@ -68,7 +69,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.9.2-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.10.0-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
