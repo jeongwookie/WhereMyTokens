@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { isSafeLocalCwd } from './pathSafety';
+import { readCodexSessionHeader } from './sessionMetadata';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 export type TrackingProvider = 'claude' | 'codex' | 'both';
@@ -273,44 +274,6 @@ function listCodexJsonlFiles(dir: string): string[] {
     }
   } catch { /* ignore */ }
   return results;
-}
-
-interface CodexSessionHeader {
-  payload: Record<string, unknown>;
-  timestamp: string | null;
-}
-
-function readCodexSessionHeader(filePath: string): CodexSessionHeader | null {
-  const maxBytes = 512 * 1024;
-  let fd: number | null = null;
-  try {
-    fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(maxBytes);
-    const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
-    let fallback: CodexSessionHeader | null = null;
-    for (const line of buf.subarray(0, bytesRead).toString('utf-8').split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        const obj = JSON.parse(line) as Record<string, unknown>;
-        const payload = obj.payload as Record<string, unknown> | undefined;
-        if (!payload) continue;
-        const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
-        if (obj.type === 'session_meta') return { payload, timestamp };
-        if (!fallback && obj.type === 'turn_context' && typeof payload.cwd === 'string') {
-          fallback = { payload, timestamp };
-        }
-      } catch {
-        continue;
-      }
-    }
-    return fallback;
-  } catch { /* ignore */ }
-  finally {
-    if (fd !== null) {
-      try { fs.closeSync(fd); } catch { /* ignore */ }
-    }
-  }
-  return null;
 }
 
 function discoverCodexSessions(): DiscoveredSession[] {

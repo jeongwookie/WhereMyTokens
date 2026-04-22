@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { TrackingProvider } from './sessionDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
+import { readJsonlCwd } from './sessionMetadata';
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
@@ -29,7 +30,7 @@ function addClaudeProjectCwds(cwds: Set<string>): void {
         const jsonlFiles = fs.readdirSync(dirPath)
           .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
         if (jsonlFiles.length === 0) continue;
-        const cwd = extractCwdFromClaudeJsonl(path.join(dirPath, jsonlFiles[0]));
+        const cwd = readJsonlCwd(path.join(dirPath, jsonlFiles[0]), 'claude');
         if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
       } catch { /* skip */ }
     }
@@ -39,7 +40,7 @@ function addClaudeProjectCwds(cwds: Set<string>): void {
 function addCodexProjectCwds(cwds: Set<string>): void {
   if (!fs.existsSync(CODEX_SESSIONS_DIR)) return;
   for (const filePath of listJsonlFiles(CODEX_SESSIONS_DIR)) {
-    const cwd = extractCwdFromCodexJsonl(filePath);
+    const cwd = readJsonlCwd(filePath, 'codex');
     if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
   }
 }
@@ -54,39 +55,4 @@ function listJsonlFiles(dir: string): string[] {
     }
   } catch { /* skip */ }
   return files;
-}
-
-function extractCwdFromClaudeJsonl(filePath: string): string | null {
-  try {
-    const fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(2048);
-    const bytesRead = fs.readSync(fd, buf, 0, 2048, 0);
-    fs.closeSync(fd);
-    for (const line of buf.slice(0, bytesRead).toString('utf-8').split('\n').slice(0, 8)) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line);
-        if (typeof data.cwd === 'string' && isSafeLocalCwd(data.cwd)) return data.cwd;
-      } catch { /* skip */ }
-    }
-  } catch { /* skip */ }
-  return null;
-}
-
-function extractCwdFromCodexJsonl(filePath: string): string | null {
-  try {
-    const fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(4096);
-    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);
-    fs.closeSync(fd);
-    for (const line of buf.slice(0, bytesRead).toString('utf-8').split('\n').slice(0, 12)) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line);
-        if (data.type === 'session_meta' && typeof data.payload?.cwd === 'string' && isSafeLocalCwd(data.payload.cwd)) return data.payload.cwd;
-        if (data.type === 'turn_context' && typeof data.payload?.cwd === 'string' && isSafeLocalCwd(data.payload.cwd)) return data.payload.cwd;
-      } catch { /* skip */ }
-    }
-  } catch { /* skip */ }
-  return null;
 }

@@ -14,6 +14,7 @@ import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { getGitStatsAsync, GitStats } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
+import { clearSessionMetadataCache, invalidateSessionMetadataCache, readJsonlCwd } from './sessionMetadata';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -82,32 +83,6 @@ function makeExcludedMatcher(excludedProjects: readonly string[] = []) {
     if (!key) return false;
     return exact.has(key) || folded.has(key.toLowerCase());
   });
-}
-
-function readJsonlCwd(filePath: string, provider: 'claude' | 'codex'): string | null {
-  let fd: number | null = null;
-  try {
-    fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(64 * 1024);
-    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
-    const lines = buf.subarray(0, bytesRead).toString('utf-8').split('\n').slice(0, 64);
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const data = JSON.parse(line) as Record<string, unknown>;
-        const cwd = provider === 'codex'
-          ? (data.payload as Record<string, unknown> | undefined)?.cwd
-          : data.cwd;
-        if (typeof cwd === 'string' && isSafeLocalCwd(cwd)) return cwd;
-      } catch { /* skip */ }
-    }
-  } catch { /* skip */ }
-  finally {
-    if (fd !== null) {
-      try { fs.closeSync(fd); } catch { /* skip */ }
-    }
-  }
-  return null;
 }
 
 export class StateManager {
@@ -373,6 +348,7 @@ export class StateManager {
     });
     this.watcher.on('unlink', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) this.jsonlCache.invalidate(filePath);
+      if (filePath.endsWith('.jsonl')) invalidateSessionMetadataCache(filePath);
       this.debouncedFastRefresh();
     });
 
@@ -790,6 +766,7 @@ export class StateManager {
     const providerChanged = settings.provider !== this.state.settings.provider;
     if (providerChanged) {
       this.jsonlCache.clear();
+      clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
       this.startWatcher();
