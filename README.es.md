@@ -81,14 +81,14 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Detección en tiempo real** — Terminal, VS Code, Cursor, Windsurf y más con estado en tiempo real: `active` / `waiting` / `idle` / `compacting`
 - **Agrupación compacta** — por proyecto git → rama; sesiones Claude/Codex repetidas se apilan por provider/source/model/state
 - **Límite por rama** — cada rama muestra las primeras 3 filas por defecto; el resto se abre con "Show N more"
-- **Advertencias de ventana de contexto** — barra por sesión; ámbar al 50%, naranja al 80%, rojo al 95%+
+- **Advertencias de ventana de contexto** — barra por sesión; ámbar al 70%, naranja al 85%, rojo al 95%+
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
 - **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine; Codex 5h/1sem desde eventos locales de rate-limit en los logs
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
-- **Presupuesto Extra Usage** — créditos mensuales usados / límite / utilización %
+- **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
 - **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, desglose de tokens (In/Out/Cache)

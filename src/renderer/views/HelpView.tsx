@@ -185,8 +185,8 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Stack rows</B> — repeated sessions with the same provider/source/model/state are grouped to keep scrolling light. Expand a stack to inspect each session.</div>
         <div style={{ marginBottom: 5 }}><B>Branch limit</B> — each branch shows the first 3 rows by default; use "Show N more" for the rest.</div>
         <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Claude and Codex use different local metrics but share the same green/yellow/red header style.</div>
-        <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 50%, orange at 80%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — Claude shows per-category output-token breakdown. Codex shows per-category tool event counts because Codex logs expose tool calls rather than per-tool output tokens.</div>
+        <div style={{ marginBottom: 5 }}><B>Context bar</B> — amber at 70%, orange at 85%, red at 95%. "⚠ near limit" at 95-99%, "⚠ at limit" at 100%.</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — click <B>Details</B> on a session row. Claude shows per-category output-token breakdown. Codex shows per-category tool event counts because Codex logs expose tool calls rather than per-tool output tokens.</div>
         <CatRow icon="💭" label="Thinking" color="#2dd4bf">Extended thinking blocks</CatRow>
         <CatRow icon="💬" label="Response" color="#94a3b8">Text blocks — the final answer text</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read tool</CatRow>
@@ -285,8 +285,8 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>Stack row</B> — provider/source/model/state가 같은 반복 세션은 묶어서 스크롤을 가볍게 유지합니다. stack을 펼치면 개별 세션을 볼 수 있습니다.</div>
         <div style={{ marginBottom: 5 }}><B>브랜치 제한</B> — 각 브랜치는 기본 3개 행만 표시하고, 나머지는 "Show N more"로 펼칩니다.</div>
         <div style={{ marginBottom: 5 }}><B>캐시 효율</B> — Claude와 Codex는 계산식은 다르지만 헤더에서는 동일한 green/yellow/red 스타일로 표시됩니다.</div>
-        <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 50%에서 황색, 80%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — Claude는 카테고리별 output token 분석을 표시합니다. Codex는 per-tool output token이 아니라 tool call 로그가 있으므로 카테고리별 tool event count로 표시합니다.</div>
+        <div style={{ marginBottom: 5 }}><B>컨텍스트 바</B> — 70%에서 황색, 85%에서 주황, 95%에서 적색. 95-99% "⚠ near limit", 100% "⚠ at limit".</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — 세션 행의 <B>Details</B>를 누르면 열립니다. Claude는 카테고리별 output token 분석을 표시합니다. Codex는 per-tool output token이 아니라 tool call 로그가 있으므로 카테고리별 tool event count로 표시합니다.</div>
         <CatRow icon="💭" label="Thinking" color="#2dd4bf">확장 사고 블록</CatRow>
         <CatRow icon="💬" label="Response" color="#94a3b8">텍스트 블록 — 최종 응답 텍스트</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read 툴</CatRow>
@@ -385,8 +385,8 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Stack row</B> — provider/source/model/state が同じ繰り返しセッションをまとめ、スクロールを軽くします。stack を展開すると個別セッションを確認できます。</div>
         <div style={{ marginBottom: 5 }}><B>ブランチ制限</B> — 各ブランチは最初の 3 行だけ表示し、残りは "Show N more" で展開します。</div>
         <div style={{ marginBottom: 5 }}><B>キャッシュ効率</B> — Claude と Codex は計算式が異なりますが、ヘッダーでは同じ green/yellow/red スタイルで表示します。</div>
-        <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 50% で琥珀色、80% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
-        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — Claude はカテゴリ別 output token 内訳を表示します。Codex は per-tool output token ではなく tool call ログを持つため、カテゴリ別 tool event count として表示します。</div>
+        <div style={{ marginBottom: 5 }}><B>コンテキストバー</B> — 70% で琥珀色、85% でオレンジ、95% で赤。95-99% "⚠ near limit"、100% "⚠ at limit"。</div>
+        <div style={{ marginBottom: 7 }}><B>Activity Breakdown</B> — セッション行の <B>Details</B> をクリックすると開きます。Claude はカテゴリ別 output token 内訳を表示します。Codex は per-tool output token ではなく tool call ログを持つため、カテゴリ別 tool event count として表示します。</div>
         <CatRow icon="💭" label="Thinking" color="#2dd4bf">拡張思考ブロック</CatRow>
         <CatRow icon="💬" label="Response" color="#94a3b8">テキストブロック — 最終回答テキスト</CatRow>
         <CatRow icon="📄" label="Read" color="#60a5fa">Read ツール</CatRow>

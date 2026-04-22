@@ -81,14 +81,14 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Live session detection** — Terminal, VS Code, Cursor, Windsurf, and more with real-time status: `active` / `waiting` / `idle` / `compacting`
 - **Compact grouping** — sessions grouped by git project → branch, with repeated Claude/Codex sessions stacked by provider, source, model, and state
 - **Branch row limit** — each branch shows the first 3 rows by default, with "Show N more" for the rest
-- **Context window warnings** — per-session bar; amber at 50%, orange at 80%, red at 95%+
+- **Context window warnings** — per-session bar; amber at 70%, orange at 85%, red at 95%+
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …)
 
 ### Rate Limits & Alerts
 - **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine; Codex 5h/1w limits from local Codex rate-limit log events when available
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
 - **Windows toast notifications** — at configurable usage thresholds (50% / 80% / 90%)
-- **Extra Usage budget** — monthly credits used / limit / utilization %
+- **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
 
 ### Analytics & Activity
 - **Header stats** — today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, token breakdown (In/Out/Cache)
@@ -216,7 +216,7 @@ Claude reports input, output, cache creation, and cache reads. Codex reports raw
 
 ## Activity Breakdown
 
-Click the **Breakdown** button on any session row to expand activity by category. Claude sessions show output-token attribution. Codex sessions show tool-event counts, because Codex logs expose function/tool calls rather than output tokens per tool.
+Click the **Details** button on any session row to expand activity by category. Claude sessions show output-token attribution. Codex sessions show tool-event counts, because Codex logs expose function/tool calls rather than output tokens per tool.
 
 | Category | Color | Source |
 |----------|-------|--------|

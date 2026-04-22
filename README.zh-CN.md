@@ -81,14 +81,14 @@
 - **实时会话检测** — 终端、VS Code、Cursor、Windsurf 等，实时状态：`active` / `waiting` / `idle` / `compacting`
 - **紧凑分组** — 按 git 项目 → 分支分组，重复的 Claude/Codex 会话会按 provider/source/model/state 堆叠
 - **分支行数限制** — 每个分支默认显示前 3 行，其余通过 "Show N more" 展开
-- **上下文窗口警告** — 每会话进度条；50% 琥珀色、80% 橙色、95%+ 红色
+- **上下文窗口警告** — 每会话进度条；70% 琥珀色、85% 橙色、95%+ 红色
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
 - **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine；Codex 5h/1w 来自本地 Codex rate-limit 日志事件
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
-- **Extra Usage 预算** — 月度额度使用量 / 限额 / 利用率
+- **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
 
 ### 分析与活动
 - **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、令牌分析（In/Out/Cache）
