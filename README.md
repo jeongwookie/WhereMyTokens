@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.1/WhereMyTokens-Setup.exe"><strong>Download v1.10.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-Setup.exe"><strong>Download v1.10.2</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -68,6 +68,7 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | Apr 23 | Align all-time Code Output with local branches and clarify top model usage |
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | Apr 22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | Apr 22 | Claude + Codex tracking, Codex usage accounting, scoped stats, session UX/performance improvements |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | Apr 20 | NSIS installer, improved session tracking accuracy and stability |
@@ -80,9 +81,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.1/WhereMyTokens-Setup.exe)** — just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-Setup.exe)** — just run and done
 
-**[⬇ Download Latest Release](https://github.com/jeongwookie/WhereMyTokens/releases/latest)** — all files
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-v1.10.2-win-x64.zip)** — no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -92,7 +93,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.10.1-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.10.2-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
