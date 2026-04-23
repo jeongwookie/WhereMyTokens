@@ -14,11 +14,22 @@ export interface GitStats {
   totalCommits: number;
   totalLinesAdded: number;
   totalLinesRemoved: number;
+  daily7d: GitDailyStats[];
+  dailyAll: GitDailyStats[];
+}
+
+export interface GitDailyStats {
+  date: string;
+  commits: number;
+  added: number;
+  removed: number;
 }
 
 export interface CodeOutputStats {
   today: { commits: number; added: number; removed: number };
   all: { commits: number; added: number; removed: number };
+  daily7d: GitDailyStats[];
+  dailyAll: GitDailyStats[];
 }
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
@@ -183,6 +194,7 @@ export interface AppState {
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;
+  initialRefreshComplete: boolean;
   lastUpdated: number;
   apiConnected: boolean;
   apiError?: string;
@@ -190,6 +202,7 @@ export interface AppState {
   extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
   codeOutputStats: CodeOutputStats;
+  codeOutputLoading: boolean;
   allTimeSessions: number;
 }
 

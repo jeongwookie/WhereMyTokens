@@ -7,7 +7,7 @@
     "build:main": "tsc",
     "build:renderer": "node scripts/build-renderer.mjs",
     "build": "node scripts/make-icons.mjs && npm run build:main && npm run build:renderer",
-    "test": "npm run build:main && node --test scripts/session-metadata.test.mjs",
+    "test": "npm run build:main && node --test scripts/session-metadata.test.mjs scripts/git-stats-keys.test.mjs scripts/git-stats-daily.test.mjs scripts/state-readiness.test.mjs",
     "start": "npm run build && electron .",
     "dev": "concurrently \"tsc -w\" \"wait-on dist/main/index.js && npm run build:renderer && electron .\"",
     "pack": "npm run build && electron-builder --dir",

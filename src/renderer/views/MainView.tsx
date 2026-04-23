@@ -873,7 +873,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
       <HeaderMetrics state={state} onQuit={onQuit} />
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
         <PlanUsagePanel usage={usage} limits={state.limits} settings={settings} apiConnected={state.apiConnected} extraUsage={state.extraUsage} />
-        <CodeOutputCard stats={state.codeOutputStats} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
+        <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
         <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
         <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
         <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />

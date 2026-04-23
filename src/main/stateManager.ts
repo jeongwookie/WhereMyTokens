@@ -11,10 +11,11 @@ import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, RateLimited
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
-import { getGitStatsAsync, GitStats } from './gitStatsCollector';
+import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGitStatsAsync, GitDailyStats, GitStats } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readJsonlCwd } from './sessionMetadata';
+import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -29,6 +30,8 @@ export interface SessionInfo extends DiscoveredSession {
 export interface CodeOutputStats {
   today: { commits: number; added: number; removed: number };
   all: { commits: number; added: number; removed: number };
+  daily7d: GitDailyStats[];
+  dailyAll: GitDailyStats[];
 }
 
 export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
@@ -53,6 +56,7 @@ export interface AppState {
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;
+  initialRefreshComplete: boolean;
   lastUpdated: number;
   apiConnected: boolean;
   apiError?: string;      // last API error message for debugging
@@ -60,6 +64,7 @@ export interface AppState {
   extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
   codeOutputStats: CodeOutputStats;
+  codeOutputLoading: boolean;
   allTimeSessions: number;
 }
 
@@ -72,8 +77,7 @@ function getJsonlMtime(filePath: string): Date | null {
 }
 
 function gitStatsCacheKey(cwd: string): string {
-  const key = path.resolve(cwd);
-  return process.platform === 'win32' ? key.toLowerCase() : key;
+  return normalizeGitCwdKey(cwd);
 }
 
 function makeExcludedMatcher(excludedProjects: readonly string[] = []) {
@@ -83,6 +87,38 @@ function makeExcludedMatcher(excludedProjects: readonly string[] = []) {
     if (!key) return false;
     return exact.has(key) || folded.has(key.toLowerCase());
   });
+}
+
+function isSameOrChildPath(parentPath: string | null, childPath: string | null): boolean {
+  if (!parentPath || !childPath) return false;
+  const relative = path.relative(parentPath, childPath);
+  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+export function resolveSessionRepoKeys(
+  sessions: Array<{ cwd: string; gitStats?: Pick<GitStats, 'gitCommonDir' | 'toplevel'> | null }>,
+  repoGitStats: Record<string, Pick<GitStats, 'gitCommonDir' | 'toplevel'>>
+): Set<string> {
+  const scopedRepoKeys = new Set<string>();
+  const repoEntries = Object.entries(repoGitStats)
+    .map(([key, stats]) => ({
+      repoKey: normalizeGitPathKey(key) ?? repoKeyFromGitStats(stats),
+      topLevelKey: normalizeGitPathKey(stats.toplevel),
+    }))
+    .filter((entry): entry is { repoKey: string; topLevelKey: string | null } => !!entry.repoKey);
+
+  for (const session of sessions) {
+    const directKey = repoKeyFromGitStats(session.gitStats);
+    if (directKey) scopedRepoKeys.add(directKey);
+
+    const cwdKey = normalizeGitPathKey(session.cwd);
+    if (!cwdKey) continue;
+    for (const entry of repoEntries) {
+      if (isSameOrChildPath(entry.topLevelKey, cwdKey)) scopedRepoKeys.add(entry.repoKey);
+    }
+  }
+
+  return scopedRepoKeys;
 }
 
 export class StateManager {
@@ -175,12 +211,14 @@ export class StateManager {
       },
       settings: this.getSettings(),
       autoLimits: null,
+      initialRefreshComplete: false,
       lastUpdated: 0,
       apiConnected: false,
       bridgeActive: false,
       extraUsage: null,
       repoGitStats: {},
       codeOutputStats: this.emptyCodeOutputStats(),
+      codeOutputLoading: false,
       allTimeSessions: 0,
     };
   }
@@ -193,6 +231,8 @@ export class StateManager {
     return {
       today: { commits: 0, added: 0, removed: 0 },
       all: { commits: 0, added: 0, removed: 0 },
+      daily7d: buildDaily7dWindow(),
+      dailyAll: [],
     };
   }
 
@@ -369,7 +409,7 @@ export class StateManager {
       ? this.updateChangedSessionInfos(changedFiles)
       : this.buildSessionInfos();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, codeOutputStats, lastUpdated: Date.now() };
+    this.state = { ...this.state, sessions, codeOutputStats, codeOutputLoading: false, lastUpdated: Date.now() };
     this.onUpdate(this.state);
     // Also refresh usage limit API periodically (independent of heavyRefresh)
     void this.refreshApiUsagePct().then(() => {
@@ -417,11 +457,15 @@ export class StateManager {
       const limits = this.buildLimits();
       let sessions = this.buildSessionInfos();
       const extraUsage = this.apiUsagePct?.extraUsage ?? null;
-      const repoGitStats = await this.getRepoGitStats(settings, force);
+      const partialCodeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, initialRefreshComplete: true, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats: this.state.repoGitStats, codeOutputStats: partialCodeOutputStats, codeOutputLoading: true, allTimeSessions: loaded.sessionCount };
+      this.onUpdate(this.state);
+
+      const repoGitStats = await this.getRepoGitStats(settings, force, sessions);
       sessions = this.attachCachedGitStats(sessions);
       const codeOutputStats = this.buildCodeOutputStats(sessions, repoGitStats);
 
-      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, codeOutputStats, allTimeSessions: loaded.sessionCount };
+      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, initialRefreshComplete: true, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, codeOutputStats, codeOutputLoading: false, allTimeSessions: loaded.sessionCount };
       this.onUpdate(this.state);
 
       checkAlerts(limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
@@ -633,39 +677,53 @@ export class StateManager {
     return stats;
   }
 
-  private async getRepoGitStats(settings: AppSettings, force = false): Promise<Record<string, GitStats>> {
+  private async getRepoGitStats(settings: AppSettings, force = false, sessions: SessionInfo[] = []): Promise<Record<string, GitStats>> {
     const now = Date.now();
-    if (!force && this.repoGitStatsLastRefresh > 0 && now - this.repoGitStatsLastRefresh < StateManager.GIT_STATS_TTL_MS) {
+    if (!force
+      && this.repoGitStatsLastRefresh > 0
+      && now - this.repoGitStatsLastRefresh < StateManager.GIT_STATS_TTL_MS
+      && !this.hasUnscopedSessionCwd(sessions, this.state.repoGitStats)) {
       return this.state.repoGitStats;
     }
 
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const allCwds = discoverAllProjectCwds(settings.provider)
+    const cwdSet = new Set(discoverAllProjectCwds(settings.provider));
+    for (const session of sessions) cwdSet.add(session.cwd);
+    const allCwds = [...cwdSet]
       .filter(cwd => isSafeLocalCwd(cwd) && !isExcluded(projectKeysForCwd(cwd)));
     const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
     const repoGitStats: Record<string, GitStats> = {};
 
     for (const stats of rawStats) {
       if (!stats?.gitCommonDir) continue;
-      if (repoGitStats[stats.gitCommonDir]) continue;
-      repoGitStats[stats.gitCommonDir] = stats;
+      const repoKey = repoKeyFromGitStats(stats);
+      if (!repoKey) continue;
+      const preferred = preferGitStats(repoGitStats[repoKey], stats);
+      if (preferred) repoGitStats[repoKey] = preferred;
     }
 
     this.repoGitStatsLastRefresh = now;
     return repoGitStats;
   }
 
+  private hasUnscopedSessionCwd(sessions: SessionInfo[], repoGitStats: Record<string, GitStats>): boolean {
+    if (sessions.length === 0) return false;
+    return sessions.some(session => resolveSessionRepoKeys([session], repoGitStats).size === 0);
+  }
+
   private buildCodeOutputStats(sessions: SessionInfo[], repoGitStats: Record<string, GitStats>): CodeOutputStats {
     const today = { commits: 0, added: 0, removed: 0 };
 
-    const scopedRepoKeys = new Set<string>();
-    for (const session of sessions) {
-      const key = session.gitStats?.gitCommonDir ?? session.gitStats?.toplevel ?? null;
-      if (key) scopedRepoKeys.add(key);
-    }
+    const scopedRepoKeys = resolveSessionRepoKeys(sessions, repoGitStats);
     const repoStats = Object.entries(repoGitStats)
-      .filter(([key, stats]) => scopedRepoKeys.size === 0 || scopedRepoKeys.has(key) || (!!stats.toplevel && scopedRepoKeys.has(stats.toplevel)))
+      .filter(([key, stats]) => {
+        if (scopedRepoKeys.size === 0) return true;
+        const repoKey = normalizeGitPathKey(key);
+        const topLevelKey = normalizeGitPathKey(stats.toplevel);
+        return (!!repoKey && scopedRepoKeys.has(repoKey)) || (!!topLevelKey && scopedRepoKeys.has(topLevelKey));
+      })
       .map(([, stats]) => stats);
+    let dailySources = repoStats;
     if (repoStats.length > 0) {
       for (const stats of repoStats) {
         today.commits += stats.commitsToday;
@@ -674,15 +732,18 @@ export class StateManager {
       }
     } else {
       const seenToday = new Set<string>();
+      const fallbackStats: GitStats[] = [];
       for (const s of sessions) {
         if (!s.gitStats) continue;
-        const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
+        const repoKey = repoKeyFromGitStats(s.gitStats) ?? normalizeGitCwdKey(s.cwd);
         if (seenToday.has(repoKey)) continue;
         seenToday.add(repoKey);
         today.commits += s.gitStats.commitsToday;
         today.added += s.gitStats.linesAdded;
         today.removed += s.gitStats.linesRemoved;
+        fallbackStats.push(s.gitStats);
       }
+      dailySources = fallbackStats;
     }
 
     const all = { commits: 0, added: 0, removed: 0 };
@@ -692,7 +753,7 @@ export class StateManager {
       all.removed += stats.totalLinesRemoved ?? 0;
     }
 
-    return { today, all };
+    return { today, all, daily7d: aggregateDailyStats(dailySources), dailyAll: aggregateDailyAllStats(dailySources) };
   }
 
   private attachCachedGitStats(sessions: SessionInfo[]): SessionInfo[] {
@@ -776,7 +837,7 @@ export class StateManager {
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const sessions = this.state.sessions.filter(s => !isExcluded(this.sessionProjectKeys(s)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, settings, codeOutputStats, lastUpdated: Date.now() };
+    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 }
