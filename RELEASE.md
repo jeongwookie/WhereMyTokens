@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.11.0 | 2026-04-23 | Code Output growth chart, stable repo-scoped git stats refresh, faster dashboard splash |
 | v1.10.2 | 2026-04-23 | Align Code Output all-time stats with local branches, distinguish GPT-5.4 Mini colors, document top model usage scope |
 | v1.10.1 | 2026-04-22 | Fix Codex repo discovery for Code Output, share session metadata parsing, add bounded cache and regression tests |
 | v1.10.0 | 2026-04-22 | Claude + Codex tracking, Codex usage accounting, scoped stats, session UX/performance improvements |

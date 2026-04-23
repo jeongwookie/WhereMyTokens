@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-Setup.exe"><strong>下载 v1.10.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-Setup.exe"><strong>下载 v1.11.0</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -68,6 +68,7 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | 新增 Code Output 增长图，稳定 git 统计刷新，并改进启动画面 |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 4/23 | 将 Code Output 全时段统计对齐到本地分支，并明确热门模型显示范围 |
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | 4/22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 4/22 | Claude + Codex 同时追踪、Codex 用量计算、按范围统计、会话 UX/性能改进 |
@@ -81,9 +82,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-v1.10.2-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-v1.11.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -93,7 +94,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.10.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.11.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -125,6 +126,7 @@
 ### 代码产出与生产力
 - **Git 指标** — 提交数、净变更行数、**$/100 Added**（每100行新增的成本）
 - **今日 vs 全部** — 今日显示每新增行实际成本与历史平均对比
+- **Output 增长图** — 按最近 7 个本地日期显示全时段累计净行数增长
 - **分支感知的全时段** — Code Output 的全时段会按本地 git 作者邮箱统计所有本地分支的提交和行变更
 - **自动发现** — Claude 项目来自 `~/.claude/projects/`，Codex 会话来自 `~/.codex/sessions/`
 - **仅统计您的提交** — 按 `git config user.email` 过滤

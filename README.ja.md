@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-Setup.exe"><strong>v1.10.2 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-Setup.exe"><strong>v1.11.0 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -68,6 +68,7 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | Code Output 成長グラフを追加し、git 統計更新と起動スプラッシュを改善 |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 4/23 | Code Output の全期間をローカルブランチ基準に揃え、上位モデル表示範囲を明確化 |
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | 4/22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 4/22 | Claude + Codex 同時追跡、Codex 使用量計算、スコープ対応統計、セッション UX/性能改善 |
@@ -81,9 +82,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.10.2/WhereMyTokens-v1.10.2-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-v1.11.0-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -93,7 +94,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.10.2-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.11.0-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -125,6 +126,7 @@
 ### Code Output & 生産性
 - **Git ベース指標** — コミット数、純変更行数、**$/100 Added**（100 追加行あたりのコスト）
 - **Today vs All-time** — 今日の追加行あたり実コストと全期間平均を比較
+- **Output 成長グラフ** — 直近 7 日のローカル日付ごとに全期間累積の純増行数を表示
 - **ブランチ対応の全期間** — Code Output の全期間は、ローカルブランチ全体のコミットと行変更をローカル git author email 基準で集計
 - **自動検出** — Claude プロジェクトは `~/.claude/projects/`、Codex セッションは `~/.codex/sessions/` から自動検出
 - **自分のコミットのみ** — `git config user.email` でフィルタリング

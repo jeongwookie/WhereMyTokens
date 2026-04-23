@@ -1,6 +1,6 @@
 {
   "name": "wheremytokens-win",
-  "version": "1.10.2",
+  "version": "1.11.0",
   "description": "Windows system tray app for monitoring Claude Code and Codex token usage in real time",
   "main": "dist/main/index.js",
   "scripts": {
