@@ -173,6 +173,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Commits</B> — number of git commits in the period.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-added-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 added. Lower = more efficient.</div>
+        <div style={{ marginBottom: 5 }}><B>Output Growth</B> — all-time cumulative net line progress with today's commit count.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
         <div style={{ marginBottom: 5 }}><B>All-time scope</B> — counts commits and line changes across local branches, not only the current HEAD.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
@@ -274,6 +275,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 해당 기간의 git 커밋 수.</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 추가 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 added. 값이 낮을수록 효율적.</div>
+        <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 전체 기간 순 라인 누적 성장과 오늘 커밋 수를 보여줍니다.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
         <div style={{ marginBottom: 5 }}><B>전체 기간 범위</B> — 현재 HEAD만이 아니라 로컬 브랜치 전체의 커밋과 라인 변경을 집계합니다.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
@@ -375,6 +377,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Commits</B> — 期間内の git コミット数。</div>
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の追加行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 added。値が低いほど効率的。</div>
+        <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 全期間の純変更の累積成長と今日のコミット数を表示します。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
         <div style={{ marginBottom: 5 }}><B>全期間の範囲</B> — 現在の HEAD だけでなく、ローカルブランチ全体のコミットと行変更を集計します。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
