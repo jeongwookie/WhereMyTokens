@@ -73,8 +73,6 @@
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | Apr 22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | Apr 22 | Claude + Codex tracking, Codex usage accounting, scoped stats, session UX/performance improvements |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | Apr 20 | NSIS installer, improved session tracking accuracy and stability |
-| **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | Apr 17 | Fix 7d heatmap hover tooltip; add zh-CN & es READMEs |
-| **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | Apr 17 | Teal theme, system dark mode, incremental JSONL caching, idle 6h+ auto-hide |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 

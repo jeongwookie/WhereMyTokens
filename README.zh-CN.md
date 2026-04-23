@@ -73,8 +73,6 @@
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | 4/22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 4/22 | Claude + Codex 同时追踪、Codex 用量计算、按范围统计、会话 UX/性能改进 |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | 4/20 | NSIS 安装程序，改进会话追踪精度与稳定性 |
-| **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | 4/17 | 修复 7d 热力图悬停提示；新增 zh-CN & es README |
-| **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | 4/17 | 青色主题、系统深色模式、增量 JSONL 缓存、空闲 6h+ 自动隐藏 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 

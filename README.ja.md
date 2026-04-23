@@ -73,8 +73,6 @@
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | 4/22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
 | **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 4/22 | Claude + Codex 同時追跡、Codex 使用量計算、スコープ対応統計、セッション UX/性能改善 |
 | **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | 4/20 | NSIS インストーラー、セッション追跡の精度と安定性の改善 |
-| **[v1.9.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.1)** | 4/17 | 7d ヒートマップのホバーツールチップ修正; zh-CN・es README 追加 |
-| **[v1.9.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.0)** | 4/17 | ティールテーマ、システムダークモード、増分 JSONL キャッシュ、idle 6h+ 自動非表示 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
