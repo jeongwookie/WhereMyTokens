@@ -8,17 +8,18 @@ const PERIODS: Period[] = ['today', 'all'];
 
 interface Props {
   stats: CodeOutputStats;
+  loading?: boolean;
   todayCost: number;
   allTimeCost: number;
   currency: string;
   usdToKrw: number;
 }
 
-function CodeOutputCard({ stats, todayCost, allTimeCost, currency, usdToKrw }: Props) {
+function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [period, setPeriod] = useState<Period>('today');
 
-  if (stats.all.commits === 0 && stats.today.commits === 0) return null;
+  if (!loading && stats.all.commits === 0 && stats.today.commits === 0) return null;
 
   const data = period === 'today' ? stats.today : stats.all;
   const periodCost = period === 'today' ? todayCost : allTimeCost;
@@ -66,33 +67,53 @@ function CodeOutputCard({ stats, todayCost, allTimeCost, currency, usdToKrw }: P
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
-        <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
-        <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
-        <KPI label="$/100 Added"
-          value={effInfo.text}
-          sub={effSub} color={effInfo.color} C={C} />
-      </div>
+      {loading && stats.all.commits === 0 ? (
+        <CodeOutputLoading C={C} />
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
+            <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
+            <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
+            <KPI label="$/100 Added"
+              value={effInfo.text}
+              sub={effSub} color={effInfo.color} C={C} />
+          </div>
 
-      <OutputGrowth data={stats.daily7d ?? []} total={stats.all} C={C} />
+          <OutputGrowth data={stats.daily7d ?? []} total={stats.all} C={C} />
 
-      {data.commits > 0 && (
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '6px 14px',
-          borderTop: `1px solid ${C.border}`,
-        }}>
-          <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
-            {data.commits} commit{data.commits > 1 ? 's' : ''} - {netLines >= 0 ? '+' : ''}{netLines} net lines
-            {perLine ? ` - ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
-          </span>
-        </div>
+          {data.commits > 0 && (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '6px 14px',
+              borderTop: `1px solid ${C.border}`,
+            }}>
+              <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
+                {data.commits} commit{data.commits > 1 ? 's' : ''} - {netLines >= 0 ? '+' : ''}{netLines} net lines
+                {perLine ? ` - ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
+              </span>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
 export default React.memo(CodeOutputCard);
+
+function CodeOutputLoading({ C }: { C: ReturnType<typeof useTheme> }) {
+  return (
+    <div style={{ padding: '18px 14px 16px', borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
+        Scanning git history
+      </div>
+      <div style={{ height: 4, background: C.bgRow, borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ width: '44%', height: '100%', background: C.accent, opacity: 0.7, borderRadius: 999 }} />
+      </div>
+      <div style={{ marginTop: 8, fontSize: 9, fontFamily: C.fontMono }}>Code Output will appear after local repo stats finish.</div>
+    </div>
+  );
+}
 
 function fmtSigned(n: number): string {
   const sign = n >= 0 ? '+' : '';

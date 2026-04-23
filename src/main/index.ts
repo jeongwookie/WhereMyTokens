@@ -72,6 +72,13 @@ function showPopup() {
   popupWindow.setPosition(x, y);
   popupWindow.show();
   popupWindow.focus();
+  const currentState = stateManager?.getState();
+  if (currentState) {
+    pendingStateUpdate = null;
+    if (stateUpdateTimer) clearTimeout(stateUpdateTimer);
+    stateUpdateTimer = null;
+    popupWindow.webContents.send('state:updated', currentState);
+  }
 }
 
 function buildTrayTitle(state: AppState): string {

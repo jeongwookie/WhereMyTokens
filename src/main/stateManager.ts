@@ -64,6 +64,7 @@ export interface AppState {
   extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
   codeOutputStats: CodeOutputStats;
+  codeOutputLoading: boolean;
   allTimeSessions: number;
 }
 
@@ -217,6 +218,7 @@ export class StateManager {
       extraUsage: null,
       repoGitStats: {},
       codeOutputStats: this.emptyCodeOutputStats(),
+      codeOutputLoading: false,
       allTimeSessions: 0,
     };
   }
@@ -407,7 +409,7 @@ export class StateManager {
       ? this.updateChangedSessionInfos(changedFiles)
       : this.buildSessionInfos();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, codeOutputStats, lastUpdated: Date.now() };
+    this.state = { ...this.state, sessions, codeOutputStats, codeOutputLoading: false, lastUpdated: Date.now() };
     this.onUpdate(this.state);
     // Also refresh usage limit API periodically (independent of heavyRefresh)
     void this.refreshApiUsagePct().then(() => {
@@ -455,11 +457,15 @@ export class StateManager {
       const limits = this.buildLimits();
       let sessions = this.buildSessionInfos();
       const extraUsage = this.apiUsagePct?.extraUsage ?? null;
+      const partialCodeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, initialRefreshComplete: true, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats: this.state.repoGitStats, codeOutputStats: partialCodeOutputStats, codeOutputLoading: true, allTimeSessions: loaded.sessionCount };
+      this.onUpdate(this.state);
+
       const repoGitStats = await this.getRepoGitStats(settings, force, sessions);
       sessions = this.attachCachedGitStats(sessions);
       const codeOutputStats = this.buildCodeOutputStats(sessions, repoGitStats);
 
-      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, initialRefreshComplete: true, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, codeOutputStats, allTimeSessions: loaded.sessionCount };
+      this.state = { sessions, usage, limits, settings, autoLimits: this.autoLimits, initialRefreshComplete: true, lastUpdated: Date.now(), apiConnected: this.apiConnected, apiError: this.apiError, bridgeActive, extraUsage, repoGitStats, codeOutputStats, codeOutputLoading: false, allTimeSessions: loaded.sessionCount };
       this.onUpdate(this.state);
 
       checkAlerts(limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
@@ -831,7 +837,7 @@ export class StateManager {
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const sessions = this.state.sessions.filter(s => !isExcluded(this.sessionProjectKeys(s)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, settings, codeOutputStats, lastUpdated: Date.now() };
+    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 }

@@ -202,6 +202,7 @@ export interface AppState {
   extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
   codeOutputStats: CodeOutputStats;
+  codeOutputLoading: boolean;
   allTimeSessions: number;
 }
 

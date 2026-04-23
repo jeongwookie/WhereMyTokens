@@ -49,6 +49,7 @@ const DEFAULT_STATE: AppState = {
   extraUsage: null,
   repoGitStats: {},
   codeOutputStats: EMPTY_CODE_OUTPUT,
+  codeOutputLoading: false,
   allTimeSessions: 0,
 };
 
@@ -212,7 +213,7 @@ export default function App() {
     }
   }, [state.settings.theme]);
 
-  // Hide HTML splash and reveal app only when data is ready
+  // Hide HTML splash as soon as core usage/session data is ready; git stats can finish in-card.
   useEffect(() => {
     if (!state.initialRefreshComplete) return;
     const splash = document.getElementById('splash');
