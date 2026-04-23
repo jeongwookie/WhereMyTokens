@@ -4,6 +4,13 @@ import Store from 'electron-store';
 import { isSafeLocalCwd } from './pathSafety';
 import { isStaleGitStats, normalizeGitCwdKey, normalizeGitPathKey, preferGitStats } from './gitStatsKeys';
 
+export interface GitDailyStats {
+  date: string;
+  commits: number;
+  added: number;
+  removed: number;
+}
+
 export interface GitStats {
   branch: string | null;
   toplevel: string | null;
@@ -20,11 +27,14 @@ export interface GitStats {
   totalCommits: number;
   totalLinesAdded: number;
   totalLinesRemoved: number;
+  daily7d: GitDailyStats[];
+  dailyAll: GitDailyStats[];
 }
 
 // cwd별 캐시 (120초 TTL — git 명령이 무거우므로 여유 있게)
 const cache = new Map<string, { stats: GitStats; ts: number }>();
 const CACHE_TTL = 120_000;
+const DAILY_LOG_DATE_MARKER = '__WMT_DAY__';
 
 // 진행 중인 요청 중복 방지
 const pending = new Map<string, Promise<GitStats | null>>();
@@ -45,6 +55,8 @@ function normalizeStatsPaths(stats: GitStats): GitStats {
     ...stats,
     toplevel: normalizeGitPathKey(stats.toplevel),
     gitCommonDir: normalizeGitPathKey(stats.gitCommonDir),
+    daily7d: normalizeDailyStats(stats.daily7d),
+    dailyAll: normalizeDailyStats(stats.dailyAll),
   };
 }
 
@@ -126,6 +138,124 @@ function parseNumstat(output: string): { added: number; removed: number } {
 }
 
 // 비동기 git 실행 (메인 프로세스 블로킹 방지)
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function buildDaily7dWindow(now = new Date()): GitDailyStats[] {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const days: GitDailyStats[] = [];
+  for (let offset = 6; offset >= 0; offset--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    days.push({ date: formatLocalDate(date), commits: 0, added: 0, removed: 0 });
+  }
+  return days;
+}
+
+function normalizeDailyStats(daily: GitDailyStats[] | undefined): GitDailyStats[] {
+  if (!Array.isArray(daily)) return [];
+  return daily
+    .filter(day => typeof day?.date === 'string' && day.date.length > 0)
+    .map(day => ({
+      date: day.date,
+      commits: Number.isFinite(day.commits) ? day.commits : 0,
+      added: Number.isFinite(day.added) ? day.added : 0,
+      removed: Number.isFinite(day.removed) ? day.removed : 0,
+    }));
+}
+
+export function parseDaily7dLog(output: string, days: GitDailyStats[] = buildDaily7dWindow()): GitDailyStats[] {
+  const byDate = new Map(days.map(day => [day.date, { ...day }]));
+  let currentDate: string | null = null;
+
+  for (const line of output.split('\n')) {
+    if (!line.trim()) continue;
+    if (line.startsWith(DAILY_LOG_DATE_MARKER)) {
+      currentDate = line.slice(DAILY_LOG_DATE_MARKER.length).trim();
+      const bucket = byDate.get(currentDate);
+      if (bucket) bucket.commits += 1;
+      continue;
+    }
+
+    if (!currentDate || !byDate.has(currentDate)) continue;
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    const a = parseInt(parts[0], 10);
+    const r = parseInt(parts[1], 10);
+    const bucket = byDate.get(currentDate)!;
+    if (!isNaN(a)) bucket.added += a;
+    if (!isNaN(r)) bucket.removed += r;
+  }
+
+  return days.map(day => byDate.get(day.date) ?? day);
+}
+
+export function parseDailyAllLog(output: string): GitDailyStats[] {
+  const byDate = new Map<string, GitDailyStats>();
+  let currentDate: string | null = null;
+
+  for (const line of output.split('\n')) {
+    if (!line.trim()) continue;
+    if (line.startsWith(DAILY_LOG_DATE_MARKER)) {
+      currentDate = line.slice(DAILY_LOG_DATE_MARKER.length).trim();
+      if (!currentDate) continue;
+      const bucket = byDate.get(currentDate) ?? { date: currentDate, commits: 0, added: 0, removed: 0 };
+      bucket.commits += 1;
+      byDate.set(currentDate, bucket);
+      continue;
+    }
+
+    if (!currentDate) continue;
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    const a = parseInt(parts[0], 10);
+    const r = parseInt(parts[1], 10);
+    const bucket = byDate.get(currentDate);
+    if (!bucket) continue;
+    if (!isNaN(a)) bucket.added += a;
+    if (!isNaN(r)) bucket.removed += r;
+  }
+
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function aggregateDailyStats(statsList: Array<{ daily7d?: GitDailyStats[] }>, days: GitDailyStats[] = buildDaily7dWindow()): GitDailyStats[] {
+  const byDate = new Map(days.map(day => [day.date, { ...day }]));
+
+  for (const stats of statsList) {
+    for (const day of stats.daily7d ?? []) {
+      const bucket = byDate.get(day.date);
+      if (!bucket) continue;
+      bucket.commits += day.commits;
+      bucket.added += day.added;
+      bucket.removed += day.removed;
+    }
+  }
+
+  return days.map(day => byDate.get(day.date) ?? day);
+}
+
+export function aggregateDailyAllStats(statsList: Array<{ dailyAll?: GitDailyStats[] }>): GitDailyStats[] {
+  const byDate = new Map<string, GitDailyStats>();
+
+  for (const stats of statsList) {
+    for (const day of stats.dailyAll ?? []) {
+      const bucket = byDate.get(day.date) ?? { date: day.date, commits: 0, added: 0, removed: 0 };
+      bucket.commits += day.commits;
+      bucket.added += day.added;
+      bucket.removed += day.removed;
+      byDate.set(day.date, bucket);
+    }
+  }
+
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function execGitAsync(args: string[], cwd: string, timeout = 5000): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile('git', args, { cwd, timeout, encoding: 'utf-8' }, (err, stdout) => {
@@ -146,16 +276,19 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
     // 현재 저장소 git user 이메일로 본인 커밋만 필터링 (미설정 시 전체 포함)
     const userEmail = await execGitAsync(['config', 'user.email'], cwd).catch(() => '');
     const authorArgs = userEmail ? [`--author=${userEmail}`] : [];
+    const daily7dWindow = buildDaily7dWindow();
+    const dailySince = `${daily7dWindow[0]?.date ?? formatLocalDate(new Date())} 00:00:00`;
 
     // 병렬로 가벼운 명령 먼저 실행
     // --branches: 모든 로컬 브랜치 포함 → 워크트리 간 공유 커밋 중복 집계 방지
-    const [branch, toplevel, gitCommonDirRaw, todayLog, todayNumstat, totalCountStr] = await Promise.all([
+    const [branch, toplevel, gitCommonDirRaw, todayLog, todayNumstat, totalCountStr, daily7dLog] = await Promise.all([
       execGitAsync(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).catch(() => null),
       execGitAsync(['rev-parse', '--show-toplevel'], cwd).catch(() => null),
       execGitAsync(['rev-parse', '--git-common-dir'], cwd),
       execGitAsync(['log', '--since=midnight', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
       execGitAsync(['log', '--since=midnight', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 15000),
       execGitAsync(['rev-list', '--count', '--branches', ...authorArgs], cwd, 15000),
+      execGitAsync(['log', `--since=${dailySince}`, '--branches', '--date=short', `--format=${DAILY_LOG_DATE_MARKER}%ad`, '--numstat', ...authorArgs], cwd, 20000),
     ]);
     // cwd가 유효한 git 저장소가 아닌 경우(삭제된 워크트리 등) null 반환 → 영속 stats 복원
     if (!gitCommonDirRaw) return null;
@@ -168,6 +301,7 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
     const commitsToday = countLines(todayLog);
     const today = parseNumstat(todayNumstat);
     const totalCommits = parseInt(totalCountStr, 10) || 0;
+    const daily7d = parseDaily7dLog(daily7dLog, daily7dWindow);
 
     // 7d/30d/all numstat — 순차 실행 (무거운 작업이므로 하나씩)
     // shortlog --summary로 커밋 수만 세고, numstat은 최소한으로
@@ -187,7 +321,9 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
 
     // 전체 numstat — 가장 무거움, shortstat으로 대체
     const allStat = await execGitAsync(['log', '--branches', '--format=', '--numstat', ...authorArgs], cwd, 30000);
+    const dailyAllLog = await execGitAsync(['log', '--branches', '--date=short', `--format=${DAILY_LOG_DATE_MARKER}%ad`, '--numstat', ...authorArgs], cwd, 30000).catch(() => '');
     const total = parseNumstat(allStat);
+    const dailyAll = parseDailyAllLog(dailyAllLog);
 
     return {
       branch,
@@ -205,6 +341,8 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
       totalCommits,
       totalLinesAdded: total.added,
       totalLinesRemoved: total.removed,
+      daily7d,
+      dailyAll,
     };
   } catch {
     return null;

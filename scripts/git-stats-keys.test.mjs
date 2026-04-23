@@ -28,6 +28,7 @@ function stats(overrides = {}) {
     totalCommits: 10,
     totalLinesAdded: 200,
     totalLinesRemoved: 50,
+    dailyAll: [{ date: '2026-04-20', commits: 1, added: 200, removed: 50 }],
     ...overrides,
   };
 }
@@ -48,11 +49,10 @@ test('repo key prefers gitCommonDir and normalizes it', () => {
 test('line-only zero-commit stats are treated as stale', () => {
   assert.equal(isStaleGitStats(stats({ commitsToday: 0, linesAdded: 1 })), true);
   assert.equal(isStaleGitStats(stats({ totalCommits: 0, totalLinesAdded: 1 })), true);
-  assert.equal(isStaleGitStats(stats({ commitsToday: 4, linesAdded: 0, linesRemoved: 0 })), true);
-  assert.equal(isStaleGitStats(stats({ totalCommits: 4, totalLinesAdded: 0, totalLinesRemoved: 0 })), true);
   assert.equal(isStaleGitStats(stats({ commitsToday: 4, totalCommits: 0 })), true);
   assert.equal(isStaleGitStats(stats({ linesAdded: 20, totalLinesAdded: 10 })), true);
   assert.equal(isStaleGitStats(stats({ commitsToday: 0, linesAdded: 0, linesRemoved: 0 })), false);
+  assert.equal(isStaleGitStats(stats({ commitsToday: 4, linesAdded: 0, linesRemoved: 0 })), false);
 });
 
 test('fresh stats win over stale duplicate cache entries', () => {

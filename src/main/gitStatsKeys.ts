@@ -9,6 +9,7 @@ interface GitStatsLike {
   totalCommits: number;
   totalLinesAdded: number;
   totalLinesRemoved: number;
+  dailyAll?: unknown[];
 }
 
 export function normalizeGitPathKey(value: string | null | undefined): string | null {
@@ -30,9 +31,7 @@ export function isStaleGitStats(stats: GitStatsLike | null | undefined): boolean
   const hasTodayLines = stats.linesAdded > 0 || stats.linesRemoved > 0;
   const hasTotalLines = stats.totalLinesAdded > 0 || stats.totalLinesRemoved > 0;
   return (stats.commitsToday === 0 && hasTodayLines)
-    || (stats.commitsToday > 0 && !hasTodayLines)
     || (stats.totalCommits === 0 && hasTotalLines)
-    || (stats.totalCommits > 0 && !hasTotalLines)
     || stats.totalCommits < stats.commitsToday
     || stats.totalLinesAdded < stats.linesAdded
     || stats.totalLinesRemoved < stats.linesRemoved;

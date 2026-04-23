@@ -10,7 +10,7 @@ import { ThemeProvider } from './ThemeContext';
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
 const EMPTY_WINDOW = { inputTokens:0, outputTokens:0, cacheCreationTokens:0, cacheReadTokens:0, totalTokens:0, costUSD:0, requestCount:0, cacheEfficiency:0, cacheSavingsUSD:0 };
-const EMPTY_CODE_OUTPUT = { today: { commits: 0, added: 0, removed: 0 }, all: { commits: 0, added: 0, removed: 0 } };
+const EMPTY_CODE_OUTPUT = { today: { commits: 0, added: 0, removed: 0 }, all: { commits: 0, added: 0, removed: 0 }, daily7d: [], dailyAll: [] };
 
 const DEFAULT_STATE: AppState = {
   sessions: [],
@@ -41,6 +41,7 @@ const DEFAULT_STATE: AppState = {
     hiddenProjects: [], excludedProjects: [],
   },
   autoLimits: null,
+  initialRefreshComplete: false,
   lastUpdated: 0,
   apiConnected: false,
   apiError: undefined,
@@ -77,7 +78,22 @@ function sameGitStats(a: AppState['sessions'][number]['gitStats'], b: AppState['
     && a.linesRemoved30d === b.linesRemoved30d
     && a.totalCommits === b.totalCommits
     && a.totalLinesAdded === b.totalLinesAdded
-    && a.totalLinesRemoved === b.totalLinesRemoved;
+    && a.totalLinesRemoved === b.totalLinesRemoved
+    && sameDailyStats(a.daily7d, b.daily7d)
+    && sameDailyStats(a.dailyAll, b.dailyAll);
+}
+
+function sameDailyStats(a: NonNullable<AppState['sessions'][number]['gitStats']>['daily7d'] | undefined, b: NonNullable<AppState['sessions'][number]['gitStats']>['daily7d'] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  if (a.length !== b.length) return false;
+  return a.every((day, index) => {
+    const other = b[index];
+    return day.date === other.date
+      && day.commits === other.commits
+      && day.added === other.added
+      && day.removed === other.removed;
+  });
 }
 
 function sameSession(a: AppState['sessions'][number], b: AppState['sessions'][number]): boolean {
@@ -198,12 +214,12 @@ export default function App() {
 
   // Hide HTML splash and reveal app only when data is ready
   useEffect(() => {
-    if (state.lastUpdated === 0) return;
+    if (!state.initialRefreshComplete) return;
     const splash = document.getElementById('splash');
     const root = document.getElementById('root');
     if (splash) splash.style.display = 'none';
     if (root) root.style.display = '';
-  }, [state.lastUpdated]);
+  }, [state.initialRefreshComplete]);
 
   async function handleSaveSettings(partial: Partial<AppSettings>) {
     const updated = await window.wmt.setSettings(partial);
