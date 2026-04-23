@@ -108,6 +108,15 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
             ))}
           </div>
         </div>
+        <div style={row}>
+          <div>
+            <div style={labelStyle}>WSL tracking</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Read Claude/Codex logs from detected WSL distributions
+            </div>
+          </div>
+          <input type="checkbox" style={chk} checked={s.enableWslTracking ?? false} onChange={e => setS({ ...s, enableWslTracking: e.target.checked })} />
+        </div>
 
         <SectionHeader label="Currency" />
         <div style={row}>
