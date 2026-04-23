@@ -15,6 +15,7 @@ import { getGitStatsAsync, GitStats } from './gitStatsCollector';
 import { discoverAllProjectCwds } from './projectDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readJsonlCwd } from './sessionMetadata';
+import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -72,8 +73,7 @@ function getJsonlMtime(filePath: string): Date | null {
 }
 
 function gitStatsCacheKey(cwd: string): string {
-  const key = path.resolve(cwd);
-  return process.platform === 'win32' ? key.toLowerCase() : key;
+  return normalizeGitCwdKey(cwd);
 }
 
 function makeExcludedMatcher(excludedProjects: readonly string[] = []) {
@@ -647,8 +647,10 @@ export class StateManager {
 
     for (const stats of rawStats) {
       if (!stats?.gitCommonDir) continue;
-      if (repoGitStats[stats.gitCommonDir]) continue;
-      repoGitStats[stats.gitCommonDir] = stats;
+      const repoKey = repoKeyFromGitStats(stats);
+      if (!repoKey) continue;
+      const preferred = preferGitStats(repoGitStats[repoKey], stats);
+      if (preferred) repoGitStats[repoKey] = preferred;
     }
 
     this.repoGitStatsLastRefresh = now;
@@ -660,11 +662,16 @@ export class StateManager {
 
     const scopedRepoKeys = new Set<string>();
     for (const session of sessions) {
-      const key = session.gitStats?.gitCommonDir ?? session.gitStats?.toplevel ?? null;
+      const key = repoKeyFromGitStats(session.gitStats);
       if (key) scopedRepoKeys.add(key);
     }
     const repoStats = Object.entries(repoGitStats)
-      .filter(([key, stats]) => scopedRepoKeys.size === 0 || scopedRepoKeys.has(key) || (!!stats.toplevel && scopedRepoKeys.has(stats.toplevel)))
+      .filter(([key, stats]) => {
+        if (scopedRepoKeys.size === 0) return true;
+        const repoKey = normalizeGitPathKey(key);
+        const topLevelKey = normalizeGitPathKey(stats.toplevel);
+        return (!!repoKey && scopedRepoKeys.has(repoKey)) || (!!topLevelKey && scopedRepoKeys.has(topLevelKey));
+      })
       .map(([, stats]) => stats);
     if (repoStats.length > 0) {
       for (const stats of repoStats) {
@@ -676,7 +683,7 @@ export class StateManager {
       const seenToday = new Set<string>();
       for (const s of sessions) {
         if (!s.gitStats) continue;
-        const repoKey = s.gitStats.gitCommonDir ?? s.gitStats.toplevel ?? s.cwd;
+        const repoKey = repoKeyFromGitStats(s.gitStats) ?? normalizeGitCwdKey(s.cwd);
         if (seenToday.has(repoKey)) continue;
         seenToday.add(repoKey);
         today.commits += s.gitStats.commitsToday;
