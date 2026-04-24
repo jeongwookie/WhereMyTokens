@@ -32,7 +32,8 @@ interface Props {
   currency: string;
   usdToKrw: number;
   limitPct?: number;    // 0-100
-  resetMs?: number;     // ms until reset
+  resetMs?: number | null;     // ms until reset
+  resetLabel?: string;
   apiConnected?: boolean;
   hideCost?: boolean;
   burnRate?: BurnRate;  // ETA 예측 (h5 카드에만 전달)
@@ -54,7 +55,7 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
 
 function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
-  limitPct, resetMs, apiConnected, hideCost, burnRate,
+  limitPct, resetMs, resetLabel, apiConnected, hideCost, burnRate,
   hero, borderRight, limitSourceLabel, cacheMetricMode = 'claude',
 }: Props) {
   const C = useTheme();
@@ -80,21 +81,26 @@ function TokenStatsCard({
     } else {
       resetStr = durationStr;
     }
+  } else if (resetLabel) {
+    resetStr = resetLabel;
   }
 
   const cache = cacheBadge(stats.cacheEfficiency, C);
   const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
-  const showEta = burnRate && burnRate.h5EtaMs !== null && burnRate.h5EtaMs < (resetMs ?? Infinity);
+  const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
   const sourceChip = limitSourceLabel ? (
-    <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}` }}>
+    <span
+      title={limitSourceLabel}
+      style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}`, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+    >
       {limitSourceLabel}
     </span>
   ) : null;
 
   // ── 히어로 레이아웃 (대형 % 숫자 + 토큰 breakdown) ──────────────────────────
   if (hero && showLimitBar) {
-    const noData = apiConnected === false && barPct === 0;
+    const noData = apiConnected === false && barPct === 0 && limitSourceLabel !== 'live fallback' && limitSourceLabel !== 'local log';
     return (
       <div style={{
         borderRight: borderRight ? `1px solid ${C.border}` : 'none',
@@ -102,17 +108,17 @@ function TokenStatsCard({
         background: C.bgCard,
       }}>
         {/* 제공자 + 등급 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0 }}>
             {provider} {period}
             {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
             )}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 1 }}>
             {sourceChip}
             {cache && (
-              <span title={cacheTitle} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color }}>
+              <span title={cacheTitle} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {cache.label}
               </span>
             )}
@@ -195,7 +201,7 @@ function TokenStatsCard({
 
       {/* limit progress bar */}
       {showLimitBar && (() => {
-        const noData = apiConnected === false && barPct === 0;
+        const noData = apiConnected === false && barPct === 0 && limitSourceLabel !== 'live fallback' && limitSourceLabel !== 'local log';
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ flex: 1, height: 5, background: C.accentDim, borderRadius: 3, overflow: 'hidden' }}>

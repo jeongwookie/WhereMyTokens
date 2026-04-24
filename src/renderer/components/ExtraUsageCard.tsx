@@ -22,7 +22,7 @@ function fmtMonthlyReset(): string {
 function ExtraUsageCard({ extraUsage, variant = 'row' }: Props) {
   const C = useTheme();
   const { monthlyLimit, usedCredits, utilization } = extraUsage;
-  const barPct = Math.min(100, utilization);
+  const barPct = Math.max(0, Math.min(100, utilization));
   const barColor = barPct >= 90 ? C.barRed : barPct >= 75 ? C.barOrange : barPct >= 50 ? C.barYellow : C.barOrange;
   const isHigh = barPct >= 90;
   const isBanner = variant === 'banner';

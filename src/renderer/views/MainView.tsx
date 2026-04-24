@@ -20,6 +20,7 @@ interface Props {
 
 type NavView = 'settings' | 'notifications' | 'help';
 type ProviderMode = AppState['settings']['provider'];
+type HeaderStatusTone = 'warning' | 'danger';
 type SessionListItem =
   | { type: 'session'; session: SessionInfo }
   | {
@@ -48,6 +49,24 @@ function formatRefreshLabel(lastUpdated: number): string {
   return `${Math.floor(elapsed / 3600)}h ago`;
 }
 
+function formatWarmupEta(historyWarmupStartsAt: number | null): string {
+  if (!historyWarmupStartsAt) return 'queued';
+  const remainingMs = Math.max(0, historyWarmupStartsAt - Date.now());
+  if (remainingMs === 0) return 'syncing...';
+  const totalSeconds = Math.ceil(remainingMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) return `in ${minutes}m ${seconds}s`;
+  return `in ${seconds}s`;
+}
+
+function formatWarmupStatus(historyWarmupStartsAt: number | null): string {
+  const etaLabel = formatWarmupEta(historyWarmupStartsAt);
+  if (etaLabel === 'queued') return 'is queued';
+  if (etaLabel === 'syncing...') return 'is syncing now';
+  return `starts ${etaLabel}`;
+}
+
 function cacheMetricColor(value: number, C: ReturnType<typeof useTheme>): string {
   if (value >= 80) return C.active;
   if (value >= 60) return C.barYellow;
@@ -58,6 +77,61 @@ function cacheMetricTitle(providerMode: ProviderMode): string {
   if (providerMode === 'claude') return 'Claude: cache read / (cache read + cache creation)';
   if (providerMode === 'codex') return 'Codex: cached input / input';
   return 'Combined view: provider-specific cache metrics are aggregated';
+}
+
+function buildHeaderStatus(args: {
+  showClaudeUsage: boolean;
+  hasClaudeFallback: boolean;
+  apiConnected: boolean;
+  apiStatusLabel?: string;
+  apiError?: string;
+}): { label: string; title: string; tone: HeaderStatusTone } | null {
+  const { showClaudeUsage, hasClaudeFallback, apiConnected, apiStatusLabel, apiError } = args;
+  if (!showClaudeUsage) return null;
+
+  if (hasClaudeFallback) {
+    return {
+      label: 'Local estimate',
+      title: `Using local Claude status-line data while API status is ${apiStatusLabel || 'unavailable'}${apiError ? ` - ${apiError}` : ''}`,
+      tone: 'warning',
+    };
+  }
+
+  switch (apiStatusLabel) {
+    case 'rate limited':
+      return { label: 'Rate limited', title: apiError || 'Claude API returned HTTP 429.', tone: 'warning' };
+    case 'schema changed':
+      return { label: 'Schema changed', title: apiError || 'Claude API response changed shape.', tone: 'danger' };
+    case 'reset partial':
+      return { label: 'Reset unavailable', title: apiError || 'Claude API usage loaded without reset timing.', tone: 'warning' };
+    case 'local only':
+      return { label: 'Local only', title: apiError || 'Claude credentials were not found. Showing local data only.', tone: 'warning' };
+    case 'auth failed':
+      return { label: 'Auth failed', title: apiError || 'Claude API rejected the stored access token.', tone: 'danger' };
+    case 'forbidden':
+      return { label: 'Access blocked', title: apiError || 'Claude API denied this account or beta surface.', tone: 'danger' };
+    case 'api disconnected':
+      return { label: 'API offline', title: apiError || 'Claude API request failed.', tone: 'danger' };
+    default:
+      break;
+  }
+
+  if (!apiConnected) {
+    return {
+      label: 'API offline',
+      title: apiError || 'Claude API request failed.',
+      tone: 'danger',
+    };
+  }
+
+  return null;
+}
+
+function limitSourceLabel(limit: AppState['limits']['h5']): string | undefined {
+  if (limit.source === 'statusLine') return 'live fallback';
+  if (limit.source === 'cache') return 'cached';
+  if (limit.source === 'localLog') return 'local log';
+  return undefined;
 }
 
 function buildTrackedH5(usage: AppState['usage'], providerMode: ProviderMode) {
@@ -158,12 +232,14 @@ const RefreshStatus = React.memo(function RefreshStatus({
   lastUpdated,
   refreshing,
   syncingHistory,
+  historyWarmupStartsAt,
 }: {
   lastUpdated: number;
   refreshing: boolean;
   syncingHistory: boolean;
+  historyWarmupStartsAt: number | null;
 }) {
-  const [label, setLabel] = useState(() => formatRefreshLabel(lastUpdated));
+  const [label, setLabel] = useState(() => syncingHistory ? formatWarmupEta(historyWarmupStartsAt) : formatRefreshLabel(lastUpdated));
 
   useEffect(() => {
     if (refreshing) {
@@ -171,13 +247,14 @@ const RefreshStatus = React.memo(function RefreshStatus({
       return;
     }
     if (syncingHistory) {
-      setLabel('syncing history...');
-      return;
+      setLabel(formatWarmupEta(historyWarmupStartsAt));
+      const t = setInterval(() => setLabel(formatWarmupEta(historyWarmupStartsAt)), 1000);
+      return () => clearInterval(t);
     }
     setLabel(formatRefreshLabel(lastUpdated));
     const t = setInterval(() => setLabel(formatRefreshLabel(lastUpdated)), 1000);
     return () => clearInterval(t);
-  }, [lastUpdated, refreshing, syncingHistory]);
+  }, [historyWarmupStartsAt, lastUpdated, refreshing, syncingHistory]);
 
   return <>{label}</>;
 });
@@ -212,12 +289,20 @@ const LazySection = React.memo(function LazySection({ minHeight, children }: { m
 
 const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { state: AppState; onQuit: () => void }) {
   const C = useTheme();
-  const { sessions, usage, settings, apiConnected, apiError } = state;
+  const { sessions, usage, settings, apiConnected, apiError, apiStatusLabel } = state;
   const { currency, usdToKrw } = settings;
   const providerMode = settings.provider ?? 'both';
   const showClaudeUsage = providerMode !== 'codex';
+  const hasClaudeFallback = showClaudeUsage && (state.limits.h5.source === 'statusLine' || state.limits.week.source === 'statusLine');
   const trackedH5 = useMemo(() => buildTrackedH5(usage, providerMode), [usage, providerMode]);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
+  const headerStatus = useMemo(() => buildHeaderStatus({
+    showClaudeUsage,
+    hasClaudeFallback,
+    apiConnected,
+    apiStatusLabel,
+    apiError,
+  }), [apiConnected, apiError, apiStatusLabel, hasClaudeFallback, showClaudeUsage]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -225,94 +310,113 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
   const sessionCount = isAll ? state.allTimeSessions : sessions.length;
   const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : trackedH5.cacheEfficiency;
   const saved = isAll ? usage.allTimeSavedUSD : trackedH5.cacheSavingsUSD;
-  const inTok = isAll ? usage.allTimeInputTokens : usage.todayInputTokens;
-  const outTok = isAll ? usage.allTimeOutputTokens : usage.todayOutputTokens;
-  const cacheTok = isAll ? usage.allTimeCacheTokens : usage.todayCacheTokens;
   const cacheColor = cacheMetricColor(cacheEff, C);
   const cacheTitle = cacheMetricTitle(providerMode);
+  const planLabel = showClaudeUsage && state.autoLimits ? state.autoLimits.plan : undefined;
+  const statusStyles = headerStatus?.tone === 'danger'
+    ? {
+        color: C.barRed,
+        background: `${C.barRed}18`,
+        border: `1px solid ${C.barRed}33`,
+      }
+    : {
+        color: C.barYellow,
+        background: `${C.barYellow}16`,
+        border: `1px solid ${C.barYellow}2b`,
+      };
 
   return (
     <div style={{ background: C.headerBg, flexShrink: 0, borderBottom: `1px solid ${C.headerBorder}` }}>
-      <div style={{ ...drag, padding: '8px 12px 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: -0.3, flexShrink: 0 }}>
-          ⚡ WhereMyTokens
+      <div style={{ ...drag, padding: '8px 12px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: -0.3, flexShrink: 0, whiteSpace: 'nowrap' }}>
+          WhereMyTokens
         </span>
-        <div style={{ ...noDrag, display: 'flex', gap: 2, marginLeft: 6 }}>
+        <div style={{ ...noDrag, display: 'inline-flex', gap: 3, marginLeft: 4, flexShrink: 0 }}>
           {(['today', 'all'] as const).map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{
-              ...noDrag, padding: '2px 7px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
-              fontFamily: C.fontMono, border: period === p ? `1px solid ${C.accent}44` : '1px solid transparent',
-              background: period === p ? `${C.accent}22` : 'none',
-              color: period === p ? C.accent : C.headerSub, fontWeight: period === p ? 700 : 400,
+              ...noDrag, padding: '3px 8px', fontSize: 9, borderRadius: 999, cursor: 'pointer',
+              fontFamily: C.fontMono, border: period === p ? `1px solid ${C.accent}55` : `1px solid ${C.headerBorder}`,
+              background: period === p ? `${C.accent}20` : 'transparent',
+              color: period === p ? C.headerText : C.headerSub, fontWeight: period === p ? 700 : 500,
+              whiteSpace: 'nowrap',
             }}>{p}</button>
           ))}
         </div>
         <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-          {showClaudeUsage && state.autoLimits && (
-            <span style={{ fontSize: 9, color: C.headerSub, background: 'rgba(255,255,255,0.1)', borderRadius: 3, padding: '1px 6px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)' }}>
-              {state.autoLimits.plan}
-            </span>
-          )}
-          {state.historyWarmupPending && (
+          {headerStatus && (
             <span
-              title="Historical usage is still syncing in the background."
-              style={{ fontSize: 9, color: C.headerAccent, background: `${C.headerAccent}22`, borderRadius: 3, padding: '1px 6px', fontWeight: 700, border: `1px solid ${C.headerAccent}33` }}
+              title={headerStatus.title}
+              style={{
+                fontSize: 9,
+                borderRadius: 999,
+                padding: '2px 8px',
+                fontWeight: 700,
+                maxWidth: 132,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flexShrink: 1,
+                ...statusStyles,
+              }}
             >
-              sync
+              {headerStatus.label}
             </span>
           )}
-          <span
-            title={apiConnected ? 'API connected' : `API disconnected${apiError ? ` - ${apiError}` : ''}`}
-            style={{ width: 6, height: 6, borderRadius: '50%', background: apiConnected ? '#4ade80' : '#f87171', display: showClaudeUsage ? 'inline-block' : 'none', flexShrink: 0 }}
-          />
-          <button onClick={() => window.wmt.minimize().catch(() => {})} title="Minimize" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
-          <button onClick={onQuit} title="Quit" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>x</button>
+          <div style={{ width: 1, height: 14, background: C.headerBorder, flexShrink: 0 }} />
+          <button onClick={() => window.wmt.minimize().catch(() => {})} title="Minimize" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>-</button>
+          <button onClick={onQuit} title="Quit" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>x</button>
         </div>
       </div>
 
-      <div style={{ ...drag, display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '2px 14px 7px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div>
-          <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
-            {isAll ? 'All-time Cost' : 'Today Cost'}
+      <div style={{ ...drag, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 14, padding: '4px 14px 10px', alignItems: 'end', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, marginBottom: 3 }}>
+            <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, whiteSpace: 'nowrap' }}>
+              {isAll ? 'All-time Cost' : 'Today Cost'}
+            </div>
+            {planLabel && (
+              <span
+                title={`Claude plan: ${planLabel}`}
+                style={{
+                  fontSize: 8,
+                  color: C.headerSub,
+                  background: 'rgba(255,255,255,0.08)',
+                  borderRadius: 999,
+                  padding: '2px 7px',
+                  fontWeight: 700,
+                  border: `1px solid ${C.headerBorder}`,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {planLabel}
+              </span>
+            )}
           </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {fmtCost(cost, currency, usdToKrw)}
           </div>
-          <div style={{ fontSize: 9, color: C.headerSub, marginTop: 3 }}>
-            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{fmtTokens(calls)}</span> calls · <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{sessionCount}</span> sessions
+          <div style={{ fontSize: 10, color: C.headerSub, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{fmtTokens(calls)}</span> calls
+            <span style={{ margin: '0 6px', color: C.textMuted }}>/</span>
+            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{sessionCount}</span> sessions
           </div>
         </div>
-        <div style={{ textAlign: 'right' }} title={cacheTitle}>
-          <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 2 }}>
+        <div style={{ textAlign: 'right', minWidth: 0 }} title={cacheTitle}>
+          <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 3, whiteSpace: 'nowrap' }}>
             {isAll ? 'Avg Cache Efficiency' : 'Cache Efficiency'}
           </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: cacheColor, lineHeight: 1, fontFamily: C.fontMono }}>
+          <div style={{ fontSize: 24, fontWeight: 800, color: cacheColor, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {Math.round(cacheEff)}%
           </div>
-          <div style={{ fontSize: 9, color: cacheColor, marginTop: 3 }}>
+          <div style={{ fontSize: 10, color: cacheColor, marginTop: 4, whiteSpace: 'nowrap' }}>
             + {fmtCost(saved, currency, usdToKrw)} saved{isAll ? ' total' : ' today'}
           </div>
         </div>
       </div>
 
-      <div style={{ ...drag, padding: '6px 14px 8px', display: 'flex', alignItems: 'center', gap: 16 }}>
-        <MetricDot label="In" value={inTok} color={C.input} />
-        <MetricDot label="Out" value={outTok} color={C.output} />
-        <MetricDot label="Cache" value={cacheTok} color={C.cacheR} />
-      </div>
     </div>
   );
 });
-
-function MetricDot({ label, value, color }: { label: string; value: number; color: string }) {
-  const C = useTheme();
-  return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: C.headerSub }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      {label} <span style={{ fontFamily: C.fontMono, fontWeight: 600, color }}>{fmtTokens(value)}</span>
-    </div>
-  );
-}
 
 const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, settings, apiConnected, extraUsage }: {
   usage: AppState['usage'];
@@ -335,8 +439,8 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
     limits.codexH5.pct > 0 ||
     limits.codexWeek.pct > 0
   );
-  const codexH5HasLimit = limits.codexH5.source === 'localLog' || limits.codexH5.pct > 0 || limits.codexH5.resetMs > 0;
-  const codexWeekHasLimit = limits.codexWeek.source === 'localLog' || limits.codexWeek.pct > 0 || limits.codexWeek.resetMs > 0;
+  const codexH5HasLimit = limits.codexH5.source === 'localLog' || limits.codexH5.pct > 0 || (limits.codexH5.resetMs ?? 0) > 0;
+  const codexWeekHasLimit = limits.codexWeek.source === 'localLog' || limits.codexWeek.pct > 0 || (limits.codexWeek.resetMs ?? 0) > 0;
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -347,11 +451,11 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
       {showClaudeUsage && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} apiConnected={apiConnected} burnRate={usage.burnRate}
-            hero borderRight />
+            limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} resetLabel={limits.h5.resetLabel} apiConnected={apiConnected} burnRate={usage.burnRate}
+            limitSourceLabel={limitSourceLabel(limits.h5)} hero borderRight />
           <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.week.pct} resetMs={limits.week.resetMs} apiConnected={apiConnected}
-            hero />
+            limitPct={limits.week.pct} resetMs={limits.week.resetMs} resetLabel={limits.week.resetLabel} apiConnected={apiConnected}
+            limitSourceLabel={limitSourceLabel(limits.week)} hero />
         </div>
       )}
 
@@ -367,21 +471,45 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
             inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
             totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
           }} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.so.pct} resetMs={limits.so.resetMs} apiConnected={apiConnected}
-            hideCost />
+            limitPct={limits.so.pct} resetMs={limits.so.resetMs} resetLabel={limits.so.resetLabel} apiConnected={apiConnected}
+            limitSourceLabel={limitSourceLabel(limits.so)} hideCost />
         </div>
       )}
 
       {showCodexPanel && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} apiConnected={codexH5HasLimit}
-            cacheMetricMode="codex" hero borderRight />
+            limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} resetLabel={limits.codexH5.resetLabel} apiConnected={codexH5HasLimit}
+            limitSourceLabel={limitSourceLabel(limits.codexH5)} cacheMetricMode="codex" hero borderRight />
           <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} apiConnected={codexWeekHasLimit}
-            cacheMetricMode="codex" hero />
+            limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} resetLabel={limits.codexWeek.resetLabel} apiConnected={codexWeekHasLimit}
+            limitSourceLabel={limitSourceLabel(limits.codexWeek)} cacheMetricMode="codex" hero />
         </div>
       )}
+    </div>
+  );
+});
+
+const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWarmupStartsAt }: {
+  historyWarmupStartsAt: number | null;
+}) {
+  const C = useTheme();
+  const statusLabel = formatWarmupStatus(historyWarmupStartsAt);
+  return (
+    <div style={{
+      margin: '10px 8px 0',
+      padding: '9px 12px',
+      borderRadius: 10,
+      border: `1px solid ${C.headerAccent}26`,
+      background: `${C.headerAccent}10`,
+      color: C.textDim,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.headerAccent, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        Partial History
+      </div>
+      <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
+        Showing current sessions and recent usage first. Full history sync {statusLabel} to keep startup responsive.
+      </div>
     </div>
   );
 });
@@ -641,7 +769,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
               return (
               <div key={branch.branch} style={{ margin: '6px 8px 0 14px', contain: 'layout paint style', overflowAnchor: 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 0', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: C.accent, lineHeight: 1 }} aria-hidden="true">🌿</span>
+                  <span style={{ fontSize: 11, color: C.accent, lineHeight: 1 }} aria-hidden="true">›</span>
                   <span title={branch.branch} style={{
                     fontSize: 10, color: C.textDim, fontWeight: 500, fontFamily: C.fontMono,
                     maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -808,19 +936,20 @@ const ModelSection = React.memo(function ModelSection({ models, currency, usdToK
   );
 });
 
-const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, syncingHistory, onRefresh, onNav }: {
+const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, syncingHistory, historyWarmupStartsAt, onRefresh, onNav }: {
   lastUpdated: number;
   refreshing: boolean;
   syncingHistory: boolean;
+  historyWarmupStartsAt: number | null;
   onRefresh: () => void;
   onNav: (view: NavView) => void;
 }) {
   const C = useTheme();
   const items: Array<{ key: NavView | 'refresh'; icon: string; label: React.ReactNode }> = [
     { key: 'settings', icon: '⚙', label: 'Settings' },
-    { key: 'notifications', icon: '🔔', label: 'Alerts' },
+    { key: 'notifications', icon: '!', label: 'Alerts' },
     { key: 'help', icon: '?', label: 'Help' },
-    { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} syncingHistory={syncingHistory} /> },
+    { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} syncingHistory={syncingHistory} historyWarmupStartsAt={historyWarmupStartsAt} /> },
   ];
   return (
     <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: C.bgCard }}>
@@ -841,7 +970,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
             transition: 'transform 0.4s',
             transform: key === 'refresh' && refreshing ? 'rotate(360deg)' : 'none',
           }}>{icon}</span>
-          <span>{label}</span>
+          <span style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
         </button>
       ))}
     </div>
@@ -896,6 +1025,11 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
         <HeaderMetrics state={state} onQuit={onQuit} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
+        {state.historyWarmupPending && (
+          <RenderErrorBoundary label="History Warmup Banner">
+            <HistoryWarmupBanner historyWarmupStartsAt={state.historyWarmupStartsAt} />
+          </RenderErrorBoundary>
+        )}
         <RenderErrorBoundary label="Plan Usage Panel">
           <PlanUsagePanel usage={usage} limits={state.limits} settings={settings} apiConnected={state.apiConnected} extraUsage={state.extraUsage} />
         </RenderErrorBoundary>
@@ -913,7 +1047,14 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
         </RenderErrorBoundary>
       </div>
       <RenderErrorBoundary label="Bottom Navigation">
-        <BottomNav lastUpdated={state.lastUpdated} refreshing={refreshing} syncingHistory={state.historyWarmupPending} onRefresh={handleRefresh} onNav={onNav} />
+        <BottomNav
+          lastUpdated={state.lastUpdated}
+          refreshing={refreshing}
+          syncingHistory={state.historyWarmupPending}
+          historyWarmupStartsAt={state.historyWarmupStartsAt}
+          onRefresh={handleRefresh}
+          onNav={onNav}
+        />
       </RenderErrorBoundary>
     </div>
   );
