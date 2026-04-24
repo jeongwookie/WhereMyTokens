@@ -379,3 +379,25 @@ test('startup recovery and persisted summary cache guards remain in source', () 
   assert.match(cacheSource, /version: PERSISTED_SCHEMA_VERSION/);
   assert.match(parserSource, /pendingBytes/);
 });
+
+test('session discovery keeps recent-active scope and tracked session hints in source', () => {
+  const discoverySource = fs.readFileSync(path.resolve('src', 'main', 'sessionDiscovery.ts'), 'utf8');
+
+  assert.match(discoverySource, /SessionDiscoveryScope = 'recent-active' \| 'all'/);
+  assert.match(discoverySource, /trackedJsonlPaths\?: string\[\]/);
+  assert.match(discoverySource, /discoverSessions\(provider: TrackingProvider = 'both', options: DiscoverSessionsOptions = \{\}\)/);
+  assert.match(discoverySource, /dedupeDiscoveredSessions/);
+});
+
+test('visible fast refresh stays on cached session scope and logs anomalies', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const fastStart = source.indexOf('private async fastRefresh');
+  const fastEnd = source.indexOf('private async refreshGitStatsAfterStartup');
+  const fastBody = source.slice(fastStart, fastEnd);
+
+  assert.match(fastBody, /this\.refreshCachedSessionInfos\(\)\)\.sessions/);
+  assert.doesNotMatch(fastBody, /this\.buildSessionInfos\(\)/);
+  assert.match(source, /discoveryScope: StateManager\.SESSION_SCOPE/);
+  assert.match(source, /sessionCountDelta/);
+  assert.match(source, /session-count-spike/);
+});

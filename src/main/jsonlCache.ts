@@ -19,6 +19,14 @@ interface PersistedSummaryStore {
   cache: Record<string, PersistedSummaryEntry>;
 }
 
+export interface JsonlCacheDebugStats {
+  memoryEntries: number;
+  pendingPersistedEntries: number;
+  persistedEntries: number;
+  memoryLimit: number;
+  persistedLimit: number;
+}
+
 export class JsonlCache {
   private readonly MAX_SIZE = 256;
   private readonly MAX_PERSISTED_SIZE = 512;
@@ -305,5 +313,16 @@ export class JsonlCache {
   get size(): number {
     this.prune();
     return this.cache.size;
+  }
+
+  getDebugStats(): JsonlCacheDebugStats {
+    this.prune();
+    return {
+      memoryEntries: this.cache.size,
+      pendingPersistedEntries: this.pendingPersisted.size,
+      persistedEntries: Object.keys(this.getPersistedCache()).length,
+      memoryLimit: this.MAX_SIZE,
+      persistedLimit: this.MAX_PERSISTED_SIZE,
+    };
   }
 }
