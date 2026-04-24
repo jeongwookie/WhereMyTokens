@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-Setup.exe"><strong>Download v1.11.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe"><strong>Download v1.11.1</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -68,6 +68,7 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | Apr 24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | Apr 23 | Add Code Output growth chart, stabilize git stats refresh, and improve startup splash |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | Apr 23 | Align all-time Code Output with local branches and clarify top model usage |
 | **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | Apr 22 | Fix Codex repo discovery for Code Output and harden session metadata caching |
@@ -80,9 +81,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-Setup.exe)** — just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe)** — just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.0/WhereMyTokens-v1.11.0-win-x64.zip)** — no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-v1.11.1-win-x64.zip)** — no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -92,7 +93,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.11.0-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.11.1-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -115,7 +116,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
 
 ### Analytics & Activity
-- **Header stats** — today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, token breakdown (In/Out/Cache)
+- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, and Claude plan context
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
 - **Model breakdown** — top per-model token and cost totals with gradient bars
@@ -206,7 +207,7 @@ Claude and Codex use separate limit sources and separate 5h/1w reset windows:
 | Codex | **Local Codex logs** | `rate_limits` events inside `~/.codex/sessions/**/*.jsonl`, using the newest observed event. |
 | Fallback | **Last known value** | On data failure, the last successful value is kept. Stale data past its reset window is auto-cleared. |
 
-The dot in the header shows API connectivity (green = connected, red = unreachable). Hover to see the last error message.
+The header status pill summarizes API fallback or reset availability. Hover it to see the latest Claude API detail.
 
 ---
 
