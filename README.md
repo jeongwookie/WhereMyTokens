@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe"><strong>Download v1.11.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>Download v1.11.2</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -68,6 +68,7 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | Apr 24 | Document partial-history startup sync, clarify header status states, and refresh in-app help |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | Apr 24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | Apr 23 | Add Code Output growth chart, stabilize git stats refresh, and improve startup splash |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | Apr 23 | Align all-time Code Output with local branches and clarify top model usage |
@@ -81,9 +82,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe)** — just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-v1.11.1-win-x64.zip)** — no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -93,7 +94,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.11.1-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.11.2-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -116,7 +117,8 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
 
 ### Analytics & Activity
-- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, and Claude plan context
+- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, Claude plan context, and a single status pill for Claude fallback/reset states
+- **Startup-friendly history sync** — current sessions and recent usage appear first; older history continues in the background with a `Partial History` banner
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
 - **Model breakdown** — top per-model token and cost totals with gradient bars
@@ -154,6 +156,14 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
 - **Tray label** — choose what to display in the taskbar
+
+---
+
+## Startup & Header States
+
+At startup the dashboard shows current sessions and recent usage first. If you see `Partial History`, older history is still syncing in the background so the tray app can open quickly.
+
+The header status pill summarizes the most important Claude/API state in one place. Common labels are `Local estimate` (local fallback data), `Reset unavailable` (usage loaded but reset timing is missing), `Rate limited`, and `API offline`. Hover the pill for the latest detail.
 
 ---
 

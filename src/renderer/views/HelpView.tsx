@@ -214,6 +214,15 @@ function ContentEN() {
 
       <Divider />
 
+      <Section icon={<Signal size={15} />} title="Startup & Status">
+        <div style={{ marginBottom: 5 }}><B>Partial History</B> — on startup the dashboard shows current sessions and recent usage first. Older history keeps syncing in the background so the tray app can open quickly.</div>
+        <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important Claude/API state instead of showing multiple warning chips.</div>
+        <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API is unavailable, so the app is temporarily using local status-line or cached limit data.</div>
+        <div><B>Reset unavailable</B> — Claude API returned current usage without a reset timestamp. Usage % may still be current, but the reset countdown stays hidden until the API provides it again.</div>
+      </Section>
+
+      <Divider />
+
       <Section icon={<Signal size={15} />} title="Data Sources">
         <SrcRow badge="1st">
           <B>Local logs</B> — Claude JSONL and Codex JSONL are parsed locally for tokens, models, cost estimates, sessions, and tool activity.
@@ -316,6 +325,15 @@ function ContentKO() {
 
       <Divider />
 
+      <Section icon={<Signal size={15} />} title="시작 상태 & 헤더 표시">
+        <div style={{ marginBottom: 5 }}><B>Partial History</B> — 시작 직후에는 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 백그라운드에서 계속 동기화합니다. 그래서 트레이 앱이 더 빨리 열립니다.</div>
+        <div style={{ marginBottom: 5 }}><B>헤더 상태 pill</B> — 상단 한 개의 pill이 Claude/API 관련 핵심 상태를 요약해서 보여줍니다. 여러 경고 칩을 한 줄로 합친 개념입니다.</div>
+        <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API를 지금 사용할 수 없어서, 로컬 status-line 또는 캐시된 한도 데이터를 임시로 표시 중입니다.</div>
+        <div><B>Reset unavailable</B> — Claude API가 현재 사용량은 반환했지만 reset 시각은 주지 않은 상태입니다. 사용률 %는 최신일 수 있지만 reset 카운트다운은 API가 다시 제공할 때까지 숨겨집니다.</div>
+      </Section>
+
+      <Divider />
+
       <Section icon={<Signal size={15} />} title="데이터 소스">
         <SrcRow badge="1st">
           <B>로컬 로그</B> — Claude JSONL과 Codex JSONL을 로컬에서 파싱해 토큰, 모델, 비용 추정, 세션, 툴 활동을 계산합니다.
@@ -414,6 +432,15 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 直近 30 日の時間帯別トークン分布。</div>
         <div style={{ marginBottom: 5 }}><B>Weekly</B> — 直近 4 週間の横棒グラフ。</div>
         <div><B>Rhythm</B> — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、直近 30 日間、グラデーションバー、ピーク詳細統計（トークン、コスト、リクエスト %）、ローカルタイムゾーン。</div>
+      </Section>
+
+      <Divider />
+
+      <Section icon={<Signal size={15} />} title="起動状態とヘッダーステータス">
+        <div style={{ marginBottom: 5 }}><B>Partial History</B> — 起動直後は現在のセッションと最近の使用量を先に表示し、古い履歴はバックグラウンドで同期を続けます。これによりトレイアプリを素早く開けます。</div>
+        <div style={{ marginBottom: 5 }}><B>ヘッダーステータス pill</B> — 上部の 1 つの pill が Claude/API の重要な状態をまとめて表示します。複数の警告チップを 1 つに整理したものです。</div>
+        <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API が利用できないため、ローカルの status-line またはキャッシュ済み制限データを一時的に表示しています。</div>
+        <div><B>Reset unavailable</B> — Claude API は現在の使用量を返しましたが、reset 時刻は返していません。使用率 % は最新でも、reset カウントダウンは API が再び返すまで非表示になります。</div>
       </Section>
 
       <Divider />

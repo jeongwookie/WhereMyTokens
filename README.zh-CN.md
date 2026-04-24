@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe"><strong>下载 v1.11.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>下载 v1.11.2</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -68,6 +68,7 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | 补充 Partial History 启动同步与头部状态说明，并更新应用内帮助 |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | 新增 Code Output 增长图，稳定 git 统计刷新，并改进启动画面 |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 4/23 | 将 Code Output 全时段统计对齐到本地分支，并明确热门模型显示范围 |
@@ -81,9 +82,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-v1.11.1-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -93,7 +94,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.11.1-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.11.2-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -116,7 +117,8 @@
 - **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
 
 ### 分析与活动
-- **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、令牌分析（In/Out/Cache）
+- **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、Claude 套餐信息，以及用于显示 Claude 回退/reset 状态的单一状态 pill
+- **启动友好的历史同步** — 先显示当前会话和最近用量，较早的历史会带着 `Partial History` 提示在后台继续同步
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
 - **模型分析** — 按热门模型的令牌和费用总计，渐变条
@@ -154,6 +156,14 @@
 - **提醒** — 设置使用阈值（50% / 80% / 90%）
 - **主题** — Auto（跟随系统）/ Light / Dark
 - **托盘标签** — 选择任务栏显示内容
+
+---
+
+## 启动与头部状态
+
+启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在后台同步，这样托盘应用可以更快打开。
+
+头部状态 pill 会集中显示最重要的 Claude/API 状态。常见标签包括 `Local estimate`（使用本地回退数据）、`Reset unavailable`（已有当前用量但缺少 reset 时间）、`Rate limited` 和 `API offline`。把鼠标移到 pill 上可以查看最新细节。
 
 ---
 

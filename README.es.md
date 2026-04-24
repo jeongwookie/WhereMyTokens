@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.11.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.11.2</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -68,6 +68,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 24 abr | Documenta Partial History y los estados del encabezado, y actualiza la ayuda integrada |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 24 abr | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 23 abr | Añade gráfico de crecimiento de Code Output, estabiliza estadísticas git y mejora el splash inicial |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 23 abr | Alinea Code Output histórico con ramas locales y aclara el alcance de modelos principales |
@@ -81,9 +82,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.1/WhereMyTokens-v1.11.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -93,7 +94,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.11.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.11.2-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -116,7 +117,8 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
-- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, desglose de tokens (In/Out/Cache)
+- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, contexto del plan Claude y una sola píldora de estado para fallback/reset
+- **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue cargando en segundo plano con el aviso `Partial History`
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
 - **Desglose por modelo** — tokens y costos de los modelos principales con barras de gradiente
@@ -154,6 +156,14 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 - **Alertas** — establece umbrales de uso (50% / 80% / 90%)
 - **Tema** — Auto (sigue el sistema) / Claro / Oscuro
 - **Etiqueta de bandeja** — elige qué mostrar en la barra de tareas
+
+---
+
+## Inicio y estado del encabezado
+
+Al iniciar, el panel muestra primero las sesiones actuales y el uso reciente. Si aparece `Partial History`, el historial antiguo sigue sincronizándose en segundo plano para que la app de bandeja abra rápido.
+
+La píldora de estado del encabezado resume el estado más importante de Claude/API. Las etiquetas más comunes son `Local estimate` (datos locales de respaldo), `Reset unavailable` (hay uso actual pero falta la hora de reset), `Rate limited` y `API offline`. Pasa el cursor por la píldora para ver el detalle más reciente.
 
 ---
 
