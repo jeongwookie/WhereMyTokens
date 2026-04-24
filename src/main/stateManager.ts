@@ -75,6 +75,20 @@ export interface AppState {
   allTimeSessions: number;
 }
 
+type WatcherProfile = 'wide' | 'recent' | 'off';
+
+interface PerfSampleStart {
+  wallNs: bigint;
+  cpu: NodeJS.CpuUsage;
+}
+
+interface PerfMetrics {
+  elapsedMs: number;
+  cpuUserMs: number;
+  cpuSystemMs: number;
+  cpuTotalMs: number;
+}
+
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -226,14 +240,22 @@ export class StateManager {
   private gitWarmupTimer: NodeJS.Timeout | null = null;
   private uiBusy = false;
   private uiVisible = false;
+  private watcherProfile: WatcherProfile = 'off';
+  private watcherTargetCount = 0;
   private repoGitStatsLastRefresh = 0;
   private static readonly API_MIN_INTERVAL_MS = 180_000;
   private static readonly GIT_STATS_TTL_MS = 600_000;
+  private static readonly FAST_REFRESH_VISIBLE_MS = 60_000;
+  private static readonly HEAVY_REFRESH_VISIBLE_MS = 300_000;
+  private static readonly FAST_REFRESH_HIDDEN_MS = 300_000;
+  private static readonly HEAVY_REFRESH_HIDDEN_MS = 900_000;
   private static readonly STARTUP_SCAN_BUDGET_MS = 2_500;
   private static readonly STARTUP_WARMUP_DELAY_MS = 90_000;
   private static readonly STARTUP_GIT_DELAY_MS = 60_000;
   private static readonly STARTUP_CLAUDE_FILE_LIMIT = 48;
   private static readonly STARTUP_CODEX_FILE_LIMIT = 96;
+  private static readonly HIDDEN_CLAUDE_WATCH_LIMIT = 24;
+  private static readonly HIDDEN_CODEX_WATCH_LIMIT = 48;
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
     this.store = store;
@@ -406,7 +428,10 @@ export class StateManager {
   }
 
   setUiVisible(visible: boolean): void {
+    if (this.uiVisible === visible) return;
     this.uiVisible = visible;
+    this.startTimers();
+    this.startWatcher(visible ? 'popup:show' : 'popup:hide');
     if (visible && this.state.initialRefreshComplete && !this.uiBusy) {
       void this.heavyRefresh();
     }
@@ -417,14 +442,79 @@ export class StateManager {
     return proc.defaultApp === true || process.env.WMT_DEBUG_PERF === '1';
   }
 
-  private logPerfTrace(label: string, startedAt: number, extras: Record<string, unknown> = {}): void {
+  private isMemoryDebugEnabled(): boolean {
+    const proc = process as NodeJS.Process & { defaultApp?: boolean };
+    return proc.defaultApp === true || process.env.WMT_DEBUG_MEMORY === '1' || process.env.WMT_DEBUG_PERF === '1';
+  }
+
+  private beginPerfSample(): PerfSampleStart {
+    return {
+      wallNs: process.hrtime.bigint(),
+      cpu: process.cpuUsage(),
+    };
+  }
+
+  private finishPerfSample(sample: PerfSampleStart): PerfMetrics {
+    const elapsedMs = Number(process.hrtime.bigint() - sample.wallNs) / 1_000_000;
+    const cpu = process.cpuUsage(sample.cpu);
+    const cpuUserMs = cpu.user / 1000;
+    const cpuSystemMs = cpu.system / 1000;
+    return {
+      elapsedMs: Math.round(elapsedMs * 10) / 10,
+      cpuUserMs: Math.round(cpuUserMs * 10) / 10,
+      cpuSystemMs: Math.round(cpuSystemMs * 10) / 10,
+      cpuTotalMs: Math.round((cpuUserMs + cpuSystemMs) * 10) / 10,
+    };
+  }
+
+  private perfFields(prefix: string, metrics: PerfMetrics): Record<string, number> {
+    return {
+      [`${prefix}ElapsedMs`]: metrics.elapsedMs,
+      [`${prefix}CpuUserMs`]: metrics.cpuUserMs,
+      [`${prefix}CpuSystemMs`]: metrics.cpuSystemMs,
+      [`${prefix}CpuTotalMs`]: metrics.cpuTotalMs,
+    };
+  }
+
+  private getDebugCounts(): Record<string, number | string | boolean> {
+    const cacheStats = this.jsonlCache.getDebugStats();
+    return {
+      uiVisible: this.uiVisible,
+      uiBusy: this.uiBusy,
+      watcherProfile: this.watcherProfile,
+      watcherTargets: this.watcherTargetCount,
+      summaryCount: this.summaries.size,
+      sessionCount: this.state.sessions.length,
+      allTimeSessions: this.state.allTimeSessions,
+      cacheMemoryEntries: cacheStats.memoryEntries,
+      cachePersistedEntries: cacheStats.persistedEntries,
+      cachePendingPersistedEntries: cacheStats.pendingPersistedEntries,
+      cacheMemoryLimit: cacheStats.memoryLimit,
+      cachePersistedLimit: cacheStats.persistedLimit,
+      gitCacheEntries: this.gitStatsCache.size,
+      dirtyFiles: this.dirtySessionFiles.size,
+      deferredFastFiles: this.deferredFastFiles.size,
+    };
+  }
+
+  private logPerfTrace(label: string, sample: PerfSampleStart, extras: Record<string, unknown> = {}): void {
     if (!this.isPerfDebugEnabled()) return;
+    const metrics = this.finishPerfSample(sample);
     console.info('[WhereMyTokens][perf]', {
       label,
-      elapsedMs: Date.now() - startedAt,
-      sessions: this.state.sessions.length,
-      summaries: this.summaries.size,
+      ...metrics,
+      ...this.getDebugCounts(),
       ...extras,
+    });
+  }
+
+  private logWatcherProfile(reason: string): void {
+    if (!this.isPerfDebugEnabled()) return;
+    console.info('[WhereMyTokens][watcher]', {
+      reason,
+      profile: this.watcherProfile,
+      targets: this.watcherTargetCount,
+      ...this.getDebugCounts(),
     });
   }
 
@@ -501,8 +591,24 @@ export class StateManager {
   private startTimers() {
     if (this.fastTimer) clearInterval(this.fastTimer);
     if (this.heavyTimer) clearInterval(this.heavyTimer);
-    this.fastTimer = setInterval(() => { void this.fastRefresh(); }, 60_000);
-    this.heavyTimer = setInterval(() => { void this.heavyRefresh(); }, 300_000);
+    const fastIntervalMs = this.uiVisible
+      ? StateManager.FAST_REFRESH_VISIBLE_MS
+      : StateManager.FAST_REFRESH_HIDDEN_MS;
+    const heavyIntervalMs = this.uiVisible
+      ? StateManager.HEAVY_REFRESH_VISIBLE_MS
+      : StateManager.HEAVY_REFRESH_HIDDEN_MS;
+    this.fastTimer = setInterval(() => { void this.fastRefresh(); }, fastIntervalMs);
+    this.heavyTimer = setInterval(() => {
+      void this.heavyRefresh(!this.uiVisible);
+    }, heavyIntervalMs);
+    if (!this.isPerfDebugEnabled()) return;
+    console.info('[WhereMyTokens][runtime]', {
+      label: 'timers:start',
+      fastIntervalMs,
+      heavyIntervalMs,
+      hiddenUsesForcedScan: !this.uiVisible,
+      ...this.getDebugCounts(),
+    });
   }
 
   private scheduleHistoryWarmup(delayMs = StateManager.STARTUP_WARMUP_DELAY_MS): number {
@@ -599,23 +705,70 @@ export class StateManager {
     }, 1200);
   }
 
-  private startWatcher() {
+  private collectTrackedWatchFiles(provider: 'claude' | 'codex', maxFiles: number): string[] {
+    const ranked = this.state.sessions
+      .filter((session): session is SessionInfo & { jsonlPath: string } => session.provider === provider && !!session.jsonlPath)
+      .sort((a, b) => {
+        const aHot = a.state === 'active' ? 2 : (a.state === 'waiting' ? 1 : 0);
+        const bHot = b.state === 'active' ? 2 : (b.state === 'waiting' ? 1 : 0);
+        if (aHot !== bHot) return bHot - aHot;
+        const aTs = a.lastModified?.getTime() ?? a.startedAt.getTime();
+        const bTs = b.lastModified?.getTime() ?? b.startedAt.getTime();
+        return bTs - aTs;
+      })
+      .slice(0, maxFiles);
+    return ranked.map(session => normalizeFileKey(session.jsonlPath));
+  }
+
+  private buildRecentWatchTargets(provider: AppSettings['provider']): string[] {
+    const targets: string[] = [];
+    const seen = new Set<string>();
+    const pushFile = (filePath: string) => {
+      const normalized = normalizeFileKey(filePath);
+      if (seen.has(normalized) || !fs.existsSync(normalized)) return;
+      seen.add(normalized);
+      targets.push(normalized);
+    };
+
+    if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
+      for (const filePath of this.collectTrackedWatchFiles('claude', StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
+      for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.HIDDEN_CLAUDE_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
+    }
+    if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
+      for (const filePath of this.collectTrackedWatchFiles('codex', StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
+      for (const filePath of this.listRecentCodexJsonlFiles(StateManager.HIDDEN_CODEX_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
+    }
+
+    return targets;
+  }
+
+  private startWatcher(reason = 'refresh') {
     this.watcher?.close();
     this.watcher = null;
 
     const provider = this.getSettings().provider ?? 'both';
     const watchTargets: string[] = [];
 
-    if ((provider === 'claude' || provider === 'both') && fs.existsSync(SESSIONS_DIR)) {
-      watchTargets.push(SESSIONS_DIR);
+    if (this.uiVisible) {
+      if ((provider === 'claude' || provider === 'both') && fs.existsSync(SESSIONS_DIR)) {
+        watchTargets.push(SESSIONS_DIR);
+      }
+      if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
+        watchTargets.push(PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+      }
+      if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
+        watchTargets.push(CODEX_SESSIONS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+      }
+      this.watcherProfile = 'wide';
+    } else {
+      watchTargets.push(...this.buildRecentWatchTargets(provider));
+      this.watcherProfile = watchTargets.length > 0 ? 'recent' : 'off';
     }
-    if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      watchTargets.push(PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+    this.watcherTargetCount = watchTargets.length;
+    if (watchTargets.length === 0) {
+      this.logWatcherProfile(reason);
+      return;
     }
-    if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-      watchTargets.push(CODEX_SESSIONS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
-    }
-    if (watchTargets.length === 0) return;
 
     this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
     this.watcher.on('add', (filePath: string) => {
@@ -637,22 +790,29 @@ export class StateManager {
     this.watcher.on('change', (filePath: string) => {
       this.debouncedFastRefresh(filePath);
     });
+    this.logWatcherProfile(reason);
   }
 
   private async fastRefresh(changedFiles?: Set<string>) {
-    const startedAt = Date.now();
+    const totalPerf = this.beginPerfSample();
+    let changedPerf: PerfMetrics | null = null;
+    let sessionPerf: PerfMetrics | null = null;
     if (this.uiBusy) {
       if (changedFiles) for (const file of changedFiles) this.deferredFastFiles.add(normalizeFileKey(file));
       return;
     }
 
     if (changedFiles && changedFiles.size > 0) {
+      const changedSample = this.beginPerfSample();
       await this.refreshChangedSummaries(changedFiles);
+      changedPerf = this.finishPerfSample(changedSample);
     }
 
+    const sessionSample = this.beginPerfSample();
     const sessions = changedFiles && changedFiles.size > 0
       ? this.updateChangedSessionInfos(changedFiles)
       : (!this.uiVisible ? this.refreshCachedSessionInfos() : this.buildSessionInfos());
+    sessionPerf = this.finishPerfSample(sessionSample);
     const settings = this.getSettings();
     const derived = this.computeDerivedUsage(settings);
     const codexAccount = readCodexAccountState();
@@ -673,11 +833,14 @@ export class StateManager {
       lastUpdated: Date.now(),
     };
     this.onUpdate(this.state);
-    this.logPerfTrace('fastRefresh', startedAt, {
+    this.logPerfTrace('fastRefresh', totalPerf, {
       changedFiles: changedFiles?.size ?? 0,
       uiVisible: this.uiVisible,
+      ...(changedPerf ? this.perfFields('changed', changedPerf) : {}),
+      ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
     });
 
+    const apiFollowupSample = this.beginPerfSample();
     void this.refreshApiUsagePct().then(() => {
       const refreshed = this.computeDerivedUsage(settings);
       this.state = {
@@ -691,6 +854,9 @@ export class StateManager {
         extraUsage: refreshed.extraUsage,
       };
       this.onUpdate(this.state);
+      this.logPerfTrace('fastRefresh:apiFollowup', apiFollowupSample, {
+        changedFiles: changedFiles?.size ?? 0,
+      });
     });
   }
 
@@ -716,7 +882,11 @@ export class StateManager {
   }
 
   private async heavyRefresh(force = false, allowStartupBudget = false) {
-    const startedAt = Date.now();
+    const totalPerf = this.beginPerfSample();
+    let apiPerf: PerfMetrics | null = null;
+    let loadPerf: PerfMetrics | null = null;
+    let sessionPerf: PerfMetrics | null = null;
+    let gitPerf: PerfMetrics | null = null;
     if (this.uiBusy && !force) {
       this.heavyPending = true;
       return;
@@ -728,14 +898,18 @@ export class StateManager {
     this.heavyInFlight = true;
     try {
       await this.logMemorySnapshot('heavyRefresh:start');
+      const apiSample = this.beginPerfSample();
       await this.refreshApiUsagePct(force);
+      apiPerf = this.finishPerfSample(apiSample);
       const initialRefreshDone = this.state.initialRefreshComplete;
       if (!force && initialRefreshDone && !this.uiVisible) {
+        const sessionSample = this.beginPerfSample();
         const settings = this.getSettings();
         const derived = this.computeDerivedUsage(settings);
         const codexAccount = readCodexAccountState();
         const sessions = this.refreshCachedSessionInfos();
         const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+        sessionPerf = this.finishPerfSample(sessionSample);
         this.state = {
           ...this.state,
           sessions,
@@ -755,13 +929,19 @@ export class StateManager {
         };
         this.onUpdate(this.state);
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
-        this.logPerfTrace('heavyRefresh:deferred', startedAt, { uiVisible: false });
+        this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
+          uiVisible: false,
+          ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
+          ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
+        });
         return;
       }
+      const loadSample = this.beginPerfSample();
       const loaded = await this.loadProviderSummaries(
         force,
         allowStartupBudget && !initialRefreshDone ? StateManager.STARTUP_SCAN_BUDGET_MS : null,
       );
+      loadPerf = this.finishPerfSample(loadSample);
       this.jsonlCache.flushPersisted();
       this.summaries = loaded.summaries;
       this.codexRateLimits = loaded.codexRateLimits;
@@ -774,9 +954,11 @@ export class StateManager {
         ? this.scheduleHistoryWarmup()
         : null;
       if (!startupPartial) this.clearHistoryWarmup();
+      const sessionBuildSample = this.beginPerfSample();
       let sessions = startupPartial
         ? this.buildStartupSessionInfos(loaded.summaries)
         : this.buildSessionInfos();
+      sessionPerf = this.finishPerfSample(sessionBuildSample);
       const partialCodeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
       this.state = {
         sessions,
@@ -804,11 +986,22 @@ export class StateManager {
         this.scheduleGitWarmup();
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
         await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
+        if (!this.uiVisible) this.startWatcher('heavyRefresh:startupsync');
+        this.logPerfTrace('heavyRefresh', totalPerf, {
+          force,
+          scannedFiles: loaded.scannedFiles,
+          partial: loaded.partial,
+          ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
+          ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
+          ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
+        });
         return;
       }
       this.clearGitWarmup();
 
+      const gitSample = this.beginPerfSample();
       const repoGitStats = await this.getRepoGitStats(settings, force, sessions);
+      gitPerf = this.finishPerfSample(gitSample);
       sessions = this.attachCachedGitStats(sessions);
       const codeOutputStats = this.buildCodeOutputStats(sessions, repoGitStats);
 
@@ -837,10 +1030,15 @@ export class StateManager {
 
       checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
       await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
-      this.logPerfTrace('heavyRefresh', startedAt, {
+      if (!this.uiVisible) this.startWatcher('heavyRefresh:hidden');
+      this.logPerfTrace('heavyRefresh', totalPerf, {
         force,
         scannedFiles: loaded.scannedFiles,
         partial: loaded.partial,
+        ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
+        ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
+        ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
+        ...(gitPerf ? this.perfFields('git', gitPerf) : {}),
       });
     } finally {
       this.heavyInFlight = false;
@@ -1627,7 +1825,7 @@ export class StateManager {
         shared: number;
       }>;
     };
-    if (!proc.defaultApp && process.env.WMT_DEBUG_MEMORY !== '1') return;
+    if (!this.isMemoryDebugEnabled()) return;
     if (!proc.getProcessMemoryInfo) return;
 
     try {
@@ -1639,13 +1837,23 @@ export class StateManager {
       };
       const workingSet = info.workingSetSize ?? info.workingSet ?? 0;
       const toMb = (kb: number) => Math.round((kb / 1024) * 10) / 10;
+      const cacheStats = this.jsonlCache.getDebugStats();
       console.info('[WhereMyTokens][memory]', {
         label,
         workingSetMB: toMb(workingSet),
         privateMB: toMb(info.private),
         sharedMB: toMb(info.shared),
         summaryCount: this.summaries.size,
+        sessionCount: this.state.sessions.length,
+        allTimeSessions: this.state.allTimeSessions,
         cacheSize: this.jsonlCache.size,
+        cacheMemoryEntries: cacheStats.memoryEntries,
+        cachePersistedEntries: cacheStats.persistedEntries,
+        cachePendingPersistedEntries: cacheStats.pendingPersistedEntries,
+        watcherProfile: this.watcherProfile,
+        watcherTargets: this.watcherTargetCount,
+        dirtyFiles: this.dirtySessionFiles.size,
+        deferredFastFiles: this.deferredFastFiles.size,
         scannedFiles,
       });
     } catch {
