@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.11.4 | 2026-04-25 | Stabilize popup sessions around recent + active work, reduce hidden tray refresh/watch cost, and add main-process perf diagnostics |
 | v1.11.3 | 2026-04-24 | Lower idle background refresh cost, restyle header metadata, clarify Code Output scope, and split GPT-5.4 / GPT-5.5 model colors |
 | v1.11.2 | 2026-04-24 | Release checklist now audits README/Help coverage; README and in-app Help document Partial History startup sync and header status states |
 | v1.11.1 | 2026-04-24 | Streaming JSONL summary cache, startup partial-history sync, Claude API reset diagnostics, and cleaner dashboard loading states |

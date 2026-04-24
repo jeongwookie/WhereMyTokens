@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>下载 v1.11.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe"><strong>下载 v1.11.4</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -68,6 +68,7 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 将弹出会话列表稳定在最近 + 活跃工作范围内，降低隐藏托盘时的刷新成本，并加强主进程诊断日志 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 降低空闲时后台刷新开销，整理头部元数据，并为 Code Output 标明当前会话 repo 范围 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | 补充 Partial History 启动同步与头部状态说明，并更新应用内帮助 |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
@@ -80,9 +81,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-v1.11.4-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -92,7 +93,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.11.3-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.11.4-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 

@@ -185,6 +185,7 @@ function ContentEN() {
       <Section icon={<GitBranch size={15} />} title="Sessions">
         <div style={{ marginBottom: 5 }}><B>Project → Branch → Session</B> — sessions are grouped by git project, then by branch.</div>
         <div style={{ marginBottom: 5 }}><B>Provider chips</B> — Claude and Codex sessions can appear in the same project/branch list, with distinct model colors.</div>
+        <div style={{ marginBottom: 5 }}><B>Recent + active scope</B> — the popup keeps the session list focused on active sessions plus recently touched work instead of expanding to the full local archive on every refresh.</div>
         <div style={{ marginBottom: 5 }}><B>Stack rows</B> — repeated sessions with the same provider/source/model/state are grouped to keep scrolling light. Expand a stack to inspect each session.</div>
         <div style={{ marginBottom: 5 }}><B>Branch limit</B> — each branch shows the first 3 rows by default; use "Show N more" for the rest.</div>
         <div style={{ marginBottom: 5 }}><B>Cache efficiency</B> — Claude and Codex use different local metrics but share the same green/yellow/red header style.</div>

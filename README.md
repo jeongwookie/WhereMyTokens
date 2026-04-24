@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>Download v1.11.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe"><strong>Download v1.11.4</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -68,6 +68,7 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | Apr 25 | Keep popup sessions focused on recent + active work, reduce hidden tray refresh cost, and add perf diagnostics for main-process troubleshooting |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | Apr 24 | Improve idle refresh efficiency, restyle header metadata, and label Code Output as current session repos |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | Apr 24 | Document partial-history startup sync, clarify header status states, and refresh in-app help |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | Apr 24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
@@ -80,9 +81,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** - just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** - no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-v1.11.4-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -92,7 +93,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.11.3-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.11.4-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -103,6 +104,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ### Session Tracking
 - **Claude + Codex provider modes** — track Claude only, Codex only, or both together in one dashboard
 - **Live session detection** — Terminal, VS Code, Cursor, Windsurf, and more with real-time status: `active` / `waiting` / `idle` / `compacting`
+- **Recent + active popup scope** — keep the tray popup focused on active sessions and recently touched work instead of reopening the full local archive on every refresh
 - **Compact grouping** — sessions grouped by git project → branch, with repeated Claude/Codex sessions stacked by provider, source, model, and state
 - **Branch row limit** — each branch shows the first 3 rows by default, with "Show N more" for the rest
 - **Context window warnings** — per-session bar; amber at 70%, orange at 85%, red at 95%+
