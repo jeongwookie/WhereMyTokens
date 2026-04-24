@@ -50,7 +50,12 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Code Output</span>
+        <div style={{ minWidth: 0, marginRight: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Code Output</div>
+          <div style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {stats.scopeLabel}
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 2 }}>
           {PERIODS.map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{

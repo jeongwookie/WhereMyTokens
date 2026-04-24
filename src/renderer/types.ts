@@ -30,6 +30,8 @@ export interface CodeOutputStats {
   all: { commits: number; added: number; removed: number };
   daily7d: GitDailyStats[];
   dailyAll: GitDailyStats[];
+  repoCount: number;
+  scopeLabel: string;
 }
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';

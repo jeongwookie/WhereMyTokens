@@ -11,7 +11,14 @@ import { ThemeProvider } from './ThemeContext';
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
 const EMPTY_WINDOW = { inputTokens:0, outputTokens:0, cacheCreationTokens:0, cacheReadTokens:0, totalTokens:0, costUSD:0, requestCount:0, cacheEfficiency:0, cacheSavingsUSD:0 };
-const EMPTY_CODE_OUTPUT = { today: { commits: 0, added: 0, removed: 0 }, all: { commits: 0, added: 0, removed: 0 }, daily7d: [], dailyAll: [] };
+const EMPTY_CODE_OUTPUT = {
+  today: { commits: 0, added: 0, removed: 0 },
+  all: { commits: 0, added: 0, removed: 0 },
+  daily7d: [],
+  dailyAll: [],
+  repoCount: 0,
+  scopeLabel: 'Current session repos',
+};
 const BOOT_FALLBACK_DELAY_MS = 12_000;
 
 const DEFAULT_STATE: AppState = {
@@ -43,6 +50,7 @@ const DEFAULT_STATE: AppState = {
     hiddenProjects: [], excludedProjects: [],
   },
   autoLimits: null,
+  codexAccount: { serviceTier: null },
   initialRefreshComplete: false,
   historyWarmupPending: false,
   historyWarmupStartsAt: null,
@@ -192,6 +200,8 @@ function normalizeState(next: AppState): AppState {
       all: { ...EMPTY_CODE_OUTPUT.all, ...next.codeOutputStats?.all },
       daily7d: arrayOrEmpty(next.codeOutputStats?.daily7d),
       dailyAll: arrayOrEmpty(next.codeOutputStats?.dailyAll),
+      repoCount: typeof next.codeOutputStats?.repoCount === 'number' ? next.codeOutputStats.repoCount : 0,
+      scopeLabel: typeof next.codeOutputStats?.scopeLabel === 'string' ? next.codeOutputStats.scopeLabel : EMPTY_CODE_OUTPUT.scopeLabel,
     },
   };
 }

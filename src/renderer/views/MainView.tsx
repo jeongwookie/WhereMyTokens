@@ -88,6 +88,25 @@ function formatCodexServiceTier(serviceTier: string | null | undefined): string 
     .join(' ');
 }
 
+function headerPeriodButtonStyle(
+  active: boolean,
+  C: ReturnType<typeof useTheme>,
+): React.CSSProperties {
+  return {
+    ...noDrag,
+    padding: '2px 6px',
+    fontSize: 9,
+    borderRadius: 3,
+    cursor: 'pointer',
+    fontFamily: C.fontMono,
+    border: active ? `1px solid ${C.accent}33` : '1px solid transparent',
+    background: active ? `${C.accent}22` : 'none',
+    color: active ? C.accent : C.headerSub,
+    fontWeight: active ? 700 : 400,
+    whiteSpace: 'nowrap',
+  };
+}
+
 function buildHeaderStatus(args: {
   showClaudeUsage: boolean;
   hasClaudeFallback: boolean;
@@ -344,13 +363,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
         </span>
         <div style={{ ...noDrag, display: 'inline-flex', gap: 3, marginLeft: 4, flexShrink: 0 }}>
           {(['today', 'all'] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={{
-              ...noDrag, padding: '3px 8px', fontSize: 9, borderRadius: 999, cursor: 'pointer',
-              fontFamily: C.fontMono, border: period === p ? `1px solid ${C.accent}55` : `1px solid ${C.headerBorder}`,
-              background: period === p ? `${C.accent}20` : 'transparent',
-              color: period === p ? C.headerText : C.headerSub, fontWeight: period === p ? 700 : 500,
-              whiteSpace: 'nowrap',
-            }}>{p}</button>
+            <button key={p} onClick={() => setPeriod(p)} style={headerPeriodButtonStyle(period === p, C)}>{p}</button>
           ))}
         </div>
         <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
@@ -385,45 +398,49 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
             <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, whiteSpace: 'nowrap' }}>
               {isAll ? 'All-time Cost' : 'Today Cost'}
             </div>
-            {(planLabel || codexTierLabel) && (
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', minWidth: 0 }}>
-                {planLabel && (
-                  <span
-                    title={`Claude plan: ${planLabel}`}
-                    style={{
-                      fontSize: 8,
-                      color: C.headerSub,
-                      background: 'rgba(255,255,255,0.08)',
-                      borderRadius: 999,
-                      padding: '2px 7px',
-                      fontWeight: 700,
-                      border: `1px solid ${C.headerBorder}`,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Claude {planLabel}
-                  </span>
-                )}
-                {codexTierLabel && (
-                  <span
-                    title={`Codex service tier: ${codexTierLabel}`}
-                    style={{
-                      fontSize: 8,
-                      color: C.headerSub,
-                      background: `${C.accent}14`,
-                      borderRadius: 999,
-                      padding: '2px 7px',
-                      fontWeight: 700,
-                      border: `1px solid ${C.accent}33`,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Codex {codexTierLabel}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
+          {(planLabel || codexTierLabel) && (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', minWidth: 0, marginBottom: 6 }}>
+              {planLabel && (
+                <div title={`Claude plan: ${planLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: 8,
+                    color: C.textMuted,
+                    background: C.bgRow,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 4,
+                    padding: '1px 4px',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}>
+                    Claude
+                  </span>
+                  <span style={{ fontSize: 9, color: C.headerSub, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
+                    {planLabel}
+                  </span>
+                </div>
+              )}
+              {codexTierLabel && (
+                <div title={`Codex service tier: ${codexTierLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: 8,
+                    color: C.textMuted,
+                    background: C.bgRow,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 4,
+                    padding: '1px 4px',
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}>
+                    Codex
+                  </span>
+                  <span style={{ fontSize: 9, color: C.headerSub, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
+                    {codexTierLabel}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ fontSize: 28, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {fmtCost(cost, currency, usdToKrw)}
           </div>

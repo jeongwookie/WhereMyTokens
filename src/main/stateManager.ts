@@ -11,7 +11,6 @@ import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGitStatsAsync, GitDailyStats, GitStats } from './gitStatsCollector';
-import { discoverAllProjectCwds } from './projectDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
@@ -33,6 +32,8 @@ export interface CodeOutputStats {
   all: { commits: number; added: number; removed: number };
   daily7d: GitDailyStats[];
   dailyAll: GitDailyStats[];
+  repoCount: number;
+  scopeLabel: string;
 }
 
 export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
@@ -129,6 +130,20 @@ function approximateSessionState(lastModified: Date | null): SessionState {
   if (diffMin < 2) return 'active';
   if (diffMin < 15) return 'waiting';
   return 'idle';
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function currentSessionState(provider: SessionInfo['provider'], pid: number | null, lastModified: Date | null): SessionState {
+  if (provider === 'claude' && pid != null && !isProcessAlive(pid)) return 'idle';
+  return approximateSessionState(lastModified);
 }
 
 function gitStatsCacheKey(cwd: string): string {
@@ -327,6 +342,8 @@ export class StateManager {
       all: { commits: 0, added: 0, removed: 0 },
       daily7d: buildDaily7dWindow(),
       dailyAll: [],
+      repoCount: 0,
+      scopeLabel: 'Current session repos',
     };
   }
 
@@ -390,6 +407,25 @@ export class StateManager {
 
   setUiVisible(visible: boolean): void {
     this.uiVisible = visible;
+    if (visible && this.state.initialRefreshComplete && !this.uiBusy) {
+      void this.heavyRefresh();
+    }
+  }
+
+  private isPerfDebugEnabled(): boolean {
+    const proc = process as NodeJS.Process & { defaultApp?: boolean };
+    return proc.defaultApp === true || process.env.WMT_DEBUG_PERF === '1';
+  }
+
+  private logPerfTrace(label: string, startedAt: number, extras: Record<string, unknown> = {}): void {
+    if (!this.isPerfDebugEnabled()) return;
+    console.info('[WhereMyTokens][perf]', {
+      label,
+      elapsedMs: Date.now() - startedAt,
+      sessions: this.state.sessions.length,
+      summaries: this.summaries.size,
+      ...extras,
+    });
   }
 
   private async refreshAutoLimits(): Promise<void> {
@@ -604,6 +640,7 @@ export class StateManager {
   }
 
   private async fastRefresh(changedFiles?: Set<string>) {
+    const startedAt = Date.now();
     if (this.uiBusy) {
       if (changedFiles) for (const file of changedFiles) this.deferredFastFiles.add(normalizeFileKey(file));
       return;
@@ -615,7 +652,7 @@ export class StateManager {
 
     const sessions = changedFiles && changedFiles.size > 0
       ? this.updateChangedSessionInfos(changedFiles)
-      : this.buildSessionInfos();
+      : (!this.uiVisible ? this.refreshCachedSessionInfos() : this.buildSessionInfos());
     const settings = this.getSettings();
     const derived = this.computeDerivedUsage(settings);
     const codexAccount = readCodexAccountState();
@@ -636,6 +673,10 @@ export class StateManager {
       lastUpdated: Date.now(),
     };
     this.onUpdate(this.state);
+    this.logPerfTrace('fastRefresh', startedAt, {
+      changedFiles: changedFiles?.size ?? 0,
+      uiVisible: this.uiVisible,
+    });
 
     void this.refreshApiUsagePct().then(() => {
       const refreshed = this.computeDerivedUsage(settings);
@@ -675,6 +716,7 @@ export class StateManager {
   }
 
   private async heavyRefresh(force = false, allowStartupBudget = false) {
+    const startedAt = Date.now();
     if (this.uiBusy && !force) {
       this.heavyPending = true;
       return;
@@ -688,6 +730,34 @@ export class StateManager {
       await this.logMemorySnapshot('heavyRefresh:start');
       await this.refreshApiUsagePct(force);
       const initialRefreshDone = this.state.initialRefreshComplete;
+      if (!force && initialRefreshDone && !this.uiVisible) {
+        const settings = this.getSettings();
+        const derived = this.computeDerivedUsage(settings);
+        const codexAccount = readCodexAccountState();
+        const sessions = this.refreshCachedSessionInfos();
+        const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+        this.state = {
+          ...this.state,
+          sessions,
+          usage: derived.usage,
+          limits: derived.limits,
+          settings,
+          autoLimits: this.autoLimits,
+          codexAccount,
+          lastUpdated: Date.now(),
+          apiConnected: this.apiConnected,
+          apiStatusLabel: this.apiStatusLabel || undefined,
+          apiError: this.apiError || undefined,
+          bridgeActive: derived.bridgeActive,
+          extraUsage: derived.extraUsage,
+          codeOutputStats,
+          codeOutputLoading: false,
+        };
+        this.onUpdate(this.state);
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+        this.logPerfTrace('heavyRefresh:deferred', startedAt, { uiVisible: false });
+        return;
+      }
       const loaded = await this.loadProviderSummaries(
         force,
         allowStartupBudget && !initialRefreshDone ? StateManager.STARTUP_SCAN_BUDGET_MS : null,
@@ -767,6 +837,11 @@ export class StateManager {
 
       checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
       await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
+      this.logPerfTrace('heavyRefresh', startedAt, {
+        force,
+        scannedFiles: loaded.scannedFiles,
+        partial: loaded.partial,
+      });
     } finally {
       this.heavyInFlight = false;
       if (this.heavyPending && !this.uiBusy) {
@@ -1343,10 +1418,13 @@ export class StateManager {
     }
 
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const cwdSet = new Set(discoverAllProjectCwds(settings.provider));
-    for (const session of sessions) cwdSet.add(session.cwd);
+    const cwdSet = new Set(sessions.map(session => session.cwd));
     const allCwds = [...cwdSet]
       .filter(cwd => isSafeLocalCwd(cwd) && !isExcluded(projectKeysForCwd(cwd)));
+    if (allCwds.length === 0) {
+      this.repoGitStatsLastRefresh = now;
+      return {};
+    }
     const rawStats = await Promise.all(allCwds.map(cwd => this.getCachedGitStatsAsync(cwd)));
     const repoGitStats: Record<string, GitStats> = {};
 
@@ -1379,6 +1457,10 @@ export class StateManager {
       })
       .map(([, stats]) => stats);
     let dailySources = repoStats;
+    let repoCount = repoStats.length;
+    let scopeLabel = repoStats.length > 0
+      ? `Current session repos (${repoStats.length})`
+      : 'Current session repos';
 
     if (repoStats.length > 0) {
       for (const stats of repoStats) {
@@ -1400,6 +1482,8 @@ export class StateManager {
         fallbackStats.push(session.gitStats);
       }
       dailySources = fallbackStats;
+      repoCount = fallbackStats.length;
+      if (fallbackStats.length > 0) scopeLabel = `Current session repos (${fallbackStats.length})`;
     }
 
     const all = { commits: 0, added: 0, removed: 0 };
@@ -1414,6 +1498,8 @@ export class StateManager {
       all,
       daily7d: aggregateDailyStats(dailySources),
       dailyAll: aggregateDailyAllStats(dailySources),
+      repoCount,
+      scopeLabel,
     };
   }
 
@@ -1469,6 +1555,33 @@ export class StateManager {
       return this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
     });
     return matched ? sessions : this.buildSessionInfos();
+  }
+
+  private refreshCachedSessionInfos(): SessionInfo[] {
+    let changed = false;
+    const next: SessionInfo[] = [];
+
+    for (const session of this.state.sessions) {
+      if (!session.jsonlPath) {
+        next.push(session);
+        continue;
+      }
+      if (!fs.existsSync(session.jsonlPath)) {
+        changed = true;
+        continue;
+      }
+
+      const lastModified = getJsonlMtime(session.jsonlPath) ?? session.lastModified;
+      const state = currentSessionState(session.provider, session.pid, lastModified);
+      if (lastModified?.getTime() !== session.lastModified?.getTime() || state !== session.state) {
+        changed = true;
+        next.push({ ...session, lastModified, state });
+      } else {
+        next.push(session);
+      }
+    }
+
+    return changed ? next : this.state.sessions;
   }
 
   private buildSessionInfos(): SessionInfo[] {
