@@ -42,8 +42,8 @@ function shouldCheckProvider(key: string, providerMode: AppSettings['provider'])
   return providerMode === 'claude' || providerMode === 'both';
 }
 
-function formatReset(resetMs: number): string {
-  if (resetMs <= 0) return '';
+function formatReset(resetMs: number | null | undefined): string {
+  if (!resetMs || resetMs <= 0) return '';
   const minutes = Math.max(1, Math.round(resetMs / 60000));
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
@@ -71,7 +71,7 @@ export function checkAlerts(
 ): void {
   if (!enabled) return;
 
-  const checks: Array<{ key: string; pct: number; resetMs: number; label: string; source?: string }> = [
+  const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string }> = [
     { key: 'h5',   pct: limits.h5.pct,   resetMs: limits.h5.resetMs,   label: 'Claude 5h usage', source: limits.h5.source },
     { key: 'week', pct: limits.week.pct, resetMs: limits.week.resetMs, label: 'Claude weekly usage', source: limits.week.source },
     { key: 'so',   pct: limits.so.pct,   resetMs: limits.so.resetMs,   label: 'Claude Sonnet weekly', source: limits.so.source },
@@ -86,11 +86,18 @@ export function checkAlerts(
     const state = getState(key);
 
     // Reset detection: if resetMs grows larger than before (new cycle started)
-    const currentReset = now + resetMs;
-    if (currentReset > state.lastResetTime + 5000) {
+    const currentReset = resetMs != null ? now + resetMs : state.lastResetTime;
+    if (resetMs != null && currentReset > state.lastResetTime + 5000) {
       state.lastResetTime = currentReset;
       state.firedThresholds.clear();
       pctHistory.delete(key); // 리셋 후 스무딩 히스토리 초기화
+    }
+
+    const prev = prevPct[key] ?? 0;
+    if (resetMs == null && prev >= 50 && pct <= Math.max(5, prev * 0.25)) {
+      state.firedThresholds.clear();
+      state.lastAlertTime = 0;
+      pctHistory.delete(key);
     }
 
     // 3-샘플 이동 평균으로 노이즈 제거 후 threshold 비교
@@ -99,7 +106,6 @@ export function checkAlerts(
     // Cooldown check
     const cooldownExpired = now - state.lastAlertTime > COOLDOWN_MS;
     // Only alert when percentage is actually rising (avoid repeating at 100% due to bad calculation)
-    const prev = prevPct[key] ?? 0;
     prevPct[key] = smoothPct;
     const isRising = smoothPct > prev + 1;  // only when rising by more than 1%
 

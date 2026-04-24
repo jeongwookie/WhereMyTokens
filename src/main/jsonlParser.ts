@@ -178,6 +178,7 @@ function makeEmptySummary(provider: 'claude' | 'codex', mtimeMs = 0, size = 0): 
     recentEntries: [],
     historicalRollup: emptyHistoricalRollup(),
     byteOffset: 0,
+    pendingBytes: 0,
     mtimeMs,
     size,
     lastAccessedAt: Date.now(),
@@ -628,8 +629,10 @@ async function scanSummaryFromScratch(
   const pendingText = await scanJsonlLines(filePath, 0, undefined, processLine);
   summary.byteOffset = stat.size;
   summary.pendingText = pendingText || undefined;
+  summary.pendingBytes = pendingText ? Buffer.byteLength(pendingText, 'utf8') : 0;
   summary.mtimeMs = stat.mtimeMs;
   summary.size = stat.size;
+  summary.rehydratedFromPersistence = false;
   return normalizeSummaryWindow(summary, now);
 }
 
@@ -644,11 +647,16 @@ async function scanSummaryIncrementally(
   const processLine = provider === 'claude'
     ? (line: string) => processClaudeLine(summary, line, now)
     : (line: string) => processCodexLine(summary, filePath, line, now);
-  const pendingText = await scanJsonlLines(filePath, summary.byteOffset, summary.pendingText, processLine);
+  const pendingStartOffset = !summary.pendingText && (summary.pendingBytes ?? 0) > 0
+    ? Math.max(0, summary.byteOffset - (summary.pendingBytes ?? 0))
+    : summary.byteOffset;
+  const pendingText = await scanJsonlLines(filePath, pendingStartOffset, summary.pendingText, processLine);
   summary.byteOffset = stat.size;
   summary.pendingText = pendingText || undefined;
+  summary.pendingBytes = pendingText ? Buffer.byteLength(pendingText, 'utf8') : 0;
   summary.mtimeMs = stat.mtimeMs;
   summary.size = stat.size;
+  summary.rehydratedFromPersistence = false;
   return normalizeSummaryWindow(summary, now);
 }
 
@@ -674,7 +682,6 @@ export async function scanJsonlSummaryCached(
     const fresh = cache.getFresh(filePath, stat.mtimeMs, stat.size);
     if (fresh) {
       const normalized = normalizeSummaryWindow(fresh);
-      cache.set(filePath, normalized);
       return normalized;
     }
   }
@@ -686,7 +693,11 @@ export async function scanJsonlSummaryCached(
   const task = (async () => {
     try {
       const cached = !force ? cache.get(filePath) : null;
-      const next = cached && stat.size >= cached.byteOffset
+      const canIncremental = !!(cached
+        && !cached.rehydratedFromPersistence
+        && stat.size >= cached.byteOffset
+        && (provider !== 'claude' || !!cached.requestIndex));
+      const next = canIncremental
         ? await scanSummaryIncrementally(filePath, provider, cached, stat, Date.now())
         : await scanSummaryFromScratch(filePath, provider, stat, Date.now());
       cache.set(filePath, next);

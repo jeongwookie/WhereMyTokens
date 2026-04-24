@@ -151,8 +151,8 @@ export function computeUsage(
   summaries: FileUsageSummary[],
   userLimits: { h5: number; week: number; sonnetWeek: number },
   resets: {
-    claude?: { weekResetMs?: number; h5ResetMs?: number };
-    codex?: { weekResetMs?: number; h5ResetMs?: number };
+    claude?: { weekResetMs?: number | null; h5ResetMs?: number | null };
+    codex?: { weekResetMs?: number | null; h5ResetMs?: number | null };
   } = {},
 ): UsageData {
   const now = Date.now();
@@ -160,7 +160,7 @@ export function computeUsage(
   const weekMs = 7 * dayMs;
   const h5Ms = 5 * 3600 * 1000;
 
-  const windowStart = (durationMs: number, resetMs: number | undefined, fallbackStart: number) => {
+  const windowStart = (durationMs: number, resetMs: number | null | undefined, fallbackStart: number) => {
     if (resetMs && resetMs > 0 && resetMs <= durationMs) return now - (durationMs - resetMs);
     return fallbackStart;
   };

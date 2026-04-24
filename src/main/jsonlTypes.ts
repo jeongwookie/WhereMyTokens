@@ -89,10 +89,12 @@ export interface FileUsageSummary {
   historicalRollup: HistoricalRollup;
   byteOffset: number;
   pendingText?: string;
+  pendingBytes?: number;
   requestIndex?: Record<string, RequestIndexEntry>;
   mtimeMs: number;
   size: number;
   lastAccessedAt: number;
+  rehydratedFromPersistence?: boolean;
 }
 
 export function emptyActivityBreakdown(): ActivityBreakdown {

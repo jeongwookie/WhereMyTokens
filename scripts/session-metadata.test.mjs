@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import sessionMetadata from '../dist/main/sessionMetadata.js';
+import * as sessionMetadata from '../dist/main/sessionMetadata.js';
 
 const {
   clearSessionMetadataCache,

@@ -30,6 +30,7 @@ const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
 const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
+let claudeProjectDirCache: Map<string, string> | null = null;
 
 function encodeCwd(cwd: string): string {
   // "C:\dev\app" → "C--dev-app" (encode path to flat name)
@@ -157,6 +158,34 @@ function codexSourceLabel(entrypoint: string, originator: string | null): string
   return entrypointToSource(entrypoint, 'codex');
 }
 
+export function describeRepoContext(cwd: string): {
+  projectName: string;
+  isWorktree: boolean;
+  worktreeBranch: string | null;
+  gitBranch: string | null;
+  mainRepoName: string | null;
+} {
+  const worktreeInfo = detectWorktreeCached(cwd);
+  return {
+    projectName: worktreeInfo ? `${worktreeInfo.mainName}` : path.basename(cwd),
+    isWorktree: !!worktreeInfo,
+    worktreeBranch: worktreeInfo?.branch ?? null,
+    gitBranch: detectGitBranchCached(cwd),
+    mainRepoName: worktreeInfo?.mainName ?? null,
+  };
+}
+
+export function describeCodexSource(sourceRaw: unknown, originator: string | null): {
+  entrypoint: string;
+  source: string;
+} {
+  const entrypoint = codexEntrypointFromSource(sourceRaw);
+  return {
+    entrypoint,
+    source: codexSourceLabel(entrypoint, originator),
+  };
+}
+
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -171,10 +200,14 @@ function findJsonlPath(cwd: string, sessionId: string): string | null {
   const candidate = path.join(PROJECTS_DIR, encoded, `${sessionId}.jsonl`);
   if (fs.existsSync(candidate)) return candidate;
 
-  // Case mismatch correction: scan directory directly
+  // 대소문자 불일치 보정은 한 번 만든 디렉터리 맵을 재사용한다.
   try {
-    const dirs = fs.readdirSync(PROJECTS_DIR);
-    const match = dirs.find(d => d.toLowerCase() === encoded.toLowerCase());
+    if (!claudeProjectDirCache) {
+      claudeProjectDirCache = new Map(
+        fs.readdirSync(PROJECTS_DIR).map(dirName => [dirName.toLowerCase(), dirName])
+      );
+    }
+    const match = claudeProjectDirCache.get(encoded.toLowerCase());
     if (match) {
       const p = path.join(PROJECTS_DIR, match, `${sessionId}.jsonl`);
       if (fs.existsSync(p)) return p;
@@ -300,27 +333,25 @@ function discoverCodexSessions(): DiscoveredSession[] {
       const startedAt = startedAtRaw ? new Date(startedAtRaw) : stat.birthtime;
       const sourceRaw = payload.source;
       const originator = typeof payload.originator === 'string' ? payload.originator : null;
-      const entrypoint = codexEntrypointFromSource(sourceRaw);
-      const projectName = path.basename(cwd);
-      const worktreeInfo = detectWorktreeCached(cwd);
-      const gitBranch = detectGitBranchCached(cwd);
+      const { entrypoint, source } = describeCodexSource(sourceRaw, originator);
+      const repoContext = describeRepoContext(cwd);
 
       results.push({
         provider: 'codex',
         pid: null,
         sessionId,
         cwd,
-        projectName: worktreeInfo ? `${worktreeInfo.mainName}` : projectName,
+        projectName: repoContext.projectName,
         startedAt,
         entrypoint,
-        source: codexSourceLabel(entrypoint, originator),
+        source,
         state: calcState(null, stat.mtime),
         jsonlPath: filePath,
         lastModified: stat.mtime,
-        isWorktree: !!worktreeInfo,
-        worktreeBranch: worktreeInfo?.branch ?? null,
-        gitBranch,
-        mainRepoName: worktreeInfo?.mainName ?? null,
+        isWorktree: repoContext.isWorktree,
+        worktreeBranch: repoContext.worktreeBranch,
+        gitBranch: repoContext.gitBranch,
+        mainRepoName: repoContext.mainRepoName,
       });
     } catch { /* skip malformed */ }
   }
