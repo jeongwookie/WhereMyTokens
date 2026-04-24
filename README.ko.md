@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>v1.11.2 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>v1.11.3 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -68,6 +68,7 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 유휴 상태 백그라운드 새로고침을 줄이고, 헤더 메타데이터를 정리하고, Code Output에 현재 세션 repo 범위를 표시 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History 시작 동기화와 헤더 상태 의미를 문서화하고 인앱 Help를 보강 |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | Code Output 성장 그래프 추가, git 통계 갱신 안정화, 시작 스플래쉬 개선 |
@@ -82,9 +83,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -94,7 +95,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.11.2-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.11.3-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -117,7 +118,7 @@
 - **Claude Extra Usage 예산** — Claude 월간 크레딧 사용량 / 한도 / 이용률 표시
 
 ### 분석 & 활동
-- **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, Claude 플랜 컨텍스트, Claude 폴백/reset 상태를 보여주는 단일 상태 pill
+- **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 Claude/Codex 메타데이터, Claude 폴백/reset 상태를 보여주는 단일 상태 pill
 - **시작 친화적 히스토리 동기화** — 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 `Partial History` 배너와 함께 백그라운드에서 계속 동기화
 - **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교
 - **Rhythm 탭** — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 그라데이션 바, 피크 상세 통계, 로컬 타임존
@@ -128,6 +129,7 @@
 - **Git 기반 지표** — 커밋 수, 순 라인 변경, **$/100 Added** (100 추가 라인당 비용)
 - **Today vs All-time** — 오늘의 추가 라인당 실제 비용과 전체 평균 비교
 - **Output 성장 그래프** — 최근 7일 로컬 날짜별로 전체 누적 순 라인 증가 흐름 표시
+- **현재 세션 repo 범위** — Code Output은 현재 추적 중인 세션에 연결된 repo 기준으로 집계된다는 라벨을 함께 표시
 - **브랜치 반영 전체 기간** — Code Output의 전체 기간은 로컬 브랜치 전체의 커밋과 라인 변경을 로컬 git 작성자 이메일 기준으로 집계
 - **자동 발견** — Claude 프로젝트는 `~/.claude/projects/`, Codex 세션은 `~/.codex/sessions/`에서 자동 포함
 - **본인 커밋만** — `git config user.email` 기준 필터링

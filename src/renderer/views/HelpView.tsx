@@ -175,6 +175,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-added-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 added. Lower = more efficient.</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — all-time cumulative net line progress with today's commit count.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
+        <div style={{ marginBottom: 5 }}><B>Current session repo scope</B> — git totals follow repos linked to the sessions currently tracked in the dashboard, so they can differ from just the repo you are viewing.</div>
         <div style={{ marginBottom: 5 }}><B>All-time scope</B> — counts commits and line changes across local branches, not only the current HEAD.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
@@ -216,6 +217,7 @@ function ContentEN() {
 
       <Section icon={<Signal size={15} />} title="Startup & Status">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — on startup the dashboard shows current sessions and recent usage first. Older history keeps syncing in the background so the tray app can open quickly.</div>
+        <div style={{ marginBottom: 5 }}><B>Header metadata</B> — Claude and Codex details in the top bar are read-only labels, not action buttons. Provider mode decides whether Claude, Codex, or both appear.</div>
         <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important Claude/API state instead of showing multiple warning chips.</div>
         <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API is unavailable, so the app is temporarily using local status-line or cached limit data.</div>
         <div><B>Reset unavailable</B> — Claude API returned current usage without a reset timestamp. Usage % may still be current, but the reset countdown stays hidden until the API provides it again.</div>
@@ -286,6 +288,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 추가 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 added. 값이 낮을수록 효율적.</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 전체 기간 순 라인 누적 성장과 오늘 커밋 수를 보여줍니다.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
+        <div style={{ marginBottom: 5 }}><B>현재 세션 repo 범위</B> — git 합계는 대시보드에서 현재 추적 중인 세션에 연결된 repo 기준으로 잡히므로, 지금 보고 있는 단일 저장소 값과 다를 수 있습니다.</div>
         <div style={{ marginBottom: 5 }}><B>전체 기간 범위</B> — 현재 HEAD만이 아니라 로컬 브랜치 전체의 커밋과 라인 변경을 집계합니다.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
@@ -327,6 +330,7 @@ function ContentKO() {
 
       <Section icon={<Signal size={15} />} title="시작 상태 & 헤더 표시">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — 시작 직후에는 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 백그라운드에서 계속 동기화합니다. 그래서 트레이 앱이 더 빨리 열립니다.</div>
+        <div style={{ marginBottom: 5 }}><B>헤더 메타데이터</B> — 상단의 Claude/Codex 정보는 클릭 버튼이 아니라 읽기 전용 라벨입니다. provider 모드에 따라 Claude만, Codex만, 또는 둘 다 표시됩니다.</div>
         <div style={{ marginBottom: 5 }}><B>헤더 상태 pill</B> — 상단 한 개의 pill이 Claude/API 관련 핵심 상태를 요약해서 보여줍니다. 여러 경고 칩을 한 줄로 합친 개념입니다.</div>
         <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API를 지금 사용할 수 없어서, 로컬 status-line 또는 캐시된 한도 데이터를 임시로 표시 중입니다.</div>
         <div><B>Reset unavailable</B> — Claude API가 현재 사용량은 반환했지만 reset 시각은 주지 않은 상태입니다. 사용률 %는 최신일 수 있지만 reset 카운트다운은 API가 다시 제공할 때까지 숨겨집니다.</div>
@@ -397,6 +401,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の追加行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 added。値が低いほど効率的。</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 全期間の純変更の累積成長と今日のコミット数を表示します。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
+        <div style={{ marginBottom: 5 }}><B>現在のセッション repo 範囲</B> — git 合計はダッシュボードで現在追跡中のセッションに結び付いた repo を基準にするため、いま見ている単一リポジトリの値とは異なる場合があります。</div>
         <div style={{ marginBottom: 5 }}><B>全期間の範囲</B> — 現在の HEAD だけでなく、ローカルブランチ全体のコミットと行変更を集計します。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>
@@ -438,6 +443,7 @@ function ContentJA() {
 
       <Section icon={<Signal size={15} />} title="起動状態とヘッダーステータス">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — 起動直後は現在のセッションと最近の使用量を先に表示し、古い履歴はバックグラウンドで同期を続けます。これによりトレイアプリを素早く開けます。</div>
+        <div style={{ marginBottom: 5 }}><B>ヘッダーメタデータ</B> — 上部の Claude/Codex 情報はクリック用ボタンではなく読み取り専用ラベルです。provider モードに応じて Claude のみ、Codex のみ、または両方を表示します。</div>
         <div style={{ marginBottom: 5 }}><B>ヘッダーステータス pill</B> — 上部の 1 つの pill が Claude/API の重要な状態をまとめて表示します。複数の警告チップを 1 つに整理したものです。</div>
         <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API が利用できないため、ローカルの status-line またはキャッシュ済み制限データを一時的に表示しています。</div>
         <div><B>Reset unavailable</B> — Claude API は現在の使用量を返しましたが、reset 時刻は返していません。使用率 % は最新でも、reset カウントダウンは API が再び返すまで非表示になります。</div>

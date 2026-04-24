@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.11.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>Descargar v1.11.3</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -68,6 +68,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 24 abr | Reduce el refresco en segundo plano cuando está inactivo, ordena los metadatos del encabezado y etiqueta Code Output como repos de las sesiones actuales |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 24 abr | Documenta Partial History y los estados del encabezado, y actualiza la ayuda integrada |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 24 abr | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 23 abr | Añade gráfico de crecimiento de Code Output, estabiliza estadísticas git y mejora el splash inicial |
@@ -82,9 +83,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -94,7 +95,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.11.2-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.11.3-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -117,7 +118,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
-- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, contexto del plan Claude y una sola píldora de estado para fallback/reset
+- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y una sola píldora de estado para fallback/reset
 - **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue cargando en segundo plano con el aviso `Partial History`
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
@@ -128,6 +129,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Métricas basadas en Git** — commits, líneas netas cambiadas, **$/100 Added** (costo por 100 líneas añadidas)
 - **Hoy vs todo el tiempo** — hoy muestra el costo real por línea añadida con el promedio para comparación
 - **Gráfico de crecimiento de Output** — muestra el crecimiento acumulado de líneas netas en los últimos 7 días locales
+- **Ámbito de repos de la sesión actual** — Code Output ahora etiqueta que los totales git se calculan sobre los repos vinculados a las sesiones que estás rastreando
 - **Histórico por ramas** — Code Output histórico cuenta commits y cambios de líneas en todas las ramas locales, usando tu email local de git
 - **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` y sesiones Codex desde `~/.codex/sessions/`
 - **Solo tus commits** — filtrado por `git config user.email`

@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>Download v1.11.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>Download v1.11.3</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -68,6 +68,7 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | Apr 24 | Improve idle refresh efficiency, restyle header metadata, and label Code Output as current session repos |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | Apr 24 | Document partial-history startup sync, clarify header status states, and refresh in-app help |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | Apr 24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | Apr 23 | Add Code Output growth chart, stabilize git stats refresh, and improve startup splash |
@@ -82,9 +83,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -94,7 +95,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.11.2-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.11.3-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -117,7 +118,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
 
 ### Analytics & Activity
-- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, Claude plan context, and a single status pill for Claude fallback/reset states
+- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, compact Claude/Codex metadata, and a single status pill for Claude fallback/reset states
 - **Startup-friendly history sync** — current sessions and recent usage appear first; older history continues in the background with a `Partial History` banner
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
@@ -126,9 +127,10 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 
 ### Code Output & Productivity
 - **Git-based metrics** — commits, net lines changed, **$/100 Added** (cost per 100 added lines)
-- **Today vs all-time** — today shows actual cost per added line with average for comparison
-- **Output growth chart** — shows cumulative net line growth from an all-time baseline across the latest 7 local days
-- **Branch-aware all-time** — all-time Code Output counts commits and line changes across local branches, using your local git author email
+- **Today vs all-time** - today shows actual cost per added line with average for comparison
+- **Output growth chart** - shows cumulative net line growth from an all-time baseline across the latest 7 local days
+- **Current session repo scope** - Code Output now labels that git totals are scoped to repos tied to your current tracked sessions
+- **Branch-aware all-time** - all-time Code Output counts commits and line changes across local branches, using your local git author email
 - **Auto-discovery** — Claude projects from `~/.claude/projects/` and Codex sessions from `~/.codex/sessions/`
 - **Your commits only** — filtered by `git config user.email`
 

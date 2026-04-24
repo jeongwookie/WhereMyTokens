@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>下载 v1.11.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>下载 v1.11.3</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -68,6 +68,7 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 降低空闲时后台刷新开销，整理头部元数据，并为 Code Output 标明当前会话 repo 范围 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | 补充 Partial History 启动同步与头部状态说明，并更新应用内帮助 |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | 新增 Code Output 增长图，稳定 git 统计刷新，并改进启动画面 |
@@ -82,9 +83,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -94,7 +95,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.11.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.11.3-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -117,7 +118,7 @@
 - **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
 
 ### 分析与活动
-- **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、Claude 套餐信息，以及用于显示 Claude 回退/reset 状态的单一状态 pill
+- **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、紧凑的 Claude/Codex 元数据，以及用于显示 Claude 回退/reset 状态的单一状态 pill
 - **启动友好的历史同步** — 先显示当前会话和最近用量，较早的历史会带着 `Partial History` 提示在后台继续同步
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
@@ -128,6 +129,7 @@
 - **Git 指标** — 提交数、净变更行数、**$/100 Added**（每100行新增的成本）
 - **今日 vs 全部** — 今日显示每新增行实际成本与历史平均对比
 - **Output 增长图** — 按最近 7 个本地日期显示全时段累计净行数增长
+- **当前会话 repo 范围** — Code Output 会明确标注其 git 汇总是基于当前正在追踪的会话关联 repo
 - **分支感知的全时段** — Code Output 的全时段会按本地 git 作者邮箱统计所有本地分支的提交和行变更
 - **自动发现** — Claude 项目来自 `~/.claude/projects/`，Codex 会话来自 `~/.codex/sessions/`
 - **仅统计您的提交** — 按 `git config user.email` 过滤

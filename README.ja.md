@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe"><strong>v1.11.2 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe"><strong>v1.11.3 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -68,6 +68,7 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | バックグラウンドのアイドル更新を軽くし、ヘッダーメタデータを整理し、Code Output に現在のセッション repo 範囲を表示 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History の起動同期とヘッダーステータスの意味を文書化し、アプリ内 Help を更新 |
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | Code Output 成長グラフを追加し、git 統計更新と起動スプラッシュを改善 |
@@ -82,9 +83,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.2/WhereMyTokens-v1.11.2-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.3/WhereMyTokens-v1.11.3-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -94,7 +95,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.11.2-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.11.3-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -117,7 +118,7 @@
 - **Claude Extra Usage 予算** — Claude 月間クレジット使用量 / 上限 / 利用率
 
 ### 分析 & アクティビティ
-- **ヘッダー統計** — today/all-time 切替: コスト、API 呼び出し、セッション、キャッシュ効率、節約額、Claude プラン情報、Claude の fallback/reset 状態を示す単一ステータス pill
+- **ヘッダー統計** — today/all-time 切替: コスト、API 呼び出し、セッション、キャッシュ効率、節約額、コンパクトな Claude/Codex メタデータ、Claude の fallback/reset 状態を示す単一ステータス pill
 - **起動にやさしい履歴同期** — 現在のセッションと最近の使用量を先に表示し、古い履歴は `Partial History` バナーとともにバックグラウンドで同期を続けます
 - **アクティビティタブ** — 7 日間ヒートマップ、5 ヶ月カレンダー（GitHub スタイル）、時間帯別分布、4 週間比較
 - **Rhythm タブ** — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、グラデーションバー、ピーク詳細統計、ローカルタイムゾーン
@@ -128,6 +129,7 @@
 - **Git ベース指標** — コミット数、純変更行数、**$/100 Added**（100 追加行あたりのコスト）
 - **Today vs All-time** — 今日の追加行あたり実コストと全期間平均を比較
 - **Output 成長グラフ** — 直近 7 日のローカル日付ごとに全期間累積の純増行数を表示
+- **現在のセッション repo 範囲** — Code Output は現在追跡中のセッションに結び付いた repo 集計であることをラベル表示
 - **ブランチ対応の全期間** — Code Output の全期間は、ローカルブランチ全体のコミットと行変更をローカル git author email 基準で集計
 - **自動検出** — Claude プロジェクトは `~/.claude/projects/`、Codex セッションは `~/.codex/sessions/` から自動検出
 - **自分のコミットのみ** — `git config user.email` でフィルタリング
