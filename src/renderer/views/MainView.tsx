@@ -8,6 +8,7 @@ import ActivityChart from '../components/ActivityChart';
 import ModelBreakdown from '../components/ModelBreakdown';
 import ExtraUsageCard from '../components/ExtraUsageCard';
 import CodeOutputCard from '../components/CodeOutputCard';
+import RenderErrorBoundary from '../components/RenderErrorBoundary';
 
 interface Props {
   state: AppState;
@@ -153,7 +154,15 @@ function buildSessionItems(projectName: string, branch: string, sessions: Sessio
   });
 }
 
-const RefreshStatus = React.memo(function RefreshStatus({ lastUpdated, refreshing }: { lastUpdated: number; refreshing: boolean }) {
+const RefreshStatus = React.memo(function RefreshStatus({
+  lastUpdated,
+  refreshing,
+  syncingHistory,
+}: {
+  lastUpdated: number;
+  refreshing: boolean;
+  syncingHistory: boolean;
+}) {
   const [label, setLabel] = useState(() => formatRefreshLabel(lastUpdated));
 
   useEffect(() => {
@@ -161,10 +170,14 @@ const RefreshStatus = React.memo(function RefreshStatus({ lastUpdated, refreshin
       setLabel('refreshing...');
       return;
     }
+    if (syncingHistory) {
+      setLabel('syncing history...');
+      return;
+    }
     setLabel(formatRefreshLabel(lastUpdated));
     const t = setInterval(() => setLabel(formatRefreshLabel(lastUpdated)), 1000);
     return () => clearInterval(t);
-  }, [lastUpdated, refreshing]);
+  }, [lastUpdated, refreshing, syncingHistory]);
 
   return <>{label}</>;
 });
@@ -238,6 +251,14 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
           {showClaudeUsage && state.autoLimits && (
             <span style={{ fontSize: 9, color: C.headerSub, background: 'rgba(255,255,255,0.1)', borderRadius: 3, padding: '1px 6px', fontWeight: 600, border: '1px solid rgba(255,255,255,0.15)' }}>
               {state.autoLimits.plan}
+            </span>
+          )}
+          {state.historyWarmupPending && (
+            <span
+              title="Historical usage is still syncing in the background."
+              style={{ fontSize: 9, color: C.headerAccent, background: `${C.headerAccent}22`, borderRadius: 3, padding: '1px 6px', fontWeight: 700, border: `1px solid ${C.headerAccent}33` }}
+            >
+              sync
             </span>
           )}
           <span
@@ -787,9 +808,10 @@ const ModelSection = React.memo(function ModelSection({ models, currency, usdToK
   );
 });
 
-const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, onRefresh, onNav }: {
+const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, syncingHistory, onRefresh, onNav }: {
   lastUpdated: number;
   refreshing: boolean;
+  syncingHistory: boolean;
   onRefresh: () => void;
   onNav: (view: NavView) => void;
 }) {
@@ -798,7 +820,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, onRef
     { key: 'settings', icon: '⚙', label: 'Settings' },
     { key: 'notifications', icon: '🔔', label: 'Alerts' },
     { key: 'help', icon: '?', label: 'Help' },
-    { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} /> },
+    { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} syncingHistory={syncingHistory} /> },
   ];
   return (
     <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: C.bgCard }}>
@@ -870,15 +892,29 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
-      <HeaderMetrics state={state} onQuit={onQuit} />
+      <RenderErrorBoundary label="Header Metrics">
+        <HeaderMetrics state={state} onQuit={onQuit} />
+      </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
-        <PlanUsagePanel usage={usage} limits={state.limits} settings={settings} apiConnected={state.apiConnected} extraUsage={state.extraUsage} />
-        <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
-        <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
-        <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
-        <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />
+        <RenderErrorBoundary label="Plan Usage Panel">
+          <PlanUsagePanel usage={usage} limits={state.limits} settings={settings} apiConnected={state.apiConnected} extraUsage={state.extraUsage} />
+        </RenderErrorBoundary>
+        <RenderErrorBoundary label="Code Output Card">
+          <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
+        </RenderErrorBoundary>
+        <RenderErrorBoundary label="Sessions Panel">
+          <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
+        </RenderErrorBoundary>
+        <RenderErrorBoundary label="Activity Section">
+          <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
+        </RenderErrorBoundary>
+        <RenderErrorBoundary label="Model Section">
+          <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />
+        </RenderErrorBoundary>
       </div>
-      <BottomNav lastUpdated={state.lastUpdated} refreshing={refreshing} onRefresh={handleRefresh} onNav={onNav} />
+      <RenderErrorBoundary label="Bottom Navigation">
+        <BottomNav lastUpdated={state.lastUpdated} refreshing={refreshing} syncingHistory={state.historyWarmupPending} onRefresh={handleRefresh} onNav={onNav} />
+      </RenderErrorBoundary>
     </div>
   );
 }

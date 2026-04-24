@@ -195,6 +195,7 @@ export interface AppState {
   settings: AppSettings;
   autoLimits: AutoLimits | null;
   initialRefreshComplete: boolean;
+  historyWarmupPending: boolean;
   lastUpdated: number;
   apiConnected: boolean;
   apiError?: string;

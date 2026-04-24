@@ -10,6 +10,7 @@ export interface CodexSessionHeader {
 }
 
 export const CODEX_HEADER_READ_BYTES = 512 * 1024;
+const CODEX_HEADER_CHUNK_BYTES = 16 * 1024;
 
 const CLAUDE_CWD_READ_BYTES = 64 * 1024;
 const CLAUDE_CWD_MAX_LINES = 64;
@@ -90,6 +91,35 @@ function safeCwd(value: unknown): string | null {
   return isSafeLocalCwd(value) ? value : null;
 }
 
+function parseCodexHeaderLine(
+  line: string,
+  fallback: CodexSessionHeader | null,
+  sessionMetaWithoutCwd: CodexSessionHeader | null,
+): {
+  resolved?: CodexSessionHeader;
+  fallback: CodexSessionHeader | null;
+  sessionMetaWithoutCwd: CodexSessionHeader | null;
+} {
+  if (!line.trim()) return { fallback, sessionMetaWithoutCwd };
+  try {
+    const obj = JSON.parse(line) as Record<string, unknown>;
+    const payload = obj.payload as Record<string, unknown> | undefined;
+    if (!payload) return { fallback, sessionMetaWithoutCwd };
+    const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
+    if (obj.type === 'session_meta') {
+      const header = { payload, timestamp };
+      if (safeCwd(payload.cwd)) return { resolved: header, fallback, sessionMetaWithoutCwd };
+      return { fallback, sessionMetaWithoutCwd: header };
+    }
+    if (!fallback && obj.type === 'turn_context' && safeCwd(payload.cwd)) {
+      return { fallback: { payload, timestamp }, sessionMetaWithoutCwd };
+    }
+  } catch {
+    return { fallback, sessionMetaWithoutCwd };
+  }
+  return { fallback, sessionMetaWithoutCwd };
+}
+
 export function readCodexSessionHeader(filePath: string): CodexSessionHeader | null {
   return readCodexSessionHeaderResult(filePath).value;
 }
@@ -103,30 +133,48 @@ function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<Code
   const cached = getCached(codexHeaderCache, key, stat);
   if (cached !== undefined) return { ok: true, value: cached };
 
-  const text = readFilePrefix(filePath, CODEX_HEADER_READ_BYTES);
-  if (text === null) return { ok: false, value: null };
   let fallback: CodexSessionHeader | null = null;
   let sessionMetaWithoutCwd: CodexSessionHeader | null = null;
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    try {
-      const obj = JSON.parse(line) as Record<string, unknown>;
-      const payload = obj.payload as Record<string, unknown> | undefined;
-      if (!payload) continue;
-      const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
-      if (obj.type === 'session_meta') {
-        const header = { payload, timestamp };
-        if (safeCwd(payload.cwd)) {
-          return { ok: true, value: setCached(codexHeaderCache, key, stat, header) };
+  let fd: number | null = null;
+  let remaining = '';
+
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const chunk = Buffer.alloc(CODEX_HEADER_CHUNK_BYTES);
+    let bytesRemaining = CODEX_HEADER_READ_BYTES;
+
+    while (bytesRemaining > 0) {
+      const bytesRead = fs.readSync(fd, chunk, 0, Math.min(chunk.length, bytesRemaining), null);
+      if (bytesRead <= 0) break;
+      cacheStats.bodyReads += 1;
+      bytesRemaining -= bytesRead;
+      const text = remaining + chunk.subarray(0, bytesRead).toString('utf-8');
+      const lines = text.split('\n');
+      remaining = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const parsed = parseCodexHeaderLine(line, fallback, sessionMetaWithoutCwd);
+        fallback = parsed.fallback;
+        sessionMetaWithoutCwd = parsed.sessionMetaWithoutCwd;
+        if (parsed.resolved) {
+          return { ok: true, value: setCached(codexHeaderCache, key, stat, parsed.resolved) };
         }
-        sessionMetaWithoutCwd = header;
-        continue;
       }
-      if (!fallback && obj.type === 'turn_context' && safeCwd(payload.cwd)) {
-        fallback = { payload, timestamp };
+    }
+
+    if (remaining.trim()) {
+      const parsed = parseCodexHeaderLine(remaining, fallback, sessionMetaWithoutCwd);
+      fallback = parsed.fallback;
+      sessionMetaWithoutCwd = parsed.sessionMetaWithoutCwd;
+      if (parsed.resolved) {
+        return { ok: true, value: setCached(codexHeaderCache, key, stat, parsed.resolved) };
       }
-    } catch {
-      continue;
+    }
+  } catch {
+    return { ok: false, value: null };
+  } finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch { /* skip */ }
     }
   }
 

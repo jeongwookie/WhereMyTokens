@@ -1,28 +1,32 @@
 import * as fs from 'fs';
-import { JsonlCache, CacheEntry } from './jsonlCache';
+import { JsonlCache } from './jsonlCache';
+import {
+  ActivityBreakdown,
+  CompactRecentEntry,
+  FileUsageSummary,
+  HistoricalAggregate,
+  HistoricalBucket,
+  HistoricalRollup,
+  RequestIndexEntry,
+  SessionSnapshot,
+  emptyHistoricalAggregate,
+  emptyHistoricalRollup,
+  emptySessionSnapshot,
+} from './jsonlTypes';
 
-export interface ParsedEntry {
-  requestId: string;
-  timestamp: Date;
-  model: string;
-  provider: 'claude' | 'codex' | 'other';
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
-  costUSD: number;
-  cacheSavingsUSD: number;
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RECENT_WINDOW_MS = 8 * DAY_MS;
+const HOURLY_BUCKET_WINDOW_MS = 150 * DAY_MS;
 
-export interface CodexRateLimitWindow {
-  pct: number;
-  resetsAt: number;
-  observedAt: number;
+const pendingScans = new Map<string, Promise<FileUsageSummary>>();
+
+function scanKey(filePath: string): string {
+  const resolved = fs.realpathSync.native?.(filePath) ?? filePath;
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
 // 모델별 토큰 단가(USD / 1M). cached input은 cacheReadTokens 단가로 계산한다.
 const PRICING: Record<string, { in: number; out: number; cw: number; cr: number }> = {
-  // OpenAI / Codex
   'gpt-5.4-mini':       { in: 0.75, out: 4.50, cw: 0.75, cr: 0.075 },
   'gpt-5.4-nano':       { in: 0.20, out: 1.25, cw: 0.20, cr: 0.02  },
   'gpt-5.4':            { in: 2.50, out: 15,   cw: 2.50, cr: 0.25  },
@@ -33,18 +37,16 @@ const PRICING: Record<string, { in: number; out: number; cw: number; cr: number 
   'gpt-5.1-codex':      { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
   'gpt-5-codex':        { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
   'codex-mini-latest':  { in: 1.50, out: 6,    cw: 1.50, cr: 0.375 },
-  // Claude 4.x
-  'claude-opus-4':   { in: 5,   out: 25,  cw: 6.25,  cr: 0.50 },
-  'claude-sonnet-4': { in: 3,   out: 15,  cw: 3.75,  cr: 0.30 },
-  'claude-haiku-4':  { in: 1,   out: 5,   cw: 1.25,  cr: 0.10 },
-  // Claude 3.x 레거시 fallback
-  'claude-opus':     { in: 15,  out: 75,  cw: 18.75, cr: 1.50 },
-  'claude-sonnet':   { in: 3,   out: 15,  cw: 3.75,  cr: 0.30 },
-  'claude-haiku':    { in: 0.8, out: 4,   cw: 1.0,   cr: 0.08 },
-  // Non-Claude
-  'gpt-4':           { in: 2,   out: 8,   cw: 0,     cr: 0.5  },
-  'gpt-4o':          { in: 2.5, out: 10,  cw: 0,     cr: 1.25 },
+  'claude-opus-4':      { in: 5,    out: 25,   cw: 6.25, cr: 0.50  },
+  'claude-sonnet-4':    { in: 3,    out: 15,   cw: 3.75, cr: 0.30  },
+  'claude-haiku-4':     { in: 1,    out: 5,    cw: 1.25, cr: 0.10  },
+  'claude-opus':        { in: 15,   out: 75,   cw: 18.75, cr: 1.50 },
+  'claude-sonnet':      { in: 3,    out: 15,   cw: 3.75, cr: 0.30  },
+  'claude-haiku':       { in: 0.8,  out: 4,    cw: 1.0,  cr: 0.08  },
+  'gpt-4':              { in: 2,    out: 8,    cw: 0,    cr: 0.5   },
+  'gpt-4o':             { in: 2.5,  out: 10,   cw: 0,    cr: 1.25  },
 };
+
 const DEFAULT_PRICE = { in: 3, out: 15, cw: 3.75, cr: 0.30 };
 
 function getPrice(model: string) {
@@ -55,19 +57,19 @@ function getPrice(model: string) {
   return DEFAULT_PRICE;
 }
 
-function normalizeModel(model: string): string {
+export function normalizeModel(model: string): string {
   const lower = model.toLowerCase();
-  if (lower.includes('gpt-5'))   return model.toUpperCase();
-  if (lower.includes('opus'))   return 'Opus';
+  if (lower.includes('gpt-5')) return model.toUpperCase();
+  if (lower.includes('opus')) return 'Opus';
   if (lower.includes('sonnet')) return 'Sonnet';
-  if (lower.includes('haiku'))  return 'Haiku';
+  if (lower.includes('haiku')) return 'Haiku';
   if (lower.includes('gpt-4o')) return 'GPT-4o';
-  if (lower.includes('gpt-4'))  return 'GPT-4';
-  if (lower.includes('glm'))    return 'GLM';
+  if (lower.includes('gpt-4')) return 'GPT-4';
+  if (lower.includes('glm')) return 'GLM';
   return model;
 }
 
-function getProvider(model: string): 'claude' | 'codex' | 'other' {
+export function getProvider(model: string): 'claude' | 'codex' | 'other' {
   const lower = model.toLowerCase();
   if (lower.startsWith('claude')) return 'claude';
   if (lower.startsWith('gpt') || lower.startsWith('text-davinci') || lower.startsWith('codex')) return 'codex';
@@ -84,52 +86,31 @@ function calcCacheSavings(model: string, cr: number): number {
   return Math.max(0, p.in - p.cr) * cr / 1_000_000;
 }
 
-export interface ActivityBreakdown {
-  read: number;       // Read 툴 호출에 귀속된 output 토큰 (비례 배분)
-  editWrite: number;  // Edit / Write / MultiEdit / NotebookEdit
-  search: number;     // Grep / Glob / LS / TodoRead
-  git: number;        // Bash — git 명령
-  buildTest: number;  // Bash — npm/tsc/test/build 등
-  terminal: number;   // Bash — 기타 / mcp__*
-  thinking: number;   // thinking 블록
-  response: number;   // text 블록 (최종 응답)
-  subagents: number;  // Agent 툴
-  web: number;        // WebFetch / WebSearch
-}
-
-export type ActivityBreakdownKind = 'tokens' | 'events';
-
-export interface ParsedFile {
-  entries: ParsedEntry[];
-  modelName: string;        // normalized model name of latest entry
-  rawModel: string;         // raw model string
-  latestInputTokens: number;
-  latestCacheCreationTokens: number;
-  latestCacheReadTokens: number;
-  contextMax?: number;
-  codexRateLimits?: {
-    h5?: CodexRateLimitWindow;
-    week?: CodexRateLimitWindow;
-  };
-  toolCounts: Record<string, number>;
-  activityBreakdown: ActivityBreakdown;
-  activityBreakdownKind: ActivityBreakdownKind;
-}
-
 function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown {
   switch (name) {
-    case 'Read':                                    return 'read';
-    case 'Edit': case 'Write':
-    case 'MultiEdit': case 'NotebookEdit':          return 'editWrite';
-    case 'Grep': case 'Glob': case 'LS':
-    case 'TodoRead': case 'TodoWrite':              return 'search';
-    case 'Agent':                                   return 'subagents';
-    case 'WebFetch': case 'WebSearch':              return 'web';
+    case 'Read': return 'read';
+    case 'Edit':
+    case 'Write':
+    case 'MultiEdit':
+    case 'NotebookEdit':
+      return 'editWrite';
+    case 'Grep':
+    case 'Glob':
+    case 'LS':
+    case 'TodoRead':
+    case 'TodoWrite':
+      return 'search';
+    case 'Agent':
+      return 'subagents';
+    case 'WebFetch':
+    case 'WebSearch':
+      return 'web';
     case 'Bash': {
       const cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
-      if (/^git\b/.test(cmd))                       return 'git';
-      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd))
-                                                    return 'buildTest';
+      if (/^git\b/.test(cmd)) return 'git';
+      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd)) {
+        return 'buildTest';
+      }
       return 'terminal';
     }
     case 'shell_command': {
@@ -144,390 +125,165 @@ function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown 
       } else {
         cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
       }
-      if (/^git\b/.test(cmd))                       return 'git';
-      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd))
-                                                    return 'buildTest';
+      if (/^git\b/.test(cmd)) return 'git';
+      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd)) {
+        return 'buildTest';
+      }
       return 'terminal';
     }
     default:
-      if (name.startsWith('mcp__'))                return 'terminal';
+      if (name.startsWith('mcp__')) return 'terminal';
       return 'terminal';
   }
 }
 
-function emptyBreakdown(): ActivityBreakdown {
-  return { read: 0, editWrite: 0, search: 0, git: 0, buildTest: 0, terminal: 0, thinking: 0, response: 0, subagents: 0, web: 0 };
+function cloneAggregate(aggregate: HistoricalAggregate): HistoricalAggregate {
+  return { ...aggregate };
 }
 
-export function parseJsonlFile(filePath: string): ParsedFile {
-  let raw: string;
-  try {
-    const stat = fs.lstatSync(filePath);
-    if (stat.isSymbolicLink()) return emptyResult();
-    raw = fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return emptyResult();
+function cloneRollup(rollup: HistoricalRollup): HistoricalRollup {
+  return {
+    aggregate: cloneAggregate(rollup.aggregate),
+    modelTotals: Object.fromEntries(Object.entries(rollup.modelTotals).map(([key, value]) => [key, { ...value }])),
+    hourlyBuckets: Object.fromEntries(Object.entries(rollup.hourlyBuckets).map(([key, value]) => [key, { ...value }])),
+  };
+}
+
+function cloneSummary(summary: FileUsageSummary): FileUsageSummary {
+  return {
+    ...summary,
+    sessionSnapshot: {
+      ...summary.sessionSnapshot,
+      toolCounts: { ...summary.sessionSnapshot.toolCounts },
+      activityBreakdown: { ...summary.sessionSnapshot.activityBreakdown },
+      codexRateLimits: summary.sessionSnapshot.codexRateLimits
+        ? {
+          ...(summary.sessionSnapshot.codexRateLimits.h5 ? { h5: { ...summary.sessionSnapshot.codexRateLimits.h5 } } : {}),
+          ...(summary.sessionSnapshot.codexRateLimits.week ? { week: { ...summary.sessionSnapshot.codexRateLimits.week } } : {}),
+        }
+        : undefined,
+    },
+    recentEntries: summary.recentEntries.map(entry => ({ ...entry })),
+    historicalRollup: cloneRollup(summary.historicalRollup),
+    requestIndex: summary.requestIndex
+      ? Object.fromEntries(Object.entries(summary.requestIndex).map(([key, value]) => [key, { ...value }]))
+      : undefined,
+  };
+}
+
+function makeEmptySummary(provider: 'claude' | 'codex', mtimeMs = 0, size = 0): FileUsageSummary {
+  return {
+    provider,
+    sessionSnapshot: emptySessionSnapshot(provider === 'codex' ? 'events' : 'tokens'),
+    recentEntries: [],
+    historicalRollup: emptyHistoricalRollup(),
+    byteOffset: 0,
+    mtimeMs,
+    size,
+    lastAccessedAt: Date.now(),
+    ...(provider === 'claude' ? { requestIndex: {} } : {}),
+  };
+}
+
+function modelKey(entry: Pick<CompactRecentEntry, 'provider' | 'model'>): string {
+  return `${entry.provider}:${entry.model}`;
+}
+
+function addToAggregate(aggregate: HistoricalAggregate, entry: CompactRecentEntry): void {
+  aggregate.requestCount += 1;
+  aggregate.inputTokens += entry.inputTokens;
+  aggregate.outputTokens += entry.outputTokens;
+  aggregate.cacheCreationTokens += entry.cacheCreationTokens;
+  aggregate.cacheReadTokens += entry.cacheReadTokens;
+  aggregate.totalTokens += entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens;
+  aggregate.costUSD += entry.costUSD;
+  aggregate.cacheSavingsUSD += entry.cacheSavingsUSD;
+}
+
+function removeFromAggregate(aggregate: HistoricalAggregate, entry: CompactRecentEntry): void {
+  aggregate.requestCount -= 1;
+  aggregate.inputTokens -= entry.inputTokens;
+  aggregate.outputTokens -= entry.outputTokens;
+  aggregate.cacheCreationTokens -= entry.cacheCreationTokens;
+  aggregate.cacheReadTokens -= entry.cacheReadTokens;
+  aggregate.totalTokens -= entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens;
+  aggregate.costUSD -= entry.costUSD;
+  aggregate.cacheSavingsUSD -= entry.cacheSavingsUSD;
+}
+
+function addToHistoricalRollup(rollup: HistoricalRollup, entry: CompactRecentEntry, now = Date.now()): void {
+  addToAggregate(rollup.aggregate, entry);
+
+  const nextModel = rollup.modelTotals[modelKey(entry)] ?? {
+    model: entry.model,
+    provider: entry.provider,
+    tokens: 0,
+    costUSD: 0,
+  };
+  nextModel.tokens += entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens;
+  nextModel.costUSD += entry.costUSD;
+  rollup.modelTotals[modelKey(entry)] = nextModel;
+
+  if (entry.timestampMs < now - HOURLY_BUCKET_WINDOW_MS) return;
+  const bucketStartMs = entry.timestampMs - (entry.timestampMs % (60 * 60 * 1000));
+  const bucketKey = String(bucketStartMs);
+  const bucket: HistoricalBucket = rollup.hourlyBuckets[bucketKey] ?? {
+    timestampMs: bucketStartMs,
+    ...emptyHistoricalAggregate(),
+  };
+  addToAggregate(bucket, entry);
+  rollup.hourlyBuckets[bucketKey] = bucket;
+}
+
+function removeFromHistoricalRollup(rollup: HistoricalRollup, entry: CompactRecentEntry): void {
+  removeFromAggregate(rollup.aggregate, entry);
+
+  const key = modelKey(entry);
+  const currentModel = rollup.modelTotals[key];
+  if (currentModel) {
+    currentModel.tokens -= entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens;
+    currentModel.costUSD -= entry.costUSD;
+    if (currentModel.tokens <= 0 && currentModel.costUSD <= 0) delete rollup.modelTotals[key];
+    else rollup.modelTotals[key] = currentModel;
   }
 
-  const lines = splitCompleteJsonlLines(raw, false).lines;
-  const entries: ParsedEntry[] = [];
-  // key: message id, value: entries 배열 인덱스
-  // Set 대신 Map을 써서 동일 id 중 output_tokens 최대값 보존
-  const seen = new Map<string, number>();
-  let latestModel = '';
-  let latestRawModel = '';
-  let latestInputTokens = 0;
-  let latestCacheCreationTokens = 0;
-  let latestCacheReadTokens = 0;
-  const toolCounts: Record<string, number> = {};
-  const activityBreakdown = emptyBreakdown();
+  const bucketStartMs = entry.timestampMs - (entry.timestampMs % (60 * 60 * 1000));
+  const bucketKey = String(bucketStartMs);
+  const bucket = rollup.hourlyBuckets[bucketKey];
+  if (!bucket) return;
+  removeFromAggregate(bucket, entry);
+  if (bucket.requestCount <= 0 || bucket.totalTokens <= 0) delete rollup.hourlyBuckets[bucketKey];
+  else rollup.hourlyBuckets[bucketKey] = bucket;
+}
 
-  for (const line of lines) {
-    let obj: Record<string, unknown>;
-    try { obj = JSON.parse(line) as Record<string, unknown>; }
-    catch { continue; }
+function pruneHistoricalBuckets(rollup: HistoricalRollup, now = Date.now()): void {
+  const cutoff = now - HOURLY_BUCKET_WINDOW_MS;
+  for (const [bucketKey, bucket] of Object.entries(rollup.hourlyBuckets)) {
+    if (bucket.timestampMs < cutoff) delete rollup.hourlyBuckets[bucketKey];
+  }
+}
 
-    if (obj.type !== 'assistant') continue;
+function normalizeSummaryWindow(summary: FileUsageSummary, now = Date.now()): FileUsageSummary {
+  const next = cloneSummary(summary);
+  const cutoff = now - RECENT_WINDOW_MS;
+  const keptRecent: CompactRecentEntry[] = [];
 
-    // Format A: Claude Code native (message.usage)
-    const msgUsage = (obj.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
-    const msgModel = (obj.message as Record<string, unknown>)?.model as string | undefined;
-    const reqId = (obj.message as Record<string, unknown>)?.id as string | undefined;
-
-    // Format B: top-level usage (other providers)
-    const topUsage = obj.usage as Record<string, number> | undefined;
-    const topModel = obj.model as string | undefined;
-
-    const usage = msgUsage ?? topUsage;
-    const rawModel = msgModel ?? topModel ?? '';
-    const timestamp = obj.timestamp as string | undefined;
-
-    if (!usage || !rawModel) continue;
-
-    const inp = (usage.input_tokens ?? 0) + 0;
-    const out = usage.output_tokens ?? 0;
-    const cw  = usage.cache_creation_input_tokens ?? 0;
-    const cr  = usage.cache_read_input_tokens ?? usage.cached_prompt_tokens ?? 0;
-
-    if (inp + out + cw + cr === 0) continue;
-
-    const id = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
-    if (seen.has(id)) {
-      // 스트리밍 중 동일 message_id가 여러 번 기록될 수 있음
-      // output_tokens가 더 큰 엔트리(최종 청크)로 교체 — toolCounts/breakdown은 재산정 안 함
-      const prevIdx = seen.get(id)!;
-      if (out > entries[prevIdx].outputTokens) {
-        const updatedCost = calcCost(rawModel, inp, out, cw, cr);
-        const updatedSavings = calcCacheSavings(rawModel, cr);
-        entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost, cacheSavingsUSD: updatedSavings };
-      }
+  for (const entry of next.recentEntries) {
+    if (entry.timestampMs >= cutoff) {
+      keptRecent.push(entry);
       continue;
     }
-    seen.set(id, entries.length); // push 직전 인덱스 저장
 
-    // ── 첫 등장 엔트리만: toolCounts + activityBreakdown 집계 ──
-    const content = (obj.message as Record<string, unknown>)?.content as unknown[];
-    if (Array.isArray(content)) {
-      // 툴 호출 횟수
-      for (const c of content) {
-        const item = c as Record<string, unknown>;
-        if (item?.type === 'tool_use' && typeof item.name === 'string') {
-          toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1;
-        }
-      }
-
-      // Activity breakdown: content 블록 char 길이 비례로 output 토큰 배분
-      if (out > 0) {
-        const blockData: Array<{ cat: keyof ActivityBreakdown; chars: number }> = [];
-        for (const c of content) {
-          const item = c as Record<string, unknown>;
-          let chars = 0;
-          let cat: keyof ActivityBreakdown = 'response';
-          if (item.type === 'thinking') {
-            chars = (item.thinking as string ?? '').length;
-            cat = 'thinking';
-          } else if (item.type === 'text') {
-            chars = (item.text as string ?? '').length;
-            cat = 'response';
-          } else if (item.type === 'tool_use' && typeof item.name === 'string') {
-            chars = JSON.stringify(item.input ?? {}).length + item.name.length;
-            cat = classifyToolUse(item.name, item.input);
-          }
-          if (chars > 0) blockData.push({ cat, chars });
-        }
-        const totalChars = blockData.reduce((s, b) => s + b.chars, 0);
-        if (totalChars > 0) {
-          for (const { cat, chars } of blockData) {
-            activityBreakdown[cat] += Math.round((chars / totalChars) * out);
-          }
-        }
-      }
-    }
-
-    const cost = calcCost(rawModel, inp, out, cw, cr);
-    const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
-    const ts = timestamp ? new Date(timestamp) : new Date(0);
-
-    entries.push({
-      requestId: id,
-      timestamp: ts,
-      model: normalizeModel(rawModel),
-      provider: getProvider(rawModel),
-      inputTokens: inp,
-      outputTokens: out,
-      cacheCreationTokens: cw,
-      cacheReadTokens: cr,
-      costUSD: cost,
-      cacheSavingsUSD,
-    });
-
-    // Track latest entry (for context)
-    if (!latestModel || ts.getTime() > 0) {
-      latestModel = normalizeModel(rawModel);
-      latestRawModel = rawModel;
-      latestInputTokens = inp;
-      latestCacheReadTokens = cr;
+    addToHistoricalRollup(next.historicalRollup, entry, now);
+    if (next.requestIndex?.[entry.requestId]) {
+      next.requestIndex[entry.requestId] = { ...entry, region: 'historical' };
     }
   }
 
-  // Verify the latest entry is actually the most recent by timestamp
-  if (entries.length > 0) {
-    const last = entries[entries.length - 1];
-    latestModel = last.model;
-    latestRawModel = entries[entries.length - 1]?.model ?? '';
-    latestInputTokens = last.inputTokens;
-    latestCacheCreationTokens = last.cacheCreationTokens;
-    latestCacheReadTokens = last.cacheReadTokens;
-  }
-
-  return {
-    entries,
-    modelName: latestModel,
-    rawModel: latestRawModel,
-    latestInputTokens,
-    latestCacheCreationTokens,
-    latestCacheReadTokens,
-    toolCounts,
-    activityBreakdown,
-    activityBreakdownKind: 'tokens',
-  };
-}
-
-function emptyResult(): ParsedFile {
-  return {
-    entries: [],
-    modelName: '',
-    rawModel: '',
-    latestInputTokens: 0,
-    latestCacheCreationTokens: 0,
-    latestCacheReadTokens: 0,
-    toolCounts: {},
-    activityBreakdown: emptyBreakdown(),
-    activityBreakdownKind: 'tokens',
-  };
-}
-
-/**
- * mtime 기반 캐시 + 증분 파싱 지원 버전.
- * - mtime 동일 → 캐시 반환 (I/O 제로)
- * - 파일 커짐 → 새 바이트만 읽어서 기존 결과에 merge
- * - 파일 줄어듦 → 캐시 무효화 후 전체 재파싱
- */
-export function parseJsonlCached(filePath: string, cache: JsonlCache): ParsedFile {
-  let stat: fs.Stats;
-  try {
-    stat = fs.lstatSync(filePath);
-    if (stat.isSymbolicLink()) return emptyResult();
-  } catch {
-    cache.invalidate(filePath);
-    return emptyResult();
-  }
-
-  const cached = cache.get(filePath);
-
-  // 캐시 히트: mtime 동일 → 즉시 반환
-  if (cached && cached.mtimeMs === stat.mtimeMs) {
-    return cached.parsed;
-  }
-
-  // 파일이 줄어들었거나 캐시 없음 → 전체 재파싱
-  if (!cached || stat.size < cached.byteOffset) {
-    const result = parseJsonlFile(filePath);
-    // 전체 파싱 후 캐시 저장 (seen map 재구축)
-    const seenMap = new Map<string, number>();
-    for (let i = 0; i < result.entries.length; i++) {
-      seenMap.set(result.entries[i].requestId, i);
-    }
-    cache.set(filePath, {
-      mtimeMs: stat.mtimeMs,
-      fileSize: stat.size,
-      byteOffset: stat.size,
-      parsed: result,
-      seenMap,
-    });
-    return result;
-  }
-
-  // 증분 파싱: 새 바이트만 읽기
-  if (stat.size > cached.byteOffset) {
-    const newSize = stat.size - cached.byteOffset;
-    const buf = Buffer.alloc(newSize);
-    let fd: number;
-    try {
-      fd = fs.openSync(filePath, 'r');
-      fs.readSync(fd, buf, 0, newSize, cached.byteOffset);
-      fs.closeSync(fd);
-    } catch {
-      // 읽기 실패 시 전체 재파싱 fallback
-      cache.invalidate(filePath);
-      return parseJsonlCached(filePath, cache);
-    }
-
-    const newText = buf.toString('utf-8');
-    // byteOffset은 항상 완전한 줄 끝(\n) 위치이므로 전체 newText 파싱
-    // 불완전 줄은 JSON.parse catch로 자동 스킵됨
-    const textToParse = newText;
-
-    if (textToParse.trim()) {
-      // 기존 결과를 복사하여 merge
-      const entries = [...cached.parsed.entries];
-      const seenMap = new Map(cached.seenMap);
-      const toolCounts = { ...cached.parsed.toolCounts };
-      const activityBreakdown = { ...cached.parsed.activityBreakdown };
-      let latestModel = cached.parsed.modelName;
-      let latestRawModel = cached.parsed.rawModel;
-      let latestInputTokens = cached.parsed.latestInputTokens;
-      let latestCacheCreationTokens = cached.parsed.latestCacheCreationTokens;
-      let latestCacheReadTokens = cached.parsed.latestCacheReadTokens;
-
-      const lines = textToParse.split('\n').filter(l => l.trim());
-      for (const line of lines) {
-        let obj: Record<string, unknown>;
-        try { obj = JSON.parse(line) as Record<string, unknown>; }
-        catch { continue; }
-
-        if (obj.type !== 'assistant') continue;
-
-        const msgUsage = (obj.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
-        const msgModel = (obj.message as Record<string, unknown>)?.model as string | undefined;
-        const reqId = (obj.message as Record<string, unknown>)?.id as string | undefined;
-        const topUsage = obj.usage as Record<string, number> | undefined;
-        const topModel = obj.model as string | undefined;
-
-        const usage = msgUsage ?? topUsage;
-        const rawModel = msgModel ?? topModel ?? '';
-        const timestamp = obj.timestamp as string | undefined;
-
-        if (!usage || !rawModel) continue;
-
-        const inp = (usage.input_tokens ?? 0) + 0;
-        const out = usage.output_tokens ?? 0;
-        const cw  = usage.cache_creation_input_tokens ?? 0;
-        const cr  = usage.cache_read_input_tokens ?? usage.cached_prompt_tokens ?? 0;
-
-        if (inp + out + cw + cr === 0) continue;
-
-        const id = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
-        if (seenMap.has(id)) {
-          const prevIdx = seenMap.get(id)!;
-          if (out > entries[prevIdx].outputTokens) {
-            const updatedCost = calcCost(rawModel, inp, out, cw, cr);
-            const updatedSavings = calcCacheSavings(rawModel, cr);
-            entries[prevIdx] = { ...entries[prevIdx], outputTokens: out, costUSD: updatedCost, cacheSavingsUSD: updatedSavings };
-          }
-          continue;
-        }
-        seenMap.set(id, entries.length);
-
-        // toolCounts + activityBreakdown 집계
-        const content = (obj.message as Record<string, unknown>)?.content as unknown[];
-        if (Array.isArray(content)) {
-          for (const c of content) {
-            const item = c as Record<string, unknown>;
-            if (item?.type === 'tool_use' && typeof item.name === 'string') {
-              toolCounts[item.name] = (toolCounts[item.name] ?? 0) + 1;
-            }
-          }
-          if (out > 0) {
-            const blockData: Array<{ cat: keyof typeof activityBreakdown; chars: number }> = [];
-            for (const c of content) {
-              const item = c as Record<string, unknown>;
-              let chars = 0;
-              let cat: keyof typeof activityBreakdown = 'response';
-              if (item.type === 'thinking') {
-                chars = (item.thinking as string ?? '').length;
-                cat = 'thinking';
-              } else if (item.type === 'text') {
-                chars = (item.text as string ?? '').length;
-                cat = 'response';
-              } else if (item.type === 'tool_use' && typeof item.name === 'string') {
-                chars = JSON.stringify(item.input ?? {}).length + item.name.length;
-                cat = classifyToolUse(item.name, item.input);
-              }
-              if (chars > 0) blockData.push({ cat, chars });
-            }
-            const totalChars = blockData.reduce((s, b) => s + b.chars, 0);
-            if (totalChars > 0) {
-              for (const { cat, chars } of blockData) {
-                activityBreakdown[cat] += Math.round((chars / totalChars) * out);
-              }
-            }
-          }
-        }
-
-        const cost = calcCost(rawModel, inp, out, cw, cr);
-        const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
-        const ts = timestamp ? new Date(timestamp) : new Date(0);
-
-        entries.push({
-          requestId: id,
-          timestamp: ts,
-          model: normalizeModel(rawModel),
-          provider: getProvider(rawModel),
-          inputTokens: inp,
-          outputTokens: out,
-          cacheCreationTokens: cw,
-          cacheReadTokens: cr,
-          costUSD: cost,
-          cacheSavingsUSD,
-        });
-
-        latestModel = normalizeModel(rawModel);
-        latestRawModel = rawModel;
-        latestInputTokens = inp;
-        latestCacheCreationTokens = cw;
-        latestCacheReadTokens = cr;
-      }
-
-      // 마지막 엔트리 기준으로 latest 갱신
-      if (entries.length > 0) {
-        const last = entries[entries.length - 1];
-        latestModel = last.model;
-        latestRawModel = entries[entries.length - 1]?.model ?? '';
-        latestInputTokens = last.inputTokens;
-        latestCacheCreationTokens = last.cacheCreationTokens;
-        latestCacheReadTokens = last.cacheReadTokens;
-      }
-
-      const result: ParsedFile = {
-        entries, modelName: latestModel, rawModel: latestRawModel,
-        latestInputTokens, latestCacheCreationTokens, latestCacheReadTokens,
-        toolCounts, activityBreakdown, activityBreakdownKind: 'tokens',
-      };
-      cache.set(filePath, {
-        mtimeMs: stat.mtimeMs,
-        fileSize: stat.size,
-        byteOffset: stat.size,
-        parsed: result,
-        seenMap,
-      });
-      return result;
-    }
-  }
-
-  // 새 데이터 없음 — mtime만 갱신하고 캐시 반환
-  cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
-  return cached.parsed;
+  next.recentEntries = keptRecent;
+  pruneHistoricalBuckets(next.historicalRollup, now);
+  next.lastAccessedAt = now;
+  return next;
 }
 
 function asNumber(value: unknown): number {
@@ -563,41 +319,11 @@ function codexEntryId(filePath: string, line: string, timestamp?: string): strin
   return `${filePath}-${timestamp ?? 'no-ts'}-${hashString(line)}`;
 }
 
-function splitCompleteJsonlLines(text: string, holdOpenLastLine: boolean): { lines: string[]; pendingText: string } {
-  const parts = text.split('\n');
-  let pendingText = '';
-  if (holdOpenLastLine && !text.endsWith('\n')) {
-    pendingText = parts.pop() ?? '';
-  }
-  return {
-    lines: parts.map(line => line.replace(/\r$/, '')).filter(line => line.trim()),
-    pendingText,
-  };
-}
-
-function readInvalidTrailingJsonlText(filePath: string): string {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    if (raw.endsWith('\n')) return '';
-    const tail = raw.slice(raw.lastIndexOf('\n') + 1);
-    if (!tail.trim()) return '';
-    JSON.parse(tail);
-    return '';
-  } catch {
-    try {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      return raw.slice(raw.lastIndexOf('\n') + 1);
-    } catch {
-      return '';
-    }
-  }
-}
-
-function parseCodexRateLimits(payload: Record<string, unknown>, observedAt: number): ParsedFile['codexRateLimits'] {
+function parseCodexRateLimits(payload: Record<string, unknown>, observedAt: number): SessionSnapshot['codexRateLimits'] {
   const rateLimits = payload.rate_limits as Record<string, unknown> | undefined;
   if (!rateLimits) return undefined;
 
-  const result: ParsedFile['codexRateLimits'] = {};
+  const result: SessionSnapshot['codexRateLimits'] = {};
   for (const key of ['primary', 'secondary'] as const) {
     const win = rateLimits[key] as Record<string, unknown> | undefined;
     if (!win) continue;
@@ -614,341 +340,366 @@ function parseCodexRateLimits(payload: Record<string, unknown>, observedAt: numb
 }
 
 function mergeCodexRateLimits(
-  current: ParsedFile['codexRateLimits'],
-  next: ParsedFile['codexRateLimits'],
-): ParsedFile['codexRateLimits'] {
+  current: SessionSnapshot['codexRateLimits'],
+  next: SessionSnapshot['codexRateLimits'],
+): SessionSnapshot['codexRateLimits'] {
   if (!next?.h5 && !next?.week) return current;
-  const merged: ParsedFile['codexRateLimits'] = { ...(current ?? {}) };
+  const merged: SessionSnapshot['codexRateLimits'] = { ...(current ?? {}) };
   if (next.h5 && (!merged.h5 || next.h5.observedAt >= merged.h5.observedAt)) merged.h5 = next.h5;
   if (next.week && (!merged.week || next.week.observedAt >= merged.week.observedAt)) merged.week = next.week;
   return merged;
 }
 
-export function parseCodexJsonlFile(filePath: string): ParsedFile {
-  let raw: string;
-  try {
-    const stat = fs.lstatSync(filePath);
-    if (stat.isSymbolicLink()) return emptyResult();
-    raw = fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return emptyResult();
-  }
+async function scanJsonlLines(
+  filePath: string,
+  startOffset: number,
+  initialPendingText: string | undefined,
+  onLine: (line: string) => void,
+): Promise<string> {
+  const stream = fs.createReadStream(filePath, {
+    encoding: 'utf8',
+    start: startOffset,
+  });
 
-  const lines = splitCompleteJsonlLines(raw, false).lines;
-  const entries: ParsedEntry[] = [];
-  let latestModel = '';
-  let latestRawModel = '';
-  let latestInputTokens = 0;
-  let latestCacheCreationTokens = 0;
-  let latestCacheReadTokens = 0;
-  let contextMax = 0;
-  let codexRateLimits: ParsedFile['codexRateLimits'] = undefined;
-  const toolCounts: Record<string, number> = {};
-  const activityBreakdown = emptyBreakdown();
+  let buffer = initialPendingText ?? '';
 
-  for (const line of lines) {
-    let obj: Record<string, unknown>;
-    try { obj = JSON.parse(line) as Record<string, unknown>; }
-    catch { continue; }
-
-    const timestamp = obj.timestamp as string | undefined;
-    const payload = obj.payload as Record<string, unknown> | undefined;
-    if (!payload) continue;
-
-    if (obj.type === 'session_meta') {
-      const model = inferCodexModel(payload);
-      if (model) {
-        latestRawModel = model;
-        latestModel = normalizeModel(model);
+  return new Promise((resolve, reject) => {
+    stream.on('data', (chunk: string) => {
+      buffer += chunk;
+      while (true) {
+        const newlineIndex = buffer.indexOf('\n');
+        if (newlineIndex < 0) break;
+        const line = buffer.slice(0, newlineIndex).replace(/\r$/, '');
+        buffer = buffer.slice(newlineIndex + 1);
+        if (line.trim()) onLine(line);
       }
-      continue;
-    }
-
-    if (obj.type === 'turn_context') {
-      const model = inferCodexModel(payload);
-      if (model) {
-        latestRawModel = model;
-        latestModel = normalizeModel(model);
-      }
-      continue;
-    }
-
-    if (obj.type === 'event_msg' && payload.type === 'task_started') {
-      const model = inferCodexModel(payload);
-      if (model) {
-        latestRawModel = model;
-        latestModel = normalizeModel(model);
-      }
-      contextMax = asNumber(payload.model_context_window);
-      continue;
-    }
-
-    if (obj.type === 'response_item' && payload.type === 'function_call') {
-      const name = payload.name as string | undefined;
-      if (name) {
-        toolCounts[name] = (toolCounts[name] ?? 0) + 1;
-        const cat = classifyToolUse(name, payload.arguments);
-        activityBreakdown[cat] += 1;
-      }
-      continue;
-    }
-
-    if (obj.type !== 'event_msg' || payload.type !== 'token_count') continue;
-
-    const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
-    const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
-    const nextRateLimits = parseCodexRateLimits(payload, observedAt);
-    if (nextRateLimits?.h5 && (!codexRateLimits?.h5 || nextRateLimits.h5.observedAt >= codexRateLimits.h5.observedAt)) {
-      codexRateLimits = { ...(codexRateLimits ?? {}), h5: nextRateLimits.h5 };
-    }
-    if (nextRateLimits?.week && (!codexRateLimits?.week || nextRateLimits.week.observedAt >= codexRateLimits.week.observedAt)) {
-      codexRateLimits = { ...(codexRateLimits ?? {}), week: nextRateLimits.week };
-    }
-
-    const info = payload.info as Record<string, unknown> | null | undefined;
-    const usage = info?.last_token_usage as Record<string, unknown> | undefined;
-    if (!usage) continue;
-
-    const rawInput = asNumber(usage.input_tokens);
-    const cached = Math.min(rawInput, asNumber(usage.cached_input_tokens));
-    const inp = Math.max(0, rawInput - cached);
-    const out = asNumber(usage.output_tokens);
-    const cw = 0;
-    const cr = cached;
-
-    if (inp + out + cr === 0) continue;
-
-    const rawModel = latestRawModel || inferCodexModel(payload, info, usage);
-    if (!rawModel) continue;
-    const ts = timestamp ? new Date(timestamp) : new Date(0);
-    const id = codexEntryId(filePath, line, timestamp);
-    const cost = calcCost(rawModel, inp, out, cw, cr);
-    const cacheSavingsUSD = calcCacheSavings(rawModel, cr);
-
-    entries.push({
-      requestId: id,
-      timestamp: ts,
-      model: normalizeModel(rawModel),
-      provider: 'codex',
-      inputTokens: inp,
-      outputTokens: out,
-      cacheCreationTokens: cw,
-      cacheReadTokens: cr,
-      costUSD: cost,
-      cacheSavingsUSD,
     });
 
-    latestModel = normalizeModel(rawModel);
-    latestRawModel = rawModel;
-    latestInputTokens = inp;
-    latestCacheCreationTokens = cw;
-    latestCacheReadTokens = cr;
-    contextMax = contextMax || asNumber(info?.model_context_window);
-  }
+    stream.on('error', reject);
 
-  return {
-    entries,
-    modelName: latestModel,
-    rawModel: latestRawModel,
-    latestInputTokens,
-    latestCacheCreationTokens,
-    latestCacheReadTokens,
-    contextMax,
-    codexRateLimits,
-    toolCounts,
-    activityBreakdown,
-    activityBreakdownKind: 'events',
-  };
+    stream.on('end', () => {
+      const trailing = buffer.replace(/\r$/, '');
+      if (!trailing.trim()) {
+        resolve('');
+        return;
+      }
+
+      try {
+        JSON.parse(trailing);
+        onLine(trailing);
+        resolve('');
+      } catch {
+        resolve(trailing);
+      }
+    });
+  });
 }
 
-export function parseCodexJsonlCached(filePath: string, cache: JsonlCache): ParsedFile {
+function updateClaudeSnapshot(summary: FileUsageSummary, rawModel: string, inp: number, cw: number, cr: number): void {
+  summary.sessionSnapshot.modelName = normalizeModel(rawModel);
+  summary.sessionSnapshot.rawModel = rawModel;
+  summary.sessionSnapshot.latestInputTokens = inp;
+  summary.sessionSnapshot.latestCacheCreationTokens = cw;
+  summary.sessionSnapshot.latestCacheReadTokens = cr;
+}
+
+function updateCodexSnapshot(
+  summary: FileUsageSummary,
+  rawModel: string,
+  inp: number,
+  cr: number,
+  contextMax: number,
+  codexRateLimits: SessionSnapshot['codexRateLimits'],
+): void {
+  summary.sessionSnapshot.modelName = normalizeModel(rawModel);
+  summary.sessionSnapshot.rawModel = rawModel;
+  summary.sessionSnapshot.latestInputTokens = inp;
+  summary.sessionSnapshot.latestCacheCreationTokens = 0;
+  summary.sessionSnapshot.latestCacheReadTokens = cr;
+  if (contextMax > 0) summary.sessionSnapshot.contextMax = contextMax;
+  if (codexRateLimits) {
+    summary.sessionSnapshot.codexRateLimits = mergeCodexRateLimits(summary.sessionSnapshot.codexRateLimits, codexRateLimits);
+  }
+}
+
+function replaceClaudeEntry(summary: FileUsageSummary, previous: RequestIndexEntry, nextEntry: CompactRecentEntry): void {
+  if (previous.region === 'historical') {
+    removeFromHistoricalRollup(summary.historicalRollup, previous);
+    addToHistoricalRollup(summary.historicalRollup, nextEntry);
+    if (summary.requestIndex) summary.requestIndex[nextEntry.requestId] = { ...nextEntry, region: 'historical' };
+    return;
+  }
+
+  const recentIndex = summary.recentEntries.findIndex(entry => entry.requestId === previous.requestId);
+  if (recentIndex >= 0) summary.recentEntries[recentIndex] = nextEntry;
+  if (summary.requestIndex) summary.requestIndex[nextEntry.requestId] = { ...nextEntry, region: 'recent' };
+}
+
+function addSummaryEntry(summary: FileUsageSummary, entry: CompactRecentEntry, now: number): void {
+  if (entry.timestampMs >= now - RECENT_WINDOW_MS) {
+    summary.recentEntries.push(entry);
+    if (summary.requestIndex) summary.requestIndex[entry.requestId] = { ...entry, region: 'recent' };
+    return;
+  }
+
+  addToHistoricalRollup(summary.historicalRollup, entry, now);
+  if (summary.requestIndex) summary.requestIndex[entry.requestId] = { ...entry, region: 'historical' };
+}
+
+function processClaudeLine(summary: FileUsageSummary, line: string, now: number): void {
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  if (obj.type !== 'assistant') return;
+
+  const msgUsage = (obj.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
+  const msgModel = (obj.message as Record<string, unknown>)?.model as string | undefined;
+  const reqId = (obj.message as Record<string, unknown>)?.id as string | undefined;
+  const topUsage = obj.usage as Record<string, number> | undefined;
+  const topModel = obj.model as string | undefined;
+
+  const usage = msgUsage ?? topUsage;
+  const rawModel = msgModel ?? topModel ?? '';
+  const timestamp = obj.timestamp as string | undefined;
+  if (!usage || !rawModel) return;
+
+  const inp = usage.input_tokens ?? 0;
+  const out = usage.output_tokens ?? 0;
+  const cw = usage.cache_creation_input_tokens ?? 0;
+  const cr = usage.cache_read_input_tokens ?? usage.cached_prompt_tokens ?? 0;
+  if (inp + out + cw + cr === 0) return;
+
+  updateClaudeSnapshot(summary, rawModel, inp, cw, cr);
+
+  const requestId = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
+  const timestampMs = timestamp ? new Date(timestamp).getTime() : 0;
+  const nextEntry: CompactRecentEntry = {
+    requestId,
+    timestampMs,
+    model: normalizeModel(rawModel),
+    provider: getProvider(rawModel),
+    inputTokens: inp,
+    outputTokens: out,
+    cacheCreationTokens: cw,
+    cacheReadTokens: cr,
+    costUSD: calcCost(rawModel, inp, out, cw, cr),
+    cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+  };
+
+  const previous = summary.requestIndex?.[requestId];
+  if (previous) {
+    if (out > previous.outputTokens) replaceClaudeEntry(summary, previous, nextEntry);
+    return;
+  }
+
+  const content = (obj.message as Record<string, unknown>)?.content as unknown[];
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      const item = block as Record<string, unknown>;
+      if (item?.type === 'tool_use' && typeof item.name === 'string') {
+        summary.sessionSnapshot.toolCounts[item.name] = (summary.sessionSnapshot.toolCounts[item.name] ?? 0) + 1;
+      }
+    }
+
+    if (out > 0) {
+      const blockData: Array<{ cat: keyof ActivityBreakdown; chars: number }> = [];
+      for (const block of content) {
+        const item = block as Record<string, unknown>;
+        let chars = 0;
+        let cat: keyof ActivityBreakdown = 'response';
+        if (item.type === 'thinking') {
+          chars = (item.thinking as string ?? '').length;
+          cat = 'thinking';
+        } else if (item.type === 'text') {
+          chars = (item.text as string ?? '').length;
+          cat = 'response';
+        } else if (item.type === 'tool_use' && typeof item.name === 'string') {
+          chars = JSON.stringify(item.input ?? {}).length + item.name.length;
+          cat = classifyToolUse(item.name, item.input);
+        }
+        if (chars > 0) blockData.push({ cat, chars });
+      }
+
+      const totalChars = blockData.reduce((sum, block) => sum + block.chars, 0);
+      if (totalChars > 0) {
+        for (const { cat, chars } of blockData) {
+          summary.sessionSnapshot.activityBreakdown[cat] += Math.round((chars / totalChars) * out);
+        }
+      }
+    }
+  }
+
+  addSummaryEntry(summary, nextEntry, now);
+}
+
+function processCodexLine(summary: FileUsageSummary, filePath: string, line: string, now: number): void {
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  const timestamp = obj.timestamp as string | undefined;
+  const payload = obj.payload as Record<string, unknown> | undefined;
+  if (!payload) return;
+
+  if (obj.type === 'session_meta' || obj.type === 'turn_context') {
+    const model = inferCodexModel(payload);
+    if (model) {
+      summary.sessionSnapshot.rawModel = model;
+      summary.sessionSnapshot.modelName = normalizeModel(model);
+    }
+    return;
+  }
+
+  if (obj.type === 'event_msg' && payload.type === 'task_started') {
+    const model = inferCodexModel(payload);
+    if (model) {
+      summary.sessionSnapshot.rawModel = model;
+      summary.sessionSnapshot.modelName = normalizeModel(model);
+    }
+    const contextMax = asNumber(payload.model_context_window);
+    if (contextMax > 0) summary.sessionSnapshot.contextMax = contextMax;
+    return;
+  }
+
+  if (obj.type === 'response_item' && payload.type === 'function_call') {
+    const name = payload.name as string | undefined;
+    if (!name) return;
+    summary.sessionSnapshot.toolCounts[name] = (summary.sessionSnapshot.toolCounts[name] ?? 0) + 1;
+    const cat = classifyToolUse(name, payload.arguments);
+    summary.sessionSnapshot.activityBreakdown[cat] += 1;
+    return;
+  }
+
+  if (obj.type !== 'event_msg' || payload.type !== 'token_count') return;
+
+  const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
+  const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
+  const nextRateLimits = parseCodexRateLimits(payload, observedAt);
+
+  const info = payload.info as Record<string, unknown> | null | undefined;
+  const usage = info?.last_token_usage as Record<string, unknown> | undefined;
+  if (!usage) return;
+
+  const rawInput = asNumber(usage.input_tokens);
+  const cachedInput = Math.min(rawInput, asNumber(usage.cached_input_tokens));
+  const inp = Math.max(0, rawInput - cachedInput);
+  const out = asNumber(usage.output_tokens);
+  const cr = cachedInput;
+  if (inp + out + cr === 0) return;
+
+  const rawModel = summary.sessionSnapshot.rawModel || inferCodexModel(payload, info, usage);
+  if (!rawModel) return;
+
+  updateCodexSnapshot(summary, rawModel, inp, cr, asNumber(info?.model_context_window), nextRateLimits);
+
+  const entry: CompactRecentEntry = {
+    requestId: codexEntryId(filePath, line, timestamp),
+    timestampMs: timestamp ? new Date(timestamp).getTime() : 0,
+    model: normalizeModel(rawModel),
+    provider: 'codex',
+    inputTokens: inp,
+    outputTokens: out,
+    cacheCreationTokens: 0,
+    cacheReadTokens: cr,
+    costUSD: calcCost(rawModel, inp, out, 0, cr),
+    cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+  };
+
+  addSummaryEntry(summary, entry, now);
+}
+
+async function scanSummaryFromScratch(
+  filePath: string,
+  provider: 'claude' | 'codex',
+  stat: fs.Stats,
+  now: number,
+): Promise<FileUsageSummary> {
+  const summary = makeEmptySummary(provider, stat.mtimeMs, stat.size);
+  const processLine = provider === 'claude'
+    ? (line: string) => processClaudeLine(summary, line, now)
+    : (line: string) => processCodexLine(summary, filePath, line, now);
+  const pendingText = await scanJsonlLines(filePath, 0, undefined, processLine);
+  summary.byteOffset = stat.size;
+  summary.pendingText = pendingText || undefined;
+  summary.mtimeMs = stat.mtimeMs;
+  summary.size = stat.size;
+  return normalizeSummaryWindow(summary, now);
+}
+
+async function scanSummaryIncrementally(
+  filePath: string,
+  provider: 'claude' | 'codex',
+  existing: FileUsageSummary,
+  stat: fs.Stats,
+  now: number,
+): Promise<FileUsageSummary> {
+  const summary = normalizeSummaryWindow(existing, now);
+  const processLine = provider === 'claude'
+    ? (line: string) => processClaudeLine(summary, line, now)
+    : (line: string) => processCodexLine(summary, filePath, line, now);
+  const pendingText = await scanJsonlLines(filePath, summary.byteOffset, summary.pendingText, processLine);
+  summary.byteOffset = stat.size;
+  summary.pendingText = pendingText || undefined;
+  summary.mtimeMs = stat.mtimeMs;
+  summary.size = stat.size;
+  return normalizeSummaryWindow(summary, now);
+}
+
+export async function scanJsonlSummaryCached(
+  filePath: string,
+  provider: 'claude' | 'codex',
+  cache: JsonlCache,
+  force = false,
+): Promise<FileUsageSummary> {
   let stat: fs.Stats;
   try {
     stat = fs.lstatSync(filePath);
-    if (stat.isSymbolicLink()) return emptyResult();
+    if (stat.isSymbolicLink()) {
+      cache.invalidate(filePath);
+      return makeEmptySummary(provider);
+    }
   } catch {
     cache.invalidate(filePath);
-    return emptyResult();
+    return makeEmptySummary(provider);
   }
 
-  const cached = cache.get(filePath);
-  if (cached && cached.mtimeMs === stat.mtimeMs) {
-    return cached.parsed;
-  }
-
-  if (cached && stat.size >= cached.byteOffset) {
-    const newSize = stat.size - cached.byteOffset;
-    if (newSize === 0) {
-      cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
-      return cached.parsed;
+  if (!force) {
+    const fresh = cache.getFresh(filePath, stat.mtimeMs, stat.size);
+    if (fresh) {
+      const normalized = normalizeSummaryWindow(fresh);
+      cache.set(filePath, normalized);
+      return normalized;
     }
+  }
 
-    let fd: number | null = null;
+  const key = `${provider}:${scanKey(filePath)}`;
+  const pending = pendingScans.get(key);
+  if (pending) return pending;
+
+  const task = (async () => {
     try {
-      const buf = Buffer.alloc(newSize);
-      fd = fs.openSync(filePath, 'r');
-      fs.readSync(fd, buf, 0, newSize, cached.byteOffset);
-      const newText = buf.toString('utf-8');
-      const textToParse = `${cached.pendingText ?? ''}${newText}`;
-
-      if (!textToParse.trim()) {
-        cache.set(filePath, { ...cached, mtimeMs: stat.mtimeMs, fileSize: stat.size });
-        return cached.parsed;
-      }
-
-      const entries = [...cached.parsed.entries];
-      const seenMap = new Map(cached.seenMap);
-      let latestModel = cached.parsed.modelName;
-      let latestRawModel = cached.parsed.rawModel;
-      let latestInputTokens = cached.parsed.latestInputTokens;
-      let latestCacheCreationTokens = cached.parsed.latestCacheCreationTokens;
-      let latestCacheReadTokens = cached.parsed.latestCacheReadTokens;
-      let contextMax = cached.parsed.contextMax ?? 0;
-      let codexRateLimits = cached.parsed.codexRateLimits;
-      const toolCounts = { ...cached.parsed.toolCounts };
-      const activityBreakdown = { ...cached.parsed.activityBreakdown };
-
-      const { lines, pendingText } = splitCompleteJsonlLines(textToParse, true);
-      for (const line of lines) {
-        let obj: Record<string, unknown>;
-        try { obj = JSON.parse(line) as Record<string, unknown>; }
-        catch { continue; }
-
-        const timestamp = obj.timestamp as string | undefined;
-        const payload = obj.payload as Record<string, unknown> | undefined;
-        if (!payload) continue;
-
-        if (obj.type === 'session_meta') {
-          const model = inferCodexModel(payload);
-          if (model) {
-            latestRawModel = model;
-            latestModel = normalizeModel(model);
-          }
-          continue;
-        }
-
-        if (obj.type === 'turn_context') {
-          const model = inferCodexModel(payload);
-          if (model) {
-            latestRawModel = model;
-            latestModel = normalizeModel(model);
-          }
-          continue;
-        }
-
-        if (obj.type === 'event_msg' && payload.type === 'task_started') {
-          const model = inferCodexModel(payload);
-          if (model) {
-            latestRawModel = model;
-            latestModel = normalizeModel(model);
-          }
-          contextMax = asNumber(payload.model_context_window);
-          continue;
-        }
-
-        if (obj.type === 'response_item' && payload.type === 'function_call') {
-          const name = payload.name as string | undefined;
-          if (name) {
-            toolCounts[name] = (toolCounts[name] ?? 0) + 1;
-            const cat = classifyToolUse(name, payload.arguments);
-            activityBreakdown[cat] += 1;
-          }
-          continue;
-        }
-
-        if (obj.type !== 'event_msg' || payload.type !== 'token_count') continue;
-
-        const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
-        const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
-        codexRateLimits = mergeCodexRateLimits(codexRateLimits, parseCodexRateLimits(payload, observedAt));
-
-        const info = payload.info as Record<string, unknown> | null | undefined;
-        const usage = info?.last_token_usage as Record<string, unknown> | undefined;
-        if (!usage) continue;
-
-        const rawInput = asNumber(usage.input_tokens);
-        const cachedInput = Math.min(rawInput, asNumber(usage.cached_input_tokens));
-        const inp = Math.max(0, rawInput - cachedInput);
-        const out = asNumber(usage.output_tokens);
-        const cw = 0;
-        const cr = cachedInput;
-
-        if (inp + out + cr === 0) continue;
-
-        const rawModel = latestRawModel || inferCodexModel(payload, info, usage);
-        if (!rawModel) continue;
-        const ts = timestamp ? new Date(timestamp) : new Date(0);
-        const id = codexEntryId(filePath, line, timestamp);
-        if (seenMap.has(id)) continue;
-        seenMap.set(id, entries.length);
-
-        entries.push({
-          requestId: id,
-          timestamp: ts,
-          model: normalizeModel(rawModel),
-          provider: 'codex',
-          inputTokens: inp,
-          outputTokens: out,
-          cacheCreationTokens: cw,
-          cacheReadTokens: cr,
-          costUSD: calcCost(rawModel, inp, out, cw, cr),
-          cacheSavingsUSD: calcCacheSavings(rawModel, cr),
-        });
-
-        latestModel = normalizeModel(rawModel);
-        latestRawModel = rawModel;
-        latestInputTokens = inp;
-        latestCacheCreationTokens = cw;
-        latestCacheReadTokens = cr;
-        contextMax = contextMax || asNumber(info?.model_context_window);
-      }
-
-      const result: ParsedFile = {
-        entries,
-        modelName: latestModel,
-        rawModel: latestRawModel,
-        latestInputTokens,
-        latestCacheCreationTokens,
-        latestCacheReadTokens,
-        contextMax,
-        codexRateLimits,
-        toolCounts,
-        activityBreakdown,
-        activityBreakdownKind: 'events',
-      };
-      cache.set(filePath, {
-        mtimeMs: stat.mtimeMs,
-        fileSize: stat.size,
-        byteOffset: stat.size,
-        pendingText,
-        parsed: result,
-        seenMap,
-      });
-      return result;
+      const cached = !force ? cache.get(filePath) : null;
+      const next = cached && stat.size >= cached.byteOffset
+        ? await scanSummaryIncrementally(filePath, provider, cached, stat, Date.now())
+        : await scanSummaryFromScratch(filePath, provider, stat, Date.now());
+      cache.set(filePath, next);
+      return next;
     } catch {
-      cache.invalidate(filePath);
-      return parseCodexJsonlCached(filePath, cache);
+      const fallback = await scanSummaryFromScratch(filePath, provider, stat, Date.now()).catch(() => makeEmptySummary(provider));
+      cache.set(filePath, fallback);
+      return fallback;
     } finally {
-      if (fd !== null) {
-        try { fs.closeSync(fd); } catch { /* ignore */ }
-      }
+      pendingScans.delete(key);
     }
-  }
+  })();
 
-  const result = parseCodexJsonlFile(filePath);
-  const seenMap = new Map<string, number>();
-  for (let i = 0; i < result.entries.length; i++) {
-    seenMap.set(result.entries[i].requestId, i);
-  }
-  cache.set(filePath, {
-    mtimeMs: stat.mtimeMs,
-    fileSize: stat.size,
-    byteOffset: stat.size,
-    pendingText: readInvalidTrailingJsonlText(filePath) || undefined,
-    parsed: result,
-    seenMap,
-  });
-  return result;
+  pendingScans.set(key, task);
+  return task;
 }
-
-export { normalizeModel, getProvider };

@@ -4,6 +4,7 @@ import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
 import HelpView from './views/HelpView';
+import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars } from './theme';
 import { ThemeProvider } from './ThemeContext';
 
@@ -42,6 +43,7 @@ const DEFAULT_STATE: AppState = {
   },
   autoLimits: null,
   initialRefreshComplete: false,
+  historyWarmupPending: false,
   lastUpdated: 0,
   apiConnected: false,
   apiError: undefined,
@@ -241,9 +243,11 @@ export default function App() {
   if (view === 'settings') {
     return (
       <ThemeProvider value={theme}>
-        <div style={bgStyle}>
-          <SettingsView settings={state.settings} onSave={handleSaveSettings} onBack={() => setView('main')} />
-        </div>
+        <RenderErrorBoundary label="Settings View" fill>
+          <div style={bgStyle}>
+            <SettingsView settings={state.settings} onSave={handleSaveSettings} onBack={() => setView('main')} />
+          </div>
+        </RenderErrorBoundary>
       </ThemeProvider>
     );
   }
@@ -251,9 +255,11 @@ export default function App() {
   if (view === 'notifications') {
     return (
       <ThemeProvider value={theme}>
-        <div style={bgStyle}>
-          <NotificationsView onBack={() => setView('main')} />
-        </div>
+        <RenderErrorBoundary label="Notifications View" fill>
+          <div style={bgStyle}>
+            <NotificationsView onBack={() => setView('main')} />
+          </div>
+        </RenderErrorBoundary>
       </ThemeProvider>
     );
   }
@@ -261,22 +267,26 @@ export default function App() {
   if (view === 'help') {
     return (
       <ThemeProvider value={theme}>
-        <div style={bgStyle}>
-          <HelpView onBack={() => setView('main')} />
-        </div>
+        <RenderErrorBoundary label="Help View" fill>
+          <div style={bgStyle}>
+            <HelpView onBack={() => setView('main')} />
+          </div>
+        </RenderErrorBoundary>
       </ThemeProvider>
     );
   }
 
   return (
     <ThemeProvider value={theme}>
-      <MainView
-        state={state}
-        onNav={setView}
-        onQuit={handleQuit}
-        onRefresh={refresh}
-        onScrollActivity={handleScrollActivity}
-      />
+      <RenderErrorBoundary label="Main View" fill>
+        <MainView
+          state={state}
+          onNav={setView}
+          onQuit={handleQuit}
+          onRefresh={refresh}
+          onScrollActivity={handleScrollActivity}
+        />
+      </RenderErrorBoundary>
     </ThemeProvider>
   );
 }
