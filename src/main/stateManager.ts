@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
-import { discoverSessions, DiscoveredSession, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
+import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDiscoveryScope, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
 import { scanJsonlSummaryCached } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
@@ -87,6 +87,16 @@ interface PerfMetrics {
   cpuUserMs: number;
   cpuSystemMs: number;
   cpuTotalMs: number;
+}
+
+interface SessionBuildResult {
+  sessions: SessionInfo[];
+  discoveryScope: SessionDiscoveryScope;
+  discoveredCount: number;
+  dedupedCount: number;
+  reusedCount: number;
+  sessionCountDelta: number;
+  anomaly?: string;
 }
 
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
@@ -256,6 +266,8 @@ export class StateManager {
   private static readonly STARTUP_CODEX_FILE_LIMIT = 96;
   private static readonly HIDDEN_CLAUDE_WATCH_LIMIT = 24;
   private static readonly HIDDEN_CODEX_WATCH_LIMIT = 48;
+  private static readonly SESSION_SCOPE: SessionDiscoveryScope = 'recent-active';
+  private static readonly SESSION_SPIKE_MARGIN = 24;
 
   constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
     this.store = store;
@@ -694,6 +706,138 @@ export class StateManager {
     return visible;
   }
 
+  private sessionIdentityKey(session: Pick<DiscoveredSession, 'provider' | 'jsonlPath' | 'cwd' | 'sessionId'>): string {
+    return session.jsonlPath
+      ? `${session.provider}:${normalizeFileKey(session.jsonlPath)}`
+      : `${session.provider}:${session.cwd}:${session.sessionId}`;
+  }
+
+  private sessionSortValue(session: Pick<DiscoveredSession, 'lastModified' | 'startedAt'>): number {
+    return session.lastModified?.getTime() ?? session.startedAt.getTime();
+  }
+
+  private isSameSessionInfo(a: SessionInfo, b: SessionInfo): boolean {
+    return a.provider === b.provider
+      && a.sessionId === b.sessionId
+      && a.cwd === b.cwd
+      && a.projectName === b.projectName
+      && a.state === b.state
+      && a.modelName === b.modelName
+      && a.contextUsed === b.contextUsed
+      && a.contextMax === b.contextMax
+      && a.entrypoint === b.entrypoint
+      && a.source === b.source
+      && a.lastModified?.getTime() === b.lastModified?.getTime()
+      && a.gitStats === b.gitStats
+      && JSON.stringify(a.toolCounts) === JSON.stringify(b.toolCounts);
+  }
+
+  private sessionDebugExtras(nextSessions: SessionInfo[], extras: Partial<Omit<SessionBuildResult, 'sessions'>> = {}): Record<string, unknown> {
+    const previousCount = this.state.sessions.length;
+    const sessionCountDelta = extras.sessionCountDelta ?? (nextSessions.length - previousCount);
+    const comparisonBaseline = Math.max(this.state.allTimeSessions, previousCount);
+    const anomaly = extras.anomaly
+      ?? ((sessionCountDelta > StateManager.SESSION_SPIKE_MARGIN || nextSessions.length > comparisonBaseline + StateManager.SESSION_SPIKE_MARGIN)
+        ? 'session-count-spike'
+        : undefined);
+    return {
+      discoveryScope: extras.discoveryScope ?? StateManager.SESSION_SCOPE,
+      discoveredCount: extras.discoveredCount ?? nextSessions.length,
+      dedupedCount: extras.dedupedCount ?? 0,
+      reusedCount: extras.reusedCount ?? 0,
+      sessionCountDelta,
+      anomaly,
+    };
+  }
+
+  private createSessionDiscoveryOptions(extraJsonlPaths?: Iterable<string>): DiscoverSessionsOptions {
+    const trackedJsonlPaths = new Set<string>();
+    for (const session of this.state.sessions) {
+      if (session.jsonlPath) trackedJsonlPaths.add(normalizeFileKey(session.jsonlPath));
+    }
+    if (extraJsonlPaths) {
+      for (const filePath of extraJsonlPaths) trackedJsonlPaths.add(normalizeFileKey(filePath));
+    }
+    return {
+      scope: StateManager.SESSION_SCOPE,
+      trackedJsonlPaths: [...trackedJsonlPaths],
+      maxClaudeSessions: StateManager.STARTUP_CLAUDE_FILE_LIMIT,
+      maxCodexFiles: StateManager.STARTUP_CODEX_FILE_LIMIT,
+    };
+  }
+
+  private buildScopedSessionInfosDetailed(
+    summaries: Map<string, FileUsageSummary> = this.summaries,
+    extraJsonlPaths?: Iterable<string>,
+  ): SessionBuildResult {
+    const settings = this.getSettings();
+    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+    const previousByKey = new Map(this.state.sessions.map(session => [this.sessionIdentityKey(session), session]));
+    const sessionsByKey = new Map<string, SessionInfo>();
+    const summaryPaths = new Set<string>();
+    let discoveredCount = 0;
+    let reusedCount = 0;
+
+    const pushSummaryPath = (filePath: string): void => {
+      const normalized = normalizeFileKey(filePath);
+      if (summaries.has(normalized)) summaryPaths.add(normalized);
+    };
+
+    for (const session of this.state.sessions) {
+      if (session.jsonlPath) pushSummaryPath(session.jsonlPath);
+    }
+    for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT).files) pushSummaryPath(filePath);
+    for (const filePath of this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT).files) pushSummaryPath(filePath);
+    if (extraJsonlPaths) {
+      for (const filePath of extraJsonlPaths) pushSummaryPath(filePath);
+    }
+
+    const addSession = (session: DiscoveredSession, summaryOverride?: FileUsageSummary | null) => {
+      if (isExcluded(this.sessionProjectKeys(session))) return;
+      discoveredCount += 1;
+      const key = this.sessionIdentityKey(session);
+      if (sessionsByKey.has(key)) return;
+      const previous = previousByKey.get(key);
+      const next = this.buildSessionInfo(session, previous?.gitStats, summaryOverride);
+      if (previous && this.isSameSessionInfo(previous, next)) {
+        reusedCount += 1;
+        sessionsByKey.set(key, previous);
+        return;
+      }
+      sessionsByKey.set(key, next);
+    };
+
+    const discovered = discoverSessions(settings.provider, this.createSessionDiscoveryOptions(summaryPaths));
+    for (const session of discovered) {
+      const summary = session.jsonlPath ? (summaries.get(normalizeFileKey(session.jsonlPath)) ?? null) : null;
+      if (session.provider === 'codex' && !summary) continue;
+      addSession(session, summary);
+    }
+
+    for (const filePath of summaryPaths) {
+      const summary = summaries.get(filePath);
+      if (!summary) continue;
+      const bootstrap = summary.provider === 'claude'
+        ? this.buildStartupClaudeSession(filePath)
+        : this.buildStartupCodexSession(filePath);
+      if (!bootstrap) continue;
+      addSession(bootstrap, summary);
+    }
+
+    const sessions = [...sessionsByKey.values()].sort((a, b) => this.sessionSortValue(b) - this.sessionSortValue(a));
+    return {
+      sessions,
+      discoveryScope: StateManager.SESSION_SCOPE,
+      discoveredCount,
+      dedupedCount: Math.max(0, discoveredCount - sessions.length),
+      reusedCount,
+      sessionCountDelta: sessions.length - this.state.sessions.length,
+      anomaly: sessions.length > Math.max(this.state.allTimeSessions, this.state.sessions.length) + StateManager.SESSION_SPIKE_MARGIN
+        ? 'session-count-spike'
+        : undefined,
+    };
+  }
+
   private debouncedFastRefresh(filePath?: string) {
     if (filePath) this.dirtySessionFiles.add(normalizeFileKey(filePath));
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
@@ -797,6 +941,7 @@ export class StateManager {
     const totalPerf = this.beginPerfSample();
     let changedPerf: PerfMetrics | null = null;
     let sessionPerf: PerfMetrics | null = null;
+    let sessionResult: SessionBuildResult | null = null;
     if (this.uiBusy) {
       if (changedFiles) for (const file of changedFiles) this.deferredFastFiles.add(normalizeFileKey(file));
       return;
@@ -810,8 +955,8 @@ export class StateManager {
 
     const sessionSample = this.beginPerfSample();
     const sessions = changedFiles && changedFiles.size > 0
-      ? this.updateChangedSessionInfos(changedFiles)
-      : (!this.uiVisible ? this.refreshCachedSessionInfos() : this.buildSessionInfos());
+      ? ((sessionResult = this.updateChangedSessionInfos(changedFiles)).sessions)
+      : ((sessionResult = this.refreshCachedSessionInfos()).sessions);
     sessionPerf = this.finishPerfSample(sessionSample);
     const settings = this.getSettings();
     const derived = this.computeDerivedUsage(settings);
@@ -830,6 +975,7 @@ export class StateManager {
       extraUsage: derived.extraUsage,
       codeOutputStats,
       codeOutputLoading: false,
+      allTimeSessions: sessions.length,
       lastUpdated: Date.now(),
     };
     this.onUpdate(this.state);
@@ -838,6 +984,7 @@ export class StateManager {
       uiVisible: this.uiVisible,
       ...(changedPerf ? this.perfFields('changed', changedPerf) : {}),
       ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
+      ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
     });
 
     const apiFollowupSample = this.beginPerfSample();
@@ -856,6 +1003,7 @@ export class StateManager {
       this.onUpdate(this.state);
       this.logPerfTrace('fastRefresh:apiFollowup', apiFollowupSample, {
         changedFiles: changedFiles?.size ?? 0,
+        ...(sessionResult ? this.sessionDebugExtras(this.state.sessions, sessionResult) : {}),
       });
     });
   }
@@ -887,6 +1035,7 @@ export class StateManager {
     let loadPerf: PerfMetrics | null = null;
     let sessionPerf: PerfMetrics | null = null;
     let gitPerf: PerfMetrics | null = null;
+    let sessionResult: SessionBuildResult | null = null;
     if (this.uiBusy && !force) {
       this.heavyPending = true;
       return;
@@ -907,7 +1056,9 @@ export class StateManager {
         const settings = this.getSettings();
         const derived = this.computeDerivedUsage(settings);
         const codexAccount = readCodexAccountState();
-        const sessions = this.refreshCachedSessionInfos();
+        const sessionState = this.refreshCachedSessionInfos();
+        const sessions = sessionState.sessions;
+        sessionResult = sessionState;
         const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
         sessionPerf = this.finishPerfSample(sessionSample);
         this.state = {
@@ -926,6 +1077,7 @@ export class StateManager {
           extraUsage: derived.extraUsage,
           codeOutputStats,
           codeOutputLoading: false,
+          allTimeSessions: sessions.length,
         };
         this.onUpdate(this.state);
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
@@ -933,6 +1085,7 @@ export class StateManager {
           uiVisible: false,
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
           ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
+          ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
         });
         return;
       }
@@ -955,9 +1108,10 @@ export class StateManager {
         : null;
       if (!startupPartial) this.clearHistoryWarmup();
       const sessionBuildSample = this.beginPerfSample();
-      let sessions = startupPartial
-        ? this.buildStartupSessionInfos(loaded.summaries)
-        : this.buildSessionInfos();
+      sessionResult = startupPartial
+        ? this.buildScopedSessionInfosDetailed(loaded.summaries)
+        : this.buildScopedSessionInfosDetailed(loaded.summaries);
+      let sessions = sessionResult.sessions;
       sessionPerf = this.finishPerfSample(sessionBuildSample);
       const partialCodeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
       this.state = {
@@ -979,7 +1133,7 @@ export class StateManager {
         repoGitStats: this.state.repoGitStats,
         codeOutputStats: partialCodeOutputStats,
         codeOutputLoading: true,
-        allTimeSessions: loaded.sessionCount,
+        allTimeSessions: sessions.length,
       };
       this.onUpdate(this.state);
       if (!initialRefreshDone && !force) {
@@ -994,6 +1148,7 @@ export class StateManager {
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
           ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
           ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
+          ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
         });
         return;
       }
@@ -1024,7 +1179,7 @@ export class StateManager {
         repoGitStats,
         codeOutputStats,
         codeOutputLoading: false,
-        allTimeSessions: loaded.sessionCount,
+        allTimeSessions: sessions.length,
       };
       this.onUpdate(this.state);
 
@@ -1039,6 +1194,7 @@ export class StateManager {
         ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
         ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
         ...(gitPerf ? this.perfFields('git', gitPerf) : {}),
+        ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
       });
     } finally {
       this.heavyInFlight = false;
@@ -1060,35 +1216,7 @@ export class StateManager {
   }
 
   private buildStartupSessionInfos(summaries: Map<string, FileUsageSummary>): SessionInfo[] {
-    const settings = this.getSettings();
-    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const startupSessions: SessionInfo[] = [];
-
-    if (settings.provider === 'claude' || settings.provider === 'both') {
-      for (const [filePath, summary] of summaries.entries()) {
-        if (summary.provider !== 'claude') continue;
-        const session = this.buildStartupClaudeSession(filePath);
-        if (!session) continue;
-        if (isExcluded(this.sessionProjectKeys(session))) continue;
-        startupSessions.push(this.buildSessionInfo(session, this.peekCachedGitStats(session.cwd), summary));
-      }
-    }
-
-    if (settings.provider === 'codex' || settings.provider === 'both') {
-      for (const [filePath, summary] of summaries.entries()) {
-        if (summary.provider !== 'codex') continue;
-        const session = this.buildStartupCodexSession(filePath);
-        if (!session) continue;
-        if (isExcluded(this.sessionProjectKeys(session))) continue;
-        startupSessions.push(this.buildSessionInfo(session, this.peekCachedGitStats(session.cwd), summary));
-      }
-    }
-
-    return startupSessions.sort((a, b) => {
-      const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
-      const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
-      return tb - ta;
-    });
+    return this.buildScopedSessionInfosDetailed(summaries).sessions;
   }
 
   private buildStartupClaudeSession(filePath: string): DiscoveredSession | null {
@@ -1743,7 +1871,7 @@ export class StateManager {
     return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
   }
 
-  private updateChangedSessionInfos(changedFiles: Set<string>): SessionInfo[] {
+  private updateChangedSessionInfos(changedFiles: Set<string>): SessionBuildResult {
     const normalized = new Set([...changedFiles].map(file => normalizeFileKey(file)));
     let matched = false;
     const sessions = this.state.sessions.map(session => {
@@ -1752,16 +1880,28 @@ export class StateManager {
       const lastModified = getJsonlMtime(session.jsonlPath) ?? session.lastModified;
       return this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
     });
-    return matched ? sessions : this.buildSessionInfos();
+    if (matched) {
+      return {
+        sessions,
+        discoveryScope: StateManager.SESSION_SCOPE,
+        discoveredCount: normalized.size,
+        dedupedCount: 0,
+        reusedCount: sessions.filter((session, index) => session === this.state.sessions[index]).length,
+        sessionCountDelta: sessions.length - this.state.sessions.length,
+      };
+    }
+    return this.buildScopedSessionInfosDetailed(this.summaries, normalized);
   }
 
-  private refreshCachedSessionInfos(): SessionInfo[] {
+  private refreshCachedSessionInfos(): SessionBuildResult {
     let changed = false;
     const next: SessionInfo[] = [];
+    let reusedCount = 0;
 
     for (const session of this.state.sessions) {
       if (!session.jsonlPath) {
         next.push(session);
+        reusedCount += 1;
         continue;
       }
       if (!fs.existsSync(session.jsonlPath)) {
@@ -1776,17 +1916,23 @@ export class StateManager {
         next.push({ ...session, lastModified, state });
       } else {
         next.push(session);
+        reusedCount += 1;
       }
     }
 
-    return changed ? next : this.state.sessions;
+    const sessions = changed ? next : this.state.sessions;
+    return {
+      sessions,
+      discoveryScope: StateManager.SESSION_SCOPE,
+      discoveredCount: sessions.length,
+      dedupedCount: 0,
+      reusedCount,
+      sessionCountDelta: sessions.length - this.state.sessions.length,
+    };
   }
 
   private buildSessionInfos(): SessionInfo[] {
-    const settings = this.getSettings();
-    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const discovered = discoverSessions(settings.provider).filter(session => !isExcluded(this.sessionProjectKeys(session)));
-    return discovered.map(session => this.buildSessionInfo(session));
+    return this.buildScopedSessionInfosDetailed().sessions;
   }
 
   getState(): AppState {
@@ -1812,7 +1958,7 @@ export class StateManager {
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, lastUpdated: Date.now() };
+    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, allTimeSessions: sessions.length, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 

@@ -7,6 +7,14 @@ import { readCodexSessionHeader } from './sessionMetadata';
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 export type TrackingProvider = 'claude' | 'codex' | 'both';
 export type SessionProvider = 'claude' | 'codex';
+export type SessionDiscoveryScope = 'recent-active' | 'all';
+
+export interface DiscoverSessionsOptions {
+  scope?: SessionDiscoveryScope;
+  trackedJsonlPaths?: string[];
+  maxClaudeSessions?: number;
+  maxCodexFiles?: number;
+}
 
 export interface DiscoveredSession {
   provider: SessionProvider;
@@ -29,8 +37,28 @@ export interface DiscoveredSession {
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
+const DEFAULT_RECENT_CLAUDE_SESSION_LIMIT = 48;
+const DEFAULT_RECENT_CODEX_FILE_LIMIT = 96;
 const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
 let claudeProjectDirCache: Map<string, string> | null = null;
+
+function normalizeSessionPath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function sessionSortTime(session: Pick<DiscoveredSession, 'lastModified' | 'startedAt'>): number {
+  return session.lastModified?.getTime() ?? session.startedAt.getTime();
+}
+
+function trackedJsonlSet(paths: string[] = []): Set<string> {
+  const tracked = new Set<string>();
+  for (const filePath of paths) {
+    if (!filePath) continue;
+    tracked.add(normalizeSessionPath(filePath));
+  }
+  return tracked;
+}
 
 function encodeCwd(cwd: string): string {
   // "C:\dev\app" → "C--dev-app" (encode path to flat name)
@@ -239,7 +267,7 @@ function shouldIncludeProvider(filter: TrackingProvider, provider: SessionProvid
   return filter === 'both' || filter === provider;
 }
 
-function discoverClaudeSessions(): DiscoveredSession[] {
+function discoverClaudeSessions(options: DiscoverSessionsOptions = {}): DiscoveredSession[] {
   if (!fs.existsSync(SESSIONS_DIR)) return [];
 
   const results: DiscoveredSession[] = [];
@@ -289,12 +317,11 @@ function discoverClaudeSessions(): DiscoveredSession[] {
     } catch { /* skip malformed */ }
   }
 
-  // Sort by most recent activity
-  return results.sort((a, b) => {
-    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
-    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
-    return tb - ta;
-  });
+  const sorted = results.sort((a, b) => sessionSortTime(b) - sessionSortTime(a));
+  if ((options.scope ?? 'recent-active') !== 'recent-active') return sorted;
+  return sorted
+    .filter(session => session.state === 'active' || session.state === 'waiting')
+    .slice(0, options.maxClaudeSessions ?? DEFAULT_RECENT_CLAUDE_SESSION_LIMIT);
 }
 
 function listCodexJsonlFiles(dir: string): string[] {
@@ -309,11 +336,73 @@ function listCodexJsonlFiles(dir: string): string[] {
   return results;
 }
 
-function discoverCodexSessions(): DiscoveredSession[] {
+function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>): string[] {
+  const files: Array<{ filePath: string; mtimeMs: number }> = [];
+  const seen = new Set<string>();
+  const targetCount = maxFiles + trackedPaths.size + 1;
+
+  const pushFile = (filePath: string): void => {
+    const normalized = normalizeSessionPath(filePath);
+    if (seen.has(normalized)) return;
+    let mtimeMs = 0;
+    try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch { return; }
+    seen.add(normalized);
+    files.push({ filePath, mtimeMs });
+  };
+
+  for (const trackedPath of trackedPaths) {
+    if (!trackedPath.startsWith(normalizeSessionPath(CODEX_SESSIONS_DIR))) continue;
+    pushFile(trackedPath);
+  }
+
+  const readSubdirs = (dir: string): string[] => {
+    try {
+      return fs.readdirSync(dir, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name);
+    } catch {
+      return [];
+    }
+  };
+
+  const dayDirs: Array<{ dir: string; mtimeMs: number }> = [];
+  for (const year of readSubdirs(CODEX_SESSIONS_DIR)) {
+    const yearDir = path.join(CODEX_SESSIONS_DIR, year);
+    for (const month of readSubdirs(yearDir)) {
+      const monthDir = path.join(yearDir, month);
+      for (const day of readSubdirs(monthDir)) {
+        const dayDir = path.join(monthDir, day);
+        let mtimeMs = 0;
+        try { mtimeMs = fs.statSync(dayDir).mtimeMs; } catch { /* skip */ }
+        dayDirs.push({ dir: dayDir, mtimeMs });
+      }
+    }
+  }
+
+  dayDirs.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const dayDir of dayDirs) {
+    if (files.length >= targetCount) break;
+    for (const filePath of listCodexJsonlFiles(dayDir.dir)) {
+      pushFile(filePath);
+      if (files.length >= targetCount) break;
+    }
+  }
+
+  return files
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+    .slice(0, maxFiles + trackedPaths.size)
+    .map(entry => entry.filePath);
+}
+
+function discoverCodexSessions(options: DiscoverSessionsOptions = {}): DiscoveredSession[] {
   if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
 
   const results: DiscoveredSession[] = [];
-  const files = listCodexJsonlFiles(CODEX_SESSIONS_DIR);
+  const scope = options.scope ?? 'recent-active';
+  const tracked = trackedJsonlSet(options.trackedJsonlPaths);
+  const files = scope === 'all'
+    ? listCodexJsonlFiles(CODEX_SESSIONS_DIR)
+    : listRecentCodexJsonlFiles(options.maxCodexFiles ?? DEFAULT_RECENT_CODEX_FILE_LIMIT, tracked);
 
   for (const filePath of files) {
     try {
@@ -356,23 +445,26 @@ function discoverCodexSessions(): DiscoveredSession[] {
     } catch { /* skip malformed */ }
   }
 
-  return results.sort((a, b) => {
-    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
-    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
-    return tb - ta;
-  });
+  return results.sort((a, b) => sessionSortTime(b) - sessionSortTime(a));
 }
 
-export function discoverSessions(provider: TrackingProvider = 'both'): DiscoveredSession[] {
-  const results: DiscoveredSession[] = [];
-  if (shouldIncludeProvider(provider, 'claude')) results.push(...discoverClaudeSessions());
-  if (shouldIncludeProvider(provider, 'codex')) results.push(...discoverCodexSessions());
+function dedupeDiscoveredSessions(sessions: DiscoveredSession[]): DiscoveredSession[] {
+  const deduped = new Map<string, DiscoveredSession>();
+  for (const session of sessions) {
+    const key = session.jsonlPath
+      ? `${session.provider}:${normalizeSessionPath(session.jsonlPath)}`
+      : `${session.provider}:${session.cwd}:${session.sessionId}`;
+    const current = deduped.get(key);
+    if (!current || sessionSortTime(session) >= sessionSortTime(current)) deduped.set(key, session);
+  }
+  return [...deduped.values()].sort((a, b) => sessionSortTime(b) - sessionSortTime(a));
+}
 
-  return results.sort((a, b) => {
-    const ta = a.lastModified?.getTime() ?? a.startedAt.getTime();
-    const tb = b.lastModified?.getTime() ?? b.startedAt.getTime();
-    return tb - ta;
-  });
+export function discoverSessions(provider: TrackingProvider = 'both', options: DiscoverSessionsOptions = {}): DiscoveredSession[] {
+  const results: DiscoveredSession[] = [];
+  if (shouldIncludeProvider(provider, 'claude')) results.push(...discoverClaudeSessions(options));
+  if (shouldIncludeProvider(provider, 'codex')) results.push(...discoverCodexSessions(options));
+  return dedupeDiscoveredSessions(results);
 }
 
 export { CODEX_SESSIONS_DIR, PROJECTS_DIR as CLAUDE_PROJECTS_DIR, SESSIONS_DIR as CLAUDE_SESSIONS_DIR };
