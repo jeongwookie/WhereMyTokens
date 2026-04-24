@@ -53,7 +53,7 @@ test('repo stats collection includes session cwd candidates', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
   assert.match(source, /getRepoGitStats\(settings, force, sessions\)/);
-  assert.match(source, /for \(const session of sessions\) cwdSet\.add\(session\.cwd\)/);
+  assert.match(source, /const cwdSet = new Set\(sessions\.map\(session => session\.cwd\)\)/);
 });
 
 test('renderer splash and session stabilization use initial readiness and daily stats', () => {
@@ -68,7 +68,7 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   const mainSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
 
-  assert.match(mainSource, /buildStartupSessionInfos\(loaded\.summaries\)/);
+  assert.match(mainSource, /buildScopedSessionInfosDetailed\(loaded\.summaries\)/);
   assert.match(mainSource, /buildStartupPriorityFiles/);
   assert.match(mainSource, /historyWarmupStartsAt/);
   assert.match(rendererSource, /apiStatusLabel/);
