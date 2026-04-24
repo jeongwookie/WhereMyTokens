@@ -73,9 +73,6 @@
 | **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 24 abr | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
 | **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 23 abr | Añade gráfico de crecimiento de Code Output, estabiliza estadísticas git y mejora el splash inicial |
 | **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 23 abr | Alinea Code Output histórico con ramas locales y aclara el alcance de modelos principales |
-| **[v1.10.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.1)** | 22 abr | Fix Codex repo discovery for Code Output and harden session metadata caching |
-| **[v1.10.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.0)** | 22 abr | Seguimiento Claude + Codex, cálculo de uso Codex, estadísticas con alcance, mejoras de UX/rendimiento de sesiones |
-| **[v1.9.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.9.2)** | 20 abr | Instalador NSIS, mejoras en precisión y estabilidad del seguimiento de sesiones |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
