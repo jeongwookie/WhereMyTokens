@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import stateManager from '../dist/main/stateManager.js';
-import gitStatsKeys from '../dist/main/gitStatsKeys.js';
+import * as gitStatsKeys from '../dist/main/gitStatsKeys.js';
 
 const { StateManager, resolveSessionRepoKeys } = stateManager;
 const { normalizeGitPathKey } = gitStatsKeys;
@@ -61,6 +61,19 @@ test('renderer splash and session stabilization use initial readiness and daily 
 
   assert.match(source, /state\.initialRefreshComplete/);
   assert.match(source, /sameDailyStats\(a\.daily7d, b\.daily7d\)/);
+  assert.match(source, /normalizeState\(next\)/);
+});
+
+test('startup refresh uses lightweight session bootstrapping and API status labels', () => {
+  const mainSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+
+  assert.match(mainSource, /buildStartupSessionInfos\(loaded\.summaries\)/);
+  assert.match(mainSource, /buildStartupPriorityFiles/);
+  assert.match(mainSource, /historyWarmupStartsAt/);
+  assert.match(rendererSource, /apiStatusLabel/);
+  assert.match(rendererSource, /formatWarmupStatus/);
+  assert.match(rendererSource, /resetLabel=\{limits\.so\.resetLabel\}/);
 });
 
 test('session cwd under a repo root scopes that repo output', () => {

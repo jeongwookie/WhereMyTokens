@@ -55,6 +55,8 @@ function createPopupWindow(): BrowserWindow {
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath);
   win.on('move', markPopupMoving);
+  win.on('show', () => stateManager?.setUiVisible(true));
+  win.on('hide', () => stateManager?.setUiVisible(false));
 
   // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
 

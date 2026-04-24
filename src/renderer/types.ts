@@ -139,11 +139,11 @@ export interface UsageData {
 }
 
 export interface UsageLimits {
-  h5: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  week: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  so: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  codexH5: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  codexWeek: { pct: number; resetMs: number; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  so: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  codexH5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  codexWeek: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
 }
 
 export interface AppSettings {
@@ -186,6 +186,7 @@ export interface ExtraUsage {
   monthlyLimit: number;  // cent 단위 (÷100 = USD)
   usedCredits: number;   // cent 단위
   utilization: number;   // 0-100
+  currency?: string | null;
 }
 
 export interface AppState {
@@ -195,8 +196,11 @@ export interface AppState {
   settings: AppSettings;
   autoLimits: AutoLimits | null;
   initialRefreshComplete: boolean;
+  historyWarmupPending: boolean;
+  historyWarmupStartsAt: number | null;
   lastUpdated: number;
   apiConnected: boolean;
+  apiStatusLabel?: string;
   apiError?: string;
   bridgeActive: boolean;
   extraUsage: ExtraUsage | null;
