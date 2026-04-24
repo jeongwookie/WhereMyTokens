@@ -79,6 +79,15 @@ function cacheMetricTitle(providerMode: ProviderMode): string {
   return 'Combined view: provider-specific cache metrics are aggregated';
 }
 
+function formatCodexServiceTier(serviceTier: string | null | undefined): string | null {
+  if (!serviceTier) return null;
+  return serviceTier
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function buildHeaderStatus(args: {
   showClaudeUsage: boolean;
   hasClaudeFallback: boolean;
@@ -293,6 +302,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
   const { currency, usdToKrw } = settings;
   const providerMode = settings.provider ?? 'both';
   const showClaudeUsage = providerMode !== 'codex';
+  const showCodexUsage = providerMode !== 'claude';
   const hasClaudeFallback = showClaudeUsage && (state.limits.h5.source === 'statusLine' || state.limits.week.source === 'statusLine');
   const trackedH5 = useMemo(() => buildTrackedH5(usage, providerMode), [usage, providerMode]);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
@@ -313,6 +323,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
   const cacheColor = cacheMetricColor(cacheEff, C);
   const cacheTitle = cacheMetricTitle(providerMode);
   const planLabel = showClaudeUsage && state.autoLimits ? state.autoLimits.plan : undefined;
+  const codexTierLabel = showCodexUsage ? formatCodexServiceTier(state.codexAccount.serviceTier) : null;
   const statusStyles = headerStatus?.tone === 'danger'
     ? {
         color: C.barRed,
@@ -374,22 +385,43 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
             <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, whiteSpace: 'nowrap' }}>
               {isAll ? 'All-time Cost' : 'Today Cost'}
             </div>
-            {planLabel && (
-              <span
-                title={`Claude plan: ${planLabel}`}
-                style={{
-                  fontSize: 8,
-                  color: C.headerSub,
-                  background: 'rgba(255,255,255,0.08)',
-                  borderRadius: 999,
-                  padding: '2px 7px',
-                  fontWeight: 700,
-                  border: `1px solid ${C.headerBorder}`,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {planLabel}
-              </span>
+            {(planLabel || codexTierLabel) && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', minWidth: 0 }}>
+                {planLabel && (
+                  <span
+                    title={`Claude plan: ${planLabel}`}
+                    style={{
+                      fontSize: 8,
+                      color: C.headerSub,
+                      background: 'rgba(255,255,255,0.08)',
+                      borderRadius: 999,
+                      padding: '2px 7px',
+                      fontWeight: 700,
+                      border: `1px solid ${C.headerBorder}`,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Claude {planLabel}
+                  </span>
+                )}
+                {codexTierLabel && (
+                  <span
+                    title={`Codex service tier: ${codexTierLabel}`}
+                    style={{
+                      fontSize: 8,
+                      color: C.headerSub,
+                      background: `${C.accent}14`,
+                      borderRadius: 999,
+                      padding: '2px 7px',
+                      fontWeight: 700,
+                      border: `1px solid ${C.accent}33`,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Codex {codexTierLabel}
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <div style={{ fontSize: 28, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>

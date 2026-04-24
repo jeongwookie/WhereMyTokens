@@ -45,6 +45,8 @@ export interface Theme {
   haiku:  string;
   gpt:    string;
   gpt5:   string;
+  gpt54:  string;
+  gpt55:  string;
   gptCodex: string;
   gpt4:   string;
   codexMini: string;
@@ -112,6 +114,8 @@ export const LIGHT: Theme = {
   haiku:  '#2a9040',
   gpt:    '#6d28d9',
   gpt5:   '#4f46e5',
+  gpt54:  '#0f766e',
+  gpt55:  '#7c3aed',
   gptCodex: '#d4602a',
   gpt4:   '#0891b2',
   codexMini: '#7c3aed',
@@ -171,6 +175,8 @@ export const DARK: Theme = {
   haiku:  '#34d399',
   gpt:    '#a78bfa',
   gpt5:   '#818cf8',
+  gpt54:  '#22d3ee',
+  gpt55:  '#a78bfa',
   gptCodex: '#fb923c',
   gpt4:   '#38bdf8',
   codexMini: '#c084fc',
@@ -214,6 +220,8 @@ export function modelColor(model: string, C: Theme): string {
   if (lower.includes('gpt-5.4') && lower.includes('nano')) return C.gpt;
   if (lower.includes('codex-mini')) return C.codexMini;
   if (lower.includes('gpt-5') && lower.includes('codex')) return C.gptCodex;
+  if (lower.includes('gpt-5.5')) return C.gpt55;
+  if (lower.includes('gpt-5.4')) return C.gpt54;
   if (lower.includes('gpt-5')) return C.gpt5;
   if (lower.includes('gpt-4')) return C.gpt4;
   if (lower.includes('gpt'))    return C.gpt;

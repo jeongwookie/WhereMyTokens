@@ -16,6 +16,7 @@ import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
 import { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
+import { CodexAccountState, readCodexAccountState } from './codexAccount';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -57,6 +58,7 @@ export interface AppState {
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;
+  codexAccount: CodexAccountState;
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
@@ -289,6 +291,7 @@ export class StateManager {
       },
       settings: this.getSettings(),
       autoLimits: null,
+      codexAccount: readCodexAccountState(),
       initialRefreshComplete: false,
       historyWarmupPending: false,
       historyWarmupStartsAt: null,
@@ -615,6 +618,7 @@ export class StateManager {
       : this.buildSessionInfos();
     const settings = this.getSettings();
     const derived = this.computeDerivedUsage(settings);
+    const codexAccount = readCodexAccountState();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     this.state = {
       ...this.state,
@@ -622,6 +626,7 @@ export class StateManager {
       settings,
       usage: derived.usage,
       limits: derived.limits,
+      codexAccount,
       bridgeActive: derived.bridgeActive,
       apiStatusLabel: this.apiStatusLabel || undefined,
       apiError: this.apiError || undefined,
@@ -693,6 +698,7 @@ export class StateManager {
 
       const settings = this.getSettings();
       const derived = this.computeDerivedUsage(settings);
+      const codexAccount = readCodexAccountState();
       const startupPartial = allowStartupBudget && !initialRefreshDone && loaded.partial;
       const historyWarmupStartsAt = startupPartial
         ? this.scheduleHistoryWarmup()
@@ -708,6 +714,7 @@ export class StateManager {
         limits: derived.limits,
         settings,
         autoLimits: this.autoLimits,
+        codexAccount,
         initialRefreshComplete: true,
         historyWarmupPending: startupPartial,
         historyWarmupStartsAt,
@@ -741,6 +748,7 @@ export class StateManager {
         limits: derived.limits,
         settings,
         autoLimits: this.autoLimits,
+        codexAccount,
         initialRefreshComplete: true,
         historyWarmupPending: startupPartial,
         historyWarmupStartsAt,

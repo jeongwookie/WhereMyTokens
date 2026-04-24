@@ -189,12 +189,17 @@ export interface ExtraUsage {
   currency?: string | null;
 }
 
+export interface CodexAccountState {
+  serviceTier: string | null;
+}
+
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;
+  codexAccount: CodexAccountState;
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
