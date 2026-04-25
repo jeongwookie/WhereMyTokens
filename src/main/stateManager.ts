@@ -829,9 +829,8 @@ export class StateManager {
 
   private createSessionDiscoveryOptions(extraJsonlPaths?: Iterable<string>): DiscoverSessionsOptions {
     const trackedJsonlPaths = new Set<string>();
-    for (const session of this.state.sessions) {
-      if (session.jsonlPath) trackedJsonlPaths.add(normalizeFileKey(session.jsonlPath));
-    }
+    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) trackedJsonlPaths.add(normalizeFileKey(filePath));
+    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) trackedJsonlPaths.add(normalizeFileKey(filePath));
     if (extraJsonlPaths) {
       for (const filePath of extraJsonlPaths) trackedJsonlPaths.add(normalizeFileKey(filePath));
     }
@@ -860,9 +859,8 @@ export class StateManager {
       if (summaries.has(normalized)) summaryPaths.add(normalized);
     };
 
-    for (const session of this.state.sessions) {
-      if (session.jsonlPath) pushSummaryPath(session.jsonlPath);
-    }
+    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) pushSummaryPath(filePath);
+    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) pushSummaryPath(filePath);
     for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT).files) pushSummaryPath(filePath);
     for (const filePath of this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT).files) pushSummaryPath(filePath);
     if (extraJsonlPaths) {
@@ -926,8 +924,12 @@ export class StateManager {
     }, 1200);
   }
 
-  private collectTrackedWatchFiles(provider: 'claude' | 'codex', maxFiles: number): string[] {
-    const ranked = this.state.sessions
+  private collectTrackedSessionFiles(
+    provider: 'claude' | 'codex',
+    maxFiles: number,
+    sessions: SessionInfo[] = this.state.sessions,
+  ): string[] {
+    const ranked = sessions
       .filter((session): session is SessionInfo & { jsonlPath: string } => session.provider === provider && !!session.jsonlPath)
       .sort((a, b) => {
         const aHot = a.state === 'active' ? 2 : (a.state === 'waiting' ? 1 : 0);
@@ -952,11 +954,11 @@ export class StateManager {
     };
 
     if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      for (const filePath of this.collectTrackedWatchFiles('claude', StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
+      for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
       for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.HIDDEN_CLAUDE_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
     }
     if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-      for (const filePath of this.collectTrackedWatchFiles('codex', StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
+      for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
       for (const filePath of this.listRecentCodexJsonlFiles(StateManager.HIDDEN_CODEX_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
     }
 
@@ -1285,8 +1287,15 @@ export class StateManager {
   private buildStartupPriorityFiles(provider: AppSettings['provider']): Set<string> {
     const priority = new Set<string>();
 
-    for (const session of this.state.sessions) {
-      if (session.jsonlPath) priority.add(normalizeFileKey(session.jsonlPath));
+    if (provider === 'claude' || provider === 'both') {
+      for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) {
+        priority.add(normalizeFileKey(filePath));
+      }
+    }
+    if (provider === 'codex' || provider === 'both') {
+      for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) {
+        priority.add(normalizeFileKey(filePath));
+      }
     }
 
     return priority;

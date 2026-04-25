@@ -382,11 +382,15 @@ test('startup recovery and persisted summary cache guards remain in source', () 
 
 test('session discovery keeps recent-active scope and tracked session hints in source', () => {
   const discoverySource = fs.readFileSync(path.resolve('src', 'main', 'sessionDiscovery.ts'), 'utf8');
+  const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
   assert.match(discoverySource, /SessionDiscoveryScope = 'recent-active' \| 'all'/);
   assert.match(discoverySource, /trackedJsonlPaths\?: string\[\]/);
   assert.match(discoverySource, /discoverSessions\(provider: TrackingProvider = 'both', options: DiscoverSessionsOptions = \{\}\)/);
   assert.match(discoverySource, /dedupeDiscoveredSessions/);
+  assert.match(stateSource, /private collectTrackedSessionFiles\(/);
+  assert.match(stateSource, /collectTrackedSessionFiles\('codex', StateManager\.STARTUP_CODEX_FILE_LIMIT\)/);
+  assert.match(stateSource, /collectTrackedSessionFiles\('claude', StateManager\.STARTUP_CLAUDE_FILE_LIMIT\)/);
 });
 
 test('visible fast refresh stays on cached session scope and logs anomalies', () => {
