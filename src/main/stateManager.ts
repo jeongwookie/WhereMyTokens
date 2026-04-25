@@ -1948,26 +1948,74 @@ export class StateManager {
     return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
   }
 
+  private buildSessionInfoForJsonlPath(
+    filePath: string,
+    previousByKey = new Map(this.state.sessions.map(session => [this.sessionIdentityKey(session), session])),
+    summaries: Map<string, FileUsageSummary> = this.summaries,
+  ): SessionInfo | null {
+    const normalized = normalizeFileKey(filePath);
+    const summary = summaries.get(normalized);
+    if (!summary) return null;
+
+    const bootstrap = summary.provider === 'claude'
+      ? this.buildStartupClaudeSession(normalized)
+      : this.buildStartupCodexSession(normalized);
+    if (!bootstrap) return null;
+
+    const isExcluded = makeExcludedMatcher(this.getSettings().excludedProjects ?? []);
+    if (isExcluded(this.sessionProjectKeys(bootstrap))) return null;
+
+    const key = this.sessionIdentityKey(bootstrap);
+    const previous = previousByKey.get(key);
+    const next = this.buildSessionInfo(bootstrap, previous?.gitStats, summary);
+    if (previous && this.isSameSessionInfo(previous, next)) return previous;
+    return next;
+  }
+
   private updateChangedSessionInfos(changedFiles: Set<string>): SessionBuildResult {
     const normalized = new Set([...changedFiles].map(file => normalizeFileKey(file)));
-    let matched = false;
-    const sessions = this.state.sessions.map(session => {
-      if (!session.jsonlPath || !normalized.has(normalizeFileKey(session.jsonlPath))) return session;
-      matched = true;
+    const previousByKey = new Map(this.state.sessions.map(session => [this.sessionIdentityKey(session), session]));
+    const previousSet = new Set(this.state.sessions);
+    const matchedPaths = new Set<string>();
+    const sessionsByKey = new Map<string, SessionInfo>();
+    let discoveredCount = 0;
+
+    for (const session of this.state.sessions) {
+      if (!session.jsonlPath) {
+        sessionsByKey.set(this.sessionIdentityKey(session), session);
+        continue;
+      }
+
+      const fileKey = normalizeFileKey(session.jsonlPath);
+      if (!normalized.has(fileKey)) {
+        sessionsByKey.set(this.sessionIdentityKey(session), session);
+        continue;
+      }
+
+      matchedPaths.add(fileKey);
+      discoveredCount += 1;
       const lastModified = getJsonlMtime(session.jsonlPath) ?? session.lastModified;
-      return this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
-    });
-    if (matched) {
-      return {
-        sessions,
-        discoveryScope: StateManager.SESSION_SCOPE,
-        discoveredCount: normalized.size,
-        dedupedCount: 0,
-        reusedCount: sessions.filter((session, index) => session === this.state.sessions[index]).length,
-        sessionCountDelta: sessions.length - this.state.sessions.length,
-      };
+      const next = this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
+      sessionsByKey.set(this.sessionIdentityKey(next), next);
     }
-    return this.buildScopedSessionInfosDetailed(this.summaries, normalized);
+
+    for (const filePath of normalized) {
+      if (matchedPaths.has(filePath)) continue;
+      const next = this.buildSessionInfoForJsonlPath(filePath, previousByKey, this.summaries);
+      if (!next) continue;
+      discoveredCount += 1;
+      sessionsByKey.set(this.sessionIdentityKey(next), next);
+    }
+
+    const sessions = [...sessionsByKey.values()].sort((a, b) => this.sessionSortValue(b) - this.sessionSortValue(a));
+    return {
+      sessions,
+      discoveryScope: StateManager.SESSION_SCOPE,
+      discoveredCount,
+      dedupedCount: Math.max(0, discoveredCount - Math.max(0, sessions.length - this.state.sessions.length)),
+      reusedCount: sessions.filter(session => previousSet.has(session)).length,
+      sessionCountDelta: sessions.length - this.state.sessions.length,
+    };
   }
 
   private refreshCachedSessionInfos(): SessionBuildResult {

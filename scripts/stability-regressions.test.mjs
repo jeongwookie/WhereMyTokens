@@ -401,3 +401,15 @@ test('visible fast refresh stays on cached session scope and logs anomalies', ()
   assert.match(source, /sessionCountDelta/);
   assert.match(source, /session-count-spike/);
 });
+
+test('changed session refresh merges unmatched files without falling back to scoped rebuild', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const updateStart = source.indexOf('private updateChangedSessionInfos');
+  const updateEnd = source.indexOf('private refreshCachedSessionInfos');
+  const updateBody = source.slice(updateStart, updateEnd);
+
+  assert.match(source, /private buildSessionInfoForJsonlPath/);
+  assert.match(updateBody, /const matchedPaths = new Set<string>\(\)/);
+  assert.match(updateBody, /this\.buildSessionInfoForJsonlPath\(filePath, previousByKey, this\.summaries\)/);
+  assert.doesNotMatch(updateBody, /buildScopedSessionInfosDetailed/);
+});
