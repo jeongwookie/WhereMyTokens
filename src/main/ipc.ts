@@ -3,8 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import Store from 'electron-store';
-import { AppState } from './stateManager';
+import { AppState, DebugMemSnapshot } from './stateManager';
 import { getHistory, clearHistory } from './notificationHistory';
+import { isDebugInstrumentationEnabled } from './debugInstrumentation';
 
 export interface AppSettings {
   // 내부용 (UI 미노출, fallback 용도)
@@ -44,6 +45,7 @@ export function registerIpcHandlers(
   getState: () => AppState,
   forceRefresh: () => Promise<void>,
   applySettingsChange: () => void,
+  getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>,
 ) {
   ipcMain.handle('state:get', () => getState());
   ipcMain.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
@@ -63,6 +65,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle('notifications:get', () => getHistory());
   ipcMain.handle('notifications:clear', () => { clearHistory(); return []; });
+  ipcMain.handle('debug-instrumentation-enabled', () => isDebugInstrumentationEnabled());
+  ipcMain.handle('debug-mem-snapshot', async () => {
+    if (!isDebugInstrumentationEnabled()) return null;
+    if (!getDebugMemSnapshot) return null;
+    return getDebugMemSnapshot();
+  });
 
   // Claude Code statusLine bridge setup
   ipcMain.handle('integration:setup', () => {

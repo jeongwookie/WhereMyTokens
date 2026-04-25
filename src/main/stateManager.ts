@@ -16,6 +16,7 @@ import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSes
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
 import { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
+import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -34,6 +35,27 @@ export interface CodeOutputStats {
   dailyAll: GitDailyStats[];
   repoCount: number;
   scopeLabel: string;
+}
+
+export interface DebugMemSnapshot {
+  label: string;
+  ts: string;
+  runtime: ReturnType<typeof collectRuntimeMemorySnapshot>;
+  collections: {
+    summaries: number;
+    sessions: number;
+    repoGitStats: number;
+    gitStatsCache: number;
+    dirtySessionFiles: number;
+    deferredFastFiles: number;
+  };
+  watcher: {
+    profile: WatcherProfile;
+    targets: number;
+    watchedDirectories: number;
+    watchedFiles: number;
+  };
+  jsonlCache: ReturnType<JsonlCache['getDebugStats']>;
 }
 
 export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
@@ -248,6 +270,7 @@ export class StateManager {
   private heavyPending = false;
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
+  private debugMemTimer: NodeJS.Timeout | null = null;
   private uiBusy = false;
   private uiVisible = false;
   private watcherProfile: WatcherProfile = 'off';
@@ -394,6 +417,7 @@ export class StateManager {
     void this.heavyRefresh(false, true);
     this.startTimers();
     this.startWatcher();
+    this.startDebugMemTimer();
     void Promise.all([this.refreshAutoLimits(), this.refreshApiUsagePct()])
       .then(() => {
         const limits = this.buildLimits();
@@ -417,6 +441,7 @@ export class StateManager {
     if (this.fastTimer) clearInterval(this.fastTimer);
     if (this.heavyTimer) clearInterval(this.heavyTimer);
     if (this.autoLimitTimer) clearInterval(this.autoLimitTimer);
+    if (this.debugMemTimer) clearInterval(this.debugMemTimer);
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
     if (this.historyWarmupTimer) clearTimeout(this.historyWarmupTimer);
     if (this.gitWarmupTimer) clearTimeout(this.gitWarmupTimer);
@@ -528,6 +553,58 @@ export class StateManager {
       targets: this.watcherTargetCount,
       ...this.getDebugCounts(),
     });
+  }
+
+  private startDebugMemTimer(): void {
+    if (!isDebugInstrumentationEnabled()) return;
+    if (this.debugMemTimer) clearInterval(this.debugMemTimer);
+    void this.writeDebugMemSnapshot('startup');
+    this.debugMemTimer = setInterval(() => {
+      void this.writeDebugMemSnapshot('interval');
+    }, 30_000);
+  }
+
+  private countWatchedPaths(): { watchedDirectories: number; watchedFiles: number } {
+    const watched = this.watcher?.getWatched();
+    if (!watched) return { watchedDirectories: 0, watchedFiles: 0 };
+    let watchedDirectories = 0;
+    let watchedFiles = 0;
+    for (const files of Object.values(watched)) {
+      watchedDirectories += 1;
+      watchedFiles += files.length;
+    }
+    return { watchedDirectories, watchedFiles };
+  }
+
+  async getDebugMemSnapshot(label = 'ipc'): Promise<DebugMemSnapshot> {
+    const cacheStats = this.jsonlCache.getDebugStats();
+    const watched = this.countWatchedPaths();
+    return {
+      label,
+      ts: new Date().toISOString(),
+      runtime: collectRuntimeMemorySnapshot(),
+      collections: {
+        summaries: this.summaries.size,
+        sessions: this.state.sessions.length,
+        repoGitStats: Object.keys(this.state.repoGitStats).length,
+        gitStatsCache: this.gitStatsCache.size,
+        dirtySessionFiles: this.dirtySessionFiles.size,
+        deferredFastFiles: this.deferredFastFiles.size,
+      },
+      watcher: {
+        profile: this.watcherProfile,
+        targets: this.watcherTargetCount,
+        watchedDirectories: watched.watchedDirectories,
+        watchedFiles: watched.watchedFiles,
+      },
+      jsonlCache: cacheStats,
+    };
+  }
+
+  private async writeDebugMemSnapshot(label: string): Promise<void> {
+    if (!isDebugInstrumentationEnabled()) return;
+    const snapshot = await this.getDebugMemSnapshot(label);
+    appendDebugMemoryLog('state-manager-snapshot', snapshot as unknown as Record<string, unknown>);
   }
 
   private async refreshAutoLimits(): Promise<void> {
@@ -1984,6 +2061,7 @@ export class StateManager {
       const workingSet = info.workingSetSize ?? info.workingSet ?? 0;
       const toMb = (kb: number) => Math.round((kb / 1024) * 10) / 10;
       const cacheStats = this.jsonlCache.getDebugStats();
+      const watched = this.countWatchedPaths();
       console.info('[WhereMyTokens][memory]', {
         label,
         workingSetMB: toMb(workingSet),
@@ -2000,6 +2078,31 @@ export class StateManager {
         watcherTargets: this.watcherTargetCount,
         dirtyFiles: this.dirtySessionFiles.size,
         deferredFastFiles: this.deferredFastFiles.size,
+        scannedFiles,
+      });
+      appendDebugMemoryLog('memory-snapshot', {
+        label,
+        electronProcessMemory: {
+          workingSetMB: toMb(workingSet),
+          privateMB: toMb(info.private),
+          sharedMB: toMb(info.shared),
+        },
+        runtime: collectRuntimeMemorySnapshot(),
+        collections: {
+          summaries: this.summaries.size,
+          sessions: this.state.sessions.length,
+          repoGitStats: Object.keys(this.state.repoGitStats).length,
+          gitStatsCache: this.gitStatsCache.size,
+          dirtySessionFiles: this.dirtySessionFiles.size,
+          deferredFastFiles: this.deferredFastFiles.size,
+        },
+        watcher: {
+          profile: this.watcherProfile,
+          targets: this.watcherTargetCount,
+          watchedDirectories: watched.watchedDirectories,
+          watchedFiles: watched.watchedFiles,
+        },
+        jsonlCache: cacheStats,
         scannedFiles,
       });
     } catch {

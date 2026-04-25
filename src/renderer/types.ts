@@ -217,6 +217,50 @@ export interface AppState {
   allTimeSessions: number;
 }
 
+export interface DebugMemSnapshot {
+  label: string;
+  ts: string;
+  runtime: {
+    pid: number;
+    uptimeSeconds: number;
+    memoryUsage: {
+      rss: number;
+      heapTotal: number;
+      heapUsed: number;
+      external: number;
+      arrayBuffers: number;
+    };
+    heapStatistics: Record<string, number>;
+    activeHandles: number;
+    activeRequests: number;
+    listenerCounts: {
+      total: number;
+      byEmitter: Record<string, number>;
+    };
+  };
+  collections: {
+    summaries: number;
+    sessions: number;
+    repoGitStats: number;
+    gitStatsCache: number;
+    dirtySessionFiles: number;
+    deferredFastFiles: number;
+  };
+  watcher: {
+    profile: 'wide' | 'recent' | 'off';
+    targets: number;
+    watchedDirectories: number;
+    watchedFiles: number;
+  };
+  jsonlCache: {
+    memoryEntries: number;
+    pendingPersistedEntries: number;
+    persistedEntries: number;
+    memoryLimit: number;
+    persistedLimit: number;
+  };
+}
+
 declare global {
   interface Window {
     wmt: {
@@ -230,6 +274,9 @@ declare global {
       getIntegrationStatus: () => Promise<{ configured: boolean; command?: string }>;
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
+      isDebugInstrumentationEnabled: () => Promise<boolean>;
+      getDebugMemSnapshot: () => Promise<DebugMemSnapshot | null>;
+      reportDebugRendererEvent: (payload: Record<string, unknown>) => Promise<void>;
       onUpdated:          (cb: (state: AppState) => void) => () => void;
       getResolvedTheme:   () => Promise<'light' | 'dark'>;
       onThemeChanged:     (cb: (theme: 'light' | 'dark') => void) => () => void;

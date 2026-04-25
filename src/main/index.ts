@@ -4,6 +4,11 @@ import Store from 'electron-store';
 import { StateManager, AppState } from './stateManager';
 import { registerIpcHandlers, AppSettings, DEFAULT_SETTINGS } from './ipc';
 import { Notification } from 'electron';
+import { appendCrashLog, buildErrorPayload, buildQuitTrace, collectRuntimeMemorySnapshot, getCrashLogPath, getDebugMemLogPath, isDebugInstrumentationEnabled, setListenerTargetsProvider } from './debugInstrumentation';
+
+if (isDebugInstrumentationEnabled()) {
+  app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
+}
 
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
@@ -17,6 +22,63 @@ let popupMoving = false;
 let popupMoveEndTimer: NodeJS.Timeout | null = null;
 let lastTrayTitle = '';
 let lastTrayTooltip = '';
+
+function registerDebugTargets() {
+  setListenerTargetsProvider(() => ([
+    { name: 'process', emitter: process },
+    { name: 'app', emitter: app },
+    { name: 'ipcMain', emitter: ipcMain },
+    { name: 'nativeTheme', emitter: nativeTheme },
+    { name: 'tray', emitter: tray },
+    { name: 'popupWindow', emitter: popupWindow },
+    { name: 'popupWebContents', emitter: popupWindow?.webContents },
+  ]));
+}
+
+function installDebugInstrumentation() {
+  if (!isDebugInstrumentationEnabled()) return;
+
+  process.on('uncaughtException', (error, origin) => {
+    appendCrashLog('uncaughtException', {
+      origin,
+      ...buildErrorPayload(error),
+    });
+    setImmediate(() => app.exit(1));
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    appendCrashLog('unhandledRejection', buildErrorPayload(reason));
+  });
+
+  app.on('render-process-gone', (_event, webContents, details) => {
+    appendCrashLog('render-process-gone', {
+      details,
+      url: webContents.getURL(),
+      runtime: collectRuntimeMemorySnapshot(),
+    });
+  });
+
+  app.on('child-process-gone', (_event, details) => {
+    appendCrashLog('child-process-gone', {
+      details,
+      runtime: collectRuntimeMemorySnapshot(),
+    });
+  });
+
+  app.on('before-quit', () => {
+    appendCrashLog('before-quit', {
+      stack: buildQuitTrace('quit-trace'),
+      runtime: collectRuntimeMemorySnapshot(),
+    });
+  });
+
+  app.on('will-quit', () => {
+    appendCrashLog('will-quit', {
+      stack: buildQuitTrace('quit-trace'),
+      runtime: collectRuntimeMemorySnapshot(),
+    });
+  });
+}
 
 function createTray(): Tray {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
@@ -32,6 +94,7 @@ function createTray(): Tray {
     if (popupWindow?.isVisible()) popupWindow.hide();
     else showPopup();
   });
+  registerDebugTargets();
   return t;
 }
 
@@ -57,6 +120,7 @@ function createPopupWindow(): BrowserWindow {
   win.on('move', markPopupMoving);
   win.on('show', () => stateManager?.setUiVisible(true));
   win.on('hide', () => stateManager?.setUiVisible(false));
+  registerDebugTargets();
 
   // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
 
@@ -175,10 +239,25 @@ function markPopupMoving() {
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.wheremytokens.app');
+  registerDebugTargets();
+  installDebugInstrumentation();
+  if (isDebugInstrumentationEnabled()) {
+    appendCrashLog('debug-instrumentation-enabled', {
+      crashLogPath: getCrashLogPath(),
+      debugMemLogPath: getDebugMemLogPath(),
+      runtime: collectRuntimeMemorySnapshot(),
+    });
+  }
 
   const manager = new StateManager(store, (state) => updateTray(state));
   stateManager = manager;
-  registerIpcHandlers(store, () => manager.getState(), () => manager.forceRefresh(), () => manager.applySettingsChange());
+  registerIpcHandlers(
+    store,
+    () => manager.getState(),
+    () => manager.forceRefresh(),
+    () => manager.applySettingsChange(),
+    () => manager.getDebugMemSnapshot('ipc'),
+  );
 
   tray = createTray();
   popupWindow = createPopupWindow();
@@ -202,6 +281,13 @@ app.whenReady().then(() => {
 
   // App quit IPC
   ipcMain.handle('app:quit', () => { app.exit(0); });
+  ipcMain.handle('debug-renderer-event', (_event, payload: Record<string, unknown>) => {
+    if (!isDebugInstrumentationEnabled()) return;
+    appendCrashLog('renderer-event', {
+      payload,
+      runtime: collectRuntimeMemorySnapshot(),
+    });
+  });
 
   // 최소화(숨김) IPC
   ipcMain.handle('window:minimize', () => { popupWindow?.hide(); });
