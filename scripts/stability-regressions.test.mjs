@@ -416,4 +416,16 @@ test('changed session refresh merges unmatched files without falling back to sco
   assert.match(updateBody, /const matchedPaths = new Set<string>\(\)/);
   assert.match(updateBody, /this\.buildSessionInfoForJsonlPath\(filePath, previousByKey, this\.summaries\)/);
   assert.doesNotMatch(updateBody, /buildScopedSessionInfosDetailed/);
+  assert.match(updateBody, /this\.retainScopedSessionInfos\(/);
+});
+
+test('cached session refresh prunes retained sessions back to the recent-active scope', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const refreshStart = source.indexOf('private refreshCachedSessionInfos');
+  const refreshEnd = source.indexOf('private buildSessionInfos');
+  const refreshBody = source.slice(refreshStart, refreshEnd);
+
+  assert.match(source, /private retainScopedSessionInfos\(/);
+  assert.match(refreshBody, /this\.retainScopedSessionInfos\(next\)/);
+  assert.match(refreshBody, /this\.retainScopedSessionInfos\(this\.state\.sessions\)/);
 });

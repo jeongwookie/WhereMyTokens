@@ -943,6 +943,27 @@ export class StateManager {
     return ranked.map(session => normalizeFileKey(session.jsonlPath));
   }
 
+  private retainScopedSessionInfos(
+    sessions: SessionInfo[],
+    extraJsonlPaths?: Iterable<string>,
+  ): SessionInfo[] {
+    const retainedPaths = new Set<string>();
+    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT, sessions)) {
+      retainedPaths.add(normalizeFileKey(filePath));
+    }
+    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT, sessions)) {
+      retainedPaths.add(normalizeFileKey(filePath));
+    }
+    if (extraJsonlPaths) {
+      for (const filePath of extraJsonlPaths) retainedPaths.add(normalizeFileKey(filePath));
+    }
+
+    return sessions.filter(session => {
+      if (!session.jsonlPath) return session.state === 'active' || session.state === 'waiting';
+      return retainedPaths.has(normalizeFileKey(session.jsonlPath));
+    });
+  }
+
   private buildRecentWatchTargets(provider: AppSettings['provider']): string[] {
     const targets: string[] = [];
     const seen = new Set<string>();
@@ -2016,7 +2037,10 @@ export class StateManager {
       sessionsByKey.set(this.sessionIdentityKey(next), next);
     }
 
-    const sessions = [...sessionsByKey.values()].sort((a, b) => this.sessionSortValue(b) - this.sessionSortValue(a));
+    const sessions = this.retainScopedSessionInfos(
+      [...sessionsByKey.values()].sort((a, b) => this.sessionSortValue(b) - this.sessionSortValue(a)),
+      normalized,
+    );
     return {
       sessions,
       discoveryScope: StateManager.SESSION_SCOPE,
@@ -2054,7 +2078,9 @@ export class StateManager {
       }
     }
 
-    const sessions = changed ? next : this.state.sessions;
+    const sessions = changed
+      ? this.retainScopedSessionInfos(next)
+      : this.retainScopedSessionInfos(this.state.sessions);
     return {
       sessions,
       discoveryScope: StateManager.SESSION_SCOPE,
