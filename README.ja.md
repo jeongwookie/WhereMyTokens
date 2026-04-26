@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="assets/source-icon.png" width="88" alt="WhereMyTokens icon" />
 </p>
 
@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe"><strong>v1.11.4 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.5/WhereMyTokens-Setup.exe"><strong>v1.11.5 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -68,6 +68,7 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 長時間実行時のポップアップセッション保持範囲を安定化し、changed file で scoped refresh が再拡大する経路を止め、トラブルシュート用の crash/memory 計測をゲート付きで追加 |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | ポップアップのセッション一覧を recent + active な作業中心に安定化し、非表示トレイ時の更新コストを下げ、メインプロセス診断を強化 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | バックグラウンドのアイドル更新を軽くし、ヘッダーメタデータを整理し、Code Output に現在のセッション repo 範囲を表示 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History の起動同期とヘッダーステータスの意味を文書化し、アプリ内 Help を更新 |
@@ -81,9 +82,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.5/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-v1.11.4-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.5/WhereMyTokens-v1.11.5-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -93,7 +94,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.11.4-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.11.5-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 

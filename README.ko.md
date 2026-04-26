@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="assets/source-icon.png" width="88" alt="WhereMyTokens icon" />
 </p>
 
@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe"><strong>v1.11.4 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.5/WhereMyTokens-Setup.exe"><strong>v1.11.5 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -68,6 +68,7 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 장시간 실행 시 팝업 세션 보존 범위를 안정화하고, changed file 때문에 scoped refresh가 다시 커지는 경로를 차단하고, 문제 재현용 crash/memory 계측을 게이팅 뒤에 추가 |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 팝업 세션 목록을 최근 + 활성 작업 중심으로 안정화하고, 숨김 트레이 새로고침 비용을 줄이고, 메인 프로세스 진단 로그를 보강 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 유휴 상태 백그라운드 새로고침을 줄이고, 헤더 메타데이터를 정리하고, Code Output에 현재 세션 repo 범위를 표시 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History 시작 동기화와 헤더 상태 의미를 문서화하고 인앱 Help를 보강 |
@@ -81,9 +82,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.5/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.4/WhereMyTokens-v1.11.4-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.5/WhereMyTokens-v1.11.5-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -93,7 +94,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.11.4-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.11.5-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
