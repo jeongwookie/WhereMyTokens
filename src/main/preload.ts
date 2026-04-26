@@ -11,6 +11,9 @@ setupIntegration:     () => ipcRenderer.invoke('integration:setup'),
   getIntegrationStatus: () => ipcRenderer.invoke('integration:status'),
   quit:                 () => ipcRenderer.invoke('app:quit'),
   minimize:             () => ipcRenderer.invoke('window:minimize'),
+  isDebugInstrumentationEnabled: () => ipcRenderer.invoke('debug-instrumentation-enabled'),
+  getDebugMemSnapshot:  () => ipcRenderer.invoke('debug-mem-snapshot'),
+  reportDebugRendererEvent: (payload: Record<string, unknown>) => ipcRenderer.invoke('debug-renderer-event', payload),
   onUpdated:            (cb: (state: unknown) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, state: unknown) => cb(state);
     ipcRenderer.on('state:updated', handler);

@@ -382,11 +382,15 @@ test('startup recovery and persisted summary cache guards remain in source', () 
 
 test('session discovery keeps recent-active scope and tracked session hints in source', () => {
   const discoverySource = fs.readFileSync(path.resolve('src', 'main', 'sessionDiscovery.ts'), 'utf8');
+  const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
   assert.match(discoverySource, /SessionDiscoveryScope = 'recent-active' \| 'all'/);
   assert.match(discoverySource, /trackedJsonlPaths\?: string\[\]/);
   assert.match(discoverySource, /discoverSessions\(provider: TrackingProvider = 'both', options: DiscoverSessionsOptions = \{\}\)/);
   assert.match(discoverySource, /dedupeDiscoveredSessions/);
+  assert.match(stateSource, /private collectTrackedSessionFiles\(/);
+  assert.match(stateSource, /collectTrackedSessionFiles\('codex', StateManager\.STARTUP_CODEX_FILE_LIMIT\)/);
+  assert.match(stateSource, /collectTrackedSessionFiles\('claude', StateManager\.STARTUP_CLAUDE_FILE_LIMIT\)/);
 });
 
 test('visible fast refresh stays on cached session scope and logs anomalies', () => {
@@ -400,4 +404,28 @@ test('visible fast refresh stays on cached session scope and logs anomalies', ()
   assert.match(source, /discoveryScope: StateManager\.SESSION_SCOPE/);
   assert.match(source, /sessionCountDelta/);
   assert.match(source, /session-count-spike/);
+});
+
+test('changed session refresh merges unmatched files without falling back to scoped rebuild', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const updateStart = source.indexOf('private updateChangedSessionInfos');
+  const updateEnd = source.indexOf('private refreshCachedSessionInfos');
+  const updateBody = source.slice(updateStart, updateEnd);
+
+  assert.match(source, /private buildSessionInfoForJsonlPath/);
+  assert.match(updateBody, /const matchedPaths = new Set<string>\(\)/);
+  assert.match(updateBody, /this\.buildSessionInfoForJsonlPath\(filePath, previousByKey, this\.summaries\)/);
+  assert.doesNotMatch(updateBody, /buildScopedSessionInfosDetailed/);
+  assert.match(updateBody, /this\.retainScopedSessionInfos\(/);
+});
+
+test('cached session refresh prunes retained sessions back to the recent-active scope', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const refreshStart = source.indexOf('private refreshCachedSessionInfos');
+  const refreshEnd = source.indexOf('private buildSessionInfos');
+  const refreshBody = source.slice(refreshStart, refreshEnd);
+
+  assert.match(source, /private retainScopedSessionInfos\(/);
+  assert.match(refreshBody, /this\.retainScopedSessionInfos\(next\)/);
+  assert.match(refreshBody, /this\.retainScopedSessionInfos\(this\.state\.sessions\)/);
 });

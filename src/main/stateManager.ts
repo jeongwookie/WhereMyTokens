@@ -16,6 +16,7 @@ import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSes
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
 import { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
+import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -34,6 +35,27 @@ export interface CodeOutputStats {
   dailyAll: GitDailyStats[];
   repoCount: number;
   scopeLabel: string;
+}
+
+export interface DebugMemSnapshot {
+  label: string;
+  ts: string;
+  runtime: ReturnType<typeof collectRuntimeMemorySnapshot>;
+  collections: {
+    summaries: number;
+    sessions: number;
+    repoGitStats: number;
+    gitStatsCache: number;
+    dirtySessionFiles: number;
+    deferredFastFiles: number;
+  };
+  watcher: {
+    profile: WatcherProfile;
+    targets: number;
+    watchedDirectories: number;
+    watchedFiles: number;
+  };
+  jsonlCache: ReturnType<JsonlCache['getDebugStats']>;
 }
 
 export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
@@ -248,6 +270,7 @@ export class StateManager {
   private heavyPending = false;
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
+  private debugMemTimer: NodeJS.Timeout | null = null;
   private uiBusy = false;
   private uiVisible = false;
   private watcherProfile: WatcherProfile = 'off';
@@ -394,6 +417,7 @@ export class StateManager {
     void this.heavyRefresh(false, true);
     this.startTimers();
     this.startWatcher();
+    this.startDebugMemTimer();
     void Promise.all([this.refreshAutoLimits(), this.refreshApiUsagePct()])
       .then(() => {
         const limits = this.buildLimits();
@@ -417,6 +441,7 @@ export class StateManager {
     if (this.fastTimer) clearInterval(this.fastTimer);
     if (this.heavyTimer) clearInterval(this.heavyTimer);
     if (this.autoLimitTimer) clearInterval(this.autoLimitTimer);
+    if (this.debugMemTimer) clearInterval(this.debugMemTimer);
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
     if (this.historyWarmupTimer) clearTimeout(this.historyWarmupTimer);
     if (this.gitWarmupTimer) clearTimeout(this.gitWarmupTimer);
@@ -528,6 +553,58 @@ export class StateManager {
       targets: this.watcherTargetCount,
       ...this.getDebugCounts(),
     });
+  }
+
+  private startDebugMemTimer(): void {
+    if (!isDebugInstrumentationEnabled()) return;
+    if (this.debugMemTimer) clearInterval(this.debugMemTimer);
+    void this.writeDebugMemSnapshot('startup');
+    this.debugMemTimer = setInterval(() => {
+      void this.writeDebugMemSnapshot('interval');
+    }, 30_000);
+  }
+
+  private countWatchedPaths(): { watchedDirectories: number; watchedFiles: number } {
+    const watched = this.watcher?.getWatched();
+    if (!watched) return { watchedDirectories: 0, watchedFiles: 0 };
+    let watchedDirectories = 0;
+    let watchedFiles = 0;
+    for (const files of Object.values(watched)) {
+      watchedDirectories += 1;
+      watchedFiles += files.length;
+    }
+    return { watchedDirectories, watchedFiles };
+  }
+
+  async getDebugMemSnapshot(label = 'ipc'): Promise<DebugMemSnapshot> {
+    const cacheStats = this.jsonlCache.getDebugStats();
+    const watched = this.countWatchedPaths();
+    return {
+      label,
+      ts: new Date().toISOString(),
+      runtime: collectRuntimeMemorySnapshot(),
+      collections: {
+        summaries: this.summaries.size,
+        sessions: this.state.sessions.length,
+        repoGitStats: Object.keys(this.state.repoGitStats).length,
+        gitStatsCache: this.gitStatsCache.size,
+        dirtySessionFiles: this.dirtySessionFiles.size,
+        deferredFastFiles: this.deferredFastFiles.size,
+      },
+      watcher: {
+        profile: this.watcherProfile,
+        targets: this.watcherTargetCount,
+        watchedDirectories: watched.watchedDirectories,
+        watchedFiles: watched.watchedFiles,
+      },
+      jsonlCache: cacheStats,
+    };
+  }
+
+  private async writeDebugMemSnapshot(label: string): Promise<void> {
+    if (!isDebugInstrumentationEnabled()) return;
+    const snapshot = await this.getDebugMemSnapshot(label);
+    appendDebugMemoryLog('state-manager-snapshot', snapshot as unknown as Record<string, unknown>);
   }
 
   private async refreshAutoLimits(): Promise<void> {
@@ -752,9 +829,8 @@ export class StateManager {
 
   private createSessionDiscoveryOptions(extraJsonlPaths?: Iterable<string>): DiscoverSessionsOptions {
     const trackedJsonlPaths = new Set<string>();
-    for (const session of this.state.sessions) {
-      if (session.jsonlPath) trackedJsonlPaths.add(normalizeFileKey(session.jsonlPath));
-    }
+    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) trackedJsonlPaths.add(normalizeFileKey(filePath));
+    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) trackedJsonlPaths.add(normalizeFileKey(filePath));
     if (extraJsonlPaths) {
       for (const filePath of extraJsonlPaths) trackedJsonlPaths.add(normalizeFileKey(filePath));
     }
@@ -783,9 +859,8 @@ export class StateManager {
       if (summaries.has(normalized)) summaryPaths.add(normalized);
     };
 
-    for (const session of this.state.sessions) {
-      if (session.jsonlPath) pushSummaryPath(session.jsonlPath);
-    }
+    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) pushSummaryPath(filePath);
+    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) pushSummaryPath(filePath);
     for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT).files) pushSummaryPath(filePath);
     for (const filePath of this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT).files) pushSummaryPath(filePath);
     if (extraJsonlPaths) {
@@ -849,8 +924,12 @@ export class StateManager {
     }, 1200);
   }
 
-  private collectTrackedWatchFiles(provider: 'claude' | 'codex', maxFiles: number): string[] {
-    const ranked = this.state.sessions
+  private collectTrackedSessionFiles(
+    provider: 'claude' | 'codex',
+    maxFiles: number,
+    sessions: SessionInfo[] = this.state.sessions,
+  ): string[] {
+    const ranked = sessions
       .filter((session): session is SessionInfo & { jsonlPath: string } => session.provider === provider && !!session.jsonlPath)
       .sort((a, b) => {
         const aHot = a.state === 'active' ? 2 : (a.state === 'waiting' ? 1 : 0);
@@ -864,6 +943,27 @@ export class StateManager {
     return ranked.map(session => normalizeFileKey(session.jsonlPath));
   }
 
+  private retainScopedSessionInfos(
+    sessions: SessionInfo[],
+    extraJsonlPaths?: Iterable<string>,
+  ): SessionInfo[] {
+    const retainedPaths = new Set<string>();
+    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT, sessions)) {
+      retainedPaths.add(normalizeFileKey(filePath));
+    }
+    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT, sessions)) {
+      retainedPaths.add(normalizeFileKey(filePath));
+    }
+    if (extraJsonlPaths) {
+      for (const filePath of extraJsonlPaths) retainedPaths.add(normalizeFileKey(filePath));
+    }
+
+    return sessions.filter(session => {
+      if (!session.jsonlPath) return session.state === 'active' || session.state === 'waiting';
+      return retainedPaths.has(normalizeFileKey(session.jsonlPath));
+    });
+  }
+
   private buildRecentWatchTargets(provider: AppSettings['provider']): string[] {
     const targets: string[] = [];
     const seen = new Set<string>();
@@ -875,11 +975,11 @@ export class StateManager {
     };
 
     if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      for (const filePath of this.collectTrackedWatchFiles('claude', StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
+      for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
       for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.HIDDEN_CLAUDE_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
     }
     if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-      for (const filePath of this.collectTrackedWatchFiles('codex', StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
+      for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
       for (const filePath of this.listRecentCodexJsonlFiles(StateManager.HIDDEN_CODEX_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
     }
 
@@ -1208,8 +1308,15 @@ export class StateManager {
   private buildStartupPriorityFiles(provider: AppSettings['provider']): Set<string> {
     const priority = new Set<string>();
 
-    for (const session of this.state.sessions) {
-      if (session.jsonlPath) priority.add(normalizeFileKey(session.jsonlPath));
+    if (provider === 'claude' || provider === 'both') {
+      for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) {
+        priority.add(normalizeFileKey(filePath));
+      }
+    }
+    if (provider === 'codex' || provider === 'both') {
+      for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) {
+        priority.add(normalizeFileKey(filePath));
+      }
     }
 
     return priority;
@@ -1871,26 +1978,77 @@ export class StateManager {
     return { ...s, modelName, contextUsed, contextMax, toolCounts, gitStats, activityBreakdown, activityBreakdownKind };
   }
 
+  private buildSessionInfoForJsonlPath(
+    filePath: string,
+    previousByKey = new Map(this.state.sessions.map(session => [this.sessionIdentityKey(session), session])),
+    summaries: Map<string, FileUsageSummary> = this.summaries,
+  ): SessionInfo | null {
+    const normalized = normalizeFileKey(filePath);
+    const summary = summaries.get(normalized);
+    if (!summary) return null;
+
+    const bootstrap = summary.provider === 'claude'
+      ? this.buildStartupClaudeSession(normalized)
+      : this.buildStartupCodexSession(normalized);
+    if (!bootstrap) return null;
+
+    const isExcluded = makeExcludedMatcher(this.getSettings().excludedProjects ?? []);
+    if (isExcluded(this.sessionProjectKeys(bootstrap))) return null;
+
+    const key = this.sessionIdentityKey(bootstrap);
+    const previous = previousByKey.get(key);
+    const next = this.buildSessionInfo(bootstrap, previous?.gitStats, summary);
+    if (previous && this.isSameSessionInfo(previous, next)) return previous;
+    return next;
+  }
+
   private updateChangedSessionInfos(changedFiles: Set<string>): SessionBuildResult {
     const normalized = new Set([...changedFiles].map(file => normalizeFileKey(file)));
-    let matched = false;
-    const sessions = this.state.sessions.map(session => {
-      if (!session.jsonlPath || !normalized.has(normalizeFileKey(session.jsonlPath))) return session;
-      matched = true;
+    const previousByKey = new Map(this.state.sessions.map(session => [this.sessionIdentityKey(session), session]));
+    const previousSet = new Set(this.state.sessions);
+    const matchedPaths = new Set<string>();
+    const sessionsByKey = new Map<string, SessionInfo>();
+    let discoveredCount = 0;
+
+    for (const session of this.state.sessions) {
+      if (!session.jsonlPath) {
+        sessionsByKey.set(this.sessionIdentityKey(session), session);
+        continue;
+      }
+
+      const fileKey = normalizeFileKey(session.jsonlPath);
+      if (!normalized.has(fileKey)) {
+        sessionsByKey.set(this.sessionIdentityKey(session), session);
+        continue;
+      }
+
+      matchedPaths.add(fileKey);
+      discoveredCount += 1;
       const lastModified = getJsonlMtime(session.jsonlPath) ?? session.lastModified;
-      return this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
-    });
-    if (matched) {
-      return {
-        sessions,
-        discoveryScope: StateManager.SESSION_SCOPE,
-        discoveredCount: normalized.size,
-        dedupedCount: 0,
-        reusedCount: sessions.filter((session, index) => session === this.state.sessions[index]).length,
-        sessionCountDelta: sessions.length - this.state.sessions.length,
-      };
+      const next = this.buildSessionInfo({ ...session, lastModified }, session.gitStats);
+      sessionsByKey.set(this.sessionIdentityKey(next), next);
     }
-    return this.buildScopedSessionInfosDetailed(this.summaries, normalized);
+
+    for (const filePath of normalized) {
+      if (matchedPaths.has(filePath)) continue;
+      const next = this.buildSessionInfoForJsonlPath(filePath, previousByKey, this.summaries);
+      if (!next) continue;
+      discoveredCount += 1;
+      sessionsByKey.set(this.sessionIdentityKey(next), next);
+    }
+
+    const sessions = this.retainScopedSessionInfos(
+      [...sessionsByKey.values()].sort((a, b) => this.sessionSortValue(b) - this.sessionSortValue(a)),
+      normalized,
+    );
+    return {
+      sessions,
+      discoveryScope: StateManager.SESSION_SCOPE,
+      discoveredCount,
+      dedupedCount: Math.max(0, discoveredCount - Math.max(0, sessions.length - this.state.sessions.length)),
+      reusedCount: sessions.filter(session => previousSet.has(session)).length,
+      sessionCountDelta: sessions.length - this.state.sessions.length,
+    };
   }
 
   private refreshCachedSessionInfos(): SessionBuildResult {
@@ -1920,7 +2078,9 @@ export class StateManager {
       }
     }
 
-    const sessions = changed ? next : this.state.sessions;
+    const sessions = changed
+      ? this.retainScopedSessionInfos(next)
+      : this.retainScopedSessionInfos(this.state.sessions);
     return {
       sessions,
       discoveryScope: StateManager.SESSION_SCOPE,
@@ -1984,6 +2144,7 @@ export class StateManager {
       const workingSet = info.workingSetSize ?? info.workingSet ?? 0;
       const toMb = (kb: number) => Math.round((kb / 1024) * 10) / 10;
       const cacheStats = this.jsonlCache.getDebugStats();
+      const watched = this.countWatchedPaths();
       console.info('[WhereMyTokens][memory]', {
         label,
         workingSetMB: toMb(workingSet),
@@ -2000,6 +2161,31 @@ export class StateManager {
         watcherTargets: this.watcherTargetCount,
         dirtyFiles: this.dirtySessionFiles.size,
         deferredFastFiles: this.deferredFastFiles.size,
+        scannedFiles,
+      });
+      appendDebugMemoryLog('memory-snapshot', {
+        label,
+        electronProcessMemory: {
+          workingSetMB: toMb(workingSet),
+          privateMB: toMb(info.private),
+          sharedMB: toMb(info.shared),
+        },
+        runtime: collectRuntimeMemorySnapshot(),
+        collections: {
+          summaries: this.summaries.size,
+          sessions: this.state.sessions.length,
+          repoGitStats: Object.keys(this.state.repoGitStats).length,
+          gitStatsCache: this.gitStatsCache.size,
+          dirtySessionFiles: this.dirtySessionFiles.size,
+          deferredFastFiles: this.deferredFastFiles.size,
+        },
+        watcher: {
+          profile: this.watcherProfile,
+          targets: this.watcherTargetCount,
+          watchedDirectories: watched.watchedDirectories,
+          watchedFiles: watched.watchedFiles,
+        },
+        jsonlCache: cacheStats,
         scannedFiles,
       });
     } catch {
