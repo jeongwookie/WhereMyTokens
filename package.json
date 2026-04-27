@@ -1,6 +1,6 @@
 {
   "name": "wheremytokens-win",
-  "version": "1.11.5",
+  "version": "1.11.6",
   "description": "Windows system tray app for monitoring Claude Code and Codex token usage in real time",
   "main": "dist/main/index.js",
   "scripts": {
@@ -36,6 +36,14 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": false,
       "runAfterFinish": true,
+      "displayLanguageSelector": true,
+      "installerLanguages": [
+        "en_US",
+        "ko_KR",
+        "ja_JP",
+        "zh_CN",
+        "es_ES"
+      ],
       "license": "assets/license.txt"
     },
     "extraResources": [
