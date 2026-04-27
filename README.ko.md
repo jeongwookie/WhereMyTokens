@@ -73,9 +73,6 @@
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 팝업 세션 목록을 최근 + 활성 작업 중심으로 안정화하고, 숨김 트레이 새로고침 비용을 줄이고, 메인 프로세스 진단 로그를 보강 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 유휴 상태 백그라운드 새로고침을 줄이고, 헤더 메타데이터를 정리하고, Code Output에 현재 세션 repo 범위를 표시 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History 시작 동기화와 헤더 상태 의미를 문서화하고 인앱 Help를 보강 |
-| **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
-| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | Code Output 성장 그래프 추가, git 통계 갱신 안정화, 시작 스플래쉬 개선 |
-| **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 4/23 | Code Output 전체 기간을 로컬 브랜치 기준으로 맞추고 상위 모델 표시 범위를 명확화 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 

@@ -73,9 +73,6 @@
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 将弹出会话列表稳定在最近 + 活跃工作范围内，降低隐藏托盘时的刷新成本，并加强主进程诊断日志 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 降低空闲时后台刷新开销，整理头部元数据，并为 Code Output 标明当前会话 repo 范围 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | 补充 Partial History 启动同步与头部状态说明，并更新应用内帮助 |
-| **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
-| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | 新增 Code Output 增长图，稳定 git 统计刷新，并改进启动画面 |
-| **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 4/23 | 将 Code Output 全时段统计对齐到本地分支，并明确热门模型显示范围 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 

@@ -73,9 +73,6 @@
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 25 abr | Mantiene el popup centrado en sesiones recientes + activas, reduce el costo de refresco con la bandeja oculta y añade diagnósticos del proceso principal |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 24 abr | Reduce el refresco en segundo plano cuando está inactivo, ordena los metadatos del encabezado y etiqueta Code Output como repos de las sesiones actuales |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 24 abr | Documenta Partial History y los estados del encabezado, y actualiza la ayuda integrada |
-| **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 24 abr | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
-| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 23 abr | Añade gráfico de crecimiento de Code Output, estabiliza estadísticas git y mejora el splash inicial |
-| **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 23 abr | Alinea Code Output histórico con ramas locales y aclara el alcance de modelos principales |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 

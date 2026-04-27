@@ -73,9 +73,6 @@
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | Apr 25 | Keep popup sessions focused on recent + active work, reduce hidden tray refresh cost, and add perf diagnostics for main-process troubleshooting |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | Apr 24 | Improve idle refresh efficiency, restyle header metadata, and label Code Output as current session repos |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | Apr 24 | Document partial-history startup sync, clarify header status states, and refresh in-app help |
-| **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | Apr 24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
-| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | Apr 23 | Add Code Output growth chart, stabilize git stats refresh, and improve startup splash |
-| **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | Apr 23 | Align all-time Code Output with local branches and clarify top model usage |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 

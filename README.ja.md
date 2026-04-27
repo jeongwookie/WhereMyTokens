@@ -73,9 +73,6 @@
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | ポップアップのセッション一覧を recent + active な作業中心に安定化し、非表示トレイ時の更新コストを下げ、メインプロセス診断を強化 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | バックグラウンドのアイドル更新を軽くし、ヘッダーメタデータを整理し、Code Output に現在のセッション repo 範囲を表示 |
 | **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History の起動同期とヘッダーステータスの意味を文書化し、アプリ内 Help を更新 |
-| **[v1.11.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.1)** | 4/24 | Stabilize long-running usage scanning, clarify startup sync states, and improve Claude limit diagnostics |
-| **[v1.11.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.0)** | 4/23 | Code Output 成長グラフを追加し、git 統計更新と起動スプラッシュを改善 |
-| **[v1.10.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.10.2)** | 4/23 | Code Output の全期間をローカルブランチ基準に揃え、上位モデル表示範囲を明確化 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
