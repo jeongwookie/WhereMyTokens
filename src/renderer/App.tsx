@@ -210,6 +210,15 @@ function normalizeState(next: AppState): AppState {
   };
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === 'INPUT'
+    || tagName === 'TEXTAREA'
+    || tagName === 'SELECT'
+    || target.isContentEditable;
+}
+
 function sameNumberRecord(a: Record<string, number> | null | undefined, b: Record<string, number> | null | undefined): boolean {
   if (a === b) return true;
   if (!a || !b) return !a && !b;
@@ -465,6 +474,21 @@ export default function App() {
   useEffect(() => () => {
     if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (view !== 'main') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      window.wmt.minimize().catch(() => {});
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view]);
 
   // 시스템 테마 감지: 초기 resolve + 실시간 변경 리스너
   useEffect(() => {
