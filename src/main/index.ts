@@ -22,6 +22,7 @@ let popupMoving = false;
 let popupMoveEndTimer: NodeJS.Timeout | null = null;
 let lastTrayTitle = '';
 let lastTrayTooltip = '';
+let registeredGlobalHotkey = '';
 
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
@@ -99,14 +100,15 @@ function createTray(): Tray {
 }
 
 function createPopupWindow(): BrowserWindow {
+  const settings = getSettings();
   const win = new BrowserWindow({
-    width: 420,
-    height: 980,
+    width: 462,
+    height: 1078,
     show: false,
     frame: false,
     resizable: false,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    alwaysOnTop: settings.alwaysOnTop,
     backgroundColor: '#0d0d1a',
     webPreferences: {
       nodeIntegration: false,
@@ -127,6 +129,10 @@ function createPopupWindow(): BrowserWindow {
   return win;
 }
 
+function getSettings(): AppSettings {
+  return { ...DEFAULT_SETTINGS, ...store.store };
+}
+
 function showPopup() {
   if (!popupWindow || popupWindow.isDestroyed()) popupWindow = createPopupWindow();
   if (!tray) return;
@@ -145,6 +151,39 @@ function showPopup() {
     stateUpdateTimer = null;
     popupWindow.webContents.send('state:updated', currentState);
   }
+}
+
+function togglePopupFromShortcut() {
+  if (popupWindow?.isVisible() && popupWindow.isFocused()) {
+    popupWindow.hide();
+    return;
+  }
+  showPopup();
+}
+
+function applyWindowSettings() {
+  const settings = getSettings();
+  if (popupWindow && !popupWindow.isDestroyed()) {
+    popupWindow.setAlwaysOnTop(settings.alwaysOnTop);
+  }
+}
+
+function registerGlobalHotkey(hotkey: string) {
+  if (registeredGlobalHotkey) {
+    globalShortcut.unregister(registeredGlobalHotkey);
+    registeredGlobalHotkey = '';
+  }
+  if (!hotkey.trim()) return;
+  try {
+    const ok = globalShortcut.register(hotkey, togglePopupFromShortcut);
+    if (ok) registeredGlobalHotkey = hotkey;
+  } catch { /* ignore */ }
+}
+
+function applyRuntimeSettings() {
+  const settings = getSettings();
+  applyWindowSettings();
+  registerGlobalHotkey(settings.globalHotkey);
 }
 
 function buildTrayTitle(state: AppState): string {
@@ -255,7 +294,10 @@ app.whenReady().then(() => {
     store,
     () => manager.getState(),
     () => manager.forceRefresh(),
-    () => manager.applySettingsChange(),
+    () => {
+      manager.applySettingsChange();
+      applyRuntimeSettings();
+    },
     () => manager.getDebugMemSnapshot('ipc'),
   );
 
@@ -268,13 +310,8 @@ app.whenReady().then(() => {
   popupWindow.once('ready-to-show', () => showPopup());
 
   // Global shortcut
-  const settings = { ...DEFAULT_SETTINGS, ...store.store };
-  try {
-    globalShortcut.register(settings.globalHotkey, () => {
-      if (popupWindow?.isVisible()) popupWindow.hide();
-      else showPopup();
-    });
-  } catch { /* ignore */ }
+  const settings = getSettings();
+  registerGlobalHotkey(settings.globalHotkey);
 
   // Auto-start at login
   app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });

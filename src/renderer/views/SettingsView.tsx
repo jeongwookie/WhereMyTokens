@@ -2,12 +2,61 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AppSettings } from '../types';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
+import { DEFAULT_MAIN_SECTION_ORDER, MAIN_SECTION_LABELS, MainSectionId, normalizeMainSectionOrder } from '../mainSections';
 
 interface Props { settings: AppSettings; onSave: (s: Partial<AppSettings>) => void; onBack: () => void; }
 
+const KEY_NAME_BY_CODE: Record<string, string> = {
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  End: 'End',
+  Enter: 'Return',
+  Escape: 'Escape',
+  Home: 'Home',
+  Insert: 'Insert',
+  Minus: '-',
+  PageDown: 'PageDown',
+  PageUp: 'PageUp',
+  Space: 'Space',
+  Tab: 'Tab',
+};
+
+const KEY_NAME_BY_KEY: Record<string, string> = {
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+};
+
+function keyNameFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string | null {
+  const { code, key } = event;
+  if (code.startsWith('Key') && code.length === 4) return code.slice(3);
+  if (code.startsWith('Digit') && code.length === 6) return code.slice(5);
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+  if (/^Numpad[0-9]$/.test(code)) return `num${code.slice(6)}`;
+  if (KEY_NAME_BY_CODE[code]) return KEY_NAME_BY_CODE[code];
+  if (KEY_NAME_BY_KEY[key]) return KEY_NAME_BY_KEY[key];
+  if (key.length === 1 && /^[a-z0-9]$/i.test(key)) return key.toUpperCase();
+  return null;
+}
+
+function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string | null {
+  const key = keyNameFromEvent(event);
+  if (!key || ['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return null;
+
+  const modifiers: string[] = [];
+  if (event.ctrlKey || event.metaKey) modifiers.push('CommandOrControl');
+  if (event.altKey) modifiers.push('Alt');
+  if (event.shiftKey) modifiers.push('Shift');
+
+  if (modifiers.length === 0 && !/^F([1-9]|1[0-9]|2[0-4])$/.test(key)) return null;
+  return [...modifiers, key].join('+');
+}
+
 export default function SettingsView({ settings, onSave, onBack }: Props) {
   const C = useTheme();
-  const [s, setS] = useState({ ...settings });
+  const [s, setS] = useState({ ...settings, mainSectionOrder: normalizeMainSectionOrder(settings.mainSectionOrder) });
+  const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [integrationConfigured, setIntegrationConfigured] = useState<boolean | null>(null);
   const [integrationMsg, setIntegrationMsg] = useState('');
 
@@ -39,11 +88,47 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
 
   function SectionHeader({ label }: { label: string }) {
     return (
-      <div style={{ fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 0 4px', borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 11, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 0 4px', borderBottom: `1px solid ${C.border}` }}>
         {label}
       </div>
     );
   }
+
+  function handleHotkeyKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.key === 'Escape') {
+      setRecordingHotkey(false);
+      event.currentTarget.blur();
+      return;
+    }
+
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      setS({ ...s, globalHotkey: '' });
+      setRecordingHotkey(false);
+      event.currentTarget.blur();
+      return;
+    }
+
+    const nextHotkey = shortcutFromEvent(event);
+    if (!nextHotkey) return;
+    setS({ ...s, globalHotkey: nextHotkey });
+    setRecordingHotkey(false);
+    event.currentTarget.blur();
+  }
+
+  function moveMainSection(id: MainSectionId, direction: -1 | 1) {
+    const order = normalizeMainSectionOrder(s.mainSectionOrder);
+    const index = order.indexOf(id);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    const next = [...order];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    setS({ ...s, mainSectionOrder: next });
+  }
+
+  const mainSectionOrder = normalizeMainSectionOrder(s.mainSectionOrder);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
@@ -55,13 +140,13 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 12, color: C.text }}>Real-time data via statusLine</div>
-              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
                 Registers WhereMyTokens as a Claude Code plugin for live rate limits
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               {integrationConfigured !== null && (
-                <span style={{ fontSize: 9, color: integrationConfigured ? '#4a9a4a' : C.textMuted }}>
+                <span style={{ fontSize: 10, color: integrationConfigured ? '#4a9a4a' : C.textMuted }}>
                   {integrationConfigured ? '● Connected' : '○ Not configured'}
                 </span>
               )}
@@ -74,7 +159,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
             </div>
           </div>
           {integrationMsg && (
-            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>{integrationMsg}</div>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>{integrationMsg}</div>
           )}
         </div>
 
@@ -84,8 +169,30 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <input type="checkbox" style={chk} checked={s.openAtLogin} onChange={e => setS({ ...s, openAtLogin: e.target.checked })} />
         </div>
         <div style={row}>
+          <span style={labelStyle}>Always On Top</span>
+          <input type="checkbox" style={chk} checked={s.alwaysOnTop} onChange={e => setS({ ...s, alwaysOnTop: e.target.checked })} />
+        </div>
+        <div style={row}>
           <span style={labelStyle}>Global shortcut</span>
-          <input style={{ ...inp, width: 160 }} value={s.globalHotkey} onChange={e => setS({ ...s, globalHotkey: e.target.value })} />
+          <input
+            readOnly
+            aria-label="Global shortcut"
+            title="Click, then press a shortcut. Esc cancels, Backspace clears."
+            placeholder={recordingHotkey ? 'Press shortcut...' : 'Click to record'}
+            style={{
+              ...inp,
+              width: 176,
+              cursor: 'pointer',
+              borderColor: recordingHotkey ? C.accent : C.border,
+              color: recordingHotkey ? C.accent : C.text,
+              outline: recordingHotkey ? `1px solid ${C.accent}55` : 'none',
+            }}
+            value={recordingHotkey ? '' : s.globalHotkey}
+            onFocus={() => setRecordingHotkey(true)}
+            onClick={() => setRecordingHotkey(true)}
+            onBlur={() => setRecordingHotkey(false)}
+            onKeyDown={handleHotkeyKeyDown}
+          />
         </div>
 
         <SectionHeader label="Tracking" />
@@ -133,6 +240,64 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
             <option value="tokens">5h tokens</option>
             <option value="cost">5h cost</option>
           </select>
+        </div>
+
+        <SectionHeader label="Main Layout" />
+        <div style={{ padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {mainSectionOrder.map((id, index) => (
+              <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 0' }}>
+                <span style={{ fontSize: 12, color: C.textDim, minWidth: 0 }}>{MAIN_SECTION_LABELS[id]}</span>
+                <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    title="Move up"
+                    disabled={index === 0}
+                    onClick={() => moveMainSection(id, -1)}
+                    style={{
+                      background: C.bgRow,
+                      border: `1px solid ${C.border}`,
+                      color: index === 0 ? C.textMuted : C.textDim,
+                      opacity: index === 0 ? 0.45 : 1,
+                      cursor: index === 0 ? 'default' : 'pointer',
+                      borderRadius: 4,
+                      width: 26,
+                      height: 22,
+                      fontSize: 12,
+                    }}
+                  >
+                    ^
+                  </button>
+                  <button
+                    type="button"
+                    title="Move down"
+                    disabled={index === mainSectionOrder.length - 1}
+                    onClick={() => moveMainSection(id, 1)}
+                    style={{
+                      background: C.bgRow,
+                      border: `1px solid ${C.border}`,
+                      color: index === mainSectionOrder.length - 1 ? C.textMuted : C.textDim,
+                      opacity: index === mainSectionOrder.length - 1 ? 0.45 : 1,
+                      cursor: index === mainSectionOrder.length - 1 ? 'default' : 'pointer',
+                      borderRadius: 4,
+                      width: 26,
+                      height: 22,
+                      fontSize: 12,
+                    }}
+                  >
+                    v
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setS({ ...s, mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER })}
+            style={{ marginTop: 6, background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
+          >
+            Reset order
+          </button>
         </div>
 
         <SectionHeader label="Appearance" />

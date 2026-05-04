@@ -174,9 +174,9 @@ function asUsageWindow(value: unknown): UsageWindowResponse | null {
   return record;
 }
 
-function scalePct(value: unknown): number {
+function normalizePct(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  return value <= 1.0 ? Math.round(value * 100) : Math.round(value);
+  return Math.max(0, Math.min(100, value));
 }
 
 function resetMs(iso: unknown, now: number): ApiResetMs {
@@ -211,13 +211,13 @@ function extraUsageSnapshot(value: unknown): ApiExtraUsage | null {
   const usedCreditsRaw = typeof record.used_credits === 'number' && Number.isFinite(record.used_credits)
     ? record.used_credits
     : (typeof record.usedCredits === 'number' && Number.isFinite(record.usedCredits) ? record.usedCredits : 0);
-  const utilizationValue = scalePct(record.utilization);
+  const utilizationValue = normalizePct(record.utilization);
   const currency = typeof record.currency === 'string' ? record.currency : null;
   return {
     isEnabled: record.is_enabled === true || record.isEnabled === true,
     monthlyLimit: Math.max(0, monthlyLimitRaw),
     usedCredits: Math.max(0, usedCreditsRaw),
-    utilization: Math.max(0, Math.min(100, utilizationValue)),
+    utilization: utilizationValue,
     currency,
   };
 }
@@ -238,9 +238,9 @@ export function normalizeStoredApiUsagePct(value: unknown): StoredApiUsagePct | 
     : undefined;
 
   return {
-    h5Pct: scalePct(record.h5Pct),
-    weekPct: scalePct(record.weekPct),
-    soPct: scalePct(record.soPct),
+    h5Pct: normalizePct(record.h5Pct),
+    weekPct: normalizePct(record.weekPct),
+    soPct: normalizePct(record.soPct),
     h5ResetMs: normalizeResetValue(record.h5ResetMs),
     weekResetMs: normalizeResetValue(record.weekResetMs),
     soResetMs: normalizeResetValue(record.soResetMs),
@@ -401,9 +401,9 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
       : null;
     const now = Date.now();
     const usage: ApiUsagePct = {
-      h5Pct: scalePct(fiveHour?.utilization),
-      weekPct: scalePct(sevenDay?.utilization),
-      soPct: scalePct(validSonnetWindow?.utilization),
+      h5Pct: normalizePct(fiveHour?.utilization),
+      weekPct: normalizePct(sevenDay?.utilization),
+      soPct: normalizePct(validSonnetWindow?.utilization),
       h5ResetMs: resetMs(fiveHour?.resets_at, now),
       weekResetMs: resetMs(sevenDay?.resets_at, now),
       soResetMs: resetMs(validSonnetWindow?.resets_at, now),

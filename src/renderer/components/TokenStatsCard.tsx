@@ -25,6 +25,26 @@ function pctBarColor(pct: number, C: Theme): string {
   return C.accent;
 }
 
+function formatUsagePct(pct: number): string {
+  if (pct <= 0) return '0%';
+  if (pct < 1) return '<1%';
+  if (pct < 10) return `${Math.round(pct * 10) / 10}%`;
+  return `${Math.round(pct)}%`;
+}
+
+function windowDurationMs(period: string): number | null {
+  const normalized = period.trim().toLowerCase();
+  if (normalized === '5h') return 5 * 60 * 60 * 1000;
+  if (normalized === '1w') return 7 * 24 * 60 * 60 * 1000;
+  return null;
+}
+
+function timeGonePct(period: string, resetMs: number | null | undefined): number | null {
+  const durationMs = windowDurationMs(period);
+  if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
+  return Math.max(0, Math.min(100, ((durationMs - resetMs) / durationMs) * 100));
+}
+
 interface Props {
   provider: string;
   period: string;
@@ -48,7 +68,7 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginRight: 10 }}>
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 9 }}>{label} {fmtTokens(value)}</span>
+      <span style={{ fontSize: 10 }}>{label} {fmtTokens(value)}</span>
     </span>
   );
 }
@@ -67,7 +87,7 @@ function TokenStatsCard({
   const costColor = stats.costUSD > 5 ? C.barRed : stats.costUSD > 2 ? C.barYellow : C.textDim;
 
   const showLimitBar = limitPct != null;
-  const barPct = Math.min(100, limitPct ?? 0);
+  const barPct = Math.max(0, Math.min(100, limitPct ?? 0));
   const barColor = pctBarColor(barPct, C);
 
   let resetStr = '';
@@ -89,10 +109,11 @@ function TokenStatsCard({
   const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
+  const timeGone = timeGonePct(period, resetMs);
   const sourceChip = limitSourceLabel ? (
     <span
       title={limitSourceLabel}
-      style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}`, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}`, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
     >
       {limitSourceLabel}
     </span>
@@ -109,7 +130,7 @@ function TokenStatsCard({
       }}>
         {/* 제공자 + 등급 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0 }}>
             {provider} {period}
             {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
@@ -118,7 +139,7 @@ function TokenStatsCard({
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 1 }}>
             {sourceChip}
             {cache && (
-              <span title={cacheTitle} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span title={cacheTitle} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {cache.label}
               </span>
             )}
@@ -126,8 +147,28 @@ function TokenStatsCard({
         </div>
 
         {/* 대형 퍼센트 */}
-        <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 6, fontFamily: C.fontMono }}>
-          {noData ? '—' : `${Math.round(barPct)}%`}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, fontFamily: C.fontMono }}>
+          {noData ? '—' : formatUsagePct(barPct)}
+          </div>
+          {!noData && timeGone != null && (
+            <div
+              title={`${Math.round(timeGone)}% of this ${period} window has elapsed`}
+              style={{
+                marginTop: 4,
+                fontSize: 9,
+                lineHeight: 1.25,
+                color: C.textMuted,
+                textAlign: 'right',
+                fontFamily: C.fontMono,
+                opacity: 0.78,
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>time gone</div>
+              <div style={{ fontSize: 12, color: C.textDim }}>{Math.round(timeGone)}%</div>
+            </div>
+          )}
         </div>
 
         {/* 진행 바 (전폭) */}
@@ -150,7 +191,7 @@ function TokenStatsCard({
 
         {/* ETA 경고 */}
         {showEta && (
-          <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 3 }}>
+          <div style={{ fontSize: 10, color: C.etaWarning, marginTop: 3 }}>
             ⚡ ~{fmtDuration(burnRate!.h5EtaMs!)} to limit
           </div>
         )}
@@ -158,7 +199,7 @@ function TokenStatsCard({
         {/* Footer: 리셋 왼쪽 ↔ 비용 오른쪽 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
           {!noData && resetStr ? (
-            <span style={{ fontSize: 9, color: C.textMuted }}>{resetStr}</span>
+            <span style={{ fontSize: 10, color: C.textMuted }}>{resetStr}</span>
           ) : <span />}
           {!hideCost && stats.costUSD > 0 && (
             <span title="Usage window cost" style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
@@ -179,19 +220,19 @@ function TokenStatsCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontSize: 11, color: C.textMuted }}>{provider} · {period}</span>
           {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
-            <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
+            <span style={{ fontSize: 9, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
           )}
           {sourceChip}
           {cache && (
-            <span title={cacheTitle} style={{ fontSize: 8, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: cache.bg, color: cache.color }}>
+            <span title={cacheTitle} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: cache.bg, color: cache.color }}>
               {cache.label}
             </span>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-          <span style={{ fontSize: 10, color: C.textMuted }}>{fmtTokens(stats.totalTokens)} tok</span>
+          <span style={{ fontSize: 11, color: C.textMuted }}>{fmtTokens(stats.totalTokens)} tok</span>
           {stats.requestCount > 0 && (
-            <span style={{ fontSize: 10, color: C.textMuted }}>{stats.requestCount} req</span>
+            <span style={{ fontSize: 11, color: C.textMuted }}>{stats.requestCount} req</span>
           )}
           {!hideCost && (
             <span title="Usage window cost" style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
@@ -213,11 +254,11 @@ function TokenStatsCard({
                 }} />
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
-              {noData ? '—' : `${Math.round(barPct)}%`}
+            <span style={{ fontSize: 11, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
+              {noData ? '—' : formatUsagePct(barPct)}
             </span>
             {!noData && resetStr && (
-              <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
+              <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
             )}
           </div>
         );
@@ -225,7 +266,7 @@ function TokenStatsCard({
 
       {/* ETA 경고 */}
       {showEta && (
-        <div style={{ fontSize: 9, color: C.etaWarning, marginTop: 3 }}>
+        <div style={{ fontSize: 10, color: C.etaWarning, marginTop: 3 }}>
           ⚡ ~{fmtDuration(burnRate!.h5EtaMs!)} to limit at current rate
         </div>
       )}

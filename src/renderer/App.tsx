@@ -7,6 +7,7 @@ import HelpView from './views/HelpView';
 import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars, Theme } from './theme';
 import { ThemeProvider } from './ThemeContext';
+import { DEFAULT_MAIN_SECTION_ORDER, normalizeMainSectionOrder } from './mainSections';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
@@ -44,9 +45,11 @@ const DEFAULT_STATE: AppState = {
     usageLimits: { h5:100, week:2000, sonnetWeek:100_000_000 },
     provider: 'both',
     alertThresholds: [50,80,90], openAtLogin: false,
+    alwaysOnTop: true,
     currency: 'USD', usdToKrw: 1380,
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     trayDisplay: 'h5pct', theme: 'auto',
+    mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
     hiddenProjects: [], excludedProjects: [],
   },
   autoLimits: null,
@@ -183,6 +186,7 @@ function normalizeState(next: AppState): AppState {
       ...DEFAULT_STATE.settings,
       ...next.settings,
       alertThresholds: arrayOrEmpty(next.settings?.alertThresholds),
+      mainSectionOrder: normalizeMainSectionOrder(next.settings?.mainSectionOrder),
       hiddenProjects: arrayOrEmpty(next.settings?.hiddenProjects),
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
     },

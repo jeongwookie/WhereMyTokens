@@ -7,6 +7,8 @@ import { AppState, DebugMemSnapshot } from './stateManager';
 import { getHistory, clearHistory } from './notificationHistory';
 import { isDebugInstrumentationEnabled } from './debugInstrumentation';
 
+const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'sessions', 'activity', 'modelUsage'];
+
 export interface AppSettings {
   // 내부용 (UI 미노출, fallback 용도)
   usageLimits: { h5: number; week: number; sonnetWeek: number };
@@ -15,11 +17,13 @@ export interface AppSettings {
   // 사용자 설정
   alertThresholds: number[]; // [50, 80, 90]
   openAtLogin: boolean;
+  alwaysOnTop: boolean;
   currency: 'USD' | 'KRW';
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
+  mainSectionOrder: string[];
   hiddenProjects: string[];
   excludedProjects: string[];
   theme: 'auto' | 'light' | 'dark';
@@ -30,11 +34,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   provider: 'both',
   alertThresholds: [50, 80, 90],
   openAtLogin: false,
+  alwaysOnTop: true,
   currency: 'USD',
   usdToKrw: 1380,
   globalHotkey: 'CommandOrControl+Shift+D',
   enableAlerts: true,
   trayDisplay: 'h5pct',
+  mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
   hiddenProjects: [],
   excludedProjects: [],
   theme: 'auto',

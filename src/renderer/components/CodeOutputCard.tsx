@@ -51,15 +51,15 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ minWidth: 0, marginRight: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Code Output</div>
-          <div style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Code Output</div>
+          <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {stats.scopeLabel}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
           {PERIODS.map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={{
-              padding: '2px 6px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
+              padding: '2px 6px', fontSize: 10, borderRadius: 3, cursor: 'pointer',
               fontFamily: "'JetBrains Mono', monospace",
               border: period === p ? '1px solid rgba(13,148,136,0.15)' : '1px solid transparent',
               background: period === p ? C.accent + '22' : 'none',
@@ -92,7 +92,7 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
               padding: '6px 14px',
               borderTop: `1px solid ${C.border}`,
             }}>
-              <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
+              <span style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
                 {data.commits} commit{data.commits > 1 ? 's' : ''} - {netLines >= 0 ? '+' : ''}{netLines} net lines
                 {perLine ? ` - ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
               </span>
@@ -109,13 +109,13 @@ export default React.memo(CodeOutputCard);
 function CodeOutputLoading({ C }: { C: ReturnType<typeof useTheme> }) {
   return (
     <div style={{ padding: '18px 14px 16px', borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
-      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
+      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
         Scanning git history
       </div>
       <div style={{ height: 4, background: C.bgRow, borderRadius: 999, overflow: 'hidden' }}>
         <div style={{ width: '44%', height: '100%', background: C.accent, opacity: 0.7, borderRadius: 999 }} />
       </div>
-      <div style={{ marginTop: 8, fontSize: 9, fontFamily: C.fontMono }}>Code Output will appear after local repo stats finish.</div>
+      <div style={{ marginTop: 8, fontSize: 10, fontFamily: C.fontMono }}>Code Output will appear after local repo stats finish.</div>
     </div>
   );
 }
@@ -244,13 +244,13 @@ function OutputGrowth({
   return (
     <div style={{ borderTop: `1px solid ${C.border}`, padding: '6px 12px 5px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-        <span style={{ fontSize: 9, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700 }}>Output Growth</span>
-        <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
+        <span style={{ fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700 }}>Output Growth</span>
+        <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>
           <span style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(totalNet)}</span> total net
           <span> - {total.commits} commits</span>
         </span>
       </div>
-      <div style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, marginBottom: 1 }}>
+      <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, marginBottom: 1 }}>
         Last 7 days on all-time baseline
       </div>
       <div style={{ position: 'relative' }}>
@@ -273,7 +273,7 @@ function OutputGrowth({
             padding: '5px 7px',
             boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
             fontFamily: C.fontMono,
-            fontSize: 9,
+            fontSize: 10,
             color: C.text,
             lineHeight: 1.35,
             zIndex: 2,
@@ -330,10 +330,10 @@ function KPI({ label, value, sub, subColor, color, C, borderRight }: {
       borderRight: borderRight ? `1px solid ${C.border}` : 'none',
       textAlign: 'center',
     }}>
-      <div style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: C.fontMono, lineHeight: 1 }}>{value}</div>
       {sub && (
-        <div style={{ fontSize: 9, color: subColor ?? C.textMuted, marginTop: 2 }}>{sub}</div>
+        <div style={{ fontSize: 10, color: subColor ?? C.textMuted, marginTop: 2 }}>{sub}</div>
       )}
     </div>
   );

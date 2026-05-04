@@ -18,7 +18,7 @@ export default function NotificationsView({ onBack }: Props) {
     borderBottom: `1px solid ${C.border}`,
   }), [C]);
   const labelStyle: React.CSSProperties = useMemo(() => ({ fontSize: 12, color: C.text }), [C]);
-  const sub: React.CSSProperties = useMemo(() => ({ fontSize: 10, color: C.textMuted, marginTop: 2 }), [C]);
+  const sub: React.CSSProperties = useMemo(() => ({ fontSize: 11, color: C.textMuted, marginTop: 2 }), [C]);
   const chk: React.CSSProperties = useMemo(() => ({ accentColor: C.accent, width: 16, height: 16, cursor: 'pointer' }), [C]);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function NotificationsView({ onBack }: Props) {
   function SectionHeader({ text }: { text: string }) {
     return (
       <div style={{
-        fontSize: 10,
+        fontSize: 11,
         color: C.textMuted,
         textTransform: 'uppercase',
         letterSpacing: 0.5,

@@ -1,3 +1,5 @@
+import type { MainSectionId } from './mainSections';
+
 export interface GitStats {
   branch: string | null;
   toplevel: string | null;
@@ -153,11 +155,13 @@ export interface AppSettings {
   provider: 'claude' | 'codex' | 'both';
   alertThresholds: number[];
   openAtLogin: boolean;
+  alwaysOnTop: boolean;
   currency: 'USD' | 'KRW';
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
+  mainSectionOrder: MainSectionId[];
   hiddenProjects: string[];
   excludedProjects: string[];
   theme: 'auto' | 'light' | 'dark';
