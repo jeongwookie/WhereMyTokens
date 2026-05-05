@@ -145,7 +145,10 @@ function compactWidgetSize(settings: AppSettings): { width: number; height: numb
   };
 }
 
-function defaultWidgetPosition(width: number, height: number): { x: number; y: number } {
+type WidgetPosition = { x: number; y: number };
+type WidgetSize = { width: number; height: number };
+
+function defaultWidgetPosition(width: number, height: number): WidgetPosition {
   const { workArea } = screen.getPrimaryDisplay();
   return {
     x: Math.round(workArea.x + workArea.width - width - 18),
@@ -153,12 +156,30 @@ function defaultWidgetPosition(width: number, height: number): { x: number; y: n
   };
 }
 
-function validWidgetPosition(value: AppSettings['compactWidgetBounds']): value is { x: number; y: number } {
+function validWidgetPosition(value: AppSettings['compactWidgetBounds']): value is WidgetPosition {
   return !!value
     && typeof value.x === 'number'
     && typeof value.y === 'number'
     && Number.isFinite(value.x)
     && Number.isFinite(value.y);
+}
+
+function constrainWidgetPosition(position: WidgetPosition, size: WidgetSize): WidgetPosition {
+  const display = screen.getDisplayNearestPoint(position);
+  const { workArea } = display;
+  const maxX = workArea.x + Math.max(0, workArea.width - size.width);
+  const maxY = workArea.y + Math.max(0, workArea.height - size.height);
+  return {
+    x: Math.round(Math.min(Math.max(position.x, workArea.x), maxX)),
+    y: Math.round(Math.min(Math.max(position.y, workArea.y), maxY)),
+  };
+}
+
+function resolveWidgetPosition(settings: AppSettings, size: WidgetSize): WidgetPosition {
+  const position = validWidgetPosition(settings.compactWidgetBounds)
+    ? settings.compactWidgetBounds
+    : defaultWidgetPosition(size.width, size.height);
+  return constrainWidgetPosition(position, size);
 }
 
 function persistWidgetPosition(win: BrowserWindow) {
@@ -169,9 +190,11 @@ function persistWidgetPosition(win: BrowserWindow) {
 
 function applyCompactWidgetBounds(settings = getSettings()) {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
-  const { width, height } = compactWidgetSize(settings);
+  const size = compactWidgetSize(settings);
   const [x, y] = widgetWindow.getPosition();
-  widgetWindow.setBounds({ x, y, width, height }, false);
+  const position = constrainWidgetPosition({ x, y }, size);
+  widgetWindow.setBounds({ ...position, ...size }, false);
+  if (position.x !== x || position.y !== y) store.set('compactWidgetBounds', position);
 }
 
 function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
@@ -211,13 +234,11 @@ function openDashboardContextMenu() {
 
 function createWidgetWindow(): BrowserWindow {
   const settings = getSettings();
-  const { width, height } = compactWidgetSize(settings);
-  const position = validWidgetPosition(settings.compactWidgetBounds)
-    ? settings.compactWidgetBounds
-    : defaultWidgetPosition(width, height);
+  const size = compactWidgetSize(settings);
+  const position = resolveWidgetPosition(settings, size);
   const win = new BrowserWindow({
-    width,
-    height,
+    width: size.width,
+    height: size.height,
     x: position.x,
     y: position.y,
     show: false,
@@ -261,6 +282,7 @@ function sendPopupNavigation(view: AppView) {
 function showPopup(view: AppView = 'main') {
   if (!popupWindow || popupWindow.isDestroyed()) popupWindow = createPopupWindow();
   if (!tray) return;
+  syncCompactWidget();
 
   const tb = tray.getBounds();
   const [w, h] = popupWindow.getSize();
@@ -280,7 +302,12 @@ function showPopup(view: AppView = 'main') {
 }
 
 function sendWidgetStateUpdate(state: AppState) {
-  if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) return;
+  if (!state.settings.compactWidgetEnabled) return;
+  if (!widgetWindow || widgetWindow.isDestroyed()) {
+    syncCompactWidget();
+    return;
+  }
+  if (!widgetWindow.isVisible()) return;
   applyCompactWidgetBounds(state.settings);
   widgetWindow.webContents.send('state:updated', state);
 }
@@ -298,10 +325,7 @@ function syncCompactWidget() {
 }
 
 function hideCompactWidget() {
-  store.set('compactWidgetEnabled', false);
-  syncCompactWidget();
-  stateManager?.applySettingsChange();
-  applyRuntimeSettings();
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide();
 }
 
 function showCompactWidget() {
@@ -507,12 +531,8 @@ app.whenReady().then(() => {
     if (typeof position?.x !== 'number' || typeof position?.y !== 'number') return;
     if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
     const size = compactWidgetSize(getSettings());
-    widgetWindow.setBounds({
-      x: Math.round(position.x),
-      y: Math.round(position.y),
-      width: size.width,
-      height: size.height,
-    });
+    const next = constrainWidgetPosition({ x: position.x, y: position.y }, size);
+    widgetWindow.setBounds({ ...next, width: size.width, height: size.height });
     persistWidgetPosition(widgetWindow);
   });
 
