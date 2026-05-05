@@ -135,7 +135,7 @@ function buildHeaderStatus(args: {
     case 'local only':
       return { label: 'Local only', title: apiError || 'Claude credentials were not found. Showing local data only.', tone: 'warning' };
     case 'auth failed':
-      return { label: 'Auth failed', title: apiError || 'Claude API rejected the stored access token.', tone: 'danger' };
+      return { label: 'Auth failed', title: apiError || 'Claude CLI token was rejected or expired.', tone: 'danger' };
     case 'forbidden':
       return { label: 'Access blocked', title: apiError || 'Claude API denied this account or beta surface.', tone: 'danger' };
     case 'api disconnected':

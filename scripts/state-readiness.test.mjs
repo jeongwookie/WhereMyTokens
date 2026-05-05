@@ -64,6 +64,13 @@ test('renderer splash and session stabilization use initial readiness and daily 
   assert.match(source, /normalizeState\(next\)/);
 });
 
+test('renderer mutes cached Claude usage text while keeping the progress bar active', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
+
+  assert.match(source, /cachedDisconnected = apiConnected === false && limitSourceLabel === 'cached'/);
+  assert.match(source, /noData \|\| cachedDisconnected \? C\.textMuted : barColor/);
+});
+
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {
   const mainSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');

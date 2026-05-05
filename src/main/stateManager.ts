@@ -141,15 +141,18 @@ function ageCachedPct(pct: number, resetMs: number | null, elapsedMs: number): n
 }
 
 function ageApiUsageSample(sample: ApiUsagePct, elapsedMs: number): ApiUsagePct {
-  const coreWindowExpired = sample.h5ResetMs == null || sample.weekResetMs == null
+  const h5Expired = sample.h5ResetMs == null
     ? elapsedMs > NULL_RESET_CACHE_TTL_MS
-    : elapsedMs > Math.min(sample.h5ResetMs, sample.weekResetMs);
-  const h5ResetMs = coreWindowExpired ? null : ageResetMs(sample.h5ResetMs, elapsedMs);
-  const weekResetMs = coreWindowExpired ? null : ageResetMs(sample.weekResetMs, elapsedMs);
+    : elapsedMs > sample.h5ResetMs;
+  const weekExpired = sample.weekResetMs == null
+    ? elapsedMs > NULL_RESET_CACHE_TTL_MS
+    : elapsedMs > sample.weekResetMs;
+  const h5ResetMs = h5Expired ? null : ageResetMs(sample.h5ResetMs, elapsedMs);
+  const weekResetMs = weekExpired ? null : ageResetMs(sample.weekResetMs, elapsedMs);
   return {
     ...sample,
-    h5Pct: coreWindowExpired ? 0 : sample.h5Pct,
-    weekPct: coreWindowExpired ? 0 : sample.weekPct,
+    h5Pct: h5Expired ? 0 : sample.h5Pct,
+    weekPct: weekExpired ? 0 : sample.weekPct,
     soPct: ageCachedPct(sample.soPct, sample.soResetMs, elapsedMs),
     h5ResetMs,
     weekResetMs,
@@ -658,8 +661,10 @@ export class StateManager {
     }
 
     if (result.status.code === 'rate-limited') {
-      this.apiBackoffMs = Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, 600_000);
-      this.apiError = `Claude API returned HTTP 429. Retry in ${Math.round(this.apiBackoffMs / 60000)}m.`;
+      this.apiBackoffMs = typeof result.status.retryAfterMs === 'number'
+        ? Math.max(0, result.status.retryAfterMs)
+        : Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, 600_000);
+      this.apiError = `${result.status.detail} Retry in ${Math.max(1, Math.ceil(this.apiBackoffMs / 60000))}m.`;
       this.apiStatusLabel = 'rate limited';
     }
     return true;
@@ -1453,10 +1458,9 @@ export class StateManager {
       codexH5,
       codexWeek,
     };
-    const canReuseClaudeCore = canReuseClaudeCachedWindow(previous.h5) && canReuseClaudeCachedWindow(previous.week);
     return {
-      h5: canReuseClaudeCore ? { ...previous.h5, source: 'cache' } : emptyUsageLimitWindow(),
-      week: canReuseClaudeCore ? { ...previous.week, source: 'cache' } : emptyUsageLimitWindow(),
+      h5: canReuseClaudeCachedWindow(previous.h5) ? { ...previous.h5, source: 'cache' } : emptyUsageLimitWindow(),
+      week: canReuseClaudeCachedWindow(previous.week) ? { ...previous.week, source: 'cache' } : emptyUsageLimitWindow(),
       so: canReuseClaudeCachedWindow(previous.so) ? { ...previous.so, source: 'cache' } : emptyUsageLimitWindow(),
       codexH5,
       codexWeek,
