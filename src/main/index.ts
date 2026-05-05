@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme, screen } from 'electron';
 import * as path from 'path';
 import Store from 'electron-store';
 import { StateManager, AppState } from './stateManager';
@@ -14,6 +14,7 @@ if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let tray: Tray | null = null;
 let popupWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
 let stateManager: StateManager | null = null;
 const store = new Store<AppSettings>() as Store<AppSettings>;
 let pendingStateUpdate: AppState | null = null;
@@ -24,6 +25,11 @@ let lastTrayTitle = '';
 let lastTrayTooltip = '';
 let registeredGlobalHotkey = '';
 
+type AppView = 'main' | 'settings' | 'notifications' | 'help';
+const WIDGET_WIDTH = 250;
+const WIDGET_HEIGHT_SINGLE = 96;
+const WIDGET_HEIGHT_BOTH = 150;
+
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
     { name: 'process', emitter: process },
@@ -33,6 +39,8 @@ function registerDebugTargets() {
     { name: 'tray', emitter: tray },
     { name: 'popupWindow', emitter: popupWindow },
     { name: 'popupWebContents', emitter: popupWindow?.webContents },
+    { name: 'widgetWindow', emitter: widgetWindow },
+    { name: 'widgetWebContents', emitter: widgetWindow?.webContents },
   ]));
 }
 
@@ -87,7 +95,7 @@ function createTray(): Tray {
   const t = new Tray(icon);
   t.setToolTip('WhereMyTokens');
   t.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open WhereMyTokens', click: showPopup },
+    { label: 'Open WhereMyTokens', click: () => showPopup() },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.exit(0); } },
   ]));
@@ -122,6 +130,7 @@ function createPopupWindow(): BrowserWindow {
   win.on('move', markPopupMoving);
   win.on('show', () => stateManager?.setUiVisible(true));
   win.on('hide', () => stateManager?.setUiVisible(false));
+  win.webContents.on('context-menu', openDashboardContextMenu);
   registerDebugTargets();
 
   // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
@@ -129,11 +138,127 @@ function createPopupWindow(): BrowserWindow {
   return win;
 }
 
+function compactWidgetSize(settings: AppSettings): { width: number; height: number } {
+  return {
+    width: WIDGET_WIDTH,
+    height: (settings.provider ?? 'both') === 'both' ? WIDGET_HEIGHT_BOTH : WIDGET_HEIGHT_SINGLE,
+  };
+}
+
+function defaultWidgetPosition(width: number, height: number): { x: number; y: number } {
+  const { workArea } = screen.getPrimaryDisplay();
+  return {
+    x: Math.round(workArea.x + workArea.width - width - 18),
+    y: Math.round(workArea.y + 84),
+  };
+}
+
+function validWidgetPosition(value: AppSettings['compactWidgetBounds']): value is { x: number; y: number } {
+  return !!value
+    && typeof value.x === 'number'
+    && typeof value.y === 'number'
+    && Number.isFinite(value.x)
+    && Number.isFinite(value.y);
+}
+
+function persistWidgetPosition(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+  const [x, y] = win.getPosition();
+  store.set('compactWidgetBounds', { x, y });
+}
+
+function applyCompactWidgetBounds(settings = getSettings()) {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const { width, height } = compactWidgetSize(settings);
+  const [x, y] = widgetWindow.getPosition();
+  widgetWindow.setBounds({ x, y, width, height }, false);
+}
+
+function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
+  if (!win || win.isDestroyed() || !settings.compactWidgetEnabled) return;
+  applyCompactWidgetBounds(settings);
+  win.setAlwaysOnTop(settings.alwaysOnTop);
+  if (!win.isVisible()) win.showInactive();
+  const currentState = stateManager?.getState();
+  if (currentState) win.webContents.send('state:updated', currentState);
+}
+
+function openWidgetContextMenu() {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  Menu.buildFromTemplate([
+    { label: 'Open dashboard', click: () => showPopup('main') },
+    { label: 'Refresh now', click: () => stateManager?.forceRefresh().catch(() => {}) },
+    { label: 'Settings', click: () => showPopup('settings') },
+    { type: 'separator' },
+    { label: 'Hide widget', click: hideCompactWidget },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.exit(0); } },
+  ]).popup({ window: widgetWindow });
+}
+
+function openDashboardContextMenu() {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  Menu.buildFromTemplate([
+    { label: 'Hide dashboard', click: () => popupWindow?.hide() },
+    { label: 'Refresh now', click: () => stateManager?.forceRefresh().catch(() => {}) },
+    { label: 'Settings', click: () => showPopup('settings') },
+    { type: 'separator' },
+    { label: 'Show widget', click: showCompactWidget },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.exit(0); } },
+  ]).popup({ window: popupWindow });
+}
+
+function createWidgetWindow(): BrowserWindow {
+  const settings = getSettings();
+  const { width, height } = compactWidgetSize(settings);
+  const position = validWidgetPosition(settings.compactWidgetBounds)
+    ? settings.compactWidgetBounds
+    : defaultWidgetPosition(width, height);
+  const win = new BrowserWindow({
+    width,
+    height,
+    x: position.x,
+    y: position.y,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: settings.alwaysOnTop,
+    backgroundColor: '#0d0f13',
+    hasShadow: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
+  win.loadFile(rendererPath, { query: { view: 'widget' } });
+  win.on('move', () => persistWidgetPosition(win));
+  win.once('ready-to-show', () => revealCompactWidget(win));
+  win.webContents.once('did-finish-load', () => revealCompactWidget(win));
+  win.on('closed', () => {
+    if (widgetWindow === win) widgetWindow = null;
+  });
+  win.webContents.on('context-menu', openWidgetContextMenu);
+  registerDebugTargets();
+  return win;
+}
+
 function getSettings(): AppSettings {
   return { ...DEFAULT_SETTINGS, ...store.store };
 }
 
-function showPopup() {
+function sendPopupNavigation(view: AppView) {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  const send = () => popupWindow?.webContents.send('app:navigate', view);
+  if (popupWindow.webContents.isLoading()) popupWindow.webContents.once('did-finish-load', send);
+  else send();
+}
+
+function showPopup(view: AppView = 'main') {
   if (!popupWindow || popupWindow.isDestroyed()) popupWindow = createPopupWindow();
   if (!tray) return;
 
@@ -144,6 +269,7 @@ function showPopup() {
   popupWindow.setPosition(x, y);
   popupWindow.show();
   popupWindow.focus();
+  sendPopupNavigation(view);
   const currentState = stateManager?.getState();
   if (currentState) {
     pendingStateUpdate = null;
@@ -151,6 +277,38 @@ function showPopup() {
     stateUpdateTimer = null;
     popupWindow.webContents.send('state:updated', currentState);
   }
+}
+
+function sendWidgetStateUpdate(state: AppState) {
+  if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) return;
+  applyCompactWidgetBounds(state.settings);
+  widgetWindow.webContents.send('state:updated', state);
+}
+
+function syncCompactWidget() {
+  const settings = getSettings();
+  if (!settings.compactWidgetEnabled) {
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
+    widgetWindow = null;
+    return;
+  }
+
+  if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow();
+  revealCompactWidget(widgetWindow, settings);
+}
+
+function hideCompactWidget() {
+  store.set('compactWidgetEnabled', false);
+  syncCompactWidget();
+  stateManager?.applySettingsChange();
+  applyRuntimeSettings();
+}
+
+function showCompactWidget() {
+  store.set('compactWidgetEnabled', true);
+  syncCompactWidget();
+  stateManager?.applySettingsChange();
+  applyRuntimeSettings();
 }
 
 function togglePopupFromShortcut() {
@@ -165,6 +323,9 @@ function applyWindowSettings() {
   const settings = getSettings();
   if (popupWindow && !popupWindow.isDestroyed()) {
     popupWindow.setAlwaysOnTop(settings.alwaysOnTop);
+  }
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.setAlwaysOnTop(settings.alwaysOnTop);
   }
 }
 
@@ -183,6 +344,7 @@ function registerGlobalHotkey(hotkey: string) {
 function applyRuntimeSettings() {
   const settings = getSettings();
   applyWindowSettings();
+  syncCompactWidget();
   registerGlobalHotkey(settings.globalHotkey);
 }
 
@@ -239,6 +401,7 @@ function updateTray(state: AppState) {
   }
 
   queueRendererStateUpdate(state);
+  sendWidgetStateUpdate(state);
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
 }
 
@@ -299,11 +462,17 @@ app.whenReady().then(() => {
       applyRuntimeSettings();
     },
     () => manager.getDebugMemSnapshot('ipc'),
+    {
+      openDashboard: () => showPopup('main'),
+      openSettings: () => showPopup('settings'),
+      hideCompactWidget,
+    },
   );
 
   tray = createTray();
   popupWindow = createPopupWindow();
   manager.start();
+  syncCompactWidget();
   app.once('before-quit', () => manager.stop());
 
   // Show popup on first launch (after renderer is ready)
@@ -328,6 +497,24 @@ app.whenReady().then(() => {
 
   // 최소화(숨김) IPC
   ipcMain.handle('window:minimize', () => { popupWindow?.hide(); });
+  ipcMain.handle('window:get-compact-widget-position', () => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return null;
+    const [x, y] = widgetWindow.getPosition();
+    return { x, y };
+  });
+  ipcMain.handle('window:set-compact-widget-position', (_event, position: { x?: unknown; y?: unknown }) => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    if (typeof position?.x !== 'number' || typeof position?.y !== 'number') return;
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
+    const size = compactWidgetSize(getSettings());
+    widgetWindow.setBounds({
+      x: Math.round(position.x),
+      y: Math.round(position.y),
+      width: size.width,
+      height: size.height,
+    });
+    persistWidgetPosition(widgetWindow);
+  });
 
   // 시스템 테마 감지: auto 설정 시 OS 다크모드에 따라 resolve
   function resolveTheme(): 'light' | 'dark' {
@@ -343,9 +530,12 @@ app.whenReady().then(() => {
     if (s.theme === 'auto' && popupWindow && !popupWindow.isDestroyed()) {
       popupWindow.webContents.send('theme:changed', resolveTheme());
     }
+    if (s.theme === 'auto' && widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.webContents.send('theme:changed', resolveTheme());
+    }
   });
 });
 
 app.on('window-all-closed', () => { /* tray app: do not quit */ });
-app.on('second-instance', showPopup);
+app.on('second-instance', () => showPopup());
 app.on('will-quit', () => globalShortcut.unregisterAll());

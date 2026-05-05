@@ -9,6 +9,11 @@ import { isDebugInstrumentationEnabled } from './debugInstrumentation';
 
 const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'sessions', 'activity', 'modelUsage'];
 
+export interface CompactWidgetBounds {
+  x: number;
+  y: number;
+}
+
 export interface AppSettings {
   // 내부용 (UI 미노출, fallback 용도)
   usageLimits: { h5: number; week: number; sonnetWeek: number };
@@ -26,6 +31,8 @@ export interface AppSettings {
   mainSectionOrder: string[];
   hiddenProjects: string[];
   excludedProjects: string[];
+  compactWidgetEnabled: boolean;
+  compactWidgetBounds: CompactWidgetBounds | null;
   theme: 'auto' | 'light' | 'dark';
 }
 
@@ -43,6 +50,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
   hiddenProjects: [],
   excludedProjects: [],
+  compactWidgetEnabled: false,
+  compactWidgetBounds: null,
   theme: 'auto',
 };
 
@@ -52,6 +61,11 @@ export function registerIpcHandlers(
   forceRefresh: () => Promise<void>,
   applySettingsChange: () => void,
   getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>,
+  windowActions?: {
+    openDashboard: () => void;
+    openSettings: () => void;
+    hideCompactWidget: () => void;
+  },
 ) {
   ipcMain.handle('state:get', () => getState());
   ipcMain.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
@@ -71,6 +85,9 @@ export function registerIpcHandlers(
 
   ipcMain.handle('notifications:get', () => getHistory());
   ipcMain.handle('notifications:clear', () => { clearHistory(); return []; });
+  ipcMain.handle('window:open-dashboard', () => windowActions?.openDashboard());
+  ipcMain.handle('window:open-settings', () => windowActions?.openSettings());
+  ipcMain.handle('window:hide-compact-widget', () => windowActions?.hideCompactWidget());
   ipcMain.handle('debug-instrumentation-enabled', () => isDebugInstrumentationEnabled());
   ipcMain.handle('debug-mem-snapshot', async () => {
     if (!isDebugInstrumentationEnabled()) return null;

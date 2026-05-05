@@ -73,6 +73,45 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
   );
 }
 
+function StackedProgressBar({
+  quotaPct,
+  timeGonePct,
+  quotaColor,
+  height = 8,
+}: {
+  quotaPct: number;
+  timeGonePct: number | null;
+  quotaColor: string;
+  height?: number;
+}) {
+  const C = useTheme();
+  const quota = Math.max(0, Math.min(100, quotaPct));
+  const gone = timeGonePct == null ? 0 : Math.max(0, Math.min(100, timeGonePct));
+  return (
+    <div style={{ position: 'relative', height, background: C.bgRow, borderRadius: height / 2, overflow: 'hidden' }}>
+      <div style={{
+        position: 'absolute',
+        inset: '0 auto 0 0',
+        width: `${gone}%`,
+        background: 'rgba(148,163,184,0.35)',
+        borderRadius: height / 2,
+        transition: 'width 0.4s',
+      }} />
+      <div style={{
+        position: 'absolute',
+        left: 0,
+        top: Math.max(1, Math.floor((height - 3) / 2)),
+        width: `${quota}%`,
+        height: 3,
+        background: quotaColor,
+        borderRadius: 3,
+        boxShadow: `0 0 8px ${quotaColor}55`,
+        transition: 'width 0.4s',
+      }} />
+    </div>
+  );
+}
+
 function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, resetLabel, apiConnected, hideCost, burnRate,
@@ -172,13 +211,9 @@ function TokenStatsCard({
         </div>
 
         {/* 진행 바 (전폭) */}
-        <div style={{ height: 4, background: C.accentDim, borderRadius: 2, overflow: 'hidden', marginBottom: 6 }}>
+        <div style={{ marginBottom: 6 }}>
           {!noData && (
-            <div style={{
-              width: `${barPct}%`, height: '100%',
-              background: barColor, borderRadius: 2,
-              transition: 'width 0.4s',
-            }} />
+            <StackedProgressBar quotaPct={barPct} timeGonePct={timeGone} quotaColor={barColor} height={8} />
           )}
         </div>
 
@@ -245,13 +280,9 @@ function TokenStatsCard({
         const noData = apiConnected === false && barPct === 0 && limitSourceLabel !== 'live fallback' && limitSourceLabel !== 'local log';
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ flex: 1, height: 5, background: C.accentDim, borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ flex: 1 }}>
               {!noData && (
-                <div style={{
-                  width: `${barPct}%`, height: '100%',
-                  background: barColor, borderRadius: 3,
-                  transition: 'width 0.4s',
-                }} />
+                <StackedProgressBar quotaPct={barPct} timeGonePct={timeGone} quotaColor={barColor} height={8} />
               )}
             </div>
             <span style={{ fontSize: 11, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>

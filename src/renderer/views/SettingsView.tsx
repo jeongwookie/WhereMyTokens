@@ -173,6 +173,15 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <input type="checkbox" style={chk} checked={s.alwaysOnTop} onChange={e => setS({ ...s, alwaysOnTop: e.target.checked })} />
         </div>
         <div style={row}>
+          <div>
+            <div style={labelStyle}>Compact widget</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Small always-on-top quota widget
+            </div>
+          </div>
+          <input type="checkbox" style={chk} checked={s.compactWidgetEnabled} onChange={e => setS({ ...s, compactWidgetEnabled: e.target.checked })} />
+        </div>
+        <div style={row}>
           <span style={labelStyle}>Global shortcut</span>
           <input
             readOnly

@@ -4,6 +4,7 @@ import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
 import HelpView from './views/HelpView';
+import CompactWidgetView from './views/CompactWidgetView';
 import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars, Theme } from './theme';
 import { ThemeProvider } from './ThemeContext';
@@ -51,6 +52,7 @@ const DEFAULT_STATE: AppState = {
     trayDisplay: 'h5pct', theme: 'auto',
     mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
     hiddenProjects: [], excludedProjects: [],
+    compactWidgetEnabled: false, compactWidgetBounds: null,
   },
   autoLimits: null,
   codexAccount: { serviceTier: null },
@@ -189,6 +191,12 @@ function normalizeState(next: AppState): AppState {
       mainSectionOrder: normalizeMainSectionOrder(next.settings?.mainSectionOrder),
       hiddenProjects: arrayOrEmpty(next.settings?.hiddenProjects),
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
+      compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,
+      compactWidgetBounds: next.settings?.compactWidgetBounds
+        && typeof next.settings.compactWidgetBounds.x === 'number'
+        && typeof next.settings.compactWidgetBounds.y === 'number'
+        ? next.settings.compactWidgetBounds
+        : null,
     },
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt
@@ -396,6 +404,7 @@ function BootFallback({
 }
 
 export default function App() {
+  const isWidget = useMemo(() => new URLSearchParams(window.location.search).get('view') === 'widget', []);
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [view, setView] = useState<View>('main');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
@@ -471,6 +480,15 @@ export default function App() {
     return cleanup;
   }, [refresh, applyState]);
 
+  useEffect(() => {
+    if (isWidget) return;
+    return window.wmt.onNavigate(nextView => {
+      if (nextView === 'main' || nextView === 'settings' || nextView === 'notifications' || nextView === 'help') {
+        setView(nextView);
+      }
+    });
+  }, [isWidget]);
+
   useEffect(() => () => {
     if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
   }, []);
@@ -537,6 +555,16 @@ export default function App() {
   useEffect(() => { applyThemeCssVars(theme); }, [theme]);
 
   const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
+
+  if (isWidget) {
+    return (
+      <ThemeProvider value={theme}>
+        <RenderErrorBoundary label="Compact Widget" fill>
+          <CompactWidgetView state={state} onRefresh={retryStartup} />
+        </RenderErrorBoundary>
+      </ThemeProvider>
+    );
+  }
 
   if (bootFallbackVisible && !state.initialRefreshComplete && view === 'main') {
     return (

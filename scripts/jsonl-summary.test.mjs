@@ -14,6 +14,10 @@ function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-jsonl-summary-'));
 }
 
+function recentTimestamp(offsetMs = 0) {
+  return new Date(Date.now() - 60_000 + offsetMs).toISOString();
+}
+
 function claudeAssistantLine({ id, timestamp, model = 'claude-sonnet-4', input = 10, output = 20, cacheCreation = 0, cacheRead = 0 }) {
   return JSON.stringify({
     type: 'assistant',
@@ -39,7 +43,7 @@ test('streaming summary scan does not use full readFileSync for JSONL bodies', a
   cache.clearAll();
   const dir = tempDir();
   const filePath = path.join(dir, 'claude.jsonl');
-  fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'a', timestamp: '2026-04-24T00:00:00.000Z' })}\n`, 'utf8');
+  fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'a', timestamp: recentTimestamp() })}\n`, 'utf8');
 
   const originalReadFileSync = fs.readFileSync;
   fs.readFileSync = function patchedReadFileSync(target, ...args) {
@@ -64,7 +68,7 @@ test('unchanged file reuses cached summary without reopening the stream', async 
   cache.clearAll();
   const dir = tempDir();
   const filePath = path.join(dir, 'cached.jsonl');
-  fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'cache-hit', timestamp: '2026-04-24T00:00:00.000Z' })}\n`, 'utf8');
+  fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'cache-hit', timestamp: recentTimestamp() })}\n`, 'utf8');
 
   await scanJsonlSummaryCached(filePath, 'claude', cache, true);
 
@@ -90,10 +94,10 @@ test('Claude duplicate request updates output delta without double counting', as
   cache.clearAll();
   const dir = tempDir();
   const filePath = path.join(dir, 'duplicate.jsonl');
-  fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'dup-1', timestamp: '2026-04-24T00:00:00.000Z', output: 10 })}\n`, 'utf8');
+  fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'dup-1', timestamp: recentTimestamp(), output: 10 })}\n`, 'utf8');
 
   await scanJsonlSummaryCached(filePath, 'claude', cache, true);
-  fs.appendFileSync(filePath, `${claudeAssistantLine({ id: 'dup-1', timestamp: '2026-04-24T00:00:01.000Z', output: 25 })}\n`, 'utf8');
+  fs.appendFileSync(filePath, `${claudeAssistantLine({ id: 'dup-1', timestamp: recentTimestamp(1_000), output: 25 })}\n`, 'utf8');
 
   const summary = await scanJsonlSummaryCached(filePath, 'claude', cache, false);
 
@@ -107,8 +111,8 @@ test('malformed trailing JSONL text is recovered on append', async () => {
   const dir = tempDir();
   const filePath = path.join(dir, 'trailing.jsonl');
 
-  const first = claudeAssistantLine({ id: 'first', timestamp: '2026-04-24T00:00:00.000Z', output: 10 });
-  const partialPrefix = '{"type":"assistant","timestamp":"2026-04-24T00:00:01.000Z","message":{"id":"second","model":"claude-sonnet-4","usage":{"input_tokens":10';
+  const first = claudeAssistantLine({ id: 'first', timestamp: recentTimestamp(), output: 10 });
+  const partialPrefix = `{"type":"assistant","timestamp":"${recentTimestamp(1_000)}","message":{"id":"second","model":"claude-sonnet-4","usage":{"input_tokens":10`;
   fs.writeFileSync(filePath, `${first}\n${partialPrefix}`, 'utf8');
 
   const firstSummary = await scanJsonlSummaryCached(filePath, 'claude', cache, true);

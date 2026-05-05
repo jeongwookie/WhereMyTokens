@@ -164,6 +164,8 @@ export interface AppSettings {
   mainSectionOrder: MainSectionId[];
   hiddenProjects: string[];
   excludedProjects: string[];
+  compactWidgetEnabled: boolean;
+  compactWidgetBounds: { x: number; y: number } | null;
   theme: 'auto' | 'light' | 'dark';
 }
 
@@ -278,10 +280,16 @@ declare global {
       getIntegrationStatus: () => Promise<{ configured: boolean; command?: string }>;
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
+      openDashboard:      () => Promise<void>;
+      openSettings:       () => Promise<void>;
+      hideCompactWidget:  () => Promise<void>;
+      getCompactWidgetPosition: () => Promise<{ x: number; y: number } | null>;
+      setCompactWidgetPosition: (p: { x: number; y: number }) => Promise<void>;
       isDebugInstrumentationEnabled: () => Promise<boolean>;
       getDebugMemSnapshot: () => Promise<DebugMemSnapshot | null>;
       reportDebugRendererEvent: (payload: Record<string, unknown>) => Promise<void>;
       onUpdated:          (cb: (state: AppState) => void) => () => void;
+      onNavigate:         (cb: (view: 'main' | 'settings' | 'notifications' | 'help') => void) => () => void;
       getResolvedTheme:   () => Promise<'light' | 'dark'>;
       onThemeChanged:     (cb: (theme: 'light' | 'dark') => void) => () => void;
     };
