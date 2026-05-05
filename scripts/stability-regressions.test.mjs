@@ -5,22 +5,33 @@ import path from 'node:path';
 
 import stateManagerModule from '../dist/main/stateManager.js';
 import * as jsonlCacheModule from '../dist/main/jsonlCache.js';
+import rateLimitFetcherModule from '../dist/main/rateLimitFetcher.js';
 
 const { StateManager } = stateManagerModule;
 const { JsonlCache } = jsonlCacheModule;
+const originalFetchApiUsagePct = rateLimitFetcherModule.fetchApiUsagePct;
 
 function makeStore(overrides = {}) {
   const values = { ...overrides };
-  return {
+  const store = {
     store: {},
+    values,
     get(key, fallback = null) {
       return key in values ? values[key] : fallback;
     },
     set(key, value) {
       values[key] = value;
     },
+    delete(key) {
+      delete values[key];
+    },
   };
+  return store;
 }
+
+test.afterEach(() => {
+  rateLimitFetcherModule.fetchApiUsagePct = originalFetchApiUsagePct;
+});
 
 test('cached Claude percentages with null resets expire instead of surviving forever', () => {
   const manager = new StateManager(makeStore({
@@ -321,6 +332,114 @@ test('in-memory null-reset samples also age out after later API loss', () => {
   assert.equal(limits.so.pct, 0);
 });
 
+test('expired Claude core usage snapshot clears 5h and weekly together', () => {
+  const manager = new StateManager(makeStore(), () => {});
+  manager.apiUsagePct = {
+    h5Pct: 5,
+    weekPct: 17,
+    soPct: 0,
+    h5ResetMs: 5_000,
+    weekResetMs: 6 * 24 * 60 * 60 * 1000,
+    soResetMs: null,
+    plan: 'Pro',
+    extraUsage: null,
+  };
+  manager.apiUsagePctStoredAt = Date.now() - 10_000;
+  manager.apiConnected = false;
+
+  const limits = manager.buildLimits();
+
+  assert.equal(limits.h5.pct, 0);
+  assert.equal(limits.h5.source, 'cache');
+  assert.equal(limits.week.pct, 0);
+  assert.equal(limits.week.source, 'cache');
+});
+
+test('rate-limited Claude refresh keeps the last trusted API sample without rewriting cache', async () => {
+  const store = makeStore();
+  const manager = new StateManager(store, () => {});
+  manager.apiUsagePct = {
+    h5Pct: 5,
+    weekPct: 17,
+    soPct: 0,
+    h5ResetMs: 5 * 60 * 60 * 1000,
+    weekResetMs: 6 * 24 * 60 * 60 * 1000,
+    soResetMs: null,
+    plan: 'Pro',
+    extraUsage: null,
+  };
+  manager.apiUsagePctStoredAt = Date.now() - 5_000;
+  rateLimitFetcherModule.fetchApiUsagePct = async () => ({
+    usage: null,
+    status: {
+      code: 'rate-limited',
+      connected: false,
+      label: 'rate limited',
+      detail: 'Claude API returned HTTP 429.',
+      httpStatus: 429,
+    },
+  });
+
+  await manager.refreshApiUsagePct(true);
+
+  assert.equal(manager.apiUsagePct.h5Pct, 5);
+  assert.equal(manager.apiUsagePct.weekPct, 17);
+  assert.equal(store.values._cachedApiPct, undefined);
+  assert.equal(manager.apiStatusLabel, 'rate limited');
+});
+
+test('late Claude API refresh results do not overwrite a newer generation', async () => {
+  const store = makeStore();
+  const manager = new StateManager(store, () => {});
+  let resolveFirst;
+  let resolveSecond;
+  const first = new Promise(resolve => { resolveFirst = resolve; });
+  const second = new Promise(resolve => { resolveSecond = resolve; });
+  let calls = 0;
+  rateLimitFetcherModule.fetchApiUsagePct = () => {
+    calls += 1;
+    return calls === 1 ? first : second;
+  };
+
+  const firstRefresh = manager.refreshApiUsagePct(true);
+  const secondRefresh = manager.refreshApiUsagePct(true);
+
+  resolveSecond({
+    usage: {
+      h5Pct: 5,
+      weekPct: 17,
+      soPct: 0,
+      h5ResetMs: 5 * 60 * 60 * 1000,
+      weekResetMs: 6 * 24 * 60 * 60 * 1000,
+      soResetMs: null,
+      plan: 'Pro',
+      extraUsage: null,
+    },
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  });
+  await secondRefresh;
+
+  resolveFirst({
+    usage: {
+      h5Pct: 0,
+      weekPct: 16,
+      soPct: 0,
+      h5ResetMs: null,
+      weekResetMs: 6 * 24 * 60 * 60 * 1000,
+      soResetMs: null,
+      plan: 'Pro',
+      extraUsage: null,
+    },
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  });
+  await firstRefresh;
+
+  assert.equal(manager.apiUsagePct.h5Pct, 5);
+  assert.equal(manager.apiUsagePct.weekPct, 17);
+  assert.equal(store.values._cachedApiPct.h5Pct, 5);
+  assert.equal(store.values._cachedApiPct.weekPct, 17);
+});
+
 test('persisted summary cache rejects malformed nested rollups', () => {
   const cache = new JsonlCache();
   const malformed = cache.hydratePersistedEntry({
@@ -404,6 +523,21 @@ test('visible fast refresh stays on cached session scope and logs anomalies', ()
   assert.match(source, /discoveryScope: StateManager\.SESSION_SCOPE/);
   assert.match(source, /sessionCountDelta/);
   assert.match(source, /session-count-spike/);
+});
+
+test('Claude API refresh is not committed from startup or fast-refresh follow-up paths', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const startStart = source.indexOf('  start()');
+  const startEnd = source.indexOf('  stop()');
+  const startBody = source.slice(startStart, startEnd);
+  const fastStart = source.indexOf('private async fastRefresh');
+  const fastEnd = source.indexOf('private async refreshGitStatsAfterStartup');
+  const fastBody = source.slice(fastStart, fastEnd);
+
+  assert.doesNotMatch(startBody, /refreshApiUsagePct/);
+  assert.doesNotMatch(startBody, /Promise\.all\(\[this\.refreshAutoLimits\(\), this\.refreshApiUsagePct\(\)\]\)/);
+  assert.doesNotMatch(fastBody, /apiFollowup/);
+  assert.doesNotMatch(fastBody, /refreshApiUsagePct/);
 });
 
 test('changed session refresh merges unmatched files without falling back to scoped rebuild', () => {
