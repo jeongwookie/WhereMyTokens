@@ -54,7 +54,7 @@ function windowDurationMs(label: string): number | null {
   return null;
 }
 
-function timeGonePct(label: string, resetMs: number | null): number | null {
+function timeElapsedPct(label: string, resetMs: number | null): number | null {
   const durationMs = windowDurationMs(label);
   if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
   return clampPct(((durationMs - resetMs) / durationMs) * 100);
@@ -90,8 +90,8 @@ function ProgressRow({
 }) {
   const C = useTheme();
   const quota = clampPct(quotaPct);
-  const gone = timeGonePct(label, resetMs);
-  const goneWidth = gone ?? 0;
+  const elapsed = timeElapsedPct(label, resetMs);
+  const elapsedWidth = elapsed ?? 0;
   const resetLabel = formatResetShort(resetMs);
   const resetBadgeBg = C.bgCard === '#ffffff' ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.22)';
 
@@ -105,7 +105,7 @@ function ProgressRow({
           style={{
             position: 'absolute',
             inset: '0 auto 0 0',
-            width: `${goneWidth}%`,
+            width: `${elapsedWidth}%`,
             background: 'rgba(148,163,184,0.35)',
             borderRadius: 4,
           }}
@@ -147,7 +147,7 @@ function ProgressRow({
       <div style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
         <span style={{ color }}>{formatPct(quota)}</span>
         <span style={{ color: C.textMuted }}> / </span>
-        <span>{formatPct(gone)}</span>
+        <span>{formatPct(elapsed)}</span>
       </div>
     </div>
   );

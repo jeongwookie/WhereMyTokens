@@ -39,7 +39,7 @@ function windowDurationMs(period: string): number | null {
   return null;
 }
 
-function timeGonePct(period: string, resetMs: number | null | undefined): number | null {
+function timeElapsedPct(period: string, resetMs: number | null | undefined): number | null {
   const durationMs = windowDurationMs(period);
   if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
   return Math.max(0, Math.min(100, ((durationMs - resetMs) / durationMs) * 100));
@@ -75,24 +75,24 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
 
 function StackedProgressBar({
   quotaPct,
-  timeGonePct,
+  timeElapsedPct,
   quotaColor,
   height = 8,
 }: {
   quotaPct: number;
-  timeGonePct: number | null;
+  timeElapsedPct: number | null;
   quotaColor: string;
   height?: number;
 }) {
   const C = useTheme();
   const quota = Math.max(0, Math.min(100, quotaPct));
-  const gone = timeGonePct == null ? 0 : Math.max(0, Math.min(100, timeGonePct));
+  const elapsed = timeElapsedPct == null ? 0 : Math.max(0, Math.min(100, timeElapsedPct));
   return (
     <div style={{ position: 'relative', height, background: C.bgRow, borderRadius: height / 2, overflow: 'hidden' }}>
       <div style={{
         position: 'absolute',
         inset: '0 auto 0 0',
-        width: `${gone}%`,
+        width: `${elapsed}%`,
         background: 'rgba(148,163,184,0.35)',
         borderRadius: height / 2,
         transition: 'width 0.4s',
@@ -148,7 +148,7 @@ function TokenStatsCard({
   const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
-  const timeGone = timeGonePct(period, resetMs);
+  const timeElapsed = timeElapsedPct(period, resetMs);
   const sourceChip = limitSourceLabel ? (
     <span
       title={limitSourceLabel}
@@ -190,9 +190,9 @@ function TokenStatsCard({
           <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, fontFamily: C.fontMono }}>
           {noData ? '—' : formatUsagePct(barPct)}
           </div>
-          {!noData && timeGone != null && (
+          {!noData && timeElapsed != null && (
             <div
-              title={`${Math.round(timeGone)}% of this ${period} window has elapsed`}
+              title={`${Math.round(timeElapsed)}% of this ${period} window has elapsed`}
               style={{
                 marginTop: 4,
                 fontSize: 9,
@@ -204,8 +204,8 @@ function TokenStatsCard({
                 flexShrink: 0,
               }}
             >
-              <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>time gone</div>
-              <div style={{ fontSize: 12, color: C.textDim }}>{Math.round(timeGone)}%</div>
+              <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>time elapsed</div>
+              <div style={{ fontSize: 12, color: C.textDim }}>{Math.round(timeElapsed)}%</div>
             </div>
           )}
         </div>
@@ -213,7 +213,7 @@ function TokenStatsCard({
         {/* 진행 바 (전폭) */}
         <div style={{ marginBottom: 6 }}>
           {!noData && (
-            <StackedProgressBar quotaPct={barPct} timeGonePct={timeGone} quotaColor={barColor} height={8} />
+            <StackedProgressBar quotaPct={barPct} timeElapsedPct={timeElapsed} quotaColor={barColor} height={8} />
           )}
         </div>
 
@@ -282,7 +282,7 @@ function TokenStatsCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ flex: 1 }}>
               {!noData && (
-                <StackedProgressBar quotaPct={barPct} timeGonePct={timeGone} quotaColor={barColor} height={8} />
+                <StackedProgressBar quotaPct={barPct} timeElapsedPct={timeElapsed} quotaColor={barColor} height={8} />
               )}
             </div>
             <span style={{ fontSize: 11, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
