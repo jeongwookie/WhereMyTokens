@@ -71,7 +71,7 @@ function SrcRow({ badge, children }: { badge: '1st' | '2nd' | 'FB'; children: Re
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'flex-start' }}>
       <span style={{
-        fontSize: 10, fontWeight: 700, padding: '2px 6px',
+        fontSize: 11, fontWeight: 700, padding: '2px 6px',
         borderRadius: 3, whiteSpace: 'nowrap' as const, marginTop: 1, flexShrink: 0,
         background: s.bg, color: s.color,
       }}>{badge}</span>
@@ -87,7 +87,7 @@ function CatRow({ icon, label, color, children }: {
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 5, alignItems: 'flex-start' }}>
       <span style={{
-        fontSize: 9.5, fontWeight: 700, padding: '2px 6px',
+        fontSize: 10.5, fontWeight: 700, padding: '2px 6px',
         borderRadius: 3, whiteSpace: 'nowrap' as const, flexShrink: 0,
         background: color + '20', color, border: `1px solid ${color}44`,
         display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -105,7 +105,7 @@ function UsageTable({ rows, headers }: {
 }) {
   const C = useTheme();
   const TH: React.CSSProperties = {
-    textAlign: 'left', fontSize: 10.5, fontWeight: 600,
+    textAlign: 'left', fontSize: 11.5, fontWeight: 600,
     color: C.textMuted, paddingBottom: 5, paddingRight: 8,
     borderBottom: `1px solid ${C.borderSub}`,
   };
@@ -481,7 +481,7 @@ export default function HelpView({ onBack }: Props) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 0', gap: 4, flexShrink: 0 }}>
         {(['en', 'ko', 'ja'] as Lang[]).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{
-            padding: '2px 8px', fontSize: 10, border: 'none', borderRadius: 10, cursor: 'pointer',
+            padding: '2px 8px', fontSize: 11, border: 'none', borderRadius: 10, cursor: 'pointer',
             background: lang === l ? C.accent : C.bgRow,
             color: lang === l ? '#fff' : C.textDim,
             fontWeight: lang === l ? 700 : 400,

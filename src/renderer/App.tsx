@@ -4,9 +4,11 @@ import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
 import HelpView from './views/HelpView';
+import CompactWidgetView from './views/CompactWidgetView';
 import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars, Theme } from './theme';
 import { ThemeProvider } from './ThemeContext';
+import { DEFAULT_MAIN_SECTION_ORDER, normalizeMainSectionOrder } from './mainSections';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
@@ -44,10 +46,13 @@ const DEFAULT_STATE: AppState = {
     usageLimits: { h5:100, week:2000, sonnetWeek:100_000_000 },
     provider: 'both',
     alertThresholds: [50,80,90], openAtLogin: false,
+    alwaysOnTop: true,
     currency: 'USD', usdToKrw: 1380,
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     trayDisplay: 'h5pct', theme: 'auto',
+    mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
     hiddenProjects: [], excludedProjects: [],
+    compactWidgetEnabled: false, compactWidgetBounds: null,
   },
   autoLimits: null,
   codexAccount: { serviceTier: null },
@@ -183,8 +188,17 @@ function normalizeState(next: AppState): AppState {
       ...DEFAULT_STATE.settings,
       ...next.settings,
       alertThresholds: arrayOrEmpty(next.settings?.alertThresholds),
+      mainSectionOrder: normalizeMainSectionOrder(next.settings?.mainSectionOrder),
       hiddenProjects: arrayOrEmpty(next.settings?.hiddenProjects),
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
+      compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,
+      compactWidgetBounds: next.settings?.compactWidgetBounds
+        && typeof next.settings.compactWidgetBounds.x === 'number'
+        && typeof next.settings.compactWidgetBounds.y === 'number'
+        && Number.isFinite(next.settings.compactWidgetBounds.x)
+        && Number.isFinite(next.settings.compactWidgetBounds.y)
+        ? next.settings.compactWidgetBounds
+        : null,
     },
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt
@@ -204,6 +218,15 @@ function normalizeState(next: AppState): AppState {
       scopeLabel: typeof next.codeOutputStats?.scopeLabel === 'string' ? next.codeOutputStats.scopeLabel : EMPTY_CODE_OUTPUT.scopeLabel,
     },
   };
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === 'INPUT'
+    || tagName === 'TEXTAREA'
+    || tagName === 'SELECT'
+    || target.isContentEditable;
 }
 
 function sameNumberRecord(a: Record<string, number> | null | undefined, b: Record<string, number> | null | undefined): boolean {
@@ -383,6 +406,7 @@ function BootFallback({
 }
 
 export default function App() {
+  const isWidget = useMemo(() => new URLSearchParams(window.location.search).get('view') === 'widget', []);
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [view, setView] = useState<View>('main');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
@@ -458,9 +482,33 @@ export default function App() {
     return cleanup;
   }, [refresh, applyState]);
 
+  useEffect(() => {
+    if (isWidget) return;
+    return window.wmt.onNavigate(nextView => {
+      if (nextView === 'main' || nextView === 'settings' || nextView === 'notifications' || nextView === 'help') {
+        setView(nextView);
+      }
+    });
+  }, [isWidget]);
+
   useEffect(() => () => {
     if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (view !== 'main') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      window.wmt.minimize().catch(() => {});
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view]);
 
   // 시스템 테마 감지: 초기 resolve + 실시간 변경 리스너
   useEffect(() => {
@@ -509,6 +557,16 @@ export default function App() {
   useEffect(() => { applyThemeCssVars(theme); }, [theme]);
 
   const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
+
+  if (isWidget) {
+    return (
+      <ThemeProvider value={theme}>
+        <RenderErrorBoundary label="Compact Widget" fill>
+          <CompactWidgetView state={state} onRefresh={retryStartup} />
+        </RenderErrorBoundary>
+      </ThemeProvider>
+    );
+  }
 
   if (bootFallbackVisible && !state.initialRefreshComplete && view === 'main') {
     return (

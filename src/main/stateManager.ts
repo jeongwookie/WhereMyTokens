@@ -5,7 +5,7 @@ import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDi
 import { scanCodexRateLimitsOnly, scanJsonlSummaryCached } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
-import { AppSettings, DEFAULT_SETTINGS } from './ipc';
+import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
@@ -335,7 +335,7 @@ export class StateManager {
   }
 
   private getSettings(): AppSettings {
-    return { ...DEFAULT_SETTINGS, ...this.store.store };
+    return normalizeSettings(this.store.store);
   }
 
   private emptyState(): AppState {

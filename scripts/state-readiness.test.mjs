@@ -75,6 +75,7 @@ test('renderer mutes cached Claude usage text while keeping the progress bar act
 test('warmup mode marks Codex local-log limits as provisional and defers alerts', () => {
   const mainSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
   const cardSource = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
+  const widgetSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'CompactWidgetView.tsx'), 'utf8');
   const alertSource = fs.readFileSync(path.resolve('src', 'main', 'usageAlertManager.ts'), 'utf8');
   const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
@@ -83,9 +84,40 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(mainSource, /limits\.codexWeek\.source === 'localLog' \|\| !codexWeekHasLimit/);
   assert.match(cardSource, /pendingLimitLabel/);
   assert.match(cardSource, /displayLimitSourceLabel = pendingLimit/);
+  assert.match(widgetSource, /const codexWeekPending = state\.historyWarmupPending/);
+  assert.match(widgetSource, /pending \? 'scan' : unknown \? 'wait' : formatResetShort/);
+  assert.match(widgetSource, />scanning<\/span>/);
+  assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);
   assert.match(stateSource, /deferCodexLocalLog: startupPartial/);
+});
+
+test('settings and widget integration guard malformed persisted values', () => {
+  const ipcSource = fs.readFileSync(path.resolve('src', 'main', 'ipc.ts'), 'utf8');
+  const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
+  const sectionsSource = fs.readFileSync(path.resolve('src', 'renderer', 'mainSections.ts'), 'utf8');
+  const settingsSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'SettingsView.tsx'), 'utf8');
+  const widgetSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'CompactWidgetView.tsx'), 'utf8');
+
+  assert.match(ipcSource, /function normalizedSettingsPartial\(partial: unknown\)/);
+  assert.match(ipcSource, /typeof record\.globalHotkey === 'string'/);
+  assert.match(ipcSource, /typeof record\.compactWidgetEnabled === 'boolean'/);
+  assert.match(ipcSource, /return \[\.\.\.new Set\(thresholds\)\]\.sort/);
+  assert.match(ipcSource, /hasOwnProperty\.call\(record, 'compactWidgetBounds'\)/);
+  assert.match(ipcSource, /normalizeSettings\(store\.store\)/);
+  assert.match(mainSource, /installNavigationGuards\(win\)/);
+  assert.match(mainSource, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
+  assert.match(mainSource, /store\.set\('globalHotkey', registeredGlobalHotkey\)/);
+  assert.match(mainSource, /registerGlobalHotkey\(hotkey: string\): boolean/);
+  assert.match(mainSource, /syncUiVisibility\(\)/);
+  assert.match(mainSource, /schedulePersistWidgetPosition/);
+  assert.match(fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8'), /return normalizeSettings\(this\.store\.store\)/);
+  assert.match(widgetSource, /dragSeqRef/);
+  assert.match(widgetSource, /dragSeq !== dragSeqRef\.current/);
+  assert.match(sectionsSource, /Array\.isArray\(value\) \? value : \[\]/);
+  assert.match(settingsSource, /compactWidgetBounds: _compactWidgetBounds/);
+  assert.match(settingsSource, /Use Ctrl\+Shift or Ctrl\+Alt/);
 });
 
 test('Codex account limit collection is separated from visible usage filters', () => {

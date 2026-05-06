@@ -9,6 +9,7 @@ import ModelBreakdown from '../components/ModelBreakdown';
 import ExtraUsageCard from '../components/ExtraUsageCard';
 import CodeOutputCard from '../components/CodeOutputCard';
 import RenderErrorBoundary from '../components/RenderErrorBoundary';
+import { MainSectionId, normalizeMainSectionOrder } from '../mainSections';
 
 interface Props {
   state: AppState;
@@ -95,7 +96,7 @@ function headerPeriodButtonStyle(
   return {
     ...noDrag,
     padding: '2px 6px',
-    fontSize: 9,
+    fontSize: 10,
     borderRadius: 3,
     cursor: 'pointer',
     fontFamily: C.fontMono,
@@ -371,7 +372,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
             <span
               title={headerStatus.title}
               style={{
-                fontSize: 9,
+                fontSize: 10,
                 borderRadius: 999,
                 padding: '2px 8px',
                 fontWeight: 700,
@@ -395,7 +396,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
       <div style={{ ...drag, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 14, padding: '4px 14px 10px', alignItems: 'end', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, marginBottom: 3 }}>
-            <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 9, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, whiteSpace: 'nowrap' }}>
               {isAll ? 'All-time Cost' : 'Today Cost'}
             </div>
           </div>
@@ -404,7 +405,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
               {planLabel && (
                 <div title={`Claude plan: ${planLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                   <span style={{
-                    fontSize: 8,
+                    fontSize: 9,
                     color: C.textMuted,
                     background: C.bgRow,
                     border: `1px solid ${C.border}`,
@@ -415,7 +416,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
                   }}>
                     Claude
                   </span>
-                  <span style={{ fontSize: 9, color: C.headerSub, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10, color: C.headerSub, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
                     {planLabel}
                   </span>
                 </div>
@@ -423,7 +424,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
               {codexTierLabel && (
                 <div title={`Codex service tier: ${codexTierLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                   <span style={{
-                    fontSize: 8,
+                    fontSize: 9,
                     color: C.textMuted,
                     background: C.bgRow,
                     border: `1px solid ${C.border}`,
@@ -434,7 +435,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
                   }}>
                     Codex
                   </span>
-                  <span style={{ fontSize: 9, color: C.headerSub, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10, color: C.headerSub, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
                     {codexTierLabel}
                   </span>
                 </div>
@@ -444,20 +445,20 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
           <div style={{ fontSize: 28, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {fmtCost(cost, currency, usdToKrw)}
           </div>
-          <div style={{ fontSize: 10, color: C.headerSub, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 11, color: C.headerSub, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{fmtTokens(calls)}</span> calls
             <span style={{ margin: '0 6px', color: C.textMuted }}>/</span>
             <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{sessionCount}</span> sessions
           </div>
         </div>
         <div style={{ textAlign: 'right', minWidth: 0 }} title={cacheTitle}>
-          <div style={{ fontSize: 8, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 3, whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 9, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 3, whiteSpace: 'nowrap' }}>
             {isAll ? 'Avg Cache Efficiency' : 'Cache Efficiency'}
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, color: cacheColor, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {Math.round(cacheEff)}%
           </div>
-          <div style={{ fontSize: 10, color: cacheColor, marginTop: 4, whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: cacheColor, marginTop: 4, whiteSpace: 'nowrap' }}>
             + {fmtCost(saved, currency, usdToKrw)} saved{isAll ? ' total' : ' today'}
           </div>
         </div>
@@ -509,7 +510,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
       </div>
 
       {showClaudeUsage && (
@@ -570,7 +571,7 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
       background: `${C.headerAccent}10`,
       color: C.textDim,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.headerAccent, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.headerAccent, textTransform: 'uppercase', letterSpacing: 0.8 }}>
         Partial History
       </div>
       <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
@@ -611,23 +612,23 @@ const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, on
       <span style={{ minWidth: 0 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           {item.modelName && (
-            <span title={item.modelName} style={{ fontSize: 8, background: `${modelColorValue}16`, color: modelColorValue, border: `1px solid ${modelColorValue}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span title={item.modelName} style={{ fontSize: 9, background: `${modelColorValue}16`, color: modelColorValue, border: `1px solid ${modelColorValue}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {item.modelName}
             </span>
           )}
-          <span style={{ fontSize: 8, background: item.provider === 'codex' ? C.output + '16' : C.accentDim, color: item.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+          <span style={{ fontSize: 9, background: item.provider === 'codex' ? C.output + '16' : C.accentDim, color: item.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
             {provider}
           </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>
             {item.sessions.length} {item.state} sessions
           </span>
         </span>
-        <span style={{ display: 'block', fontSize: 9, color: C.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'block', fontSize: 10, color: C.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {item.source} - latest {fmtRelative(item.latest)} - max ctx {Math.round(item.maxCtxPct)}%
         </span>
       </span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 8, padding: '1px 5px', borderRadius: 3, background: `${chipColor}1a`, color: chipColor, fontWeight: 700 }}>
+        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: `${chipColor}1a`, color: chipColor, fontWeight: 700 }}>
           {expanded ? 'open' : 'stack'}
         </span>
         <span style={{ fontSize: 12, color: C.textMuted }}>{expanded ? '^' : 'v'}</span>
@@ -775,7 +776,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, paddingBottom: 16, contain: 'layout paint style', overflowAnchor: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
         <div style={{ display: 'flex', gap: 4 }}>
           {(['all', 'active'] as const).map(filter => (
             <button
@@ -785,7 +786,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
                 background: activeFilter === filter ? C.accent + '22' : 'none',
                 border: `1px solid ${activeFilter === filter ? C.accent + '66' : C.border}`,
                 color: activeFilter === filter ? C.accent : C.textMuted,
-                borderRadius: 3, padding: '1px 7px', fontSize: 9, cursor: 'pointer', fontWeight: activeFilter === filter ? 700 : 400,
+                borderRadius: 3, padding: '1px 7px', fontSize: 10, cursor: 'pointer', fontWeight: activeFilter === filter ? 700 : 400,
               }}
             >
               {filter === 'all' ? 'All' : 'Active'}
@@ -805,7 +806,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
               <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: C.fontSans }}>{project.name}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {project.totalCommits > 0 && (
-                  <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
+                  <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>
                     {project.totalCommits} commit{project.totalCommits > 1 ? 's' : ''} · +{project.totalAdded} / -{project.totalRemoved}
                   </span>
                 )}
@@ -819,8 +820,8 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
                   </button>
                   {projectMenuOpen === project.name && (
                     <div style={{ position: 'absolute', right: 0, top: 20, zIndex: 5, display: 'grid', gap: 2, padding: 4, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: '0 4px 10px rgba(0,0,0,0.18)' }}>
-                      <button onClick={() => hideProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Hide</button>
-                      <button onClick={() => excludeProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Exclude</button>
+                      <button onClick={() => hideProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Hide</button>
+                      <button onClick={() => excludeProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Exclude</button>
                     </div>
                   )}
                 </div>
@@ -837,16 +838,16 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 0', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 11, color: C.accent, lineHeight: 1 }} aria-hidden="true">›</span>
                   <span title={branch.branch} style={{
-                    fontSize: 10, color: C.textDim, fontWeight: 500, fontFamily: C.fontMono,
+                    fontSize: 11, color: C.textDim, fontWeight: 500, fontFamily: C.fontMono,
                     maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>{branch.branch}</span>
                   {branch.commits > 0 && (
                     <>
-                      <span style={{ fontSize: 8, background: '#60a5fa1a', color: '#60a5fa', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>
+                      <span style={{ fontSize: 9, background: '#60a5fa1a', color: '#60a5fa', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>
                         {branch.commits} commit{branch.commits > 1 ? 's' : ''}
                       </span>
-                      <span style={{ fontSize: 8, background: '#34d3991a', color: '#34d399', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>+{branch.added}</span>
-                      <span style={{ fontSize: 8, background: '#f871711a', color: '#f87171', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>-{branch.removed}</span>
+                      <span style={{ fontSize: 9, background: '#34d3991a', color: '#34d399', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>+{branch.added}</span>
+                      <span style={{ fontSize: 9, background: '#f871711a', color: '#f87171', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>-{branch.removed}</span>
                     </>
                   )}
                 </div>
@@ -886,7 +887,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
                       color: C.textMuted,
                       borderRadius: 8,
                       cursor: 'pointer',
-                      fontSize: 9,
+                      fontSize: 10,
                       padding: '3px 8px',
                       fontFamily: C.fontMono,
                     }}
@@ -905,7 +906,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
                       color: C.textMuted,
                       borderRadius: 8,
                       cursor: 'pointer',
-                      fontSize: 9,
+                      fontSize: 10,
                       padding: '3px 8px',
                       fontFamily: C.fontMono,
                     }}
@@ -928,7 +929,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
             onClick={() => setShowStale(v => !v)}
             style={{
               background: 'none', border: `1px solid ${C.border}`, borderRadius: 10,
-              color: C.textMuted, cursor: 'pointer', fontSize: 9, padding: '3px 12px',
+              color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: '3px 12px',
               fontFamily: C.fontMono,
             }}
           >
@@ -941,7 +942,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
         <div style={{ padding: '4px 14px', marginTop: 8, borderTop: `1px solid ${C.border}` }}>
           <button
             onClick={() => setShowHiddenManager(v => !v)}
-            style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 10, padding: 0 }}
+            style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: 0 }}
           >
             {showHiddenManager ? 'v' : '>'} {hiddenProjects.length} hidden project{hiddenProjects.length > 1 ? 's' : ''}
           </button>
@@ -952,7 +953,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
                   <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{name}</span>
                   <button
                     onClick={() => unhideProject(name)}
-                    style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3 }}
+                    style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '1px 6px', borderRadius: 3 }}
                   >show</button>
                 </div>
               ))}
@@ -1027,7 +1028,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
             flex: 1, padding: '7px 0', background: 'none', border: 'none',
             color: key === 'refresh' && refreshing ? C.accent : C.textDim,
             cursor: key === 'refresh' && refreshing ? 'wait' : 'pointer',
-            fontSize: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
           }}
         >
           <span style={{
@@ -1056,6 +1057,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
     () => sessions.map(s => `${s.sessionId}:${s.provider}:${s.source}:${s.state}:${s.projectName}:${s.worktreeBranch ?? s.gitBranch ?? ''}:${s.modelName}`).join('|'),
     [sessions]
   );
+  const mainSectionOrder = useMemo(() => normalizeMainSectionOrder(settings.mainSectionOrder), [settings.mainSectionOrder]);
 
   const handleScroll = useCallback(() => {
     const node = scrollRef.current;
@@ -1085,6 +1087,51 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
     setRefreshing(false);
   }, [refreshing, onRefresh]);
 
+  const renderMainSection = useCallback((sectionId: MainSectionId) => {
+    switch (sectionId) {
+      case 'planUsage':
+        return (
+          <RenderErrorBoundary key={sectionId} label="Plan Usage Panel">
+            <PlanUsagePanel
+              usage={usage}
+              limits={state.limits}
+              settings={settings}
+              apiConnected={state.apiConnected}
+              extraUsage={state.extraUsage}
+              historyWarmupPending={state.historyWarmupPending}
+              historyWarmupStartsAt={state.historyWarmupStartsAt}
+            />
+          </RenderErrorBoundary>
+        );
+      case 'codeOutput':
+        return (
+          <RenderErrorBoundary key={sectionId} label="Code Output Card">
+            <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
+          </RenderErrorBoundary>
+        );
+      case 'sessions':
+        return (
+          <RenderErrorBoundary key={sectionId} label="Sessions Panel">
+            <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
+          </RenderErrorBoundary>
+        );
+      case 'activity':
+        return (
+          <RenderErrorBoundary key={sectionId} label="Activity Section">
+            <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
+          </RenderErrorBoundary>
+        );
+      case 'modelUsage':
+        return (
+          <RenderErrorBoundary key={sectionId} label="Model Section">
+            <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />
+          </RenderErrorBoundary>
+        );
+      default:
+        return null;
+    }
+  }, [allTimeCost, currency, providerMode, sessions, settings, state.apiConnected, state.codeOutputLoading, state.codeOutputStats, state.extraUsage, state.historyWarmupPending, state.historyWarmupStartsAt, state.limits, usage, usdToKrw]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
       <RenderErrorBoundary label="Header Metrics">
@@ -1096,29 +1143,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
             <HistoryWarmupBanner historyWarmupStartsAt={state.historyWarmupStartsAt} />
           </RenderErrorBoundary>
         )}
-        <RenderErrorBoundary label="Plan Usage Panel">
-          <PlanUsagePanel
-            usage={usage}
-            limits={state.limits}
-            settings={settings}
-            apiConnected={state.apiConnected}
-            extraUsage={state.extraUsage}
-            historyWarmupPending={state.historyWarmupPending}
-            historyWarmupStartsAt={state.historyWarmupStartsAt}
-          />
-        </RenderErrorBoundary>
-        <RenderErrorBoundary label="Code Output Card">
-          <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
-        </RenderErrorBoundary>
-        <RenderErrorBoundary label="Sessions Panel">
-          <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
-        </RenderErrorBoundary>
-        <RenderErrorBoundary label="Activity Section">
-          <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
-        </RenderErrorBoundary>
-        <RenderErrorBoundary label="Model Section">
-          <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />
-        </RenderErrorBoundary>
+        {mainSectionOrder.map(renderMainSection)}
       </div>
       <RenderErrorBoundary label="Bottom Navigation">
         <BottomNav
