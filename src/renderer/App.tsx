@@ -4,9 +4,11 @@ import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
 import HelpView from './views/HelpView';
+import CompactWidgetView from './views/CompactWidgetView';
 import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars, Theme } from './theme';
 import { ThemeProvider } from './ThemeContext';
+import { DEFAULT_MAIN_SECTION_ORDER, normalizeMainSectionOrder } from './mainSections';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
@@ -44,10 +46,13 @@ const DEFAULT_STATE: AppState = {
     usageLimits: { h5:100, week:2000, sonnetWeek:100_000_000 },
     provider: 'both',
     alertThresholds: [50,80,90], openAtLogin: false,
+    alwaysOnTop: true,
     currency: 'USD', usdToKrw: 1380,
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     trayDisplay: 'h5pct', theme: 'auto',
+    mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
     hiddenProjects: [], excludedProjects: [],
+    compactWidgetEnabled: false, compactWidgetBounds: null,
   },
   autoLimits: null,
   codexAccount: { serviceTier: null },
@@ -183,8 +188,17 @@ function normalizeState(next: AppState): AppState {
       ...DEFAULT_STATE.settings,
       ...next.settings,
       alertThresholds: arrayOrEmpty(next.settings?.alertThresholds),
+      mainSectionOrder: normalizeMainSectionOrder(next.settings?.mainSectionOrder),
       hiddenProjects: arrayOrEmpty(next.settings?.hiddenProjects),
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
+      compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,
+      compactWidgetBounds: next.settings?.compactWidgetBounds
+        && typeof next.settings.compactWidgetBounds.x === 'number'
+        && typeof next.settings.compactWidgetBounds.y === 'number'
+        && Number.isFinite(next.settings.compactWidgetBounds.x)
+        && Number.isFinite(next.settings.compactWidgetBounds.y)
+        ? next.settings.compactWidgetBounds
+        : null,
     },
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt
@@ -204,6 +218,15 @@ function normalizeState(next: AppState): AppState {
       scopeLabel: typeof next.codeOutputStats?.scopeLabel === 'string' ? next.codeOutputStats.scopeLabel : EMPTY_CODE_OUTPUT.scopeLabel,
     },
   };
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === 'INPUT'
+    || tagName === 'TEXTAREA'
+    || tagName === 'SELECT'
+    || target.isContentEditable;
 }
 
 function sameNumberRecord(a: Record<string, number> | null | undefined, b: Record<string, number> | null | undefined): boolean {
@@ -383,6 +406,7 @@ function BootFallback({
 }
 
 export default function App() {
+  const isWidget = useMemo(() => new URLSearchParams(window.location.search).get('view') === 'widget', []);
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [view, setView] = useState<View>('main');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
@@ -458,9 +482,60 @@ export default function App() {
     return cleanup;
   }, [refresh, applyState]);
 
+  // widget 창은 transparent window이므로 body 배경을 투명하게
+  useEffect(() => {
+    if (!isWidget) return;
+    const root = document.getElementById('root');
+    const previous = {
+      htmlBackground: document.documentElement.style.background,
+      htmlBackgroundColor: document.documentElement.style.backgroundColor,
+      bodyBackground: document.body.style.background,
+      bodyBackgroundColor: document.body.style.backgroundColor,
+      rootBackground: root?.style.background ?? '',
+    };
+
+    document.documentElement.style.background = 'transparent';
+    document.documentElement.style.backgroundColor = 'transparent';
+    document.body.style.background = 'transparent';
+    document.body.style.backgroundColor = 'transparent';
+    if (root) root.style.background = 'transparent';
+
+    return () => {
+      document.documentElement.style.background = previous.htmlBackground;
+      document.documentElement.style.backgroundColor = previous.htmlBackgroundColor;
+      document.body.style.background = previous.bodyBackground;
+      document.body.style.backgroundColor = previous.bodyBackgroundColor;
+      if (root) root.style.background = previous.rootBackground;
+    };
+  }, [isWidget]);
+
+  useEffect(() => {
+    if (isWidget) return;
+    return window.wmt.onNavigate(nextView => {
+      if (nextView === 'main' || nextView === 'settings' || nextView === 'notifications' || nextView === 'help') {
+        setView(nextView);
+      }
+    });
+  }, [isWidget]);
+
   useEffect(() => () => {
     if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (view !== 'main') return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      window.wmt.minimize().catch(() => {});
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view]);
 
   // 시스템 테마 감지: 초기 resolve + 실시간 변경 리스너
   useEffect(() => {
@@ -481,6 +556,10 @@ export default function App() {
 
   // 핵심 상태가 준비되면 스플래시를 닫고, 장시간 응답이 없으면 복구 화면으로 전환한다.
   useEffect(() => {
+    if (isWidget) {
+      revealRoot();
+      return;
+    }
     if (state.initialRefreshComplete) {
       setBootFallbackVisible(false);
       revealRoot();
@@ -492,7 +571,7 @@ export default function App() {
       revealRoot();
     }, BOOT_FALLBACK_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [state.initialRefreshComplete, revealRoot]);
+  }, [isWidget, state.initialRefreshComplete, revealRoot]);
 
   async function handleSaveSettings(partial: Partial<AppSettings>) {
     const updated = await window.wmt.setSettings(partial);
@@ -509,6 +588,16 @@ export default function App() {
   useEffect(() => { applyThemeCssVars(theme); }, [theme]);
 
   const bgStyle: React.CSSProperties = { background: theme.bg, height: '100vh', color: theme.text };
+
+  if (isWidget) {
+    return (
+      <ThemeProvider value={theme}>
+        <RenderErrorBoundary label="Compact Widget" fill>
+          <CompactWidgetView state={state} onRefresh={retryStartup} />
+        </RenderErrorBoundary>
+      </ThemeProvider>
+    );
+  }
 
   if (bootFallbackVisible && !state.initialRefreshComplete && view === 'main') {
     return (

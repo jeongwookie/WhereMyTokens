@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe"><strong>v1.11.6 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe"><strong>v1.12.0 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -40,25 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">라이트 모드</th>
-    <th width="50%">다크 모드</th>
+    <th width="50%">다크 오버뷰</th>
+    <th width="50%">라이트 오버뷰</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="33%">Rhythm & 피크 통계</th>
-    <th width="33%">7일 히트맵</th>
-    <th width="33%">설정</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens 다크 오버뷰" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens 라이트 오버뷰" /></td>
   </tr>
 </table>
 
@@ -68,6 +55,7 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 5/6 | Floating Quota Pace 위젯, 메인 레이아웃 커스터마이징, 시간 경과 사용량 바, 새 스크린샷, 위젯/설정 동기화 안정화 추가 |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 4/27 | 인스톨러 시작 시 English/한국어/日本語/简体中文/Español 언어 선택을 추가하고, EULA 본문은 영어로 유지 |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 장시간 실행 시 팝업 세션 보존 범위를 안정화하고, changed file 때문에 scoped refresh가 다시 커지는 경로를 차단하고, 문제 재현용 crash/memory 계측을 게이팅 뒤에 추가 |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 팝업 세션 목록을 최근 + 활성 작업 중심으로 안정화하고, 숨김 트레이 새로고침 비용을 줄이고, 메인 프로세스 진단 로그를 보강 |
@@ -80,9 +68,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-v1.11.6-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-v1.12.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -92,7 +80,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.11.6-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.12.0-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -110,6 +98,7 @@
 
 ### 속도 제한 & 알림
 - **속도 제한 바** — Claude 5h/1w는 Anthropic API/statusLine 기준, Codex 5h/1w는 로컬 Codex rate-limit 로그 이벤트 기준
+- **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
 - **Windows 토스트 알림** — 사용량 임계값(50% / 80% / 90%)에서 알림
 - **Claude Extra Usage 예산** — Claude 월간 크레딧 사용량 / 한도 / 이용률 표시
@@ -134,7 +123,7 @@
 ### 커스터마이징
 - **Auto/Light/Dark 테마** — 기본값은 시스템 설정 따름
 - **비용 표시** — USD 또는 KRW, 환율 설정 가능
-- **항상 위 위젯** — 다른 창 위에 고정; 헤더 버튼, 트레이 아이콘, 전역 단축키로 최소화
+- **Floating usage widget** — 항상 위에 표시되는 작은 Quota Pace 창; 트레이 메뉴, Settings, 위젯 버튼에서 표시/숨김 가능
 - **트레이 라벨** — 사용량 %, 토큰 수, 비용 직접 표시
 - **프로젝트 관리** — 숨기기 또는 추적에서 완전 제외
 - **Windows 시작 시 자동 실행** — 선택적 자동 실행
@@ -155,6 +144,7 @@
 - **알림** — 사용량 임계값 설정 (50% / 80% / 90%)
 - **테마** — Auto (시스템 설정 따름) / Light / Dark
 - **트레이 라벨** — 작업표시줄에 표시할 정보 선택
+- **Floating usage widget** — 작은 Quota Pace 창을 켤 수 있고, 이후 트레이 아이콘 우클릭으로 다시 표시/숨김 가능
 
 ---
 

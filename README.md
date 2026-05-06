@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe"><strong>Download v1.11.6</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe"><strong>Download v1.12.0</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -40,25 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">Light Mode</th>
-    <th width="50%">Dark Mode</th>
+    <th width="50%">Dark Overview</th>
+    <th width="50%">Light Overview</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode dashboard" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode dashboard" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="33%">Rhythm & Peak Stats</th>
-    <th width="33%">7-Day Heatmap</th>
-    <th width="33%">Settings</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens dark overview collage" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens light overview collage" /></td>
   </tr>
 </table>
 
@@ -68,6 +55,7 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | May 6 | Add the floating Quota Pace widget, layout customization, time-elapsed usage bars, refreshed screenshots, and widget/settings hardening |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | Apr 27 | Add installer language selection for English, Korean, Japanese, Simplified Chinese, and Spanish while keeping the EULA in English |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | Apr 26 | Stabilize long-running popup session retention, stop scoped refresh growth from changed files, and add gated crash and memory instrumentation for troubleshooting |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | Apr 25 | Keep popup sessions focused on recent + active work, reduce hidden tray refresh cost, and add perf diagnostics for main-process troubleshooting |
@@ -80,9 +68,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe)** - just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-v1.11.6-win-x64.zip)** - no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-v1.12.0-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -92,7 +80,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.11.6-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.12.0-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -111,6 +99,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 
 ### Rate Limits & Alerts
 - **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine; Codex 5h/1w limits from local Codex rate-limit log events when available
+- **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means your burn rate is ahead of the reset window
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
 - **Windows toast notifications** — at configurable usage thresholds (50% / 80% / 90%)
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
@@ -135,7 +124,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ### Customization
 - **Auto/Light/Dark theme** — follows system preference by default
 - **Cost display** — USD or KRW with configurable exchange rate
-- **Always-on-top widget** — stays visible; minimize via header button, tray icon, or global hotkey
+- **Floating usage widget** — compact Quota Pace window with always-on-top support; show/hide it from the tray menu, Settings, or widget controls
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
 - **Project management** — hide or fully exclude projects from tracking
 - **Start with Windows** — optional auto-launch at login
@@ -156,6 +145,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
 - **Tray label** — choose what to display in the taskbar
+- **Floating usage widget** — enable the compact Quota Pace window; right-click the tray icon to show or hide it later
 
 ---
 

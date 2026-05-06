@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.12.0 | 2026-05-06 | Add floating Quota Pace widget, main layout customization, elapsed-time usage bars, refreshed README screenshots, and hardened widget/settings/provider synchronization |
 | v1.11.6 | 2026-04-27 | Add installer language selection for English, Korean, Japanese, Simplified Chinese, and Spanish while keeping the EULA in English |
 | v1.11.5 | 2026-04-26 | Stabilize long-running popup session retention, stop scoped refresh growth from changed files, and add gated crash/memory diagnostics |
 | v1.11.4 | 2026-04-25 | Stabilize popup sessions around recent + active work, reduce hidden tray refresh/watch cost, and add main-process perf diagnostics |

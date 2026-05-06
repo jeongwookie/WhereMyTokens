@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe"><strong>Descargar v1.11.6</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.12.0</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -40,25 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">Modo Claro</th>
-    <th width="50%">Modo Oscuro</th>
+    <th width="50%">Vista general oscura</th>
+    <th width="50%">Vista general clara</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="33%">Rhythm y Estadísticas Pico</th>
-    <th width="33%">Mapa de Calor 7 Días</th>
-    <th width="33%">Configuración</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="Vista general oscura de WhereMyTokens" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="Vista general clara de WhereMyTokens" /></td>
   </tr>
 </table>
 
@@ -68,6 +55,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 6 may | Añade el widget flotante Quota Pace, personalización del diseño principal, barras de uso con tiempo transcurrido, nuevas capturas y sincronización más robusta del widget y Settings |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 27 abr | Añade selector de idioma del instalador para English, 한국어, 日本語, 简体中文 y Español, manteniendo el EULA en inglés |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 26 abr | Estabiliza la retención de sesiones del popup en ejecuciones largas, evita que los changed files vuelvan a expandir el scoped refresh y añade instrumentación opcional de crash y memoria para diagnóstico |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 25 abr | Mantiene el popup centrado en sesiones recientes + activas, reduce el costo de refresco con la bandeja oculta y añade diagnósticos del proceso principal |
@@ -80,9 +68,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-v1.11.6-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-v1.12.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -92,7 +80,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.11.6-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.12.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -110,6 +98,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 
 ### Límites de Uso y Alertas
 - **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine; Codex 5h/1sem desde eventos locales de rate-limit en los logs
+- **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
@@ -134,7 +123,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 ### Personalización
 - **Tema Auto/Claro/Oscuro** — sigue la preferencia del sistema por defecto
 - **Visualización de costos** — USD o KRW con tasa de cambio configurable
-- **Widget siempre visible** — permanece encima; minimiza vía botón del encabezado, icono de bandeja o atajo global
+- **Floating usage widget** — ventana compacta de Quota Pace con soporte always-on-top; muéstrala u ocúltala desde el menú de bandeja, Settings o los controles del widget
 - **Etiqueta de bandeja** — muestra % de uso, cantidad de tokens o costo directamente en la barra de tareas
 - **Gestión de proyectos** — oculta o excluye completamente proyectos del seguimiento
 - **Iniciar con Windows** — inicio automático opcional
@@ -155,6 +144,7 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 - **Alertas** — establece umbrales de uso (50% / 80% / 90%)
 - **Tema** — Auto (sigue el sistema) / Claro / Oscuro
 - **Etiqueta de bandeja** — elige qué mostrar en la barra de tareas
+- **Floating usage widget** — activa la ventana compacta de Quota Pace; luego puedes mostrarla u ocultarla con clic derecho en el icono de bandeja
 
 ---
 

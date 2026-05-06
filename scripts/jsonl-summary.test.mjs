@@ -15,7 +15,7 @@ function tempDir() {
 }
 
 function recentIso(offsetMs = 0) {
-  return new Date(Date.now() + offsetMs).toISOString();
+  return new Date(Date.now() - 60_000 + offsetMs).toISOString();
 }
 
 function claudeAssistantLine({ id, timestamp = recentIso(), model = 'claude-sonnet-4', input = 10, output = 20, cacheCreation = 0, cacheRead = 0 }) {
@@ -131,7 +131,7 @@ test('Codex rate-limit-only scan keeps millisecond event ordering', async () => 
   const dir = tempDir();
   const filePath = path.join(dir, 'codex-limits-order.jsonl');
   const nowSec = Math.floor(Date.now() / 1000);
-  const base = Date.now();
+  const base = Date.now() - 60_000;
   const older = new Date(base).toISOString();
   const newer = new Date(base + 350).toISOString();
   const line = (timestamp, pct) => JSON.stringify({

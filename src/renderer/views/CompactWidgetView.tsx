@@ -1,0 +1,478 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, X } from 'lucide-react';
+import { AppState } from '../types';
+import { useTheme } from '../ThemeContext';
+
+interface Props {
+  state: AppState;
+  onRefresh: () => Promise<void>;
+}
+
+type WidgetAgent = {
+  key: 'claude' | 'codex';
+  label: string;
+  color: string;
+  scanning?: boolean;
+  scanningTitle?: string;
+  rows: Array<{
+    key: string;
+    label: string;
+    quotaPct: number;
+    resetMs: number | null;
+    pending?: boolean;
+    pendingTitle?: string;
+    unknown?: boolean;
+    unknownLabel?: string;
+    unknownBadge?: string;
+    unknownTitle?: string;
+  }>;
+};
+
+type DragState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+};
+
+function formatRefreshLabel(lastUpdated: number): string {
+  if (!lastUpdated) return 'refresh';
+  const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
+  if (elapsed < 60) return 'now';
+  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
+  return `${Math.floor(elapsed / 3600)}h`;
+}
+
+function formatPct(pct: number | null): string {
+  if (pct == null) return '--';
+  if (pct <= 0) return '0%';
+  if (pct < 1) return '<1%';
+  if (pct < 10) return `${Math.round(pct * 10) / 10}%`;
+  return `${Math.round(pct)}%`;
+}
+
+function clampPct(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function windowDurationMs(label: string): number | null {
+  if (label === '5h') return 5 * 60 * 60 * 1000;
+  if (label === '1w') return 7 * 24 * 60 * 60 * 1000;
+  return null;
+}
+
+function timeElapsedPct(label: string, resetMs: number | null): number | null {
+  const durationMs = windowDurationMs(label);
+  if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
+  return clampPct(((durationMs - resetMs) / durationMs) * 100);
+}
+
+function formatResetShort(resetMs: number | null): string {
+  if (resetMs == null || resetMs <= 0) return '--';
+  if (resetMs > 4 * 24 * 3600 * 1000) {
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(Date.now() + resetMs).getDay()];
+  }
+  const totalMinutes = Math.max(1, Math.round(resetMs / 60000));
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours >= 10 || minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && !!target.closest('[data-no-drag="true"]');
+}
+
+function missingLimitStatus(
+  pct: number,
+  resetMs: number | null,
+  bootPending: boolean,
+  unavailableTitle: string,
+  windowLabel: string,
+): Pick<WidgetAgent['rows'][number], 'unknown' | 'unknownLabel' | 'unknownBadge' | 'unknownTitle'> {
+  if (bootPending) {
+    return {
+      unknown: true,
+      unknownLabel: 'loading',
+      unknownBadge: 'wait',
+      unknownTitle: 'Startup scan is still loading.',
+    };
+  }
+  if (pct <= 0 && resetMs == null) {
+    return {
+      unknown: true,
+      unknownLabel: 'waiting',
+      unknownBadge: '',
+      unknownTitle: windowLabel === '5h'
+        ? 'No 5h reset data yet. It will appear after local usage or provider data is detected.'
+        : unavailableTitle,
+    };
+  }
+  return {};
+}
+
+function ProgressRow({
+  label,
+  quotaPct,
+  resetMs,
+  color,
+  pending = false,
+  pendingTitle,
+  unknown = false,
+  unknownLabel = 'loading',
+  unknownBadge = 'wait',
+  unknownTitle,
+}: {
+  label: string;
+  quotaPct: number;
+  resetMs: number | null;
+  color: string;
+  pending?: boolean;
+  pendingTitle?: string;
+  unknown?: boolean;
+  unknownLabel?: string;
+  unknownBadge?: string;
+  unknownTitle?: string;
+}) {
+  const C = useTheme();
+  const quota = clampPct(quotaPct);
+  const elapsed = pending || unknown ? null : timeElapsedPct(label, resetMs);
+  const elapsedWidth = elapsed ?? 0;
+  const resetLabel = pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
+  const quotaColor = unknown ? C.textMuted : color;
+  // pace 색상: 사용량이 경과 시간보다 빠르면 경고
+  const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
+    ? (quota / elapsed > 1.5 ? C.barRed : quota / elapsed > 1.0 ? C.barYellow : color)
+    : color;
+  const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
+  const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
+  const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
+
+  return (
+    <div
+      title={rowTitle}
+      style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
+    >
+      <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
+        {label}
+      </div>
+      <div style={{ position: 'relative', height: 8, background: trackColor, borderRadius: 4, overflow: 'hidden' }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: '0 auto 0 0',
+            width: `${elapsedWidth}%`,
+            background: elapsedColor,
+            borderRadius: 4,
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 2,
+            width: `${unknown ? 0 : quota}%`,
+            height: 4,
+            background: quotaColor,
+            borderRadius: 3,
+            boxShadow: `0 0 4px ${quotaColor}44`,
+          }}
+        />
+      </div>
+      <div
+        title={resetLabel ? `Time until reset: ${resetLabel}` : undefined}
+        style={{
+          color: C.textDim,
+          fontSize: 9,
+          fontFamily: C.fontMono,
+          textAlign: 'right',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {resetLabel}
+      </div>
+      <div
+        title="Used / Time elapsed"
+        style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
+      >
+        {pending ? (
+          <span style={{ color: C.textMuted }}>--</span>
+        ) : unknown ? (
+          <span style={{ color: C.textDim }}>{unknownLabel}</span>
+        ) : (
+          <>
+            <span style={{ color: paceColor }}>{formatPct(quota)}</span>
+            <span style={{ color: C.textMuted }}> / </span>
+            <span>{formatPct(elapsed)}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgentBlock({ agent }: { agent: WidgetAgent }) {
+  const C = useTheme();
+  return (
+    <div style={{ display: 'grid', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: agent.color, boxShadow: `0 0 8px ${agent.color}88` }} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1 }}>
+          {agent.label}
+        </span>
+        {agent.scanning ? (
+          <span
+            title={agent.scanningTitle}
+            style={{
+              color: C.textMuted,
+              fontSize: 8,
+              fontFamily: C.fontMono,
+              lineHeight: 1,
+              border: `1px solid ${C.borderSub}`,
+              borderRadius: 3,
+              padding: '1px 4px',
+              opacity: 0.8,
+            }}
+          >
+            scanning
+          </span>
+        ) : null}
+      </div>
+      <div style={{ display: 'grid', gap: 5 }}>
+        {agent.rows.map(row => (
+          <ProgressRow
+            key={row.key}
+            label={row.label}
+            quotaPct={row.quotaPct}
+            resetMs={row.resetMs}
+            color={agent.color}
+            pending={row.pending}
+            pendingTitle={row.pendingTitle}
+            unknown={row.unknown}
+            unknownLabel={row.unknownLabel}
+            unknownBadge={row.unknownBadge}
+            unknownTitle={row.unknownTitle}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function CompactWidgetView({ state, onRefresh }: Props) {
+  const C = useTheme();
+  const [refreshLabel, setRefreshLabel] = useState(() => formatRefreshLabel(state.lastUpdated));
+  const [refreshing, setRefreshing] = useState(false);
+  const dragRef = useRef<DragState | null>(null);
+  const dragSeqRef = useRef(0);
+  const movedRef = useRef(false);
+
+  useEffect(() => {
+    setRefreshLabel(formatRefreshLabel(state.lastUpdated));
+    const timer = window.setInterval(() => setRefreshLabel(formatRefreshLabel(state.lastUpdated)), 30_000);
+    return () => window.clearInterval(timer);
+  }, [state.lastUpdated]);
+
+  const agents = useMemo<WidgetAgent[]>(() => {
+    const provider = state.settings.provider ?? 'both';
+    const next: WidgetAgent[] = [];
+    const bootPending = !state.initialRefreshComplete;
+    const codexH5HasLimit = state.limits.codexH5.source === 'localLog' || state.limits.codexH5.pct > 0 || (state.limits.codexH5.resetMs ?? 0) > 0;
+    const codexWeekHasLimit = state.limits.codexWeek.source === 'localLog' || state.limits.codexWeek.pct > 0 || (state.limits.codexWeek.resetMs ?? 0) > 0;
+    const codexH5Pending = state.historyWarmupPending && (state.limits.codexH5.source === 'localLog' || !codexH5HasLimit);
+    const codexWeekPending = state.historyWarmupPending && (state.limits.codexWeek.source === 'localLog' || !codexWeekHasLimit);
+    const codexPendingTitle = 'Full Codex history is still scanning; local-log limits may update.';
+    const claudeUnavailableTitle = 'Claude limit data is unavailable until API or statusLine data is connected.';
+    const codexUnavailableTitle = 'No Codex rate-limit event has been found in local logs yet.';
+    if (provider !== 'codex') {
+      next.push({
+        key: 'claude',
+        label: 'Claude',
+        color: C.sonnet,
+        rows: [
+          { key: 'claude-5h', label: '5h', quotaPct: state.limits.h5.pct, resetMs: state.limits.h5.resetMs, ...missingLimitStatus(state.limits.h5.pct, state.limits.h5.resetMs, bootPending, claudeUnavailableTitle, '5h') },
+          { key: 'claude-1w', label: '1w', quotaPct: state.limits.week.pct, resetMs: state.limits.week.resetMs, ...missingLimitStatus(state.limits.week.pct, state.limits.week.resetMs, bootPending, claudeUnavailableTitle, '1w') },
+        ],
+      });
+    }
+    if (provider !== 'claude') {
+      next.push({
+        key: 'codex',
+        label: 'Codex',
+        color: C.active,
+        scanning: codexH5Pending || codexWeekPending,
+        scanningTitle: codexPendingTitle,
+        rows: [
+          { key: 'codex-5h', label: '5h', quotaPct: state.limits.codexH5.pct, resetMs: state.limits.codexH5.resetMs, pending: codexH5Pending, pendingTitle: codexPendingTitle, ...(!codexH5Pending ? missingLimitStatus(state.limits.codexH5.pct, state.limits.codexH5.resetMs, bootPending, codexUnavailableTitle, '5h') : {}) },
+          { key: 'codex-1w', label: '1w', quotaPct: state.limits.codexWeek.pct, resetMs: state.limits.codexWeek.resetMs, pending: codexWeekPending, pendingTitle: codexPendingTitle, ...(!codexWeekPending ? missingLimitStatus(state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, bootPending, codexUnavailableTitle, '1w') : {}) },
+        ],
+      });
+    }
+    return next;
+  }, [C.active, C.sonnet, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5.pct, state.limits.codexH5.resetMs, state.limits.codexH5.source, state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, state.limits.codexWeek.source, state.limits.h5.pct, state.limits.h5.resetMs, state.limits.week.pct, state.limits.week.resetMs, state.settings.provider]);
+
+  const showFiveHourHint = agents.length > 1 && agents.every(agent =>
+    agent.rows.some(row => row.label === '5h' && row.unknown && row.unknownLabel === 'waiting')
+  );
+  const toolbarButtonStyle: React.CSSProperties = {
+    background: C.bgCard === '#ffffff' ? 'rgba(245,247,252,0.72)' : 'rgba(30,41,59,0.62)',
+    border: `1px solid ${C.bgCard === '#ffffff' ? 'rgba(148,163,184,0.42)' : 'rgba(100,116,139,0.28)'}`,
+    borderRadius: 4,
+    color: C.textDim,
+    cursor: 'pointer',
+    height: 20,
+    minHeight: 20,
+    padding: 0,
+    lineHeight: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: C.fontMono,
+    boxShadow: C.bgCard === '#ffffff'
+      ? 'inset 0 1px 0 rgba(255,255,255,0.7)'
+      : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+  };
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshLabel('...');
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefresh, refreshing]);
+
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || isInteractiveTarget(event.target)) return;
+    movedRef.current = false;
+    const startX = event.screenX;
+    const startY = event.screenY;
+    const pointerId = event.pointerId;
+    const dragSeq = ++dragSeqRef.current;
+    dragRef.current = null;
+    event.currentTarget.setPointerCapture(pointerId);
+    window.wmt.getCompactWidgetPosition().then(position => {
+      if (dragSeq !== dragSeqRef.current) return;
+      if (!position) return;
+      dragRef.current = { pointerId, startX, startY, originX: position.x, originY: position.y };
+    }).catch(() => {});
+  }, []);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dx = event.screenX - drag.startX;
+    const dy = event.screenY - drag.startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) movedRef.current = true;
+    window.wmt.setCompactWidgetPosition({ x: drag.originX + dx, y: drag.originY + dy }).catch(() => {});
+  }, []);
+
+  const handlePointerUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    dragSeqRef.current += 1;
+    const drag = dragRef.current;
+    if (drag?.pointerId === event.pointerId) dragRef.current = null;
+  }, []);
+
+  const handleDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (isInteractiveTarget(event.target) || movedRef.current) return;
+    window.wmt.openDashboard().catch(() => {});
+  }, []);
+
+  return (
+    <div
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onDoubleClick={handleDoubleClick}
+      style={{
+        height: '100vh',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        padding: '14px 12px 13px',
+        background: C.bgCard,
+        color: C.text,
+        fontFamily: C.fontSans,
+        overflow: 'hidden',
+        cursor: 'move',
+        userSelect: 'none',
+        borderRadius: 8,
+        border: `1px solid ${C.border}`,
+        boxShadow: C.bgCard === '#ffffff'
+          ? 'inset 0 0 0 1px rgba(255,255,255,0.65)'
+          : 'inset 0 0 0 1px rgba(255,255,255,0.04)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 13 }}>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 900, color: C.text, letterSpacing: 0, lineHeight: 1 }}>
+          Quota Pace
+        </span>
+        <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
+          used / elapsed
+        </span>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <button
+            data-no-drag="true"
+            onClick={handleRefresh}
+            title="Refresh now"
+            style={{
+              ...toolbarButtonStyle,
+              color: refreshing ? C.accent : C.textDim,
+              cursor: refreshing ? 'wait' : 'pointer',
+              fontSize: 10,
+              minWidth: 28,
+            }}
+          >
+            {refreshLabel}
+          </button>
+          <button
+            data-no-drag="true"
+            onClick={() => window.wmt.openDashboard().catch(() => {})}
+            title="Open dashboard"
+            style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 11 }}
+          >
+            <ArrowUpRight size={11} strokeWidth={2} />
+          </button>
+          <button
+            data-no-drag="true"
+            onClick={() => window.wmt.hideCompactWidget().catch(() => {})}
+            title="Hide widget"
+            style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 12 }}
+          >
+            <X size={11} strokeWidth={2} />
+          </button>
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gap: agents.length > 1 ? 9 : 6 }}>
+        {agents.map(agent => <AgentBlock key={agent.key} agent={agent} />)}
+      </div>
+      {showFiveHourHint ? (
+        <div
+          title="No 5h reset data yet. It will appear after local usage or provider data is detected."
+          style={{
+            marginTop: -2,
+            color: C.textMuted,
+            fontSize: 8,
+            fontFamily: C.fontMono,
+            lineHeight: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          5h limits appear after first usage event
+        </div>
+      ) : null}
+    </div>
+  );
+}

@@ -29,8 +29,8 @@ function ModelBreakdown({ models, currency, usdToKrw }: { models: ModelUsage[]; 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Model Usage</span>
-        <span style={{ fontSize: 9, color: C.textMuted }}>Top 4 - All time</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Model Usage</span>
+        <span style={{ fontSize: 10, color: C.textMuted }}>Top 4 - All time</span>
       </div>
       <div style={{ padding: '6px 14px 8px' }}>
         {models.slice(0, 4).map(m => {
@@ -40,7 +40,7 @@ function ModelBreakdown({ models, currency, usdToKrw }: { models: ModelUsage[]; 
             <div key={`${m.provider}:${m.model}`} style={{ marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1, marginRight: 8 }}>
-                  <span style={{ fontSize: 8, color: C.textMuted, background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
+                  <span style={{ fontSize: 9, color: C.textMuted, background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 4px', flexShrink: 0 }}>
                     {provider}
                   </span>
                   <span title={m.model} style={{ fontSize: 11, color, fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -48,7 +48,7 @@ function ModelBreakdown({ models, currency, usdToKrw }: { models: ModelUsage[]; 
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>{fmtTokens(m.tokens)}</span>
+                  <span style={{ fontSize: 11, color: C.textMuted, fontFamily: C.fontMono }}>{fmtTokens(m.tokens)}</span>
                   <span style={{ fontSize: 11, color: C.textDim, fontFamily: C.fontMono }}>{fmtCost(m.costUSD, currency, usdToKrw)}</span>
                 </div>
               </div>

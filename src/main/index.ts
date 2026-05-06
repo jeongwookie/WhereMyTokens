@@ -1,8 +1,8 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme, screen } from 'electron';
 import * as path from 'path';
 import Store from 'electron-store';
 import { StateManager, AppState } from './stateManager';
-import { registerIpcHandlers, AppSettings, DEFAULT_SETTINGS } from './ipc';
+import { registerIpcHandlers, AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { Notification } from 'electron';
 import { appendCrashLog, buildErrorPayload, buildQuitTrace, collectRuntimeMemorySnapshot, getCrashLogPath, getDebugMemLogPath, isDebugInstrumentationEnabled, setListenerTargetsProvider } from './debugInstrumentation';
 
@@ -14,14 +14,26 @@ if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let tray: Tray | null = null;
 let popupWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
 let stateManager: StateManager | null = null;
 const store = new Store<AppSettings>() as Store<AppSettings>;
 let pendingStateUpdate: AppState | null = null;
 let stateUpdateTimer: NodeJS.Timeout | null = null;
 let popupMoving = false;
 let popupMoveEndTimer: NodeJS.Timeout | null = null;
+let widgetMoveEndTimer: NodeJS.Timeout | null = null;
 let lastTrayTitle = '';
 let lastTrayTooltip = '';
+let registeredGlobalHotkey = '';
+const readyWidgetWindows = new WeakSet<BrowserWindow>();
+
+type AppView = 'main' | 'settings' | 'notifications' | 'help';
+const POPUP_WIDTH = 462;
+const POPUP_HEIGHT = 1078;
+const POPUP_MARGIN = 8;
+const WIDGET_WIDTH = 320;
+const WIDGET_HEIGHT_SINGLE = 112;
+const WIDGET_HEIGHT_BOTH = 176;
 
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
@@ -32,6 +44,8 @@ function registerDebugTargets() {
     { name: 'tray', emitter: tray },
     { name: 'popupWindow', emitter: popupWindow },
     { name: 'popupWebContents', emitter: popupWindow?.webContents },
+    { name: 'widgetWindow', emitter: widgetWindow },
+    { name: 'widgetWebContents', emitter: widgetWindow?.webContents },
   ]));
 }
 
@@ -80,16 +94,26 @@ function installDebugInstrumentation() {
   });
 }
 
+function rebuildTrayMenu() {
+  if (!tray) return;
+  const settings = getSettings();
+  const widgetLabel = settings.compactWidgetEnabled ? 'Hide Widget' : 'Show Widget';
+  const widgetAction = settings.compactWidgetEnabled ? hideCompactWidget : showCompactWidget;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open WhereMyTokens', click: () => showPopup() },
+    { type: 'separator' },
+    { label: widgetLabel, click: widgetAction },
+    { label: 'Settings', click: () => showPopup('settings') },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.exit(0); } },
+  ]));
+}
+
 function createTray(): Tray {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
   const icon = nativeImage.createFromPath(iconPath);
   const t = new Tray(icon);
   t.setToolTip('WhereMyTokens');
-  t.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open WhereMyTokens', click: showPopup },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { app.exit(0); } },
-  ]));
   t.on('click', () => {
     if (popupWindow?.isVisible()) popupWindow.hide();
     else showPopup();
@@ -99,14 +123,15 @@ function createTray(): Tray {
 }
 
 function createPopupWindow(): BrowserWindow {
+  const settings = getSettings();
   const win = new BrowserWindow({
-    width: 420,
-    height: 980,
+    width: POPUP_WIDTH,
+    height: POPUP_HEIGHT,
     show: false,
     frame: false,
     resizable: false,
     skipTaskbar: true,
-    alwaysOnTop: true,
+    alwaysOnTop: settings.alwaysOnTop,
     backgroundColor: '#0d0d1a',
     webPreferences: {
       nodeIntegration: false,
@@ -115,11 +140,13 @@ function createPopupWindow(): BrowserWindow {
     },
   });
 
+  installNavigationGuards(win);
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath);
   win.on('move', markPopupMoving);
-  win.on('show', () => stateManager?.setUiVisible(true));
-  win.on('hide', () => stateManager?.setUiVisible(false));
+  win.on('show', syncUiVisibility);
+  win.on('hide', syncUiVisibility);
+  win.webContents.on('context-menu', openDashboardContextMenu);
   registerDebugTargets();
 
   // blur 시 자동 숨김 없음 — 항상 떠있는 위젯 모드
@@ -127,17 +154,220 @@ function createPopupWindow(): BrowserWindow {
   return win;
 }
 
-function showPopup() {
+function compactWidgetSize(settings: AppSettings): { width: number; height: number } {
+  return {
+    width: WIDGET_WIDTH,
+    height: (settings.provider ?? 'both') === 'both' ? WIDGET_HEIGHT_BOTH : WIDGET_HEIGHT_SINGLE,
+  };
+}
+
+type WidgetPosition = { x: number; y: number };
+type WidgetSize = { width: number; height: number };
+
+function defaultWidgetPosition(width: number, height: number): WidgetPosition {
+  const { workArea } = screen.getPrimaryDisplay();
+  return {
+    x: Math.round(workArea.x + workArea.width - width - 18),
+    y: Math.round(workArea.y + 84),
+  };
+}
+
+function validWidgetPosition(value: AppSettings['compactWidgetBounds']): value is WidgetPosition {
+  return !!value
+    && typeof value.x === 'number'
+    && typeof value.y === 'number'
+    && Number.isFinite(value.x)
+    && Number.isFinite(value.y);
+}
+
+function constrainWidgetPosition(position: WidgetPosition, size: WidgetSize): WidgetPosition {
+  const display = screen.getDisplayNearestPoint(position);
+  const { workArea } = display;
+  const maxX = workArea.x + Math.max(0, workArea.width - size.width);
+  const maxY = workArea.y + Math.max(0, workArea.height - size.height);
+  return {
+    x: Math.round(Math.min(Math.max(position.x, workArea.x), maxX)),
+    y: Math.round(Math.min(Math.max(position.y, workArea.y), maxY)),
+  };
+}
+
+function resolveWidgetPosition(settings: AppSettings, size: WidgetSize): WidgetPosition {
+  const position = validWidgetPosition(settings.compactWidgetBounds)
+    ? settings.compactWidgetBounds
+    : defaultWidgetPosition(size.width, size.height);
+  return constrainWidgetPosition(position, size);
+}
+
+function persistWidgetPosition(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+  const [x, y] = win.getPosition();
+  store.set('compactWidgetBounds', { x, y });
+}
+
+function flushWidgetPosition(win = widgetWindow) {
+  if (widgetMoveEndTimer) {
+    clearTimeout(widgetMoveEndTimer);
+    widgetMoveEndTimer = null;
+  }
+  if (win && !win.isDestroyed()) persistWidgetPosition(win);
+}
+
+function schedulePersistWidgetPosition(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+  if (widgetMoveEndTimer) clearTimeout(widgetMoveEndTimer);
+  widgetMoveEndTimer = setTimeout(() => {
+    widgetMoveEndTimer = null;
+    if (widgetWindow === win && !win.isDestroyed()) persistWidgetPosition(win);
+  }, 250);
+}
+
+function applyCompactWidgetBounds(settings = getSettings()) {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  const size = compactWidgetSize(settings);
+  const [x, y] = widgetWindow.getPosition();
+  const position = constrainWidgetPosition({ x, y }, size);
+  widgetWindow.setBounds({ ...position, ...size }, false);
+  if (position.x !== x || position.y !== y) schedulePersistWidgetPosition(widgetWindow);
+}
+
+function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
+  if (!win || win.isDestroyed() || !settings.compactWidgetEnabled) return;
+  if (!win.isVisible() && !readyWidgetWindows.has(win)) return;
+  applyCompactWidgetBounds(settings);
+  win.setAlwaysOnTop(true);
+  if (!win.isVisible()) win.showInactive();
+  syncUiVisibility();
+  const currentState = stateManager?.getState();
+  if (currentState) win.webContents.send('state:updated', currentState);
+}
+
+function openWidgetContextMenu() {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return;
+  Menu.buildFromTemplate([
+    { label: 'Open dashboard', click: () => showPopup('main') },
+    { label: 'Refresh now', click: () => stateManager?.forceRefresh().catch(() => {}) },
+    { label: 'Settings', click: () => showPopup('settings') },
+    { type: 'separator' },
+    { label: 'Hide widget', click: hideCompactWidget },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.exit(0); } },
+  ]).popup({ window: widgetWindow });
+}
+
+function openDashboardContextMenu() {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  Menu.buildFromTemplate([
+    { label: 'Hide dashboard', click: () => popupWindow?.hide() },
+    { label: 'Refresh now', click: () => stateManager?.forceRefresh().catch(() => {}) },
+    { label: 'Settings', click: () => showPopup('settings') },
+    { type: 'separator' },
+    { label: 'Show widget', click: showCompactWidget },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.exit(0); } },
+  ]).popup({ window: popupWindow });
+}
+
+function createWidgetWindow(): BrowserWindow {
+  const settings = getSettings();
+  const size = compactWidgetSize(settings);
+  const position = resolveWidgetPosition(settings, size);
+  const win = new BrowserWindow({
+    width: size.width,
+    height: size.height,
+    x: position.x,
+    y: position.y,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  installNavigationGuards(win);
+  const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
+  win.loadFile(rendererPath, { query: { view: 'widget' } });
+  win.on('move', () => schedulePersistWidgetPosition(win));
+  win.on('show', syncUiVisibility);
+  win.on('hide', syncUiVisibility);
+  win.once('ready-to-show', () => {
+    readyWidgetWindows.add(win);
+    revealCompactWidget(win);
+  });
+  win.on('close', () => flushWidgetPosition(win));
+  win.on('closed', () => {
+    if (widgetWindow === win) widgetWindow = null;
+    syncUiVisibility();
+  });
+  win.webContents.on('context-menu', openWidgetContextMenu);
+  registerDebugTargets();
+  return win;
+}
+
+function getSettings(): AppSettings {
+  return normalizeSettings(store.store);
+}
+
+function installNavigationGuards(win: BrowserWindow) {
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', event => {
+    event.preventDefault();
+  });
+  win.webContents.on('will-attach-webview', event => {
+    event.preventDefault();
+  });
+}
+
+function sendPopupNavigation(view: AppView) {
+  if (!popupWindow || popupWindow.isDestroyed()) return;
+  const send = () => popupWindow?.webContents.send('app:navigate', view);
+  if (popupWindow.webContents.isLoading()) popupWindow.webContents.once('did-finish-load', send);
+  else send();
+}
+
+function syncUiVisibility() {
+  const popupVisible = !!popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible();
+  const widgetVisible = !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
+  // 화면에 보이는 창이 하나라도 있으면 새 세션 발견을 놓치지 않도록 foreground 스캔을 유지한다.
+  const foregroundVisible = popupVisible || widgetVisible;
+  stateManager?.setUiVisible(foregroundVisible);
+}
+
+function resolvePopupBounds(trayBounds: Electron.Rectangle): Electron.Rectangle {
+  const trayCenter = {
+    x: Math.round(trayBounds.x + trayBounds.width / 2),
+    y: Math.round(trayBounds.y + trayBounds.height / 2),
+  };
+  const { workArea } = screen.getDisplayNearestPoint(trayCenter);
+  const width = Math.min(POPUP_WIDTH, Math.max(240, workArea.width - POPUP_MARGIN * 2));
+  const height = Math.min(POPUP_HEIGHT, Math.max(240, workArea.height - POPUP_MARGIN * 2));
+  const preferredX = Math.round(trayCenter.x - width / 2);
+  const preferredY = Math.round(trayBounds.y - height - POPUP_MARGIN);
+  const maxX = workArea.x + Math.max(0, workArea.width - width);
+  const maxY = workArea.y + Math.max(0, workArea.height - height);
+  return {
+    x: Math.min(Math.max(preferredX, workArea.x), maxX),
+    y: Math.min(Math.max(preferredY, workArea.y), maxY),
+    width,
+    height,
+  };
+}
+
+function showPopup(view: AppView = 'main') {
   if (!popupWindow || popupWindow.isDestroyed()) popupWindow = createPopupWindow();
   if (!tray) return;
 
-  const tb = tray.getBounds();
-  const [w, h] = popupWindow.getSize();
-  const x = Math.round(tb.x + tb.width / 2 - w / 2);
-  const y = Math.round(tb.y - h - 8);
-  popupWindow.setPosition(x, y);
+  popupWindow.setBounds(resolvePopupBounds(tray.getBounds()));
   popupWindow.show();
   popupWindow.focus();
+  sendPopupNavigation(view);
   const currentState = stateManager?.getState();
   if (currentState) {
     pendingStateUpdate = null;
@@ -145,6 +375,114 @@ function showPopup() {
     stateUpdateTimer = null;
     popupWindow.webContents.send('state:updated', currentState);
   }
+}
+
+function sendWidgetStateUpdate(state: AppState) {
+  if (!state.settings.compactWidgetEnabled) return;
+  if (!widgetWindow || widgetWindow.isDestroyed()) {
+    syncCompactWidget();
+    return;
+  }
+  if (!widgetWindow.isVisible()) return;
+  applyCompactWidgetBounds(state.settings);
+  widgetWindow.webContents.send('state:updated', state);
+}
+
+function syncCompactWidget() {
+  const settings = getSettings();
+  if (!settings.compactWidgetEnabled) {
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
+    widgetWindow = null;
+    syncUiVisibility();
+    return;
+  }
+
+  if (!widgetWindow || widgetWindow.isDestroyed()) {
+    widgetWindow = createWidgetWindow();
+    return;
+  }
+  revealCompactWidget(widgetWindow, settings);
+}
+
+function hideCompactWidget() {
+  store.set('compactWidgetEnabled', false);
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.close();
+  widgetWindow = null;
+  syncUiVisibility();
+  stateManager?.applySettingsChange();
+  rebuildTrayMenu();
+}
+
+function showCompactWidget() {
+  store.set('compactWidgetEnabled', true);
+  syncCompactWidget();
+  stateManager?.applySettingsChange();
+  applyRuntimeSettings();
+  rebuildTrayMenu();
+}
+
+function togglePopupFromShortcut() {
+  if (popupWindow?.isVisible() && popupWindow.isFocused()) {
+    popupWindow.hide();
+    return;
+  }
+  showPopup();
+}
+
+function applyWindowSettings() {
+  const settings = getSettings();
+  if (popupWindow && !popupWindow.isDestroyed()) {
+    popupWindow.setAlwaysOnTop(settings.alwaysOnTop);
+  }
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.setAlwaysOnTop(true);
+  }
+}
+
+function registerGlobalHotkey(hotkey: string): boolean {
+  const nextHotkey = hotkey.trim();
+  if (nextHotkey === registeredGlobalHotkey) return true;
+  if (!nextHotkey) {
+    if (registeredGlobalHotkey) {
+      globalShortcut.unregister(registeredGlobalHotkey);
+      registeredGlobalHotkey = '';
+    }
+    return true;
+  }
+
+  let nextRegistered = false;
+  try {
+    nextRegistered = globalShortcut.register(nextHotkey, togglePopupFromShortcut);
+  } catch { /* ignore */ }
+  if (!nextRegistered) return false;
+
+  if (registeredGlobalHotkey) {
+    globalShortcut.unregister(registeredGlobalHotkey);
+  }
+  registeredGlobalHotkey = nextHotkey;
+  return true;
+}
+
+function rollbackHotkeySettingAfterFailedRegistration(): boolean {
+  if (!registeredGlobalHotkey) return false;
+  store.set('globalHotkey', registeredGlobalHotkey);
+  return true;
+}
+
+function applyRuntimeSettings() {
+  const settings = getSettings();
+  applyWindowSettings();
+  syncCompactWidget();
+  rebuildTrayMenu();
+  if (!registerGlobalHotkey(settings.globalHotkey)) {
+    if (rollbackHotkeySettingAfterFailedRegistration()) {
+      stateManager?.applySettingsChange();
+    }
+  }
+}
+
+function isCodexLimitProvisional(state: AppState, limit: AppState['limits']['codexH5']): boolean {
+  return state.historyWarmupPending && (limit.source === 'localLog' || limit.pct > 0 || (limit.resetMs ?? 0) > 0);
 }
 
 function buildTrayTitle(state: AppState): string {
@@ -157,11 +495,15 @@ function buildTrayTitle(state: AppState): string {
   const h5Cost = (provider === 'codex')
     ? state.usage.h5Codex.costUSD
     : (provider === 'both' ? state.usage.h5.costUSD + state.usage.h5Codex.costUSD : state.usage.h5.costUSD);
+  const codexH5Provisional = isCodexLimitProvisional(state, state.limits.codexH5);
+  const stableCodexH5Pct = codexH5Provisional ? 0 : state.limits.codexH5.pct;
   const h5Pct = provider === 'codex'
-    ? state.limits.codexH5.pct
-    : (provider === 'both' ? Math.max(state.limits.h5.pct, state.limits.codexH5.pct) : state.limits.h5.pct);
+    ? stableCodexH5Pct
+    : (provider === 'both' ? Math.max(state.limits.h5.pct, stableCodexH5Pct) : state.limits.h5.pct);
   switch (display) {
     case 'h5pct':
+      if (codexH5Provisional && provider === 'codex') return 'scan';
+      if (codexH5Provisional && provider === 'both' && state.limits.h5.pct <= 0) return 'scan';
       return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;
@@ -200,6 +542,7 @@ function updateTray(state: AppState) {
   }
 
   queueRendererStateUpdate(state);
+  sendWidgetStateUpdate(state);
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
 }
 
@@ -255,26 +598,33 @@ app.whenReady().then(() => {
     store,
     () => manager.getState(),
     () => manager.forceRefresh(),
-    () => manager.applySettingsChange(),
+    () => {
+      manager.applySettingsChange();
+      applyRuntimeSettings();
+    },
     () => manager.getDebugMemSnapshot('ipc'),
+    {
+      openDashboard: () => showPopup('main'),
+      openSettings: () => showPopup('settings'),
+      hideCompactWidget,
+    },
   );
 
   tray = createTray();
+  rebuildTrayMenu();
   popupWindow = createPopupWindow();
   manager.start();
+  syncCompactWidget();
   app.once('before-quit', () => manager.stop());
 
   // Show popup on first launch (after renderer is ready)
   popupWindow.once('ready-to-show', () => showPopup());
 
   // Global shortcut
-  const settings = { ...DEFAULT_SETTINGS, ...store.store };
-  try {
-    globalShortcut.register(settings.globalHotkey, () => {
-      if (popupWindow?.isVisible()) popupWindow.hide();
-      else showPopup();
-    });
-  } catch { /* ignore */ }
+  const settings = getSettings();
+  if (!registerGlobalHotkey(settings.globalHotkey)) {
+    rollbackHotkeySettingAfterFailedRegistration();
+  }
 
   // Auto-start at login
   app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
@@ -291,10 +641,24 @@ app.whenReady().then(() => {
 
   // 최소화(숨김) IPC
   ipcMain.handle('window:minimize', () => { popupWindow?.hide(); });
+  ipcMain.handle('window:get-compact-widget-position', () => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return null;
+    const [x, y] = widgetWindow.getPosition();
+    return { x, y };
+  });
+  ipcMain.handle('window:set-compact-widget-position', (_event, position: { x?: unknown; y?: unknown }) => {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    if (typeof position?.x !== 'number' || typeof position?.y !== 'number') return;
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
+    const size = compactWidgetSize(getSettings());
+    const next = constrainWidgetPosition({ x: position.x, y: position.y }, size);
+    widgetWindow.setBounds({ ...next, width: size.width, height: size.height });
+    schedulePersistWidgetPosition(widgetWindow);
+  });
 
   // 시스템 테마 감지: auto 설정 시 OS 다크모드에 따라 resolve
   function resolveTheme(): 'light' | 'dark' {
-    const s = { ...DEFAULT_SETTINGS, ...store.store };
+    const s = getSettings();
     if (s.theme === 'auto') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
     return s.theme as 'light' | 'dark';
   }
@@ -302,13 +666,16 @@ app.whenReady().then(() => {
   ipcMain.handle('theme:resolved', () => resolveTheme());
 
   nativeTheme.on('updated', () => {
-    const s = { ...DEFAULT_SETTINGS, ...store.store };
+    const s = getSettings();
     if (s.theme === 'auto' && popupWindow && !popupWindow.isDestroyed()) {
       popupWindow.webContents.send('theme:changed', resolveTheme());
+    }
+    if (s.theme === 'auto' && widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.webContents.send('theme:changed', resolveTheme());
     }
   });
 });
 
 app.on('window-all-closed', () => { /* tray app: do not quit */ });
-app.on('second-instance', showPopup);
+app.on('second-instance', () => showPopup());
 app.on('will-quit', () => globalShortcut.unregisterAll());

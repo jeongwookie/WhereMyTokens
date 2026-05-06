@@ -5,7 +5,7 @@ import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDi
 import { scanCodexRateLimitsOnly, scanJsonlSummaryCached } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
-import { AppSettings, DEFAULT_SETTINGS } from './ipc';
+import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
@@ -202,6 +202,10 @@ function currentSessionState(provider: SessionInfo['provider'], pid: number | nu
   return approximateSessionState(lastModified);
 }
 
+function providerMatchesMode(mode: AppSettings['provider'], provider: SessionInfo['provider']): boolean {
+  return mode === 'both' || mode === provider;
+}
+
 function gitStatsCacheKey(cwd: string): string {
   return normalizeGitCwdKey(cwd);
 }
@@ -335,7 +339,7 @@ export class StateManager {
   }
 
   private getSettings(): AppSettings {
-    return { ...DEFAULT_SETTINGS, ...this.store.store };
+    return normalizeSettings(this.store.store);
   }
 
   private emptyState(): AppState {
@@ -2133,6 +2137,27 @@ export class StateManager {
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
+      const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+      const sessions = this.state.sessions.filter(session =>
+        providerMatchesMode(settings.provider, session.provider)
+        && !isExcluded(this.sessionProjectKeys(session)),
+      );
+      const derived = this.computeDerivedUsage(settings);
+      const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      this.state = {
+        ...this.state,
+        sessions,
+        settings,
+        usage: derived.usage,
+        limits: derived.limits,
+        bridgeActive: derived.bridgeActive,
+        extraUsage: derived.extraUsage,
+        codeOutputStats,
+        codeOutputLoading: true,
+        allTimeSessions: sessions.length,
+        lastUpdated: Date.now(),
+      };
+      this.onUpdate(this.state);
       this.startWatcher();
       this.clearHistoryWarmup();
       this.clearGitWarmup();
