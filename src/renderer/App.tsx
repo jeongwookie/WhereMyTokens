@@ -482,6 +482,11 @@ export default function App() {
     return cleanup;
   }, [refresh, applyState]);
 
+  // widget 창은 transparent window이므로 body 배경을 투명하게
+  useEffect(() => {
+    if (isWidget) document.body.style.background = 'transparent';
+  }, [isWidget]);
+
   useEffect(() => {
     if (isWidget) return;
     return window.wmt.onNavigate(nextView => {

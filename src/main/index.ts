@@ -94,16 +94,26 @@ function installDebugInstrumentation() {
   });
 }
 
+function rebuildTrayMenu() {
+  if (!tray) return;
+  const settings = getSettings();
+  const widgetLabel = settings.compactWidgetEnabled ? 'Hide Widget' : 'Show Widget';
+  const widgetAction = settings.compactWidgetEnabled ? hideCompactWidget : showCompactWidget;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open WhereMyTokens', click: () => showPopup() },
+    { type: 'separator' },
+    { label: widgetLabel, click: widgetAction },
+    { label: 'Settings', click: () => showPopup('settings') },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.exit(0); } },
+  ]));
+}
+
 function createTray(): Tray {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
   const icon = nativeImage.createFromPath(iconPath);
   const t = new Tray(icon);
   t.setToolTip('WhereMyTokens');
-  t.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open WhereMyTokens', click: () => showPopup() },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { app.exit(0); } },
-  ]));
   t.on('click', () => {
     if (popupWindow?.isVisible()) popupWindow.hide();
     else showPopup();
@@ -263,8 +273,9 @@ function createWidgetWindow(): BrowserWindow {
     resizable: false,
     skipTaskbar: true,
     alwaysOnTop: settings.alwaysOnTop,
-    backgroundColor: '#0d0f13',
-    hasShadow: true,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -392,6 +403,7 @@ function hideCompactWidget() {
   widgetWindow = null;
   syncUiVisibility();
   stateManager?.applySettingsChange();
+  rebuildTrayMenu();
 }
 
 function showCompactWidget() {
@@ -399,6 +411,7 @@ function showCompactWidget() {
   syncCompactWidget();
   stateManager?.applySettingsChange();
   applyRuntimeSettings();
+  rebuildTrayMenu();
 }
 
 function togglePopupFromShortcut() {
@@ -453,6 +466,7 @@ function applyRuntimeSettings() {
   const settings = getSettings();
   applyWindowSettings();
   syncCompactWidget();
+  rebuildTrayMenu();
   if (!registerGlobalHotkey(settings.globalHotkey)) {
     if (rollbackHotkeySettingAfterFailedRegistration()) {
       stateManager?.applySettingsChange();
@@ -590,6 +604,7 @@ app.whenReady().then(() => {
   );
 
   tray = createTray();
+  rebuildTrayMenu();
   popupWindow = createPopupWindow();
   manager.start();
   syncCompactWidget();

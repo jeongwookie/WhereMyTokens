@@ -138,6 +138,10 @@ function ProgressRow({
   const resetLabel = pending ? 'scan' : unknown ? unknownBadge : formatResetShort(resetMs);
   const resetBadgeBg = C.bgCard === '#ffffff' ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.22)';
   const quotaColor = unknown ? C.textMuted : color;
+  // pace 색상: 사용량이 경과 시간보다 빠르면 경고
+  const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
+    ? (quota / elapsed > 1.5 ? C.barRed : quota / elapsed > 1.0 ? C.barYellow : color)
+    : color;
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
   const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
 
@@ -194,7 +198,7 @@ function ProgressRow({
         </span>
       </div>
       <div
-        title="Usage percent / elapsed window percent"
+        title="Used / Time elapsed"
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
         {pending ? (
@@ -211,7 +215,7 @@ function ProgressRow({
           <span style={{ color: C.textDim }}>{unknownLabel}</span>
         ) : (
           <>
-            <span style={{ color }}>{formatPct(quota)}</span>
+            <span style={{ color: paceColor }}>{formatPct(quota)}</span>
             <span style={{ color: C.textMuted }}> / </span>
             <span>{formatPct(elapsed)}</span>
           </>
@@ -369,15 +373,16 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         overflow: 'hidden',
         cursor: 'move',
         userSelect: 'none',
-        boxShadow: 'none',
+        borderRadius: 8,
+        boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 13 }}>
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 900, color: C.textDim, letterSpacing: 0, lineHeight: 1 }}>
-          Usage vs Time
+          Quota Pace
         </span>
         <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
-          usage / time
+          used / elapsed
         </span>
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           <button
@@ -403,17 +408,17 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
             data-no-drag="true"
             onClick={() => window.wmt.openDashboard().catch(() => {})}
             title="Open dashboard"
-            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '0 4px', lineHeight: 1.3 }}
+            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 11, minWidth: 20, minHeight: 20, padding: '0 4px', lineHeight: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            ^
+            ↗
           </button>
           <button
             data-no-drag="true"
             onClick={() => window.wmt.hideCompactWidget().catch(() => {})}
             title="Hide widget"
-            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 12, padding: '0 4px', lineHeight: 1.3 }}
+            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 12, minWidth: 20, minHeight: 20, padding: '0 4px', lineHeight: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            x
+            ×
           </button>
         </span>
       </div>

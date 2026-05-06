@@ -362,6 +362,9 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
         <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: -0.3, flexShrink: 0, whiteSpace: 'nowrap' }}>
           WhereMyTokens
         </span>
+        <span style={{ fontSize: 8, color: C.headerSub, opacity: 0.42, flexShrink: 0, whiteSpace: 'nowrap', marginLeft: -3 }}>
+          by jeongwookie
+        </span>
         <div style={{ ...noDrag, display: 'inline-flex', gap: 3, marginLeft: 4, flexShrink: 0 }}>
           {(['today', 'all'] as const).map(p => (
             <button key={p} onClick={() => setPeriod(p)} style={headerPeriodButtonStyle(period === p, C)}>{p}</button>

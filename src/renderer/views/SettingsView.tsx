@@ -40,6 +40,11 @@ function keyNameFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string 
   return null;
 }
 
+function formatShortcutDisplay(accelerator: string): string {
+  if (!accelerator) return '';
+  return accelerator.replace(/CommandOrControl/g, 'Ctrl');
+}
+
 function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string | null {
   const key = keyNameFromEvent(event);
   if (!key || ['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return null;
@@ -61,6 +66,13 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [integrationConfigured, setIntegrationConfigured] = useState<boolean | null>(null);
   const [integrationMsg, setIntegrationMsg] = useState('');
+
+  const isDirty = useMemo(() => {
+    const { compactWidgetBounds: _a, ...current } = s;
+    const { compactWidgetBounds: _b, ...original } = settings;
+    return JSON.stringify({ ...current, mainSectionOrder: normalizeMainSectionOrder(current.mainSectionOrder) })
+      !== JSON.stringify({ ...original, mainSectionOrder: normalizeMainSectionOrder(original.mainSectionOrder) });
+  }, [s, settings]);
 
   const row: React.CSSProperties = useMemo(() => ({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.border}` }), [C]);
   const labelStyle: React.CSSProperties = useMemo(() => ({ fontSize: 12, color: C.textDim }), [C]);
@@ -171,14 +183,19 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <input type="checkbox" style={chk} checked={s.openAtLogin} onChange={e => setS({ ...s, openAtLogin: e.target.checked })} />
         </div>
         <div style={row}>
-          <span style={labelStyle}>Always On Top</span>
+          <div>
+            <div style={labelStyle}>Always On Top</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Applies to dashboard and widget
+            </div>
+          </div>
           <input type="checkbox" style={chk} checked={s.alwaysOnTop} onChange={e => setS({ ...s, alwaysOnTop: e.target.checked })} />
         </div>
         <div style={row}>
           <div>
-            <div style={labelStyle}>Compact widget</div>
+            <div style={labelStyle}>Floating usage widget</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Small quota widget; follows Always On Top
+              Shows quota pace at a glance
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.compactWidgetEnabled} onChange={e => setS({ ...s, compactWidgetEnabled: e.target.checked })} />
@@ -198,7 +215,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
               color: recordingHotkey ? C.accent : C.text,
               outline: recordingHotkey ? `1px solid ${C.accent}55` : 'none',
             }}
-            value={recordingHotkey ? '' : s.globalHotkey}
+            value={recordingHotkey ? '' : formatShortcutDisplay(s.globalHotkey)}
             onFocus={() => setRecordingHotkey(true)}
             onClick={() => setRecordingHotkey(true)}
             onBlur={() => setRecordingHotkey(false)}
@@ -282,7 +299,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
                       fontSize: 12,
                     }}
                   >
-                    ^
+                    ▲
                   </button>
                   <button
                     type="button"
@@ -301,7 +318,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
                       fontSize: 12,
                     }}
                   >
-                    v
+                    ▼
                   </button>
                 </span>
               </div>
@@ -335,12 +352,14 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
 
       </div>
       <button
+        disabled={!isDirty}
         onClick={() => {
+          if (!isDirty) return;
           const { compactWidgetBounds: _compactWidgetBounds, ...settingsToSave } = s;
           onSave(settingsToSave);
           onBack();
         }}
-        style={{ margin: '12px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 13, cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}
+        style={{ margin: '12px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 13, cursor: isDirty ? 'pointer' : 'default', fontWeight: 700, flexShrink: 0, opacity: isDirty ? 1 : 0.4, pointerEvents: isDirty ? 'auto' : 'none' }}
       >
         Save
       </button>
