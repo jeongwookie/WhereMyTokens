@@ -138,11 +138,12 @@ function OutputGrowth({
   C: ReturnType<typeof useTheme>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hover, setHover] = useState<{ x: number; y: number; point: GrowthPoint } | null>(null);
+  const [hover, setHover] = useState<{ point: GrowthPoint } | null>(null);
   const points = buildGrowthPoints(data, total);
   const totalNet = points[points.length - 1]?.totalNet ?? (total.added - total.removed);
   const progressColor = totalNet >= 0 ? C.active : C.barRed;
   const hasData = points.length > 0 && total.commits > 0;
+  const detailPoint = hover?.point ?? points[points.length - 1] ?? null;
 
   useEffect(() => {
     if (!hasData) return;
@@ -238,7 +239,7 @@ function OutputGrowth({
     const right = 52;
     const plotW = W - left - right;
     const index = Math.max(0, Math.min(points.length - 1, Math.round(((x - left) / Math.max(plotW, 1)) * (points.length - 1))));
-    setHover({ x: Math.max(8, Math.min(W - 118, x + 8)), y: 8, point: points[index] });
+    setHover({ point: points[index] });
   }
 
   return (
@@ -261,27 +262,27 @@ function OutputGrowth({
           onMouseLeave={() => setHover(null)}
           style={{ width: '100%', display: 'block' }}
         />
-        {hover && (
-          <div style={{
-            position: 'absolute',
-            left: hover.x,
-            top: hover.y,
-            pointerEvents: 'none',
-            background: C.bgElev,
-            border: `1px solid ${C.border}`,
-            borderRadius: 6,
-            padding: '5px 7px',
-            boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
-            fontFamily: C.fontMono,
-            fontSize: 10,
-            color: C.text,
-            lineHeight: 1.35,
-            zIndex: 2,
-          }}>
-            <div style={{ color: C.textMuted }}>{hover.point.label}</div>
-            <div style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(hover.point.totalNet)} total</div>
-            <div>{fmtSigned(hover.point.dayNet)} day - {hover.point.commits} commit{hover.point.commits === 1 ? '' : 's'}</div>
-          </div>
+      </div>
+      <div style={{
+        minHeight: 16,
+        marginTop: 2,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        overflow: 'hidden',
+        color: C.textDim,
+        fontFamily: C.fontMono,
+        fontSize: 9,
+        whiteSpace: 'nowrap',
+      }}>
+        {detailPoint && (
+          <>
+            <span style={{ color: C.textMuted }}>{detailPoint.label}</span>
+            <span style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(detailPoint.totalNet)} total</span>
+            <span>
+              {fmtSigned(detailPoint.dayNet)} day · {detailPoint.commits} commit{detailPoint.commits === 1 ? '' : 's'}
+            </span>
+          </>
         )}
       </div>
     </div>
