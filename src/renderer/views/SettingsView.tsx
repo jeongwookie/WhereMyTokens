@@ -184,9 +184,9 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
         </div>
         <div style={row}>
           <div>
-            <div style={labelStyle}>Always On Top</div>
+            <div style={labelStyle}>Dashboard always on top</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Applies to dashboard and widget
+              Widget always stays on top
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.alwaysOnTop} onChange={e => setS({ ...s, alwaysOnTop: e.target.checked })} />

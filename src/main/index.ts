@@ -31,9 +31,9 @@ type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
 const POPUP_MARGIN = 8;
-const WIDGET_WIDTH = 268;
-const WIDGET_HEIGHT_SINGLE = 106;
-const WIDGET_HEIGHT_BOTH = 166;
+const WIDGET_WIDTH = 320;
+const WIDGET_HEIGHT_SINGLE = 112;
+const WIDGET_HEIGHT_BOTH = 176;
 
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
@@ -226,7 +226,7 @@ function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
   if (!win || win.isDestroyed() || !settings.compactWidgetEnabled) return;
   if (!win.isVisible() && !readyWidgetWindows.has(win)) return;
   applyCompactWidgetBounds(settings);
-  win.setAlwaysOnTop(settings.alwaysOnTop);
+  win.setAlwaysOnTop(true);
   if (!win.isVisible()) win.showInactive();
   syncUiVisibility();
   const currentState = stateManager?.getState();
@@ -272,7 +272,7 @@ function createWidgetWindow(): BrowserWindow {
     frame: false,
     resizable: false,
     skipTaskbar: true,
-    alwaysOnTop: settings.alwaysOnTop,
+    alwaysOnTop: true,
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
@@ -428,7 +428,7 @@ function applyWindowSettings() {
     popupWindow.setAlwaysOnTop(settings.alwaysOnTop);
   }
   if (widgetWindow && !widgetWindow.isDestroyed()) {
-    widgetWindow.setAlwaysOnTop(settings.alwaysOnTop);
+    widgetWindow.setAlwaysOnTop(true);
   }
 }
 

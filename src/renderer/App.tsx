@@ -484,7 +484,29 @@ export default function App() {
 
   // widget 창은 transparent window이므로 body 배경을 투명하게
   useEffect(() => {
-    if (isWidget) document.body.style.background = 'transparent';
+    if (!isWidget) return;
+    const root = document.getElementById('root');
+    const previous = {
+      htmlBackground: document.documentElement.style.background,
+      htmlBackgroundColor: document.documentElement.style.backgroundColor,
+      bodyBackground: document.body.style.background,
+      bodyBackgroundColor: document.body.style.backgroundColor,
+      rootBackground: root?.style.background ?? '',
+    };
+
+    document.documentElement.style.background = 'transparent';
+    document.documentElement.style.backgroundColor = 'transparent';
+    document.body.style.background = 'transparent';
+    document.body.style.backgroundColor = 'transparent';
+    if (root) root.style.background = 'transparent';
+
+    return () => {
+      document.documentElement.style.background = previous.htmlBackground;
+      document.documentElement.style.backgroundColor = previous.htmlBackgroundColor;
+      document.body.style.background = previous.bodyBackground;
+      document.body.style.backgroundColor = previous.bodyBackgroundColor;
+      if (root) root.style.background = previous.rootBackground;
+    };
   }, [isWidget]);
 
   useEffect(() => {
