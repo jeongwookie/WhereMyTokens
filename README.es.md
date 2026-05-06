@@ -226,18 +226,6 @@ npm run build
 npm start
 ```
 
----
-
-## Demo
-
-<div align="center">
-
-https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
-
-</div>
-
----
-
 ## Aviso Legal
 
 Los costos mostrados son **estimaciones equivalentes a la API**, no facturación real. Las suscripciones Claude Max/Pro son tarifas mensuales fijas. La visualización de costos muestra cuánto valor de uso estás obteniendo de tu suscripción.

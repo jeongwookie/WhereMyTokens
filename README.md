@@ -334,18 +334,6 @@ src/
     components/           SessionRow, TokenStatsCard, ActivityChart, CodeOutputCard, ...
 ```
 
----
-
-## Demo
-
-<div align="center">
-
-https://github.com/user-attachments/assets/98b6f8d7-6fc6-4c12-aef1-af6300db0728
-
-</div>
-
----
-
 ## Disclaimer
 
 Costs shown are **API-equivalent estimates**, not actual billing. Claude Max/Pro subscriptions are flat monthly fees. The cost display shows how much usage value you are getting out of your subscription.
