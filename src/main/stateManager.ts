@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
 import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDiscoveryScope, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
-import { scanJsonlSummaryCached } from './jsonlParser';
+import { scanCodexRateLimitsOnly, scanJsonlSummaryCached } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS } from './ipc';
-import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
+import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
@@ -14,7 +14,7 @@ import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGit
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
-import { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
+import { ActivityBreakdown, ActivityBreakdownKind, CodexRateLimitWindow, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 
@@ -124,6 +124,8 @@ interface SessionBuildResult {
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
+const CODEX_H5_WINDOW_MS = 5 * 60 * 60 * 1000;
+const CODEX_WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getJsonlMtime(filePath: string): Date | null {
   try { return fs.statSync(filePath).mtime; }
@@ -292,10 +294,11 @@ export class StateManager {
   private static readonly FAST_REFRESH_HIDDEN_MS = 300_000;
   private static readonly HEAVY_REFRESH_HIDDEN_MS = 900_000;
   private static readonly STARTUP_SCAN_BUDGET_MS = 2_500;
-  private static readonly STARTUP_WARMUP_DELAY_MS = 90_000;
+  private static readonly STARTUP_WARMUP_DELAY_MS = 30_000;
   private static readonly STARTUP_GIT_DELAY_MS = 60_000;
   private static readonly STARTUP_CLAUDE_FILE_LIMIT = 48;
   private static readonly STARTUP_CODEX_FILE_LIMIT = 96;
+  private static readonly CODEX_RATE_LIMIT_FAST_FILE_LIMIT = 24;
   private static readonly HIDDEN_CLAUDE_WATCH_LIMIT = 24;
   private static readonly HIDDEN_CODEX_WATCH_LIMIT = 48;
   private static readonly SESSION_SCOPE: SessionDiscoveryScope = 'recent-active';
@@ -305,13 +308,15 @@ export class StateManager {
     this.store = store;
     this.onUpdate = onUpdate;
     this.state = this.emptyState();
-    const cached = normalizeStoredApiUsagePct(
-      (this.store as unknown as Store<Record<string, unknown>>).get('_cachedApiPct', null)
-    );
+    const persistedStore = this.store as unknown as Store<Record<string, unknown>>;
+    const cachedRaw = persistedStore.get('_cachedApiPct', null);
+    const cached = normalizeStoredApiUsagePct(cachedRaw);
+    if (cachedRaw && !cached) {
+      persistedStore.delete('_cachedApiPct');
+    }
     if (cached && hasClaudeCredentials()) {
-      this.apiUsagePctStoredAt = cached.storedAt ?? 0;
-      const elapsed = this.apiUsagePctStoredAt ? Date.now() - this.apiUsagePctStoredAt : Infinity;
-      this.apiUsagePct = ageApiUsageSample(cached, elapsed);
+      this.apiUsagePctStoredAt = cached.storedAt;
+      this.apiUsagePct = cached;
     }
 
     this.bridgeWatcher = new BridgeWatcher((data) => {
@@ -637,8 +642,9 @@ export class StateManager {
 
   private async refreshApiUsagePct(force = false): Promise<boolean> {
     const now = Date.now();
-    const interval = Math.max(StateManager.API_MIN_INTERVAL_MS, this.apiBackoffMs);
-    if (!force && now - this.lastApiCallMs < interval) return false;
+    const elapsedSinceLastApiCall = now - this.lastApiCallMs;
+    if (this.apiBackoffMs > 0 && elapsedSinceLastApiCall < this.apiBackoffMs) return false;
+    if (!force && elapsedSinceLastApiCall < StateManager.API_MIN_INTERVAL_MS) return false;
     this.lastApiCallMs = now;
     const requestSeq = ++this.apiRequestSeq;
     const result = await fetchApiUsagePct();
@@ -650,7 +656,11 @@ export class StateManager {
       this.apiUsagePct = mergedUsage;
       this.apiUsagePctStoredAt = Date.now();
       this.apiBackoffMs = 0;
-      (this.store as unknown as Store<Record<string, unknown>>).set('_cachedApiPct', { ...mergedUsage, storedAt: this.apiUsagePctStoredAt });
+      (this.store as unknown as Store<Record<string, unknown>>).set('_cachedApiPct', {
+        ...mergedUsage,
+        storedAt: this.apiUsagePctStoredAt,
+        schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
+      });
       return true;
     }
 
@@ -662,10 +672,12 @@ export class StateManager {
 
     if (result.status.code === 'rate-limited') {
       this.apiBackoffMs = typeof result.status.retryAfterMs === 'number'
-        ? Math.max(0, result.status.retryAfterMs)
-        : Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, 600_000);
+        ? Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, result.status.retryAfterMs))
+        : Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, CLAUDE_API_MAX_BACKOFF_MS);
       this.apiError = `${result.status.detail} Retry in ${Math.max(1, Math.ceil(this.apiBackoffMs / 60000))}m.`;
       this.apiStatusLabel = 'rate limited';
+    } else {
+      this.apiBackoffMs = 0;
     }
     return true;
   }
@@ -1058,6 +1070,7 @@ export class StateManager {
       : ((sessionResult = this.refreshCachedSessionInfos()).sessions);
     sessionPerf = this.finishPerfSample(sessionSample);
     const settings = this.getSettings();
+    await this.refreshRecentCodexRateLimits(settings);
     const derived = this.computeDerivedUsage(settings);
     const codexAccount = readCodexAccountState();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
@@ -1159,7 +1172,9 @@ export class StateManager {
           allTimeSessions: sessions.length,
         };
         this.onUpdate(this.state);
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+          deferCodexLocalLog: this.state.historyWarmupPending,
+        });
         this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
           uiVisible: false,
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
@@ -1217,7 +1232,9 @@ export class StateManager {
       this.onUpdate(this.state);
       if (!initialRefreshDone && !force) {
         this.scheduleGitWarmup();
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+          deferCodexLocalLog: startupPartial,
+        });
         await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
         if (!this.uiVisible) this.startWatcher('heavyRefresh:startupsync');
         this.logPerfTrace('heavyRefresh', totalPerf, {
@@ -1262,7 +1279,9 @@ export class StateManager {
       };
       this.onUpdate(this.state);
 
-      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+        deferCodexLocalLog: startupPartial,
+      });
       await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
       if (!this.uiVisible) this.startWatcher('heavyRefresh:hidden');
       this.logPerfTrace('heavyRefresh', totalPerf, {
@@ -1468,13 +1487,21 @@ export class StateManager {
   }
 
   private getCodexResetMs(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
+    const toWindow = (window: CodexRateLimitWindow | undefined, maxWindowMs: number): UsageLimitWindow => {
+      if (!window) return emptyUsageLimitWindow();
+      const resetMs = window.resetsAt * 1000 - now;
+      if (!Number.isFinite(window.pct) || !Number.isFinite(resetMs) || resetMs <= 0 || resetMs > maxWindowMs) {
+        return emptyUsageLimitWindow();
+      }
+      return {
+        pct: Math.max(0, Math.min(100, window.pct)),
+        resetMs,
+        source: 'localLog',
+      };
+    };
     return {
-      h5: this.codexRateLimits?.h5
-        ? { pct: this.codexRateLimits.h5.pct, resetMs: Math.max(0, this.codexRateLimits.h5.resetsAt * 1000 - now), source: 'localLog' }
-        : emptyUsageLimitWindow(),
-      week: this.codexRateLimits?.week
-        ? { pct: this.codexRateLimits.week.pct, resetMs: Math.max(0, this.codexRateLimits.week.resetsAt * 1000 - now), source: 'localLog' }
-        : emptyUsageLimitWindow(),
+      h5: toWindow(this.codexRateLimits?.h5, CODEX_H5_WINDOW_MS),
+      week: toWindow(this.codexRateLimits?.week, CODEX_WEEK_WINDOW_MS),
     };
   }
 
@@ -1489,14 +1516,26 @@ export class StateManager {
     return merged;
   }
 
-  private collectCodexRateLimits(settings: AppSettings = this.getSettings()): SessionSnapshot['codexRateLimits'] | null {
+  private collectCodexRateLimits(): SessionSnapshot['codexRateLimits'] | null {
     let merged: SessionSnapshot['codexRateLimits'] | null = null;
-    const visibleSummaries = this.getVisibleSummaries(settings);
-    for (const summary of visibleSummaries) {
+    for (const summary of this.summaries.values()) {
       if (summary.provider !== 'codex') continue;
       merged = this.mergeCodexRateLimits(merged, summary.sessionSnapshot.codexRateLimits);
     }
     return merged;
+  }
+
+  private async refreshRecentCodexRateLimits(settings: AppSettings = this.getSettings()): Promise<void> {
+    const provider = settings.provider ?? 'both';
+    if (provider === 'claude' || !fs.existsSync(CODEX_SESSIONS_DIR)) return;
+    let merged = this.codexRateLimits;
+    const recentFiles = this.listRecentCodexJsonlFiles(StateManager.CODEX_RATE_LIMIT_FAST_FILE_LIMIT).files;
+    for (const filePath of recentFiles) {
+      try {
+        merged = this.mergeCodexRateLimits(merged, await scanCodexRateLimitsOnly(filePath));
+      } catch { /* skip */ }
+    }
+    this.codexRateLimits = merged;
   }
 
   private async loadProviderSummaries(force = false, budgetMs: number | null = null): Promise<{
@@ -1637,7 +1676,14 @@ export class StateManager {
           partial = true;
           break;
         }
-        if (this.isExcludedSummary(filePath, 'codex', isExcluded)) continue;
+        const excludedForUsage = this.isExcludedSummary(filePath, 'codex', isExcluded);
+        if (excludedForUsage) {
+          try {
+            scannedFiles += 1;
+            codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, await scanCodexRateLimitsOnly(filePath));
+          } catch { /* skip */ }
+          continue;
+        }
         const cwd = hasExcludedProjects ? readJsonlCwd(filePath, 'codex') : null;
         if (cwd && isExcluded(projectKeysForCwd(cwd))) continue;
         const summary = await scanSummary(filePath, 'codex');

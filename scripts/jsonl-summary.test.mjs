@@ -7,7 +7,7 @@ import path from 'node:path';
 import jsonlParser from '../dist/main/jsonlParser.js';
 import jsonlCache from '../dist/main/jsonlCache.js';
 
-const { scanJsonlSummaryCached } = jsonlParser;
+const { scanCodexRateLimitsOnly, scanJsonlSummaryCached } = jsonlParser;
 const { JsonlCache } = jsonlCache;
 
 function tempDir() {
@@ -103,6 +103,53 @@ test('Claude duplicate request updates output delta without double counting', as
 
   assert.equal(summary.recentEntries.length, 1);
   assert.equal(summary.recentEntries[0].outputTokens, 25);
+});
+
+test('Codex rate-limit-only scan reads account windows without usage data', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'codex-limits.jsonl');
+  const nowSec = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(filePath, `${JSON.stringify({
+    type: 'event_msg',
+    timestamp: recentIso(),
+    payload: {
+      type: 'token_count',
+      rate_limits: {
+        primary: { used_percent: 11, window_minutes: 300, resets_at: nowSec + 3 * 60 * 60 },
+        secondary: { used_percent: 3, window_minutes: 10080, resets_at: nowSec + 6 * 24 * 60 * 60 },
+      },
+    },
+  })}\n`, 'utf8');
+
+  const limits = await scanCodexRateLimitsOnly(filePath);
+
+  assert.equal(limits.h5.pct, 11);
+  assert.equal(limits.week.pct, 3);
+});
+
+test('Codex rate-limit-only scan keeps millisecond event ordering', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'codex-limits-order.jsonl');
+  const nowSec = Math.floor(Date.now() / 1000);
+  const base = Date.now();
+  const older = new Date(base).toISOString();
+  const newer = new Date(base + 350).toISOString();
+  const line = (timestamp, pct) => JSON.stringify({
+    type: 'event_msg',
+    timestamp,
+    payload: {
+      type: 'token_count',
+      rate_limits: {
+        primary: { used_percent: pct, window_minutes: 300, resets_at: nowSec + 3 * 60 * 60 },
+        secondary: { used_percent: 2, window_minutes: 10080, resets_at: nowSec + 6 * 24 * 60 * 60 },
+      },
+    },
+  });
+  fs.writeFileSync(filePath, `${line(newer, 14)}\n${line(older, 5)}\n`, 'utf8');
+
+  const limits = await scanCodexRateLimitsOnly(filePath);
+
+  assert.equal(limits.h5.pct, 14);
 });
 
 test('malformed trailing JSONL text is recovered on append', async () => {

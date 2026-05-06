@@ -13,6 +13,10 @@ interface AlertState {
   firedThresholds: Set<number>;
 }
 
+interface AlertOptions {
+  deferCodexLocalLog?: boolean;
+}
+
 const alertStates: Record<string, AlertState> = {};
 const COOLDOWN_MS = 60 * 60 * 1000;
 
@@ -68,6 +72,7 @@ export function checkAlerts(
   thresholds: number[],
   enabled: boolean,
   providerMode: AppSettings['provider'],
+  options: AlertOptions = {},
 ): void {
   if (!enabled) return;
 
@@ -82,6 +87,7 @@ export function checkAlerts(
   const now = Date.now();
 
   for (const { key, pct, resetMs, label, source } of checks.filter(check => shouldCheckProvider(check.key, providerMode))) {
+    if (options.deferCodexLocalLog && key.startsWith('codex-') && source === 'localLog') continue;
     if (pct <= 0) continue;
     const state = getState(key);
 

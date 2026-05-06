@@ -2,7 +2,13 @@ import * as fs from 'fs';
 import * as https from 'https';
 import * as path from 'path';
 import * as os from 'os';
-import { execFileSync } from 'child_process';
+
+export const API_USAGE_CACHE_SCHEMA_VERSION = 2;
+export const CLAUDE_API_MAX_BACKOFF_MS = 600_000;
+
+const CLAUDE_USER_AGENT = 'claude-code/1.0';
+const MAX_SERVER_MESSAGE_LENGTH = 240;
+const MAX_CLAUDE_API_RESPONSE_BYTES = 256 * 1024;
 
 export interface AutoLimits {
   h5: number;
@@ -34,7 +40,8 @@ export interface ApiUsagePct {
 }
 
 export interface StoredApiUsagePct extends ApiUsagePct {
-  storedAt?: number;
+  storedAt: number;
+  schemaVersion: number;
 }
 
 export type ClaudeApiStatusCode =
@@ -97,8 +104,6 @@ class HttpResponseError extends Error {
   }
 }
 
-let cachedClaudeUserAgent: string | null = null;
-
 function credentialsPath(): string {
   const configDir = process.env.CLAUDE_CONFIG_DIR;
   return path.join(configDir && configDir.trim() ? configDir : path.join(os.homedir(), '.claude'), '.credentials.json');
@@ -146,26 +151,15 @@ function logStatus(status: ClaudeApiStatus): void {
   });
 }
 
-function getClaudeUserAgent(): string {
-  if (cachedClaudeUserAgent !== null) return cachedClaudeUserAgent;
-  try {
-    const output = execFileSync('claude', ['--version'], {
-      encoding: 'utf8',
-      timeout: 1000,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    const version = output.match(/\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1];
-    cachedClaudeUserAgent = version ? `claude-code/${version}` : 'claude-code/1.0';
-  } catch {
-    cachedClaudeUserAgent = 'claude-code/1.0';
-  }
-  return cachedClaudeUserAgent;
-}
-
 function httpsGet(url: string, headers: Record<string, string>): Promise<string> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     const req = https.request(
       {
         hostname: u.hostname,
@@ -175,8 +169,20 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
       },
       (res) => {
         let body = '';
-        res.on('data', (chunk) => { body += chunk; });
+        let bodyBytes = 0;
+        res.on('data', (chunk: Buffer | string) => {
+          const chunkBytes = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+          bodyBytes += chunkBytes;
+          if (bodyBytes > MAX_CLAUDE_API_RESPONSE_BYTES) {
+            fail(new Error('response-too-large'));
+            req.destroy();
+            return;
+          }
+          body += chunk;
+        });
         res.on('end', () => {
+          if (settled) return;
+          settled = true;
           const statusCode = res.statusCode ?? 0;
           if (statusCode >= 200 && statusCode < 300) {
             resolve(body);
@@ -186,7 +192,7 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
         });
       },
     );
-    req.on('error', reject);
+    req.on('error', fail);
     req.setTimeout(8000, () => {
       req.destroy(new Error('timeout'));
     });
@@ -262,13 +268,16 @@ function normalizeResetValue(value: unknown): ApiResetMs {
 export function normalizeStoredApiUsagePct(value: unknown): StoredApiUsagePct | null {
   const record = asRecord(value);
   if (!record) return null;
+  if (record.schemaVersion !== API_USAGE_CACHE_SCHEMA_VERSION) return null;
   if (typeof record.plan !== 'string') return null;
 
   const storedAt = typeof record.storedAt === 'number' && Number.isFinite(record.storedAt)
     ? record.storedAt
-    : undefined;
+    : null;
+  if (storedAt == null || storedAt <= 0 || storedAt > Date.now()) return null;
 
   return {
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
     h5Pct: normalizePct(record.h5Pct),
     weekPct: normalizePct(record.weekPct),
     soPct: normalizePct(record.soPct),
@@ -293,8 +302,16 @@ function buildStatus(
 
 function cleanServerMessage(message: string): string {
   return message
+    .replace(/\s+/g, ' ')
     .replace(/\s*Please try again later\.?\s*$/i, '')
     .trim();
+}
+
+function boundedServerMessage(message: string): string | undefined {
+  const cleaned = cleanServerMessage(message);
+  if (!cleaned) return undefined;
+  if (cleaned.length <= MAX_SERVER_MESSAGE_LENGTH) return cleaned;
+  return `${cleaned.slice(0, MAX_SERVER_MESSAGE_LENGTH - 3).trimEnd()}...`;
 }
 
 function serverMessageFromBody(body: string): string | undefined {
@@ -303,16 +320,16 @@ function serverMessageFromBody(body: string): string | undefined {
   try {
     const parsed = JSON.parse(trimmed) as unknown;
     const record = asRecord(parsed);
-    if (!record) return cleanServerMessage(trimmed) || undefined;
+    if (!record) return undefined;
     const error = record.error;
-    if (typeof error === 'string') return cleanServerMessage(error) || undefined;
+    if (typeof error === 'string') return boundedServerMessage(error);
     const errorRecord = asRecord(error);
     const message = errorRecord && typeof errorRecord.message === 'string'
       ? errorRecord.message
       : (typeof record.message === 'string' ? record.message : '');
-    return cleanServerMessage(message) || undefined;
+    return boundedServerMessage(message);
   } catch {
-    return cleanServerMessage(trimmed) || undefined;
+    return undefined;
   }
 }
 
@@ -324,10 +341,10 @@ function retryAfterMsFromHeader(header: string | string[] | undefined, now = Dat
   const raw = Array.isArray(header) ? header[0] : header;
   if (typeof raw !== 'string' || raw.trim() === '') return undefined;
   const seconds = Number(raw);
-  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
+  if (Number.isFinite(seconds)) return Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, Math.round(seconds * 1000)));
   const timestamp = new Date(raw).getTime();
   if (!Number.isFinite(timestamp)) return undefined;
-  return Math.max(0, timestamp - now);
+  return Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, timestamp - now));
 }
 
 function classifyHttpError(error: HttpResponseError): ClaudeApiStatus {
@@ -376,6 +393,9 @@ function classifyRuntimeError(error: unknown): ClaudeApiStatus {
   if (error instanceof Error) {
     if (error.message === 'timeout') {
       return buildStatus('timeout', false, 'api timeout', 'Claude API request timed out.');
+    }
+    if (error.message === 'response-too-large') {
+      return buildStatus('http-error', false, 'api disconnected', 'Claude API response was too large.');
     }
 
     const code = (error as Error & { code?: string }).code;
@@ -455,7 +475,7 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'oauth-2025-04-20',
-      'User-Agent': getClaudeUserAgent(),
+      'User-Agent': CLAUDE_USER_AGENT,
     });
 
     const parsed = JSON.parse(body) as unknown;
@@ -511,7 +531,7 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
     const unknownResetFields = [
       resetFields.fiveHour === 'null' ? 'five_hour' : null,
       resetFields.sevenDay === 'null' ? 'seven_day' : null,
-      sevenDaySonnet && !validSonnetWindow ? 'seven_day_sonnet' : (resetFields.sevenDaySonnet === 'null' ? 'seven_day_sonnet' : null),
+      resetFields.sevenDaySonnet !== 'present' || (sevenDaySonnet && !validSonnetWindow) ? 'seven_day_sonnet' : null,
     ].filter((field): field is string => !!field);
 
     const status = unknownResetFields.length > 0

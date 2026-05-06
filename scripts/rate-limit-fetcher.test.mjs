@@ -7,7 +7,12 @@ import { EventEmitter } from 'node:events';
 
 import rateLimitFetcher from '../dist/main/rateLimitFetcher.js';
 
-const { fetchApiUsagePct, normalizeStoredApiUsagePct } = rateLimitFetcher;
+const {
+  API_USAGE_CACHE_SCHEMA_VERSION,
+  CLAUDE_API_MAX_BACKOFF_MS,
+  fetchApiUsagePct,
+  normalizeStoredApiUsagePct,
+} = rateLimitFetcher;
 
 const originalReadFileSync = fs.readFileSync;
 const originalRequest = https.request;
@@ -101,6 +106,23 @@ test('Claude API marks null resets as reset-unavailable without zeroing the wind
   assert.equal(result.usage.plan, 'Max 5x');
 });
 
+test('Claude API treats an omitted Sonnet window as reset-unavailable', async () => {
+  withMockCredentials();
+  withHttpResponse(200, {
+    five_hour: { utilization: 5, resets_at: '2026-04-24T05:00:00.000Z' },
+    seven_day: { utilization: 17, resets_at: '2026-04-28T00:00:00.000Z' },
+  });
+
+  const result = await fetchApiUsagePct();
+
+  assert.ok(result.usage);
+  assert.equal(result.status.code, 'reset-unavailable');
+  assert.equal(result.status.resetFields?.sevenDaySonnet, 'missing');
+  assert.match(result.status.detail, /seven_day_sonnet/);
+  assert.equal(result.usage.soPct, 0);
+  assert.equal(result.usage.soResetMs, null);
+});
+
 test('Claude API classifies 429 responses as rate limited', async () => {
   withMockCredentials();
   withHttpResponse(429, { error: { message: 'too many requests. Please try again later.' } }, { 'retry-after': '180' });
@@ -116,6 +138,42 @@ test('Claude API classifies 429 responses as rate limited', async () => {
   assert.doesNotMatch(result.status.detail, /Please try again later/i);
 });
 
+test('Claude API bounds long JSON server messages', async () => {
+  withMockCredentials();
+  const longMessage = `too many requests ${'x'.repeat(500)} Please try again later.`;
+  withHttpResponse(429, { error: { message: longMessage } }, { 'retry-after': '1' });
+
+  const result = await fetchApiUsagePct();
+
+  assert.equal(result.status.code, 'rate-limited');
+  assert.equal(result.status.serverMessage?.length, 240);
+  assert.match(result.status.detail, /too many requests/);
+  assert.doesNotMatch(result.status.detail, /Please try again later/i);
+  assert.ok(result.status.detail.length < 300);
+});
+
+test('Claude API rejects oversized response bodies before parsing', async () => {
+  withMockCredentials();
+  withHttpResponse(200, `${'x'.repeat(300 * 1024)}`);
+
+  const result = await fetchApiUsagePct();
+
+  assert.equal(result.usage, null);
+  assert.equal(result.status.code, 'http-error');
+  assert.equal(result.status.detail, 'Claude API response was too large.');
+});
+
+test('Claude API ignores non-JSON error bodies in user-visible messages', async () => {
+  withMockCredentials();
+  withHttpResponse(500, `<html><body>${'x'.repeat(500)}</body></html>`);
+
+  const result = await fetchApiUsagePct();
+
+  assert.equal(result.status.code, 'http-error');
+  assert.equal(result.status.serverMessage, undefined);
+  assert.equal(result.status.detail, 'Claude API returned HTTP 500.');
+});
+
 test('Claude API classifies 401 as an expired stored CLI token', async () => {
   withMockCredentials();
   withHttpResponse(401, { error: { message: 'invalid bearer token. Please try again later.' } });
@@ -129,6 +187,16 @@ test('Claude API classifies 401 as an expired stored CLI token', async () => {
   assert.match(result.status.detail, /Claude CLI token was rejected or expired/);
   assert.match(result.status.detail, /invalid bearer token\./);
   assert.doesNotMatch(result.status.detail, /Please try again later/i);
+});
+
+test('Claude API caps huge Retry-After headers', async () => {
+  withMockCredentials();
+  withHttpResponse(429, { error: { message: 'too many requests. Please try again later.' } }, { 'retry-after': '999999' });
+
+  const result = await fetchApiUsagePct();
+
+  assert.equal(result.status.code, 'rate-limited');
+  assert.equal(result.status.retryAfterMs, CLAUDE_API_MAX_BACKOFF_MS);
 });
 
 test('Claude API uses percentage units returned by the usage endpoint', async () => {
@@ -162,6 +230,14 @@ test('Claude API credentials honor CLAUDE_CONFIG_DIR', async () => {
 
   assert.ok(result.usage);
   assert.equal(result.usage.plan, 'Max 5x');
+});
+
+test('Claude API uses a static User-Agent without executing a local CLI', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'rateLimitFetcher.ts'), 'utf8');
+
+  assert.doesNotMatch(source, /execFileSync/);
+  assert.doesNotMatch(source, /child_process/);
+  assert.match(source, /CLAUDE_USER_AGENT/);
 });
 
 test('Claude API reports schema changes when core windows are missing', async () => {
@@ -241,6 +317,7 @@ test('Claude API reports missing credentials without throwing', async () => {
 
 test('persisted Claude API cache is normalized before reuse', () => {
   const normalized = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
     h5Pct: 0.63,
     weekPct: 41,
     soPct: 7,
@@ -255,7 +332,7 @@ test('persisted Claude API cache is normalized before reuse', () => {
       utilization: 1,
       currency: 'USD',
     },
-    storedAt: 'bad',
+    storedAt: 1_000,
   });
 
   assert.ok(normalized);
@@ -263,11 +340,68 @@ test('persisted Claude API cache is normalized before reuse', () => {
   assert.equal(normalized.h5ResetMs, null);
   assert.equal(normalized.weekResetMs, 1200);
   assert.equal(normalized.extraUsage?.utilization, 1);
-  assert.equal(normalized.storedAt, undefined);
+  assert.equal(normalized.storedAt, 1_000);
+  assert.equal(normalized.schemaVersion, API_USAGE_CACHE_SCHEMA_VERSION);
+});
+
+test('persisted Claude API cache rejects legacy, undated, or future samples', () => {
+  const legacy = normalizeStoredApiUsagePct({
+    h5Pct: 63,
+    weekPct: 41,
+    soPct: 7,
+    h5ResetMs: null,
+    weekResetMs: null,
+    soResetMs: null,
+    plan: 'Max 5x',
+    extraUsage: null,
+    storedAt: Date.now(),
+  });
+  const zeroDated = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
+    h5Pct: 63,
+    weekPct: 41,
+    soPct: 7,
+    h5ResetMs: null,
+    weekResetMs: null,
+    soResetMs: null,
+    plan: 'Max 5x',
+    extraUsage: null,
+    storedAt: 0,
+  });
+  const undated = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
+    h5Pct: 63,
+    weekPct: 41,
+    soPct: 7,
+    h5ResetMs: null,
+    weekResetMs: null,
+    soResetMs: null,
+    plan: 'Max 5x',
+    extraUsage: null,
+    storedAt: 'bad',
+  });
+  const futureDated = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
+    h5Pct: 63,
+    weekPct: 41,
+    soPct: 7,
+    h5ResetMs: null,
+    weekResetMs: null,
+    soResetMs: null,
+    plan: 'Max 5x',
+    extraUsage: null,
+    storedAt: Date.now() + 60_000,
+  });
+
+  assert.equal(legacy, null);
+  assert.equal(zeroDated, null);
+  assert.equal(undated, null);
+  assert.equal(futureDated, null);
 });
 
 test('persisted extra usage clamps negative values', () => {
   const normalized = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
     h5Pct: 10,
     weekPct: 20,
     soPct: 30,
@@ -281,6 +415,7 @@ test('persisted extra usage clamps negative values', () => {
       usedCredits: -50,
       utilization: -10,
     },
+    storedAt: 1_000,
   });
 
   assert.ok(normalized?.extraUsage);
