@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as https from 'https';
 import * as path from 'path';
 import * as os from 'os';
+import { execFileSync } from 'child_process';
 
 export interface AutoLimits {
   h5: number;
@@ -56,6 +57,8 @@ export interface ClaudeApiStatus {
   label: string;
   detail: string;
   httpStatus?: number;
+  retryAfterMs?: number;
+  serverMessage?: string;
   responseKeys?: string[];
   resetFields?: {
     fiveHour: ResetFieldState;
@@ -83,19 +86,28 @@ interface UsageWindowResponse {
 class HttpResponseError extends Error {
   statusCode: number;
   body: string;
+  headers: Record<string, string | string[] | undefined>;
 
-  constructor(statusCode: number, body: string) {
+  constructor(statusCode: number, body: string, headers: Record<string, string | string[] | undefined>) {
     super(`HTTP ${statusCode}`);
     this.name = 'HttpResponseError';
     this.statusCode = statusCode;
     this.body = body;
+    this.headers = headers;
   }
+}
+
+let cachedClaudeUserAgent: string | null = null;
+
+function credentialsPath(): string {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  return path.join(configDir && configDir.trim() ? configDir : path.join(os.homedir(), '.claude'), '.credentials.json');
 }
 
 function readCredentials(): Credentials | null {
   try {
     const raw = JSON.parse(fs.readFileSync(
-      path.join(os.homedir(), '.claude', '.credentials.json'),
+      credentialsPath(),
       'utf-8',
     )) as { claudeAiOauth?: { accessToken?: unknown; rateLimitTier?: unknown; subscriptionType?: unknown } };
     const oauth = raw.claudeAiOauth;
@@ -127,9 +139,28 @@ function logStatus(status: ClaudeApiStatus): void {
     label: status.label,
     detail: status.detail,
     httpStatus: status.httpStatus,
+    retryAfterMs: status.retryAfterMs,
+    serverMessage: status.serverMessage,
     responseKeys: status.responseKeys,
     resetFields: status.resetFields,
   });
+}
+
+function getClaudeUserAgent(): string {
+  if (cachedClaudeUserAgent !== null) return cachedClaudeUserAgent;
+  try {
+    const output = execFileSync('claude', ['--version'], {
+      encoding: 'utf8',
+      timeout: 1000,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const version = output.match(/\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1];
+    cachedClaudeUserAgent = version ? `claude-code/${version}` : 'claude-code/1.0';
+  } catch {
+    cachedClaudeUserAgent = 'claude-code/1.0';
+  }
+  return cachedClaudeUserAgent;
 }
 
 function httpsGet(url: string, headers: Record<string, string>): Promise<string> {
@@ -151,7 +182,7 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
             resolve(body);
             return;
           }
-          reject(new HttpResponseError(statusCode, body));
+          reject(new HttpResponseError(statusCode, body, res.headers));
         });
       },
     );
@@ -174,9 +205,9 @@ function asUsageWindow(value: unknown): UsageWindowResponse | null {
   return record;
 }
 
-function scalePct(value: unknown): number {
+function normalizePct(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  return value <= 1.0 ? Math.round(value * 100) : Math.round(value);
+  return Math.max(0, Math.min(100, value));
 }
 
 function resetMs(iso: unknown, now: number): ApiResetMs {
@@ -211,13 +242,13 @@ function extraUsageSnapshot(value: unknown): ApiExtraUsage | null {
   const usedCreditsRaw = typeof record.used_credits === 'number' && Number.isFinite(record.used_credits)
     ? record.used_credits
     : (typeof record.usedCredits === 'number' && Number.isFinite(record.usedCredits) ? record.usedCredits : 0);
-  const utilizationValue = scalePct(record.utilization);
+  const utilizationValue = normalizePct(record.utilization);
   const currency = typeof record.currency === 'string' ? record.currency : null;
   return {
     isEnabled: record.is_enabled === true || record.isEnabled === true,
     monthlyLimit: Math.max(0, monthlyLimitRaw),
     usedCredits: Math.max(0, usedCreditsRaw),
-    utilization: Math.max(0, Math.min(100, utilizationValue)),
+    utilization: utilizationValue,
     currency,
   };
 }
@@ -238,9 +269,9 @@ export function normalizeStoredApiUsagePct(value: unknown): StoredApiUsagePct | 
     : undefined;
 
   return {
-    h5Pct: scalePct(record.h5Pct),
-    weekPct: scalePct(record.weekPct),
-    soPct: scalePct(record.soPct),
+    h5Pct: normalizePct(record.h5Pct),
+    weekPct: normalizePct(record.weekPct),
+    soPct: normalizePct(record.soPct),
     h5ResetMs: normalizeResetValue(record.h5ResetMs),
     weekResetMs: normalizeResetValue(record.weekResetMs),
     soResetMs: normalizeResetValue(record.soResetMs),
@@ -260,16 +291,82 @@ function buildStatus(
   return { code, connected, label, detail, ...extras };
 }
 
+function cleanServerMessage(message: string): string {
+  return message
+    .replace(/\s*Please try again later\.?\s*$/i, '')
+    .trim();
+}
+
+function serverMessageFromBody(body: string): string | undefined {
+  const trimmed = body.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const record = asRecord(parsed);
+    if (!record) return cleanServerMessage(trimmed) || undefined;
+    const error = record.error;
+    if (typeof error === 'string') return cleanServerMessage(error) || undefined;
+    const errorRecord = asRecord(error);
+    const message = errorRecord && typeof errorRecord.message === 'string'
+      ? errorRecord.message
+      : (typeof record.message === 'string' ? record.message : '');
+    return cleanServerMessage(message) || undefined;
+  } catch {
+    return cleanServerMessage(trimmed) || undefined;
+  }
+}
+
+function withServerMessage(base: string, message: string | undefined): string {
+  return message ? `${base} ${message}` : base;
+}
+
+function retryAfterMsFromHeader(header: string | string[] | undefined, now = Date.now()): number | undefined {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
+  const timestamp = new Date(raw).getTime();
+  if (!Number.isFinite(timestamp)) return undefined;
+  return Math.max(0, timestamp - now);
+}
+
 function classifyHttpError(error: HttpResponseError): ClaudeApiStatus {
+  const serverMessage = serverMessageFromBody(error.body);
   switch (error.statusCode) {
     case 401:
-      return buildStatus('unauthorized', false, 'auth failed', 'Claude API rejected the stored access token.', { httpStatus: 401 });
+      return buildStatus(
+        'unauthorized',
+        false,
+        'auth failed',
+        withServerMessage('Claude CLI token was rejected or expired.', serverMessage),
+        { httpStatus: 401, serverMessage },
+      );
     case 403:
-      return buildStatus('forbidden', false, 'forbidden', 'Claude API denied this account or beta surface.', { httpStatus: 403 });
-    case 429:
-      return buildStatus('rate-limited', false, 'rate limited', 'Claude API returned HTTP 429.', { httpStatus: 429 });
+      return buildStatus(
+        'forbidden',
+        false,
+        'forbidden',
+        withServerMessage('Claude API denied this account or beta surface.', serverMessage),
+        { httpStatus: 403, serverMessage },
+      );
+    case 429: {
+      const retryAfterMs = retryAfterMsFromHeader(error.headers['retry-after']);
+      return buildStatus(
+        'rate-limited',
+        false,
+        'rate limited',
+        withServerMessage('Claude API returned HTTP 429.', serverMessage),
+        { httpStatus: 429, retryAfterMs, serverMessage },
+      );
+    }
     default:
-      return buildStatus('http-error', false, 'api disconnected', `Claude API returned HTTP ${error.statusCode}.`, { httpStatus: error.statusCode });
+      return buildStatus(
+        'http-error',
+        false,
+        'api disconnected',
+        withServerMessage(`Claude API returned HTTP ${error.statusCode}.`, serverMessage),
+        { httpStatus: error.statusCode, serverMessage },
+      );
   }
 }
 
@@ -358,7 +455,7 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
       'anthropic-beta': 'oauth-2025-04-20',
-      'User-Agent': 'claude-code/1.0',
+      'User-Agent': getClaudeUserAgent(),
     });
 
     const parsed = JSON.parse(body) as unknown;
@@ -401,9 +498,9 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
       : null;
     const now = Date.now();
     const usage: ApiUsagePct = {
-      h5Pct: scalePct(fiveHour?.utilization),
-      weekPct: scalePct(sevenDay?.utilization),
-      soPct: scalePct(validSonnetWindow?.utilization),
+      h5Pct: normalizePct(fiveHour?.utilization),
+      weekPct: normalizePct(sevenDay?.utilization),
+      soPct: normalizePct(validSonnetWindow?.utilization),
       h5ResetMs: resetMs(fiveHour?.resets_at, now),
       weekResetMs: resetMs(sevenDay?.resets_at, now),
       soResetMs: resetMs(validSonnetWindow?.resets_at, now),

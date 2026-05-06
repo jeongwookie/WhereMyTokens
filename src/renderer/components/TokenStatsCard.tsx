@@ -89,6 +89,7 @@ function TokenStatsCard({
   const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
+  const cachedDisconnected = apiConnected === false && limitSourceLabel === 'cached';
   const sourceChip = limitSourceLabel ? (
     <span
       title={limitSourceLabel}
@@ -126,7 +127,7 @@ function TokenStatsCard({
         </div>
 
         {/* 대형 퍼센트 */}
-        <div style={{ fontSize: 30, fontWeight: 800, color: noData ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 6, fontFamily: C.fontMono }}>
+        <div style={{ fontSize: 30, fontWeight: 800, color: noData || cachedDisconnected ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 6, fontFamily: C.fontMono }}>
           {noData ? '—' : `${Math.round(barPct)}%`}
         </div>
 
@@ -213,7 +214,7 @@ function TokenStatsCard({
                 }} />
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: noData ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
               {noData ? '—' : `${Math.round(barPct)}%`}
             </span>
             {!noData && resetStr && (
