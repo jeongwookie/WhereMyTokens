@@ -202,6 +202,10 @@ function currentSessionState(provider: SessionInfo['provider'], pid: number | nu
   return approximateSessionState(lastModified);
 }
 
+function providerMatchesMode(mode: AppSettings['provider'], provider: SessionInfo['provider']): boolean {
+  return mode === 'both' || mode === provider;
+}
+
 function gitStatsCacheKey(cwd: string): string {
   return normalizeGitCwdKey(cwd);
 }
@@ -2134,9 +2138,25 @@ export class StateManager {
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
       const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-      const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
+      const sessions = this.state.sessions.filter(session =>
+        providerMatchesMode(settings.provider, session.provider)
+        && !isExcluded(this.sessionProjectKeys(session)),
+      );
+      const derived = this.computeDerivedUsage(settings);
       const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-      this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: true, allTimeSessions: sessions.length, lastUpdated: Date.now() };
+      this.state = {
+        ...this.state,
+        sessions,
+        settings,
+        usage: derived.usage,
+        limits: derived.limits,
+        bridgeActive: derived.bridgeActive,
+        extraUsage: derived.extraUsage,
+        codeOutputStats,
+        codeOutputLoading: true,
+        allTimeSessions: sessions.length,
+        lastUpdated: Date.now(),
+      };
       this.onUpdate(this.state);
       this.startWatcher();
       this.clearHistoryWarmup();

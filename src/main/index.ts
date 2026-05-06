@@ -204,6 +204,14 @@ function persistWidgetPosition(win: BrowserWindow) {
   store.set('compactWidgetBounds', { x, y });
 }
 
+function flushWidgetPosition(win = widgetWindow) {
+  if (widgetMoveEndTimer) {
+    clearTimeout(widgetMoveEndTimer);
+    widgetMoveEndTimer = null;
+  }
+  if (win && !win.isDestroyed()) persistWidgetPosition(win);
+}
+
 function schedulePersistWidgetPosition(win: BrowserWindow) {
   if (win.isDestroyed()) return;
   if (widgetMoveEndTimer) clearTimeout(widgetMoveEndTimer);
@@ -293,11 +301,8 @@ function createWidgetWindow(): BrowserWindow {
     readyWidgetWindows.add(win);
     revealCompactWidget(win);
   });
+  win.on('close', () => flushWidgetPosition(win));
   win.on('closed', () => {
-    if (widgetMoveEndTimer) {
-      clearTimeout(widgetMoveEndTimer);
-      widgetMoveEndTimer = null;
-    }
     if (widgetWindow === win) widgetWindow = null;
     syncUiVisibility();
   });
@@ -329,8 +334,10 @@ function sendPopupNavigation(view: AppView) {
 
 function syncUiVisibility() {
   const popupVisible = !!popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible();
-  // 컴팩트 위젯은 상시 표시될 수 있어 대시보드가 보일 때만 foreground 스캔 프로필을 쓴다.
-  stateManager?.setUiVisible(popupVisible);
+  const widgetVisible = !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
+  // 화면에 보이는 창이 하나라도 있으면 새 세션 발견을 놓치지 않도록 foreground 스캔을 유지한다.
+  const foregroundVisible = popupVisible || widgetVisible;
+  stateManager?.setUiVisible(foregroundVisible);
 }
 
 function resolvePopupBounds(trayBounds: Electron.Rectangle): Electron.Rectangle {
@@ -646,6 +653,7 @@ app.whenReady().then(() => {
     const size = compactWidgetSize(getSettings());
     const next = constrainWidgetPosition({ x: position.x, y: position.y }, size);
     widgetWindow.setBounds({ ...next, width: size.width, height: size.height });
+    schedulePersistWidgetPosition(widgetWindow);
   });
 
   // 시스템 테마 감지: auto 설정 시 OS 다크모드에 따라 resolve

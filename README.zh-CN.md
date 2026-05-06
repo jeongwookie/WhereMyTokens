@@ -122,7 +122,7 @@
 ### 个性化
 - **Auto/Light/Dark 主题** — 默认跟随系统偏好
 - **费用显示** — USD 或 KRW，可配置汇率
-- **Floating usage widget** — 小型 Quota Pace 悬浮窗口，遵循置顶设置；可从托盘菜单、Settings 或小部件按钮显示/隐藏
+- **Floating usage widget** — 始终置顶显示的小型 Quota Pace 悬浮窗口；可从托盘菜单、Settings 或小部件按钮显示/隐藏
 - **托盘标签** — 在任务栏直接显示使用率 %、令牌数或费用
 - **项目管理** — 隐藏或完全排除项目
 - **随 Windows 启动** — 可选自动启动

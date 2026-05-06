@@ -60,19 +60,62 @@ function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string
   return [...modifiers, key].join('+');
 }
 
+type EditableSettingKey = Exclude<keyof AppSettings, 'compactWidgetBounds'>;
+
+const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
+  'usageLimits',
+  'provider',
+  'alertThresholds',
+  'currency',
+  'usdToKrw',
+  'plan',
+  'globalHotkey',
+  'openAtLogin',
+  'alwaysOnTop',
+  'enableAlerts',
+  'trayDisplay',
+  'mainSectionOrder',
+  'hiddenProjects',
+  'excludedProjects',
+  'compactWidgetEnabled',
+  'theme',
+];
+
+function normalizeSettingsDraft(settings: AppSettings): AppSettings {
+  return { ...settings, mainSectionOrder: normalizeMainSectionOrder(settings.mainSectionOrder) };
+}
+
+function settingValue(settings: AppSettings, key: EditableSettingKey): unknown {
+  if (key === 'mainSectionOrder') return normalizeMainSectionOrder(settings.mainSectionOrder);
+  return settings[key];
+}
+
+function sameSettingValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function buildSettingsPatch(current: AppSettings, base: AppSettings, latest: AppSettings): Partial<AppSettings> {
+  const patch: Partial<AppSettings> = {};
+  for (const key of EDITABLE_SETTING_KEYS) {
+    const currentValue = settingValue(current, key);
+    if (sameSettingValue(currentValue, settingValue(base, key))) continue;
+    if (sameSettingValue(currentValue, settingValue(latest, key))) continue;
+    (patch as Record<EditableSettingKey, unknown>)[key] = currentValue;
+  }
+  return patch;
+}
+
 export default function SettingsView({ settings, onSave, onBack }: Props) {
   const C = useTheme();
-  const [s, setS] = useState({ ...settings, mainSectionOrder: normalizeMainSectionOrder(settings.mainSectionOrder) });
+  const [baseSettings] = useState(() => normalizeSettingsDraft(settings));
+  const [s, setS] = useState(() => normalizeSettingsDraft(settings));
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [integrationConfigured, setIntegrationConfigured] = useState<boolean | null>(null);
   const [integrationMsg, setIntegrationMsg] = useState('');
+  const latestSettings = useMemo(() => normalizeSettingsDraft(settings), [settings]);
+  const settingsToSave = useMemo(() => buildSettingsPatch(s, baseSettings, latestSettings), [s, baseSettings, latestSettings]);
 
-  const isDirty = useMemo(() => {
-    const { compactWidgetBounds: _a, ...current } = s;
-    const { compactWidgetBounds: _b, ...original } = settings;
-    return JSON.stringify({ ...current, mainSectionOrder: normalizeMainSectionOrder(current.mainSectionOrder) })
-      !== JSON.stringify({ ...original, mainSectionOrder: normalizeMainSectionOrder(original.mainSectionOrder) });
-  }, [s, settings]);
+  const isDirty = useMemo(() => Object.keys(settingsToSave).length > 0, [settingsToSave]);
 
   const row: React.CSSProperties = useMemo(() => ({ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.border}` }), [C]);
   const labelStyle: React.CSSProperties = useMemo(() => ({ fontSize: 12, color: C.textDim }), [C]);
@@ -186,7 +229,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <div>
             <div style={labelStyle}>Dashboard always on top</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Widget always stays on top
+              Applies to the dashboard only
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.alwaysOnTop} onChange={e => setS({ ...s, alwaysOnTop: e.target.checked })} />
@@ -195,7 +238,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <div>
             <div style={labelStyle}>Floating usage widget</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Shows quota pace at a glance
+              Always stays on top; shows quota pace at a glance
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.compactWidgetEnabled} onChange={e => setS({ ...s, compactWidgetEnabled: e.target.checked })} />
@@ -355,7 +398,6 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
         disabled={!isDirty}
         onClick={() => {
           if (!isDirty) return;
-          const { compactWidgetBounds: _compactWidgetBounds, ...settingsToSave } = s;
           onSave(settingsToSave);
           onBack();
         }}

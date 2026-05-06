@@ -122,7 +122,7 @@
 ### 커스터마이징
 - **Auto/Light/Dark 테마** — 기본값은 시스템 설정 따름
 - **비용 표시** — USD 또는 KRW, 환율 설정 가능
-- **Floating usage widget** — 항상 위 옵션을 따르는 작은 Quota Pace 창; 트레이 메뉴, Settings, 위젯 버튼에서 표시/숨김 가능
+- **Floating usage widget** — 항상 위에 표시되는 작은 Quota Pace 창; 트레이 메뉴, Settings, 위젯 버튼에서 표시/숨김 가능
 - **트레이 라벨** — 사용량 %, 토큰 수, 비용 직접 표시
 - **프로젝트 관리** — 숨기기 또는 추적에서 완전 제외
 - **Windows 시작 시 자동 실행** — 선택적 자동 실행
