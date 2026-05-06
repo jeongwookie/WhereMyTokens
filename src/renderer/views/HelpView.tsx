@@ -239,7 +239,7 @@ function ContentEN() {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
-          <InfoRow label="Widget">Settings → Floating usage widget opens the compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window.</InfoRow>
+          <InfoRow label="Widget">Settings → Floating usage widget opens the always-on-top compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window.</InfoRow>
         </div>
       </Section>
     </>
@@ -353,7 +353,7 @@ function ContentKO() {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
-          <InfoRow label="Widget">Settings → Floating usage widget를 켜면 작은 Quota Pace 창이 열립니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다.</InfoRow>
+          <InfoRow label="Widget">Settings → Floating usage widget를 켜면 항상 위에 표시되는 작은 Quota Pace 창이 열립니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다.</InfoRow>
         </div>
       </Section>
     </>
@@ -467,7 +467,7 @@ function ContentJA() {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both。</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup。</InfoRow>
-          <InfoRow label="Widget">Settings → Floating usage widget をオンにすると、コンパクトな Quota Pace ウィンドウが開きます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。</InfoRow>
+          <InfoRow label="Widget">Settings → Floating usage widget をオンにすると、常に最前面のコンパクトな Quota Pace ウィンドウが開きます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。</InfoRow>
         </div>
       </Section>
     </>

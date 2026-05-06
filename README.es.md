@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe"><strong>Descargar v1.11.6</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.12.0</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -55,6 +55,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 6 may | Añade el widget flotante Quota Pace, personalización del diseño principal, barras de uso con tiempo transcurrido, nuevas capturas y sincronización más robusta del widget y Settings |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 27 abr | Añade selector de idioma del instalador para English, 한국어, 日本語, 简体中文 y Español, manteniendo el EULA en inglés |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 26 abr | Estabiliza la retención de sesiones del popup en ejecuciones largas, evita que los changed files vuelvan a expandir el scoped refresh y añade instrumentación opcional de crash y memoria para diagnóstico |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 25 abr | Mantiene el popup centrado en sesiones recientes + activas, reduce el costo de refresco con la bandeja oculta y añade diagnósticos del proceso principal |
@@ -67,9 +68,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.11.6/WhereMyTokens-v1.11.6-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.12.0/WhereMyTokens-v1.12.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -79,7 +80,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.11.6-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.12.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
