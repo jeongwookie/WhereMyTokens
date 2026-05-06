@@ -2133,6 +2133,11 @@ export class StateManager {
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
+      const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+      const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
+      const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: true, allTimeSessions: sessions.length, lastUpdated: Date.now() };
+      this.onUpdate(this.state);
       this.startWatcher();
       this.clearHistoryWarmup();
       this.clearGitWarmup();

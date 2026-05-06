@@ -25,14 +25,15 @@ let widgetMoveEndTimer: NodeJS.Timeout | null = null;
 let lastTrayTitle = '';
 let lastTrayTooltip = '';
 let registeredGlobalHotkey = '';
+const readyWidgetWindows = new WeakSet<BrowserWindow>();
 
 type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
 const POPUP_MARGIN = 8;
-const WIDGET_WIDTH = 250;
-const WIDGET_HEIGHT_SINGLE = 96;
-const WIDGET_HEIGHT_BOTH = 150;
+const WIDGET_WIDTH = 268;
+const WIDGET_HEIGHT_SINGLE = 106;
+const WIDGET_HEIGHT_BOTH = 166;
 
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
@@ -213,6 +214,7 @@ function applyCompactWidgetBounds(settings = getSettings()) {
 
 function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
   if (!win || win.isDestroyed() || !settings.compactWidgetEnabled) return;
+  if (!win.isVisible() && !readyWidgetWindows.has(win)) return;
   applyCompactWidgetBounds(settings);
   win.setAlwaysOnTop(settings.alwaysOnTop);
   if (!win.isVisible()) win.showInactive();
@@ -276,8 +278,10 @@ function createWidgetWindow(): BrowserWindow {
   win.on('move', () => schedulePersistWidgetPosition(win));
   win.on('show', syncUiVisibility);
   win.on('hide', syncUiVisibility);
-  win.once('ready-to-show', () => revealCompactWidget(win));
-  win.webContents.once('did-finish-load', () => revealCompactWidget(win));
+  win.once('ready-to-show', () => {
+    readyWidgetWindows.add(win);
+    revealCompactWidget(win);
+  });
   win.on('closed', () => {
     if (widgetMoveEndTimer) {
       clearTimeout(widgetMoveEndTimer);
@@ -314,8 +318,8 @@ function sendPopupNavigation(view: AppView) {
 
 function syncUiVisibility() {
   const popupVisible = !!popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible();
-  const widgetVisible = !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
-  stateManager?.setUiVisible(popupVisible || widgetVisible);
+  // 컴팩트 위젯은 상시 표시될 수 있어 대시보드가 보일 때만 foreground 스캔 프로필을 쓴다.
+  stateManager?.setUiVisible(popupVisible);
 }
 
 function resolvePopupBounds(trayBounds: Electron.Rectangle): Electron.Rectangle {
@@ -439,13 +443,25 @@ function registerGlobalHotkey(hotkey: string): boolean {
   return true;
 }
 
+function rollbackHotkeySettingAfterFailedRegistration(): boolean {
+  if (!registeredGlobalHotkey) return false;
+  store.set('globalHotkey', registeredGlobalHotkey);
+  return true;
+}
+
 function applyRuntimeSettings() {
   const settings = getSettings();
   applyWindowSettings();
   syncCompactWidget();
   if (!registerGlobalHotkey(settings.globalHotkey)) {
-    store.set('globalHotkey', registeredGlobalHotkey);
+    if (rollbackHotkeySettingAfterFailedRegistration()) {
+      stateManager?.applySettingsChange();
+    }
   }
+}
+
+function isCodexLimitProvisional(state: AppState, limit: AppState['limits']['codexH5']): boolean {
+  return state.historyWarmupPending && (limit.source === 'localLog' || limit.pct > 0 || (limit.resetMs ?? 0) > 0);
 }
 
 function buildTrayTitle(state: AppState): string {
@@ -458,11 +474,15 @@ function buildTrayTitle(state: AppState): string {
   const h5Cost = (provider === 'codex')
     ? state.usage.h5Codex.costUSD
     : (provider === 'both' ? state.usage.h5.costUSD + state.usage.h5Codex.costUSD : state.usage.h5.costUSD);
+  const codexH5Provisional = isCodexLimitProvisional(state, state.limits.codexH5);
+  const stableCodexH5Pct = codexH5Provisional ? 0 : state.limits.codexH5.pct;
   const h5Pct = provider === 'codex'
-    ? state.limits.codexH5.pct
-    : (provider === 'both' ? Math.max(state.limits.h5.pct, state.limits.codexH5.pct) : state.limits.h5.pct);
+    ? stableCodexH5Pct
+    : (provider === 'both' ? Math.max(state.limits.h5.pct, stableCodexH5Pct) : state.limits.h5.pct);
   switch (display) {
     case 'h5pct':
+      if (codexH5Provisional && provider === 'codex') return 'scan';
+      if (codexH5Provisional && provider === 'both' && state.limits.h5.pct <= 0) return 'scan';
       return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;
@@ -581,7 +601,7 @@ app.whenReady().then(() => {
   // Global shortcut
   const settings = getSettings();
   if (!registerGlobalHotkey(settings.globalHotkey)) {
-    store.set('globalHotkey', registeredGlobalHotkey);
+    rollbackHotkeySettingAfterFailedRegistration();
   }
 
   // Auto-start at login
