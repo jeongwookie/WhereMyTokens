@@ -275,8 +275,8 @@ const RefreshStatus = React.memo(function RefreshStatus({
       return;
     }
     if (syncingHistory) {
-      setLabel(formatWarmupEta(historyWarmupStartsAt));
-      const t = setInterval(() => setLabel(formatWarmupEta(historyWarmupStartsAt)), 1000);
+      setLabel(`scan ${formatWarmupEta(historyWarmupStartsAt)}`);
+      const t = setInterval(() => setLabel(`scan ${formatWarmupEta(historyWarmupStartsAt)}`), 1000);
       return () => clearInterval(t);
     }
     setLabel(formatRefreshLabel(lastUpdated));
@@ -467,12 +467,22 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
   );
 });
 
-const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, settings, apiConnected, extraUsage }: {
+const PlanUsagePanel = React.memo(function PlanUsagePanel({
+  usage,
+  limits,
+  settings,
+  apiConnected,
+  extraUsage,
+  historyWarmupPending,
+  historyWarmupStartsAt,
+}: {
   usage: AppState['usage'];
   limits: AppState['limits'];
   settings: AppState['settings'];
   apiConnected: boolean;
   extraUsage: AppState['extraUsage'];
+  historyWarmupPending: boolean;
+  historyWarmupStartsAt: number | null;
 }) {
   const C = useTheme();
   const { currency, usdToKrw } = settings;
@@ -490,6 +500,11 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
   );
   const codexH5HasLimit = limits.codexH5.source === 'localLog' || limits.codexH5.pct > 0 || (limits.codexH5.resetMs ?? 0) > 0;
   const codexWeekHasLimit = limits.codexWeek.source === 'localLog' || limits.codexWeek.pct > 0 || (limits.codexWeek.resetMs ?? 0) > 0;
+  const codexH5Pending = historyWarmupPending && (limits.codexH5.source === 'localLog' || !codexH5HasLimit);
+  const codexWeekPending = historyWarmupPending && (limits.codexWeek.source === 'localLog' || !codexWeekHasLimit);
+  const codexWarmupTitle = historyWarmupPending
+    ? `Full Codex history is still scanning (${formatWarmupEta(historyWarmupStartsAt)}); local-log limits may update.`
+    : undefined;
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -529,10 +544,12 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({ usage, limits, setti
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} resetLabel={limits.codexH5.resetLabel} apiConnected={codexH5HasLimit}
-            limitSourceLabel={limitSourceLabel(limits.codexH5)} cacheMetricMode="codex" hero borderRight />
+            limitSourceLabel={limitSourceLabel(limits.codexH5)} pendingLimit={codexH5Pending} pendingLimitLabel="scanning" pendingLimitTitle={codexWarmupTitle}
+            cacheMetricMode="codex" hero borderRight />
           <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} resetLabel={limits.codexWeek.resetLabel} apiConnected={codexWeekHasLimit}
-            limitSourceLabel={limitSourceLabel(limits.codexWeek)} cacheMetricMode="codex" hero />
+            limitSourceLabel={limitSourceLabel(limits.codexWeek)} pendingLimit={codexWeekPending} pendingLimitLabel="scanning" pendingLimitTitle={codexWarmupTitle}
+            cacheMetricMode="codex" hero />
         </div>
       )}
     </div>
@@ -1080,7 +1097,15 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
           </RenderErrorBoundary>
         )}
         <RenderErrorBoundary label="Plan Usage Panel">
-          <PlanUsagePanel usage={usage} limits={state.limits} settings={settings} apiConnected={state.apiConnected} extraUsage={state.extraUsage} />
+          <PlanUsagePanel
+            usage={usage}
+            limits={state.limits}
+            settings={settings}
+            apiConnected={state.apiConnected}
+            extraUsage={state.extraUsage}
+            historyWarmupPending={state.historyWarmupPending}
+            historyWarmupStartsAt={state.historyWarmupStartsAt}
+          />
         </RenderErrorBoundary>
         <RenderErrorBoundary label="Code Output Card">
           <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />

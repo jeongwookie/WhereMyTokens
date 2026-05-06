@@ -68,7 +68,48 @@ test('renderer mutes cached Claude usage text while keeping the progress bar act
   const source = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
 
   assert.match(source, /cachedDisconnected = apiConnected === false && limitSourceLabel === 'cached'/);
-  assert.match(source, /noData \|\| cachedDisconnected \? C\.textMuted : barColor/);
+  assert.match(source, /limitValueColor = pendingLimit \? C\.textMuted : barColor/);
+  assert.match(source, /noData \|\| cachedDisconnected \? C\.textMuted : limitValueColor/);
+});
+
+test('warmup mode marks Codex local-log limits as provisional and defers alerts', () => {
+  const mainSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  const cardSource = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
+  const alertSource = fs.readFileSync(path.resolve('src', 'main', 'usageAlertManager.ts'), 'utf8');
+  const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+
+  assert.match(mainSource, /historyWarmupPending=\{state\.historyWarmupPending\}/);
+  assert.match(mainSource, /pendingLimit=\{codexWeekPending\}/);
+  assert.match(mainSource, /limits\.codexWeek\.source === 'localLog' \|\| !codexWeekHasLimit/);
+  assert.match(cardSource, /pendingLimitLabel/);
+  assert.match(cardSource, /displayLimitSourceLabel = pendingLimit/);
+  assert.match(alertSource, /deferCodexLocalLog/);
+  assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);
+  assert.match(stateSource, /deferCodexLocalLog: startupPartial/);
+});
+
+test('Codex account limit collection is separated from visible usage filters', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const collectStart = source.indexOf('private collectCodexRateLimits');
+  const collectEnd = source.indexOf('private async loadProviderSummaries', collectStart);
+  const collectBody = source.slice(collectStart, collectEnd);
+  const fastStart = source.indexOf('private async fastRefresh');
+  const fastEnd = source.indexOf('private async refreshGitStatsAfterStartup', fastStart);
+  const fastBody = source.slice(fastStart, fastEnd);
+
+  assert.match(source, /scanCodexRateLimitsOnly/);
+  assert.match(source, /const excludedForUsage = this\.isExcludedSummary\(filePath, 'codex', isExcluded\)/);
+  assert.match(source, /codexRateLimits = this\.mergeCodexRateLimits\(codexRateLimits, await scanCodexRateLimitsOnly\(filePath\)\)/);
+  assert.doesNotMatch(collectBody, /getVisibleSummaries/);
+  assert.match(source, /private async refreshRecentCodexRateLimits/);
+  assert.match(fastBody, /await this\.refreshRecentCodexRateLimits\(settings\)/);
+});
+
+test('bottom refresh label distinguishes scan countdown from update age', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+
+  assert.match(source, /\$\{elapsed\}s ago/);
+  assert.match(source, /scan \$\{formatWarmupEta\(historyWarmupStartsAt\)\}/);
 });
 
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {

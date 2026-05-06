@@ -40,6 +40,9 @@ interface Props {
   hero?: boolean;       // true = 히어로 대형 % 레이아웃
   borderRight?: boolean;
   limitSourceLabel?: string;
+  pendingLimit?: boolean;
+  pendingLimitLabel?: string;
+  pendingLimitTitle?: string;
   cacheMetricMode?: 'claude' | 'codex';
 }
 
@@ -56,7 +59,7 @@ function TokenDotRow({ label, value, color }: { label: string; value: number; co
 function TokenStatsCard({
   provider, period, stats, currency, usdToKrw,
   limitPct, resetMs, resetLabel, apiConnected, hideCost, burnRate,
-  hero, borderRight, limitSourceLabel, cacheMetricMode = 'claude',
+  hero, borderRight, limitSourceLabel, pendingLimit = false, pendingLimitLabel, pendingLimitTitle, cacheMetricMode = 'claude',
 }: Props) {
   const C = useTheme();
 
@@ -68,7 +71,7 @@ function TokenStatsCard({
 
   const showLimitBar = limitPct != null;
   const barPct = Math.min(100, limitPct ?? 0);
-  const barColor = pctBarColor(barPct, C);
+  const barColor = pendingLimit ? C.accent : pctBarColor(barPct, C);
 
   let resetStr = '';
   if (resetMs && resetMs > 0) {
@@ -89,13 +92,16 @@ function TokenStatsCard({
   const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
+  const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'scanning') : limitSourceLabel;
+  const displayLimitSourceTitle = pendingLimitTitle ?? displayLimitSourceLabel ?? '';
   const cachedDisconnected = apiConnected === false && limitSourceLabel === 'cached';
-  const sourceChip = limitSourceLabel ? (
+  const limitValueColor = pendingLimit ? C.textMuted : barColor;
+  const sourceChip = displayLimitSourceLabel ? (
     <span
-      title={limitSourceLabel}
-      style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}`, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      title={displayLimitSourceTitle}
+      style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 4, background: pendingLimit ? C.accentDim : C.bgRow, color: pendingLimit ? C.accent : C.textMuted, border: `1px solid ${C.border}`, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
     >
-      {limitSourceLabel}
+      {displayLimitSourceLabel}
     </span>
   ) : null;
 
@@ -112,7 +118,7 @@ function TokenStatsCard({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0 }}>
             {provider} {period}
-            {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
+            {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
             )}
           </span>
@@ -127,7 +133,7 @@ function TokenStatsCard({
         </div>
 
         {/* 대형 퍼센트 */}
-        <div style={{ fontSize: 30, fontWeight: 800, color: noData || cachedDisconnected ? C.textMuted : barColor, lineHeight: 1.1, marginBottom: 6, fontFamily: C.fontMono }}>
+        <div style={{ fontSize: 30, fontWeight: 800, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, lineHeight: 1.1, marginBottom: 6, fontFamily: C.fontMono }}>
           {noData ? '—' : `${Math.round(barPct)}%`}
         </div>
 
@@ -179,7 +185,7 @@ function TokenStatsCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: showLimitBar ? 5 : 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontSize: 11, color: C.textMuted }}>{provider} · {period}</span>
-          {!limitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
+          {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
             <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
           )}
           {sourceChip}
@@ -214,7 +220,7 @@ function TokenStatsCard({
                 }} />
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : barColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
               {noData ? '—' : `${Math.round(barPct)}%`}
             </span>
             {!noData && resetStr && (
