@@ -40,11 +40,15 @@
 
 <table>
   <tr>
-    <th width="50%">Dark Overview</th>
-    <th width="50%">Light Overview</th>
+    <th>Dark Overview</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens dark overview collage" /></td>
+  </tr>
+  <tr>
+    <th>Light Overview</th>
+  </tr>
+  <tr>
     <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens light overview collage" /></td>
   </tr>
 </table>
@@ -60,7 +64,6 @@
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | Apr 26 | Stabilize long-running popup session retention, stop scoped refresh growth from changed files, and add gated crash and memory instrumentation for troubleshooting |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | Apr 25 | Keep popup sessions focused on recent + active work, reduce hidden tray refresh cost, and add perf diagnostics for main-process troubleshooting |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | Apr 24 | Improve idle refresh efficiency, restyle header metadata, and label Code Output as current session repos |
-| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | Apr 24 | Document partial-history startup sync, clarify header status states, and refresh in-app help |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 

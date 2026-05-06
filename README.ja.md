@@ -40,11 +40,15 @@
 
 <table>
   <tr>
-    <th width="50%">ダーク概要</th>
-    <th width="50%">ライト概要</th>
+    <th>ダーク概要</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens ダーク概要" /></td>
+  </tr>
+  <tr>
+    <th>ライト概要</th>
+  </tr>
+  <tr>
     <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens ライト概要" /></td>
   </tr>
 </table>
@@ -60,7 +64,6 @@
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 長時間実行時のポップアップセッション保持範囲を安定化し、changed file で scoped refresh が再拡大する経路を止め、トラブルシュート用の crash/memory 計測をゲート付きで追加 |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | ポップアップのセッション一覧を recent + active な作業中心に安定化し、非表示トレイ時の更新コストを下げ、メインプロセス診断を強化 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | バックグラウンドのアイドル更新を軽くし、ヘッダーメタデータを整理し、Code Output に現在のセッション repo 範囲を表示 |
-| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | Partial History の起動同期とヘッダーステータスの意味を文書化し、アプリ内 Help を更新 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 

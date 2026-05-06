@@ -40,11 +40,15 @@
 
 <table>
   <tr>
-    <th width="50%">Vista general oscura</th>
-    <th width="50%">Vista general clara</th>
+    <th>Vista general oscura</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-overview-dark.png" alt="Vista general oscura de WhereMyTokens" /></td>
+  </tr>
+  <tr>
+    <th>Vista general clara</th>
+  </tr>
+  <tr>
     <td><img src="assets/screenshot-overview-light.png" alt="Vista general clara de WhereMyTokens" /></td>
   </tr>
 </table>
@@ -60,7 +64,6 @@
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 26 abr | Estabiliza la retención de sesiones del popup en ejecuciones largas, evita que los changed files vuelvan a expandir el scoped refresh y añade instrumentación opcional de crash y memoria para diagnóstico |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 25 abr | Mantiene el popup centrado en sesiones recientes + activas, reduce el costo de refresco con la bandeja oculta y añade diagnósticos del proceso principal |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 24 abr | Reduce el refresco en segundo plano cuando está inactivo, ordena los metadatos del encabezado y etiqueta Code Output como repos de las sesiones actuales |
-| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 24 abr | Documenta Partial History y los estados del encabezado, y actualiza la ayuda integrada |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 

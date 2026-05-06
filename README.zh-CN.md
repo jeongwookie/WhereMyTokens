@@ -40,11 +40,15 @@
 
 <table>
   <tr>
-    <th width="50%">深色总览</th>
-    <th width="50%">浅色总览</th>
+    <th>深色总览</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens 深色总览" /></td>
+  </tr>
+  <tr>
+    <th>浅色总览</th>
+  </tr>
+  <tr>
     <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens 浅色总览" /></td>
   </tr>
 </table>
@@ -60,7 +64,6 @@
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 稳定长时间运行时的弹出会话保留范围，阻止 changed file 让 scoped refresh 再次扩张的路径，并新增带开关的 crash/memory 诊断计测 |
 | **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 将弹出会话列表稳定在最近 + 活跃工作范围内，降低隐藏托盘时的刷新成本，并加强主进程诊断日志 |
 | **[v1.11.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.3)** | 4/24 | 降低空闲时后台刷新开销，整理头部元数据，并为 Code Output 标明当前会话 repo 范围 |
-| **[v1.11.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.2)** | 4/24 | 补充 Partial History 启动同步与头部状态说明，并更新应用内帮助 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 

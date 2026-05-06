@@ -181,6 +181,28 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   assert.match(rendererSource, /resetLabel=\{limits\.so\.resetLabel\}/);
 });
 
+test('README release blocks stay compact and screenshots are full width', () => {
+  const readmes = [
+    'README.md',
+    'README.ko.md',
+    'README.ja.md',
+    'README.zh-CN.md',
+    'README.es.md',
+  ];
+  const packageJson = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+  const currentVersion = `v${packageJson.version}`;
+
+  for (const file of readmes) {
+    const source = fs.readFileSync(path.resolve(file), 'utf8');
+    const releaseRows = source.match(/^\| \*\*\[v\d+\.\d+\.\d+\]/gm) ?? [];
+    assert.equal(releaseRows.length, 5, `${file} should show the latest five releases only`);
+    assert.match(releaseRows[0], new RegExp(`\\[${currentVersion.replaceAll('.', '\\.')}\\]`), `${file} first release row should match package version`);
+    assert.doesNotMatch(source, /<th width="50%">/, `${file} should not render overview screenshots in a two-column table`);
+    assert.match(source, /<th>.*?(Dark|다크|ダーク|深色|oscura).*?<\/th>[\s\S]*screenshot-overview-dark\.png/);
+    assert.match(source, /<th>.*?(Light|라이트|ライト|浅色|clara).*?<\/th>[\s\S]*screenshot-overview-light\.png/);
+  }
+});
+
 test('session cwd under a repo root scopes that repo output', () => {
   const repoRoot = path.resolve('tmp', 'example-repo');
   const repoStats = repoStatsFor(repoRoot);
