@@ -494,6 +494,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
   const showExtraUsage = showClaudeUsage && !!extraUsage?.isEnabled;
   const showCodexPanel = showCodexUsage && (
     providerMode === 'codex' ||
+    historyWarmupPending ||
     usage.h5Codex.totalTokens > 0 ||
     usage.weekCodex.totalTokens > 0 ||
     limits.codexH5.pct > 0 ||

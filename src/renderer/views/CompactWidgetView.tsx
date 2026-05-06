@@ -19,6 +19,9 @@ type WidgetAgent = {
     pending?: boolean;
     pendingTitle?: string;
     unknown?: boolean;
+    unknownLabel?: string;
+    unknownBadge?: string;
+    unknownTitle?: string;
   }>;
 };
 
@@ -33,9 +36,9 @@ type DragState = {
 function formatRefreshLabel(lastUpdated: number): string {
   if (!lastUpdated) return 'refresh';
   const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
-  if (elapsed < 60) return 'just now';
-  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m ago`;
-  return `${Math.floor(elapsed / 3600)}h ago`;
+  if (elapsed < 60) return 'now';
+  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
+  return `${Math.floor(elapsed / 3600)}h`;
 }
 
 function formatPct(pct: number | null): string {
@@ -80,6 +83,31 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && !!target.closest('[data-no-drag="true"]');
 }
 
+function missingLimitStatus(
+  pct: number,
+  resetMs: number | null,
+  bootPending: boolean,
+  unavailableTitle: string,
+): Pick<WidgetAgent['rows'][number], 'unknown' | 'unknownLabel' | 'unknownBadge' | 'unknownTitle'> {
+  if (bootPending) {
+    return {
+      unknown: true,
+      unknownLabel: 'loading',
+      unknownBadge: 'wait',
+      unknownTitle: 'Startup scan is still loading.',
+    };
+  }
+  if (pct <= 0 && resetMs == null) {
+    return {
+      unknown: true,
+      unknownLabel: 'no data',
+      unknownBadge: 'n/a',
+      unknownTitle: unavailableTitle,
+    };
+  }
+  return {};
+}
+
 function ProgressRow({
   label,
   quotaPct,
@@ -88,6 +116,9 @@ function ProgressRow({
   pending = false,
   pendingTitle,
   unknown = false,
+  unknownLabel = 'loading',
+  unknownBadge = 'wait',
+  unknownTitle,
 }: {
   label: string;
   quotaPct: number;
@@ -96,20 +127,24 @@ function ProgressRow({
   pending?: boolean;
   pendingTitle?: string;
   unknown?: boolean;
+  unknownLabel?: string;
+  unknownBadge?: string;
+  unknownTitle?: string;
 }) {
   const C = useTheme();
   const quota = clampPct(quotaPct);
   const elapsed = pending || unknown ? null : timeElapsedPct(label, resetMs);
   const elapsedWidth = elapsed ?? 0;
-  const resetLabel = pending ? 'scan' : unknown ? 'wait' : formatResetShort(resetMs);
+  const resetLabel = pending ? 'scan' : unknown ? unknownBadge : formatResetShort(resetMs);
   const resetBadgeBg = C.bgCard === '#ffffff' ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.22)';
-  const quotaColor = pending || unknown ? C.textMuted : color;
+  const quotaColor = unknown ? C.textMuted : color;
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
+  const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
 
   return (
     <div
-      title={pending ? pendingTitle : undefined}
-      style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 70px', alignItems: 'center', gap: 7 }}
+      title={rowTitle}
+      style={{ display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) 64px', alignItems: 'center', gap: 6 }}
     >
       <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
         {label}
@@ -129,7 +164,7 @@ function ProgressRow({
             position: 'absolute',
             left: 0,
             top: 2,
-            width: `${pending || unknown ? 0 : quota}%`,
+            width: `${unknown ? 0 : quota}%`,
             height: 3,
             background: quotaColor,
             borderRadius: 3,
@@ -163,9 +198,17 @@ function ProgressRow({
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
         {pending ? (
-          <span style={{ color: C.accent }}>scanning</span>
+          quota > 0 ? (
+            <>
+              <span style={{ color }}>{formatPct(quota)}</span>
+              <span style={{ color: C.textMuted }}> / </span>
+              <span style={{ color: C.accent }}>scan</span>
+            </>
+          ) : (
+            <span style={{ color: C.accent }}>scanning</span>
+          )
         ) : unknown ? (
-          <span style={{ color: C.textDim }}>loading</span>
+          <span style={{ color: C.textDim }}>{unknownLabel}</span>
         ) : (
           <>
             <span style={{ color }}>{formatPct(quota)}</span>
@@ -190,7 +233,19 @@ function AgentBlock({ agent }: { agent: WidgetAgent }) {
       </div>
       <div style={{ display: 'grid', gap: 4 }}>
         {agent.rows.map(row => (
-          <ProgressRow key={row.key} label={row.label} quotaPct={row.quotaPct} resetMs={row.resetMs} color={agent.color} pending={row.pending} pendingTitle={row.pendingTitle} unknown={row.unknown} />
+          <ProgressRow
+            key={row.key}
+            label={row.label}
+            quotaPct={row.quotaPct}
+            resetMs={row.resetMs}
+            color={agent.color}
+            pending={row.pending}
+            pendingTitle={row.pendingTitle}
+            unknown={row.unknown}
+            unknownLabel={row.unknownLabel}
+            unknownBadge={row.unknownBadge}
+            unknownTitle={row.unknownTitle}
+          />
         ))}
       </div>
     </div>
@@ -220,14 +275,16 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     const codexH5Pending = state.historyWarmupPending && (state.limits.codexH5.source === 'localLog' || !codexH5HasLimit);
     const codexWeekPending = state.historyWarmupPending && (state.limits.codexWeek.source === 'localLog' || !codexWeekHasLimit);
     const codexPendingTitle = 'Full Codex history is still scanning; local-log limits may update.';
+    const claudeUnavailableTitle = 'Claude limit data is unavailable until API or statusLine data is connected.';
+    const codexUnavailableTitle = 'No Codex rate-limit event has been found in local logs yet.';
     if (provider !== 'codex') {
       next.push({
         key: 'claude',
         label: 'Claude',
         color: C.sonnet,
         rows: [
-          { key: 'claude-5h', label: '5h', quotaPct: state.limits.h5.pct, resetMs: state.limits.h5.resetMs, unknown: bootPending || (state.limits.h5.pct <= 0 && state.limits.h5.resetMs == null) },
-          { key: 'claude-1w', label: '1w', quotaPct: state.limits.week.pct, resetMs: state.limits.week.resetMs, unknown: bootPending || (state.limits.week.pct <= 0 && state.limits.week.resetMs == null) },
+          { key: 'claude-5h', label: '5h', quotaPct: state.limits.h5.pct, resetMs: state.limits.h5.resetMs, ...missingLimitStatus(state.limits.h5.pct, state.limits.h5.resetMs, bootPending, claudeUnavailableTitle) },
+          { key: 'claude-1w', label: '1w', quotaPct: state.limits.week.pct, resetMs: state.limits.week.resetMs, ...missingLimitStatus(state.limits.week.pct, state.limits.week.resetMs, bootPending, claudeUnavailableTitle) },
         ],
       });
     }
@@ -237,8 +294,8 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         label: 'Codex',
         color: C.active,
         rows: [
-          { key: 'codex-5h', label: '5h', quotaPct: state.limits.codexH5.pct, resetMs: state.limits.codexH5.resetMs, pending: codexH5Pending, pendingTitle: codexPendingTitle, unknown: !codexH5Pending && (bootPending || (state.limits.codexH5.pct <= 0 && state.limits.codexH5.resetMs == null)) },
-          { key: 'codex-1w', label: '1w', quotaPct: state.limits.codexWeek.pct, resetMs: state.limits.codexWeek.resetMs, pending: codexWeekPending, pendingTitle: codexPendingTitle, unknown: !codexWeekPending && (bootPending || (state.limits.codexWeek.pct <= 0 && state.limits.codexWeek.resetMs == null)) },
+          { key: 'codex-5h', label: '5h', quotaPct: state.limits.codexH5.pct, resetMs: state.limits.codexH5.resetMs, pending: codexH5Pending, pendingTitle: codexPendingTitle, ...(!codexH5Pending ? missingLimitStatus(state.limits.codexH5.pct, state.limits.codexH5.resetMs, bootPending, codexUnavailableTitle) : {}) },
+          { key: 'codex-1w', label: '1w', quotaPct: state.limits.codexWeek.pct, resetMs: state.limits.codexWeek.resetMs, pending: codexWeekPending, pendingTitle: codexPendingTitle, ...(!codexWeekPending ? missingLimitStatus(state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, bootPending, codexUnavailableTitle) : {}) },
         ],
       });
     }
@@ -248,7 +305,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
-    setRefreshLabel('refreshing');
+    setRefreshLabel('...');
     try {
       await onRefresh();
     } finally {
@@ -304,8 +361,8 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: 7,
-        padding: '8px 10px',
+        gap: 6,
+        padding: '8px 9px',
         background: C.bgCard,
         color: C.text,
         fontFamily: C.fontSans,
@@ -315,14 +372,14 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         boxShadow: 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 13 }}>
-        <span style={{ fontSize: 10, fontWeight: 900, color: C.textDim, letterSpacing: 0, lineHeight: 1 }}>
-          Plan Usage vs Time Elapsed
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 13 }}>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 900, color: C.textDim, letterSpacing: 0, lineHeight: 1 }}>
+          Usage vs Time
         </span>
         <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
           usage / time
         </span>
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
           <button
             data-no-drag="true"
             onClick={handleRefresh}
@@ -335,8 +392,9 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
               cursor: refreshing ? 'wait' : 'pointer',
               fontSize: 10,
               fontFamily: C.fontMono,
-              padding: '1px 5px',
+              padding: '1px 4px',
               lineHeight: 1,
+              minWidth: 26,
             }}
           >
             {refreshLabel}
@@ -345,7 +403,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
             data-no-drag="true"
             onClick={() => window.wmt.openDashboard().catch(() => {})}
             title="Open dashboard"
-            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '0 5px', lineHeight: 1.3 }}
+            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '0 4px', lineHeight: 1.3 }}
           >
             ^
           </button>
@@ -353,14 +411,14 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
             data-no-drag="true"
             onClick={() => window.wmt.hideCompactWidget().catch(() => {})}
             title="Hide widget"
-            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 12, padding: '0 5px', lineHeight: 1.3 }}
+            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 12, padding: '0 4px', lineHeight: 1.3 }}
           >
             x
           </button>
         </span>
       </div>
 
-      <div style={{ display: 'grid', gap: agents.length > 1 ? 9 : 6 }}>
+      <div style={{ display: 'grid', gap: agents.length > 1 ? 7 : 6 }}>
         {agents.map(agent => <AgentBlock key={agent.key} agent={agent} />)}
       </div>
     </div>

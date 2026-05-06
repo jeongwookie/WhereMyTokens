@@ -529,6 +529,10 @@ export default function App() {
 
   // 핵심 상태가 준비되면 스플래시를 닫고, 장시간 응답이 없으면 복구 화면으로 전환한다.
   useEffect(() => {
+    if (isWidget) {
+      revealRoot();
+      return;
+    }
     if (state.initialRefreshComplete) {
       setBootFallbackVisible(false);
       revealRoot();
@@ -540,7 +544,7 @@ export default function App() {
       revealRoot();
     }, BOOT_FALLBACK_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [state.initialRefreshComplete, revealRoot]);
+  }, [isWidget, state.initialRefreshComplete, revealRoot]);
 
   async function handleSaveSettings(partial: Partial<AppSettings>) {
     const updated = await window.wmt.setSettings(partial);
