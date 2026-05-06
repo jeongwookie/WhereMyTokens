@@ -40,25 +40,31 @@
 
 <table>
   <tr>
-    <th width="50%">ライトモード</th>
-    <th width="50%">ダークモード</th>
+    <th width="50%">ダークダッシュボード</th>
+    <th width="50%">ライトダッシュボード</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode" /></td>
+    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
+    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <th width="33%">Rhythm & ピーク統計</th>
-    <th width="33%">7 日間ヒートマップ</th>
-    <th width="33%">設定</th>
+    <th width="50%">コンパクトウィジェット</th>
+    <th width="50%">モデル別使用量</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
+    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
+  </tr>
+  <tr>
+    <th width="50%">Rhythm & ピーク統計</th>
+    <th width="50%">アクティビティヒートマップ</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
   </tr>
 </table>
 
@@ -110,6 +116,7 @@
 
 ### レート制限 & アラート
 - **レート制限バー** — Claude 5h/1w は Anthropic API/statusLine、Codex 5h/1w はローカル Codex rate-limit ログイベントを使用
+- **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` プラグインで API ポーリングなしのリアルタイムデータ受信
 - **Windows トースト通知** — 使用量しきい値（50% / 80% / 90%）でアラート
 - **Claude Extra Usage 予算** — Claude 月間クレジット使用量 / 上限 / 利用率
@@ -134,7 +141,7 @@
 ### カスタマイズ
 - **Auto/Light/Dark テーマ** — デフォルトはシステム設定に従う
 - **コスト表示** — USD または KRW、為替レート設定可能
-- **常に最前面ウィジェット** — 他のウィンドウの上に固定；ヘッダーボタン、トレイアイコン、グローバルホットキーで最小化
+- **Floating usage widget** — 常に最前面設定に従う小さな Quota Pace ウィンドウ；トレイメニュー、Settings、ウィジェットボタンから表示/非表示を切替
 - **トレイラベル** — 使用量 %、トークン数、コストを直接表示
 - **プロジェクト管理** — 非表示または追跡から完全除外
 - **Windows 起動時に自動起動** — オプション
@@ -155,6 +162,7 @@
 - **アラート** — 使用量しきい値の設定（50% / 80% / 90%）
 - **テーマ** — Auto（システム設定に従う）/ Light / Dark
 - **トレイラベル** — タスクバーに表示する情報を選択
+- **Floating usage widget** — 小さな Quota Pace ウィンドウを有効化できます。あとからトレイアイコンの右クリックで表示/非表示を切り替えられます
 
 ---
 

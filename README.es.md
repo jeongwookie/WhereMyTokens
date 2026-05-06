@@ -40,25 +40,31 @@
 
 <table>
   <tr>
-    <th width="50%">Modo Claro</th>
-    <th width="50%">Modo Oscuro</th>
+    <th width="50%">Panel oscuro</th>
+    <th width="50%">Panel claro</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode" /></td>
+    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
+    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <th width="33%">Rhythm y Estadísticas Pico</th>
-    <th width="33%">Mapa de Calor 7 Días</th>
-    <th width="33%">Configuración</th>
+    <th width="50%">Widget compacto</th>
+    <th width="50%">Uso por modelo</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
+    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
+  </tr>
+  <tr>
+    <th width="50%">Rhythm y estadísticas pico</th>
+    <th width="50%">Mapa de actividad</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
   </tr>
 </table>
 
@@ -110,6 +116,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 
 ### Límites de Uso y Alertas
 - **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine; Codex 5h/1sem desde eventos locales de rate-limit en los logs
+- **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
@@ -134,7 +141,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 ### Personalización
 - **Tema Auto/Claro/Oscuro** — sigue la preferencia del sistema por defecto
 - **Visualización de costos** — USD o KRW con tasa de cambio configurable
-- **Widget siempre visible** — permanece encima; minimiza vía botón del encabezado, icono de bandeja o atajo global
+- **Floating usage widget** — ventana compacta de Quota Pace con soporte always-on-top; muéstrala u ocúltala desde el menú de bandeja, Settings o los controles del widget
 - **Etiqueta de bandeja** — muestra % de uso, cantidad de tokens o costo directamente en la barra de tareas
 - **Gestión de proyectos** — oculta o excluye completamente proyectos del seguimiento
 - **Iniciar con Windows** — inicio automático opcional
@@ -155,6 +162,7 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 - **Alertas** — establece umbrales de uso (50% / 80% / 90%)
 - **Tema** — Auto (sigue el sistema) / Claro / Oscuro
 - **Etiqueta de bandeja** — elige qué mostrar en la barra de tareas
+- **Floating usage widget** — activa la ventana compacta de Quota Pace; luego puedes mostrarla u ocultarla con clic derecho en el icono de bandeja
 
 ---
 

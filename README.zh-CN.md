@@ -40,25 +40,31 @@
 
 <table>
   <tr>
-    <th width="50%">浅色模式</th>
-    <th width="50%">深色模式</th>
+    <th width="50%">深色仪表板</th>
+    <th width="50%">浅色仪表板</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode" /></td>
+    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
+    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <th width="33%">Rhythm 与峰值统计</th>
-    <th width="33%">7 天热力图</th>
-    <th width="33%">设置</th>
+    <th width="50%">紧凑小部件</th>
+    <th width="50%">模型使用量</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
+    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
+  </tr>
+  <tr>
+    <th width="50%">Rhythm 与峰值统计</th>
+    <th width="50%">活动热力图</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
   </tr>
 </table>
 
@@ -110,6 +116,7 @@
 
 ### 速率限制与提醒
 - **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine；Codex 5h/1w 来自本地 Codex rate-limit 日志事件
+- **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示消耗速度快于重置窗口
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
 - **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
@@ -134,7 +141,7 @@
 ### 个性化
 - **Auto/Light/Dark 主题** — 默认跟随系统偏好
 - **费用显示** — USD 或 KRW，可配置汇率
-- **置顶小部件** — 始终悬浮；通过标题栏按钮、托盘图标或全局快捷键最小化
+- **Floating usage widget** — 小型 Quota Pace 悬浮窗口，遵循置顶设置；可从托盘菜单、Settings 或小部件按钮显示/隐藏
 - **托盘标签** — 在任务栏直接显示使用率 %、令牌数或费用
 - **项目管理** — 隐藏或完全排除项目
 - **随 Windows 启动** — 可选自动启动
@@ -155,6 +162,7 @@
 - **提醒** — 设置使用阈值（50% / 80% / 90%）
 - **主题** — Auto（跟随系统）/ Light / Dark
 - **托盘标签** — 选择任务栏显示内容
+- **Floating usage widget** — 启用小型 Quota Pace 窗口；之后可右键托盘图标显示或隐藏
 
 ---
 

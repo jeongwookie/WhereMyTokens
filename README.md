@@ -40,25 +40,31 @@
 
 <table>
   <tr>
-    <th width="50%">Light Mode</th>
-    <th width="50%">Dark Mode</th>
+    <th width="50%">Dark Dashboard</th>
+    <th width="50%">Light Dashboard</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode dashboard" /></td>
     <td><img src="assets/screenshot-dark.png" alt="Dark mode dashboard" /></td>
+    <td><img src="assets/screenshot-light.png" alt="Light mode dashboard" /></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <th width="33%">Rhythm & Peak Stats</th>
-    <th width="33%">7-Day Heatmap</th>
-    <th width="33%">Settings</th>
+    <th width="50%">Compact Widget</th>
+    <th width="50%">Model Usage</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
+    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
+  </tr>
+  <tr>
+    <th width="50%">Rhythm & Peak Stats</th>
+    <th width="50%">Activity Heatmap</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab with peak stats" /></td>
+    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
   </tr>
 </table>
 
@@ -111,6 +117,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 
 ### Rate Limits & Alerts
 - **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine; Codex 5h/1w limits from local Codex rate-limit log events when available
+- **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means your burn rate is ahead of the reset window
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
 - **Windows toast notifications** — at configurable usage thresholds (50% / 80% / 90%)
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
@@ -135,7 +142,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ### Customization
 - **Auto/Light/Dark theme** — follows system preference by default
 - **Cost display** — USD or KRW with configurable exchange rate
-- **Always-on-top widget** — stays visible; minimize via header button, tray icon, or global hotkey
+- **Floating usage widget** — compact Quota Pace window with always-on-top support; show/hide it from the tray menu, Settings, or widget controls
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
 - **Project management** — hide or fully exclude projects from tracking
 - **Start with Windows** — optional auto-launch at login
@@ -156,6 +163,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
 - **Tray label** — choose what to display in the taskbar
+- **Floating usage widget** — enable the compact Quota Pace window; right-click the tray icon to show or hide it later
 
 ---
 

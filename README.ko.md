@@ -40,25 +40,31 @@
 
 <table>
   <tr>
-    <th width="50%">라이트 모드</th>
-    <th width="50%">다크 모드</th>
+    <th width="50%">다크 대시보드</th>
+    <th width="50%">라이트 대시보드</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-light.png" alt="Light mode" /></td>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode" /></td>
+    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
+    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
   </tr>
 </table>
 
 <table>
   <tr>
-    <th width="33%">Rhythm & 피크 통계</th>
-    <th width="33%">7일 히트맵</th>
-    <th width="33%">설정</th>
+    <th width="50%">컴팩트 위젯</th>
+    <th width="50%">모델별 사용량</th>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
+    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
+  </tr>
+  <tr>
+    <th width="50%">Rhythm & 피크 통계</th>
+    <th width="50%">활동 히트맵</th>
   </tr>
   <tr>
     <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="7-day heatmap" /></td>
-    <td><img src="assets/screenshot-settings.png" alt="Settings" /></td>
+    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
   </tr>
 </table>
 
@@ -110,6 +116,7 @@
 
 ### 속도 제한 & 알림
 - **속도 제한 바** — Claude 5h/1w는 Anthropic API/statusLine 기준, Codex 5h/1w는 로컬 Codex rate-limit 로그 이벤트 기준
+- **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
 - **Windows 토스트 알림** — 사용량 임계값(50% / 80% / 90%)에서 알림
 - **Claude Extra Usage 예산** — Claude 월간 크레딧 사용량 / 한도 / 이용률 표시
@@ -134,7 +141,7 @@
 ### 커스터마이징
 - **Auto/Light/Dark 테마** — 기본값은 시스템 설정 따름
 - **비용 표시** — USD 또는 KRW, 환율 설정 가능
-- **항상 위 위젯** — 다른 창 위에 고정; 헤더 버튼, 트레이 아이콘, 전역 단축키로 최소화
+- **Floating usage widget** — 항상 위 옵션을 따르는 작은 Quota Pace 창; 트레이 메뉴, Settings, 위젯 버튼에서 표시/숨김 가능
 - **트레이 라벨** — 사용량 %, 토큰 수, 비용 직접 표시
 - **프로젝트 관리** — 숨기기 또는 추적에서 완전 제외
 - **Windows 시작 시 자동 실행** — 선택적 자동 실행
@@ -155,6 +162,7 @@
 - **알림** — 사용량 임계값 설정 (50% / 80% / 90%)
 - **테마** — Auto (시스템 설정 따름) / Light / Dark
 - **트레이 라벨** — 작업표시줄에 표시할 정보 선택
+- **Floating usage widget** — 작은 Quota Pace 창을 켤 수 있고, 이후 트레이 아이콘 우클릭으로 다시 표시/숨김 가능
 
 ---
 
