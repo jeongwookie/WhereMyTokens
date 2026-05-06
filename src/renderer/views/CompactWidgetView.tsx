@@ -135,8 +135,7 @@ function ProgressRow({
   const quota = clampPct(quotaPct);
   const elapsed = pending || unknown ? null : timeElapsedPct(label, resetMs);
   const elapsedWidth = elapsed ?? 0;
-  const resetLabel = pending ? 'scan' : unknown ? unknownBadge : formatResetShort(resetMs);
-  const resetBadgeBg = C.bgCard === '#ffffff' ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.22)';
+  const resetLabel = pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
   const quotaColor = unknown ? C.textMuted : color;
   // pace 색상: 사용량이 경과 시간보다 빠르면 경고
   const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
@@ -148,7 +147,7 @@ function ProgressRow({
   return (
     <div
       title={rowTitle}
-      style={{ display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) 64px', alignItems: 'center', gap: 6 }}
+      style={{ display: 'grid', gridTemplateColumns: '22px minmax(44px, 1fr) 38px 62px', alignItems: 'center', gap: 5 }}
     >
       <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
         {label}
@@ -175,27 +174,21 @@ function ProgressRow({
             boxShadow: `0 0 8px ${quotaColor}66`,
           }}
         />
-        <span
-          title="Time until reset"
-          style={{
-            position: 'absolute',
-            right: 4,
-            top: -1,
-            maxWidth: 52,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            fontSize: 8,
-            lineHeight: '10px',
-            fontFamily: C.fontMono,
-            color: C.textDim,
-            background: resetBadgeBg,
-            borderRadius: 3,
-            padding: '0 3px',
-          }}
-        >
-          {resetLabel}
-        </span>
+      </div>
+      <div
+        title={resetLabel ? `Time until reset: ${resetLabel}` : undefined}
+        style={{
+          color: C.textMuted,
+          fontSize: 8,
+          fontFamily: C.fontMono,
+          lineHeight: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          textAlign: 'left',
+        }}
+      >
+        {resetLabel}
       </div>
       <div
         title="Used / Time elapsed"
