@@ -40,31 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">Dark Dashboard</th>
-    <th width="50%">Light Dashboard</th>
+    <th width="50%">Dark Overview</th>
+    <th width="50%">Light Overview</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-dark.png" alt="Dark mode dashboard" /></td>
-    <td><img src="assets/screenshot-light.png" alt="Light mode dashboard" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="50%">Compact Widget</th>
-    <th width="50%">Model Usage</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
-    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
-  </tr>
-  <tr>
-    <th width="50%">Rhythm & Peak Stats</th>
-    <th width="50%">Activity Heatmap</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab with peak stats" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens dark overview collage" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens light overview collage" /></td>
   </tr>
 </table>
 

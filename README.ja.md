@@ -40,31 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">ダークダッシュボード</th>
-    <th width="50%">ライトダッシュボード</th>
+    <th width="50%">ダーク概要</th>
+    <th width="50%">ライト概要</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
-    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="50%">コンパクトウィジェット</th>
-    <th width="50%">モデル別使用量</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
-    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
-  </tr>
-  <tr>
-    <th width="50%">Rhythm & ピーク統計</th>
-    <th width="50%">アクティビティヒートマップ</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens ダーク概要" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens ライト概要" /></td>
   </tr>
 </table>
 

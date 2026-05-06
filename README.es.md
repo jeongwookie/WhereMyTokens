@@ -40,31 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">Panel oscuro</th>
-    <th width="50%">Panel claro</th>
+    <th width="50%">Vista general oscura</th>
+    <th width="50%">Vista general clara</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
-    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="50%">Widget compacto</th>
-    <th width="50%">Uso por modelo</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
-    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
-  </tr>
-  <tr>
-    <th width="50%">Rhythm y estadísticas pico</th>
-    <th width="50%">Mapa de actividad</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="Vista general oscura de WhereMyTokens" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="Vista general clara de WhereMyTokens" /></td>
   </tr>
 </table>
 

@@ -40,31 +40,12 @@
 
 <table>
   <tr>
-    <th width="50%">深色仪表板</th>
-    <th width="50%">浅色仪表板</th>
+    <th width="50%">深色总览</th>
+    <th width="50%">浅色总览</th>
   </tr>
   <tr>
-    <td><img src="assets/screenshot-dark.png" alt="Dark dashboard" /></td>
-    <td><img src="assets/screenshot-light.png" alt="Light dashboard" /></td>
-  </tr>
-</table>
-
-<table>
-  <tr>
-    <th width="50%">紧凑小部件</th>
-    <th width="50%">模型使用量</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-widget.png" alt="Compact quota pace widget" /></td>
-    <td><img src="assets/screenshot-model-usage.png" alt="Model usage breakdown" /></td>
-  </tr>
-  <tr>
-    <th width="50%">Rhythm 与峰值统计</th>
-    <th width="50%">活动热力图</th>
-  </tr>
-  <tr>
-    <td><img src="assets/screenshot-rhythm.png" alt="Rhythm tab" /></td>
-    <td><img src="assets/screenshot-heatmap.png" alt="Activity heatmap" /></td>
+    <td><img src="assets/screenshot-overview-dark.png" alt="WhereMyTokens 深色总览" /></td>
+    <td><img src="assets/screenshot-overview-light.png" alt="WhereMyTokens 浅色总览" /></td>
   </tr>
 </table>
 
