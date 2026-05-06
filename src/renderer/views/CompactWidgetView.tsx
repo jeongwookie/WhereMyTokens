@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, X } from 'lucide-react';
 import { AppState } from '../types';
 import { useTheme } from '../ThemeContext';
 
@@ -11,6 +12,8 @@ type WidgetAgent = {
   key: 'claude' | 'codex';
   label: string;
   color: string;
+  scanning?: boolean;
+  scanningTitle?: string;
   rows: Array<{
     key: string;
     label: string;
@@ -88,6 +91,7 @@ function missingLimitStatus(
   resetMs: number | null,
   bootPending: boolean,
   unavailableTitle: string,
+  windowLabel: string,
 ): Pick<WidgetAgent['rows'][number], 'unknown' | 'unknownLabel' | 'unknownBadge' | 'unknownTitle'> {
   if (bootPending) {
     return {
@@ -100,9 +104,11 @@ function missingLimitStatus(
   if (pct <= 0 && resetMs == null) {
     return {
       unknown: true,
-      unknownLabel: 'no data',
-      unknownBadge: 'n/a',
-      unknownTitle: unavailableTitle,
+      unknownLabel: 'waiting',
+      unknownBadge: '',
+      unknownTitle: windowLabel === '5h'
+        ? 'No 5h reset data yet. It will appear after local usage or provider data is detected.'
+        : unavailableTitle,
     };
   }
   return {};
@@ -135,25 +141,25 @@ function ProgressRow({
   const quota = clampPct(quotaPct);
   const elapsed = pending || unknown ? null : timeElapsedPct(label, resetMs);
   const elapsedWidth = elapsed ?? 0;
-  const resetLabel = pending ? 'scan' : unknown ? unknownBadge : formatResetShort(resetMs);
-  const resetBadgeBg = C.bgCard === '#ffffff' ? 'rgba(255,255,255,0.68)' : 'rgba(0,0,0,0.22)';
+  const resetLabel = pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
   const quotaColor = unknown ? C.textMuted : color;
   // pace 색상: 사용량이 경과 시간보다 빠르면 경고
   const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
     ? (quota / elapsed > 1.5 ? C.barRed : quota / elapsed > 1.0 ? C.barYellow : color)
     : color;
+  const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
   const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
 
   return (
     <div
       title={rowTitle}
-      style={{ display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) 64px', alignItems: 'center', gap: 6 }}
+      style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
     >
       <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
         {label}
       </div>
-      <div style={{ position: 'relative', height: 8, background: C.bgRow, borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', height: 8, background: trackColor, borderRadius: 4, overflow: 'hidden' }}>
         <div
           style={{
             position: 'absolute',
@@ -169,48 +175,33 @@ function ProgressRow({
             left: 0,
             top: 2,
             width: `${unknown ? 0 : quota}%`,
-            height: 3,
+            height: 4,
             background: quotaColor,
             borderRadius: 3,
-            boxShadow: `0 0 8px ${quotaColor}66`,
+            boxShadow: `0 0 4px ${quotaColor}44`,
           }}
         />
-        <span
-          title="Time until reset"
-          style={{
-            position: 'absolute',
-            right: 4,
-            top: -1,
-            maxWidth: 52,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            fontSize: 8,
-            lineHeight: '10px',
-            fontFamily: C.fontMono,
-            color: C.textDim,
-            background: resetBadgeBg,
-            borderRadius: 3,
-            padding: '0 3px',
-          }}
-        >
-          {resetLabel}
-        </span>
+      </div>
+      <div
+        title={resetLabel ? `Time until reset: ${resetLabel}` : undefined}
+        style={{
+          color: C.textDim,
+          fontSize: 9,
+          fontFamily: C.fontMono,
+          textAlign: 'right',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {resetLabel}
       </div>
       <div
         title="Used / Time elapsed"
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
         {pending ? (
-          quota > 0 ? (
-            <>
-              <span style={{ color }}>{formatPct(quota)}</span>
-              <span style={{ color: C.textMuted }}> / </span>
-              <span style={{ color: C.accent }}>scan</span>
-            </>
-          ) : (
-            <span style={{ color: C.accent }}>scanning</span>
-          )
+          <span style={{ color: C.textMuted }}>--</span>
         ) : unknown ? (
           <span style={{ color: C.textDim }}>{unknownLabel}</span>
         ) : (
@@ -228,14 +219,31 @@ function ProgressRow({
 function AgentBlock({ agent }: { agent: WidgetAgent }) {
   const C = useTheme();
   return (
-    <div style={{ display: 'grid', gap: 4 }}>
+    <div style={{ display: 'grid', gap: 5 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: agent.color, boxShadow: `0 0 8px ${agent.color}88` }} />
         <span style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1 }}>
           {agent.label}
         </span>
+        {agent.scanning ? (
+          <span
+            title={agent.scanningTitle}
+            style={{
+              color: C.textMuted,
+              fontSize: 8,
+              fontFamily: C.fontMono,
+              lineHeight: 1,
+              border: `1px solid ${C.borderSub}`,
+              borderRadius: 3,
+              padding: '1px 4px',
+              opacity: 0.8,
+            }}
+          >
+            scanning
+          </span>
+        ) : null}
       </div>
-      <div style={{ display: 'grid', gap: 4 }}>
+      <div style={{ display: 'grid', gap: 5 }}>
         {agent.rows.map(row => (
           <ProgressRow
             key={row.key}
@@ -287,8 +295,8 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         label: 'Claude',
         color: C.sonnet,
         rows: [
-          { key: 'claude-5h', label: '5h', quotaPct: state.limits.h5.pct, resetMs: state.limits.h5.resetMs, ...missingLimitStatus(state.limits.h5.pct, state.limits.h5.resetMs, bootPending, claudeUnavailableTitle) },
-          { key: 'claude-1w', label: '1w', quotaPct: state.limits.week.pct, resetMs: state.limits.week.resetMs, ...missingLimitStatus(state.limits.week.pct, state.limits.week.resetMs, bootPending, claudeUnavailableTitle) },
+          { key: 'claude-5h', label: '5h', quotaPct: state.limits.h5.pct, resetMs: state.limits.h5.resetMs, ...missingLimitStatus(state.limits.h5.pct, state.limits.h5.resetMs, bootPending, claudeUnavailableTitle, '5h') },
+          { key: 'claude-1w', label: '1w', quotaPct: state.limits.week.pct, resetMs: state.limits.week.resetMs, ...missingLimitStatus(state.limits.week.pct, state.limits.week.resetMs, bootPending, claudeUnavailableTitle, '1w') },
         ],
       });
     }
@@ -297,14 +305,38 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         key: 'codex',
         label: 'Codex',
         color: C.active,
+        scanning: codexH5Pending || codexWeekPending,
+        scanningTitle: codexPendingTitle,
         rows: [
-          { key: 'codex-5h', label: '5h', quotaPct: state.limits.codexH5.pct, resetMs: state.limits.codexH5.resetMs, pending: codexH5Pending, pendingTitle: codexPendingTitle, ...(!codexH5Pending ? missingLimitStatus(state.limits.codexH5.pct, state.limits.codexH5.resetMs, bootPending, codexUnavailableTitle) : {}) },
-          { key: 'codex-1w', label: '1w', quotaPct: state.limits.codexWeek.pct, resetMs: state.limits.codexWeek.resetMs, pending: codexWeekPending, pendingTitle: codexPendingTitle, ...(!codexWeekPending ? missingLimitStatus(state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, bootPending, codexUnavailableTitle) : {}) },
+          { key: 'codex-5h', label: '5h', quotaPct: state.limits.codexH5.pct, resetMs: state.limits.codexH5.resetMs, pending: codexH5Pending, pendingTitle: codexPendingTitle, ...(!codexH5Pending ? missingLimitStatus(state.limits.codexH5.pct, state.limits.codexH5.resetMs, bootPending, codexUnavailableTitle, '5h') : {}) },
+          { key: 'codex-1w', label: '1w', quotaPct: state.limits.codexWeek.pct, resetMs: state.limits.codexWeek.resetMs, pending: codexWeekPending, pendingTitle: codexPendingTitle, ...(!codexWeekPending ? missingLimitStatus(state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, bootPending, codexUnavailableTitle, '1w') : {}) },
         ],
       });
     }
     return next;
   }, [C.active, C.sonnet, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5.pct, state.limits.codexH5.resetMs, state.limits.codexH5.source, state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, state.limits.codexWeek.source, state.limits.h5.pct, state.limits.h5.resetMs, state.limits.week.pct, state.limits.week.resetMs, state.settings.provider]);
+
+  const showFiveHourHint = agents.length > 1 && agents.every(agent =>
+    agent.rows.some(row => row.label === '5h' && row.unknown && row.unknownLabel === 'waiting')
+  );
+  const toolbarButtonStyle: React.CSSProperties = {
+    background: C.bgCard === '#ffffff' ? 'rgba(245,247,252,0.72)' : 'rgba(30,41,59,0.62)',
+    border: `1px solid ${C.bgCard === '#ffffff' ? 'rgba(148,163,184,0.42)' : 'rgba(100,116,139,0.28)'}`,
+    borderRadius: 4,
+    color: C.textDim,
+    cursor: 'pointer',
+    height: 20,
+    minHeight: 20,
+    padding: 0,
+    lineHeight: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: C.fontMono,
+    boxShadow: C.bgCard === '#ffffff'
+      ? 'inset 0 1px 0 rgba(255,255,255,0.7)'
+      : 'inset 0 1px 0 rgba(255,255,255,0.06)',
+  };
 
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
@@ -365,8 +397,8 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
-        padding: '8px 9px',
+        gap: 8,
+        padding: '14px 12px 13px',
         background: C.bgCard,
         color: C.text,
         fontFamily: C.fontSans,
@@ -374,32 +406,30 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         cursor: 'move',
         userSelect: 'none',
         borderRadius: 8,
-        boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        border: `1px solid ${C.border}`,
+        boxShadow: C.bgCard === '#ffffff'
+          ? 'inset 0 0 0 1px rgba(255,255,255,0.65)'
+          : 'inset 0 0 0 1px rgba(255,255,255,0.04)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 13 }}>
-        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 900, color: C.textDim, letterSpacing: 0, lineHeight: 1 }}>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 900, color: C.text, letterSpacing: 0, lineHeight: 1 }}>
           Quota Pace
         </span>
         <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
           used / elapsed
         </span>
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <button
             data-no-drag="true"
             onClick={handleRefresh}
             title="Refresh now"
             style={{
-              background: C.bgRow,
-              border: `1px solid ${C.border}`,
-              borderRadius: 4,
+              ...toolbarButtonStyle,
               color: refreshing ? C.accent : C.textDim,
               cursor: refreshing ? 'wait' : 'pointer',
               fontSize: 10,
-              fontFamily: C.fontMono,
-              padding: '1px 4px',
-              lineHeight: 1,
-              minWidth: 26,
+              minWidth: 28,
             }}
           >
             {refreshLabel}
@@ -408,24 +438,41 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
             data-no-drag="true"
             onClick={() => window.wmt.openDashboard().catch(() => {})}
             title="Open dashboard"
-            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 11, minWidth: 20, minHeight: 20, padding: '0 4px', lineHeight: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 11 }}
           >
-            ↗
+            <ArrowUpRight size={11} strokeWidth={2} />
           </button>
           <button
             data-no-drag="true"
             onClick={() => window.wmt.hideCompactWidget().catch(() => {})}
             title="Hide widget"
-            style={{ background: C.bgRow, border: `1px solid ${C.border}`, borderRadius: 4, color: C.textDim, cursor: 'pointer', fontSize: 12, minWidth: 20, minHeight: 20, padding: '0 4px', lineHeight: 1.3, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 12 }}
           >
-            ×
+            <X size={11} strokeWidth={2} />
           </button>
         </span>
       </div>
 
-      <div style={{ display: 'grid', gap: agents.length > 1 ? 7 : 6 }}>
+      <div style={{ display: 'grid', gap: agents.length > 1 ? 9 : 6 }}>
         {agents.map(agent => <AgentBlock key={agent.key} agent={agent} />)}
       </div>
+      {showFiveHourHint ? (
+        <div
+          title="No 5h reset data yet. It will appear after local usage or provider data is detected."
+          style={{
+            marginTop: -2,
+            color: C.textMuted,
+            fontSize: 8,
+            fontFamily: C.fontMono,
+            lineHeight: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          5h limits appear after first usage event
+        </div>
+      ) : null}
     </div>
   );
 }
