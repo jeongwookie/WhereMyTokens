@@ -578,6 +578,11 @@ export default function App() {
     setState(prev => ({ ...prev, settings: updated }));
   }
 
+  const handleToggleCompactWidget = useCallback(async () => {
+    const updated = await window.wmt.setSettings({ compactWidgetEnabled: !state.settings.compactWidgetEnabled });
+    setState(prev => ({ ...prev, settings: updated }));
+  }, [state.settings.compactWidgetEnabled]);
+
   const handleQuit = useCallback(() => {
     window.wmt.quit().catch(() => window.close());
   }, []);
@@ -654,6 +659,7 @@ export default function App() {
           onQuit={handleQuit}
           onRefresh={refresh}
           onScrollActivity={handleScrollActivity}
+          onToggleCompactWidget={handleToggleCompactWidget}
         />
       </RenderErrorBoundary>
     </ThemeProvider>
