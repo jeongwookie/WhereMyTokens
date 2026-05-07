@@ -59,6 +59,31 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes revealSlowSplash { to { visibility: visible; opacity: 1; } }
+    @keyframes wmtPulseDot {
+      0%, 100% { opacity: 0.35; transform: scale(0.75); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes wmtSyncSweep {
+      0% { transform: translateX(-80%); opacity: 0.2; }
+      45% { opacity: 0.85; }
+      100% { transform: translateX(170%); opacity: 0.2; }
+    }
+    .wmt-sync-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      display: inline-block;
+      animation: wmtPulseDot 1.05s ease-in-out infinite;
+    }
+    .wmt-sync-dot:nth-child(2) { animation-delay: 0.16s; }
+    .wmt-sync-dot:nth-child(3) { animation-delay: 0.32s; }
+    .wmt-sync-sweep {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 42%;
+      border-radius: inherit;
+      animation: wmtSyncSweep 1.45s ease-in-out infinite;
+    }
 
     /* 커스텀 스크롤바 - CSS 변수 기반 (applyThemeCssVars가 :root에 설정) */
     ::-webkit-scrollbar { width: 6px; }

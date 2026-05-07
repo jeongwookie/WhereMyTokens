@@ -2,6 +2,7 @@ import React from 'react';
 import { WindowStats, BurnRate } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtDuration, Theme } from '../theme';
+import type { LimitDataState, LimitSourceTone } from '../limitDisplay';
 
 function cacheBadge(eff: number, C: Theme) {
   if (eff <= 0) return null;
@@ -59,6 +60,9 @@ interface Props {
   hero?: boolean;
   borderRight?: boolean;
   limitSourceLabel?: string;
+  limitSourceTitle?: string;
+  limitSourceTone?: LimitSourceTone;
+  limitDataState?: LimitDataState;
   pendingLimit?: boolean;
   pendingLimitLabel?: string;
   pendingLimitTitle?: string;
@@ -115,6 +119,67 @@ function StackedProgressBar({
   );
 }
 
+function LimitStatusIndicator({
+  state,
+  hero = false,
+}: {
+  state: Exclude<LimitDataState, 'ready'>;
+  hero?: boolean;
+}) {
+  const C = useTheme();
+  const label = state === 'syncing' ? 'Syncing' : 'Waiting';
+  const title = state === 'syncing'
+    ? 'Limit data is syncing in the background.'
+    : 'Waiting for provider limit data.';
+  return (
+    <span
+      title={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: hero ? 7 : 5,
+        color: state === 'syncing' ? C.accent : C.textMuted,
+        fontSize: hero ? 18 : 10,
+        fontWeight: 800,
+        lineHeight: 1.1,
+        fontFamily: C.fontMono,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+        {[0, 1, 2].map(index => (
+          <span
+            key={index}
+            className="wmt-sync-dot"
+            style={{
+              background: state === 'syncing' ? C.accent : C.textMuted,
+              animationDelay: `${index * 0.16}s`,
+            }}
+          />
+        ))}
+      </span>
+      {label}
+    </span>
+  );
+}
+
+function LimitStatusBar({ state, color }: { state: Exclude<LimitDataState, 'ready'>; color: string }) {
+  const C = useTheme();
+  const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
+  return (
+    <div style={{ position: 'relative', height: 8, background: trackColor, borderRadius: 4, overflow: 'hidden' }}>
+      <span
+        className="wmt-sync-sweep"
+        style={{
+          background: state === 'syncing'
+            ? `linear-gradient(90deg, transparent, ${color}88, transparent)`
+            : `linear-gradient(90deg, transparent, ${C.textMuted}55, transparent)`,
+        }}
+      />
+    </div>
+  );
+}
+
 function TokenStatsCard({
   provider,
   period,
@@ -130,6 +195,9 @@ function TokenStatsCard({
   hero,
   borderRight,
   limitSourceLabel,
+  limitSourceTitle,
+  limitSourceTone = 'neutral',
+  limitDataState,
   pendingLimit = false,
   pendingLimitLabel,
   pendingLimitTitle,
@@ -145,6 +213,10 @@ function TokenStatsCard({
   const barPct = Math.max(0, Math.min(100, limitPct ?? 0));
   const barColor = pendingLimit ? C.accent : pctBarColor(barPct, C);
   const timeElapsed = pendingLimit ? null : timeElapsedPct(period, resetMs);
+  const resolvedLimitState: LimitDataState = pendingLimit
+    ? 'syncing'
+    : (limitDataState ?? (apiConnected === false && barPct === 0 && !limitSourceLabel ? 'waiting' : 'ready'));
+  const noData = showLimitBar && resolvedLimitState !== 'ready';
 
   let resetStr = '';
   if (resetMs && resetMs > 0) {
@@ -164,11 +236,16 @@ function TokenStatsCard({
   const cacheTitle = cacheBadgeTitle(cacheMetricMode);
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
-  const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'scanning') : limitSourceLabel;
-  const displayLimitSourceTitle = pendingLimitTitle ?? displayLimitSourceLabel ?? '';
-  const cachedDisconnected = apiConnected === false && limitSourceLabel === 'cached';
+  const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'Syncing') : limitSourceLabel;
+  const displayLimitSourceTitle = pendingLimitTitle ?? limitSourceTitle ?? displayLimitSourceLabel ?? '';
+  const cachedDisconnected = apiConnected === false && limitSourceLabel === 'Cache';
   const limitValueColor = pendingLimit ? C.textMuted : barColor;
   const quotaBarColor = pendingLimit ? C.textMuted : barColor;
+  const sourceToneStyle = limitSourceTone === 'good'
+    ? { background: `${C.accent}18`, color: C.accent, border: `1px solid ${C.accent}3d` }
+    : limitSourceTone === 'warning'
+      ? { background: `${C.waiting}18`, color: C.waiting, border: `1px solid ${C.waiting}45` }
+      : { background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}` };
   const sourceChip = displayLimitSourceLabel ? (
     <span
       title={displayLimitSourceTitle}
@@ -177,9 +254,7 @@ function TokenStatsCard({
         fontWeight: 700,
         padding: '1px 4px',
         borderRadius: 4,
-        background: pendingLimit ? C.accentDim : C.bgRow,
-        color: pendingLimit ? C.accent : C.textMuted,
-        border: `1px solid ${C.border}`,
+        ...(pendingLimit ? { background: C.accentDim, color: C.accent, border: `1px solid ${C.accent}45` } : sourceToneStyle),
         maxWidth: 92,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -191,7 +266,6 @@ function TokenStatsCard({
   ) : null;
 
   if (hero && showLimitBar) {
-    const noData = apiConnected === false && barPct === 0 && limitSourceLabel !== 'live fallback' && limitSourceLabel !== 'local log';
     return (
       <div style={{
         borderRight: borderRight ? `1px solid ${C.border}` : 'none',
@@ -217,7 +291,7 @@ function TokenStatsCard({
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
           <div style={{ fontSize: 30, fontWeight: 800, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, lineHeight: 1.1, fontFamily: C.fontMono }}>
-            {noData ? '—' : formatUsagePct(barPct)}
+            {noData ? <LimitStatusIndicator state={resolvedLimitState} hero /> : formatUsagePct(barPct)}
           </div>
           {!noData && timeElapsed != null && (
             <div
@@ -240,7 +314,9 @@ function TokenStatsCard({
         </div>
 
         <div style={{ marginBottom: 6 }}>
-          {!noData && (
+          {noData ? (
+            <LimitStatusBar state={resolvedLimitState} color={C.accent} />
+          ) : (
             <StackedProgressBar quotaPct={barPct} timeElapsedPct={timeElapsed} quotaColor={quotaBarColor} height={8} />
           )}
         </div>
@@ -299,16 +375,17 @@ function TokenStatsCard({
       </div>
 
       {showLimitBar && (() => {
-        const noData = apiConnected === false && barPct === 0 && limitSourceLabel !== 'live fallback' && limitSourceLabel !== 'local log';
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ flex: 1 }}>
-              {!noData && (
+              {noData ? (
+                <LimitStatusBar state={resolvedLimitState} color={C.accent} />
+              ) : (
                 <StackedProgressBar quotaPct={barPct} timeElapsedPct={timeElapsed} quotaColor={quotaBarColor} height={8} />
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, width: 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
-              {noData ? '—' : formatUsagePct(barPct)}
+            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, width: noData ? 64 : 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
+              {noData ? <LimitStatusIndicator state={resolvedLimitState} /> : formatUsagePct(barPct)}
             </span>
             {!noData && resetStr && (
               <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>

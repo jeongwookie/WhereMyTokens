@@ -528,21 +528,23 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
       extraUsage: extraUsageSnapshot(data.extra_usage),
     };
 
-    const unknownResetFields = [
+    const coreUnknownResetFields = [
       resetFields.fiveHour === 'null' ? 'five_hour' : null,
       resetFields.sevenDay === 'null' ? 'seven_day' : null,
+    ].filter((field): field is string => !!field);
+    const optionalUnknownResetFields = [
       resetFields.sevenDaySonnet !== 'present' || (sevenDaySonnet && !validSonnetWindow) ? 'seven_day_sonnet' : null,
     ].filter((field): field is string => !!field);
 
-    const status = unknownResetFields.length > 0
+    const status = coreUnknownResetFields.length > 0
       ? buildStatus(
           'reset-unavailable',
           true,
           'reset partial',
-          `${unknownResetFields.join(', ')} reset is unavailable.`,
+          `${coreUnknownResetFields.join(', ')} reset is unavailable.`,
           { responseKeys, resetFields },
         )
-      : buildStatus('ok', true, '', '', { responseKeys, resetFields });
+      : buildStatus('ok', true, optionalUnknownResetFields.length > 0 ? 'sonnet reset unavailable' : '', '', { responseKeys, resetFields });
 
     logStatus(status);
     return { usage, status };

@@ -143,11 +143,11 @@ export interface UsageData {
 }
 
 export interface UsageLimits {
-  h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  so: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  codexH5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  codexWeek: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  so: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  codexH5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  codexWeek: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
 }
 
 export interface AppSettings {

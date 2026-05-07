@@ -10,6 +10,7 @@ import ExtraUsageCard from '../components/ExtraUsageCard';
 import CodeOutputCard from '../components/CodeOutputCard';
 import RenderErrorBoundary from '../components/RenderErrorBoundary';
 import { MainSectionId, normalizeMainSectionOrder } from '../mainSections';
+import { hasLimitData, limitDataState, limitSourceDisplay } from '../limitDisplay';
 
 interface Props {
   state: AppState;
@@ -120,7 +121,7 @@ function buildHeaderStatus(args: {
 
   if (hasClaudeFallback) {
     return {
-      label: 'Local estimate',
+      label: 'Claude local',
       title: `Using local Claude status-line data while API status is ${apiStatusLabel || 'unavailable'}${apiError ? ` - ${apiError}` : ''}`,
       tone: 'warning',
     };
@@ -128,39 +129,32 @@ function buildHeaderStatus(args: {
 
   switch (apiStatusLabel) {
     case 'rate limited':
-      return { label: 'Rate limited', title: apiError || 'Claude API returned HTTP 429.', tone: 'warning' };
+      return { label: 'Claude limited', title: apiError || 'Claude API returned HTTP 429.', tone: 'warning' };
     case 'schema changed':
-      return { label: 'Schema changed', title: apiError || 'Claude API response changed shape.', tone: 'danger' };
+      return { label: 'Claude schema', title: apiError || 'Claude API response changed shape.', tone: 'danger' };
     case 'reset partial':
-      return { label: 'Reset unavailable', title: apiError || 'Claude API usage loaded without reset timing.', tone: 'warning' };
+      return { label: 'Claude partial', title: apiError || 'Claude API usage loaded without reset timing.', tone: 'warning' };
     case 'local only':
-      return { label: 'Local only', title: apiError || 'Claude credentials were not found. Showing local data only.', tone: 'warning' };
+      return { label: 'Claude local', title: apiError || 'Claude credentials were not found. Showing local data only.', tone: 'warning' };
     case 'auth failed':
-      return { label: 'Auth failed', title: apiError || 'Claude CLI token was rejected or expired.', tone: 'danger' };
+      return { label: 'Claude auth', title: apiError || 'Claude CLI token was rejected or expired.', tone: 'danger' };
     case 'forbidden':
-      return { label: 'Access blocked', title: apiError || 'Claude API denied this account or beta surface.', tone: 'danger' };
+      return { label: 'Claude blocked', title: apiError || 'Claude API denied this account or beta surface.', tone: 'danger' };
     case 'api disconnected':
-      return { label: 'API offline', title: apiError || 'Claude API request failed.', tone: 'danger' };
+      return { label: 'Claude offline', title: apiError || 'Claude API request failed.', tone: 'danger' };
     default:
       break;
   }
 
   if (!apiConnected) {
     return {
-      label: 'API offline',
+      label: 'Claude offline',
       title: apiError || 'Claude API request failed.',
       tone: 'danger',
     };
   }
 
   return null;
-}
-
-function limitSourceLabel(limit: AppState['limits']['h5']): string | undefined {
-  if (limit.source === 'statusLine') return 'live fallback';
-  if (limit.source === 'cache') return 'cached';
-  if (limit.source === 'localLog') return 'local log';
-  return undefined;
 }
 
 function buildTrackedH5(usage: AppState['usage'], providerMode: ProviderMode) {
@@ -503,13 +497,18 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
     limits.codexH5.pct > 0 ||
     limits.codexWeek.pct > 0
   );
-  const codexH5HasLimit = limits.codexH5.source === 'localLog' || limits.codexH5.pct > 0 || (limits.codexH5.resetMs ?? 0) > 0;
-  const codexWeekHasLimit = limits.codexWeek.source === 'localLog' || limits.codexWeek.pct > 0 || (limits.codexWeek.resetMs ?? 0) > 0;
+  const codexH5HasLimit = hasLimitData(limits.codexH5);
+  const codexWeekHasLimit = hasLimitData(limits.codexWeek);
   const codexH5Pending = historyWarmupPending && (limits.codexH5.source === 'localLog' || !codexH5HasLimit);
   const codexWeekPending = historyWarmupPending && (limits.codexWeek.source === 'localLog' || !codexWeekHasLimit);
   const codexWarmupTitle = historyWarmupPending
     ? `Full Codex history is still scanning (${formatWarmupEta(historyWarmupStartsAt)}); local-log limits may update.`
     : undefined;
+  const claudeH5Source = limitSourceDisplay(limits.h5);
+  const claudeWeekSource = limitSourceDisplay(limits.week);
+  const sonnetSource = limitSourceDisplay(limits.so);
+  const codexH5Source = limitSourceDisplay(limits.codexH5);
+  const codexWeekSource = limitSourceDisplay(limits.codexWeek);
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -521,10 +520,12 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} resetLabel={limits.h5.resetLabel} apiConnected={apiConnected} burnRate={usage.burnRate}
-            limitSourceLabel={limitSourceLabel(limits.h5)} hero borderRight />
+            limitSourceLabel={claudeH5Source.label} limitSourceTitle={claudeH5Source.title} limitSourceTone={claudeH5Source.tone}
+            limitDataState={limitDataState(limits.h5)} hero borderRight />
           <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.week.pct} resetMs={limits.week.resetMs} resetLabel={limits.week.resetLabel} apiConnected={apiConnected}
-            limitSourceLabel={limitSourceLabel(limits.week)} hero />
+            limitSourceLabel={claudeWeekSource.label} limitSourceTitle={claudeWeekSource.title} limitSourceTone={claudeWeekSource.tone}
+            limitDataState={limitDataState(limits.week)} hero />
         </div>
       )}
 
@@ -541,7 +542,8 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
             totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
           }} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.so.pct} resetMs={limits.so.resetMs} resetLabel={limits.so.resetLabel} apiConnected={apiConnected}
-            limitSourceLabel={limitSourceLabel(limits.so)} hideCost />
+            limitSourceLabel={sonnetSource.label} limitSourceTitle={sonnetSource.title} limitSourceTone={sonnetSource.tone}
+            limitDataState={limitDataState(limits.so)} hideCost />
         </div>
       )}
 
@@ -549,11 +551,13 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
           <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} resetLabel={limits.codexH5.resetLabel} apiConnected={codexH5HasLimit}
-            limitSourceLabel={limitSourceLabel(limits.codexH5)} pendingLimit={codexH5Pending} pendingLimitLabel="scanning" pendingLimitTitle={codexWarmupTitle}
+            limitSourceLabel={codexH5Source.label} limitSourceTitle={codexH5Source.title} limitSourceTone={codexH5Source.tone}
+            limitDataState={limitDataState(limits.codexH5, codexH5Pending)} pendingLimit={codexH5Pending} pendingLimitLabel="Syncing" pendingLimitTitle={codexWarmupTitle}
             cacheMetricMode="codex" hero borderRight />
           <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} resetLabel={limits.codexWeek.resetLabel} apiConnected={codexWeekHasLimit}
-            limitSourceLabel={limitSourceLabel(limits.codexWeek)} pendingLimit={codexWeekPending} pendingLimitLabel="scanning" pendingLimitTitle={codexWarmupTitle}
+            limitSourceLabel={codexWeekSource.label} limitSourceTitle={codexWeekSource.title} limitSourceTone={codexWeekSource.tone}
+            limitDataState={limitDataState(limits.codexWeek, codexWeekPending)} pendingLimit={codexWeekPending} pendingLimitLabel="Syncing" pendingLimitTitle={codexWarmupTitle}
             cacheMetricMode="codex" hero />
         </div>
       )}
