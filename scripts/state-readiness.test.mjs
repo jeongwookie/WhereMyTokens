@@ -90,6 +90,7 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(widgetSource, /unknownLabel: 'waiting'/);
   assert.match(widgetSource, /No 5h reset data yet/);
   assert.match(widgetSource, /5h limits appear after first usage event/);
+  assert.match(widgetSource, /target instanceof Element && !!target\.closest\('\[data-no-drag="true"\]'\)/);
   assert.match(widgetSource, /scanning: codexH5Pending \|\| codexWeekPending/);
   assert.match(widgetSource, /agent\.scanning \? \(/);
   assert.match(widgetSource, /MiniLimitStatus/);
@@ -111,6 +112,8 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
 test('settings and widget integration guard malformed persisted values', () => {
   const ipcSource = fs.readFileSync(path.resolve('src', 'main', 'ipc.ts'), 'utf8');
   const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
+  const appSource = fs.readFileSync(path.resolve('src', 'renderer', 'App.tsx'), 'utf8');
+  const mainViewSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
   const sectionsSource = fs.readFileSync(path.resolve('src', 'renderer', 'mainSections.ts'), 'utf8');
   const settingsSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'SettingsView.tsx'), 'utf8');
   const widgetSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'CompactWidgetView.tsx'), 'utf8');
@@ -138,6 +141,11 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(mainSource, /win\.on\('close', \(\) => flushWidgetPosition\(win\)\)/);
   assert.match(mainSource, /alwaysOnTop: true/);
   assert.match(mainSource, /widgetWindow\.setAlwaysOnTop\(true\)/);
+  assert.match(appSource, /handleToggleCompactWidget/);
+  assert.match(appSource, /compactWidgetEnabled: !state\.settings\.compactWidgetEnabled/);
+  assert.match(mainViewSource, /PictureInPicture2/);
+  assert.match(mainViewSource, /aria-pressed=\{compactWidgetEnabled\}/);
+  assert.match(mainViewSource, /Show floating Quota Pace widget/);
   const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   assert.match(stateManagerSource, /return normalizeSettings\(this\.store\.store\)/);
   assert.match(stateManagerSource, /providerMatchesMode\(settings\.provider, session\.provider\)/);

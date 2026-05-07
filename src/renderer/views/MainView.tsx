@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { PictureInPicture2 } from 'lucide-react';
 import { AppState, SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtRelative, modelColor } from '../theme';
@@ -18,6 +19,7 @@ interface Props {
   onQuit: () => void;
   onRefresh: () => void;
   onScrollActivity: () => void;
+  onToggleCompactWidget: () => void;
 }
 
 type NavView = 'settings' | 'notifications' | 'help';
@@ -106,6 +108,29 @@ function headerPeriodButtonStyle(
     color: active ? C.accent : C.headerSub,
     fontWeight: active ? 700 : 400,
     whiteSpace: 'nowrap',
+  };
+}
+
+function headerIconButtonStyle(
+  active: boolean,
+  C: ReturnType<typeof useTheme>,
+): React.CSSProperties {
+  return {
+    ...noDrag,
+    width: 24,
+    height: 20,
+    padding: 0,
+    borderRadius: 5,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    flexShrink: 0,
+    lineHeight: 1,
+    color: active ? C.active : C.headerSub,
+    background: active ? `${C.active}16` : 'none',
+    border: active ? `1px solid ${C.active}40` : '1px solid transparent',
   };
 }
 
@@ -310,10 +335,19 @@ const LazySection = React.memo(function LazySection({ minHeight, children }: { m
   );
 });
 
-const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { state: AppState; onQuit: () => void }) {
+const HeaderMetrics = React.memo(function HeaderMetrics({
+  state,
+  onQuit,
+  onToggleCompactWidget,
+}: {
+  state: AppState;
+  onQuit: () => void;
+  onToggleCompactWidget: () => void;
+}) {
   const C = useTheme();
   const { sessions, usage, settings, apiConnected, apiError, apiStatusLabel } = state;
   const { currency, usdToKrw } = settings;
+  const compactWidgetEnabled = settings.compactWidgetEnabled === true;
   const providerMode = settings.provider ?? 'both';
   const showClaudeUsage = providerMode !== 'codex';
   const showCodexUsage = providerMode !== 'claude';
@@ -384,6 +418,31 @@ const HeaderMetrics = React.memo(function HeaderMetrics({ state, onQuit }: { sta
               {headerStatus.label}
             </span>
           )}
+          <button
+            type="button"
+            onClick={onToggleCompactWidget}
+            aria-label={compactWidgetEnabled ? 'Hide floating Quota Pace widget' : 'Show floating Quota Pace widget'}
+            aria-pressed={compactWidgetEnabled}
+            title={compactWidgetEnabled ? 'Hide floating Quota Pace widget' : 'Show floating Quota Pace widget'}
+            style={headerIconButtonStyle(compactWidgetEnabled, C)}
+          >
+            <PictureInPicture2 size={13} strokeWidth={2.1} aria-hidden="true" />
+            {compactWidgetEnabled && (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: 3,
+                  right: 3,
+                  width: 4,
+                  height: 4,
+                  borderRadius: 999,
+                  background: C.active,
+                  boxShadow: `0 0 0 2px ${C.headerBg}`,
+                }}
+              />
+            )}
+          </button>
           <div style={{ width: 1, height: 14, background: C.headerBorder, flexShrink: 0 }} />
           <button onClick={() => window.wmt.minimize().catch(() => {})} title="Minimize" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>-</button>
           <button onClick={onQuit} title="Quit" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>x</button>
@@ -1052,7 +1111,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
   );
 });
 
-export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActivity }: Props) {
+export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActivity, onToggleCompactWidget }: Props) {
   const C = useTheme();
   const { sessions, usage, settings } = state;
   const { currency, usdToKrw } = settings;
@@ -1143,7 +1202,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
       <RenderErrorBoundary label="Header Metrics">
-        <HeaderMetrics state={state} onQuit={onQuit} />
+        <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
         {state.historyWarmupPending && (

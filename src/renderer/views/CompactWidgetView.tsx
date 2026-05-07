@@ -93,7 +93,7 @@ function formatResetShort(resetMs: number | null): string {
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && !!target.closest('[data-no-drag="true"]');
+  return target instanceof Element && !!target.closest('[data-no-drag="true"]');
 }
 
 function missingLimitStatus(
