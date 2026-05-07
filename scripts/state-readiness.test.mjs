@@ -94,8 +94,14 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(widgetSource, /agent\.scanning \? \(/);
   assert.match(widgetSource, /MiniLimitStatus/);
   assert.match(widgetSource, /Provider limit-data health/);
+  assert.match(widgetSource, /\`\$\{provider\} OK\`/);
+  assert.match(widgetSource, /claudeGood/);
+  assert.match(widgetSource, /codexGood/);
   assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
+  assert.match(stateSource, /API_MIN_INTERVAL_MS = 300_000/);
+  assert.match(stateSource, /settingsForApi\.provider !== 'codex' \? this\.refreshApiUsagePct\(force\) : Promise\.resolve\(false\)/);
+  assert.match(stateSource, /settingsForApi\.provider !== 'claude' \? this\.refreshCodexUsagePct\(force\) : Promise\.resolve\(false\)/);
   assert.match(mainSource, /historyWarmupPending \|\|/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);

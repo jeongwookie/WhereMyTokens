@@ -318,7 +318,7 @@ export class StateManager {
   private watcherProfile: WatcherProfile = 'off';
   private watcherTargetCount = 0;
   private repoGitStatsLastRefresh = 0;
-  private static readonly API_MIN_INTERVAL_MS = 180_000;
+  private static readonly API_MIN_INTERVAL_MS = 300_000;
   private static readonly CODEX_USAGE_MIN_INTERVAL_MS = 300_000;
   private static readonly GIT_STATS_TTL_MS = 600_000;
   private static readonly FAST_REFRESH_VISIBLE_MS = 60_000;
@@ -1238,8 +1238,8 @@ export class StateManager {
       const apiSample = this.beginPerfSample();
       const settingsForApi = this.getSettings();
       await Promise.all([
-        this.refreshAutoLimits(),
-        this.refreshApiUsagePct(force),
+        settingsForApi.provider !== 'codex' ? this.refreshAutoLimits() : Promise.resolve(),
+        settingsForApi.provider !== 'codex' ? this.refreshApiUsagePct(force) : Promise.resolve(false),
         settingsForApi.provider !== 'claude' ? this.refreshCodexUsagePct(force) : Promise.resolve(false),
       ]);
       apiPerf = this.finishPerfSample(apiSample);

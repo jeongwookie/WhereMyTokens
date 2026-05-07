@@ -37,7 +37,7 @@ type DragState = {
   originY: number;
 };
 
-type HealthTone = 'good' | 'neutral' | 'warning' | 'danger';
+type HealthTone = 'claudeGood' | 'codexGood' | 'neutral' | 'warning' | 'danger';
 
 interface HealthItem {
   key: string;
@@ -147,6 +147,10 @@ function healthLabelForSource(limit: LimitWindow): string | null {
   return limitSourceDisplay(limit).label ?? null;
 }
 
+function providerOkTone(provider: 'Claude' | 'Codex'): HealthTone {
+  return provider === 'Claude' ? 'claudeGood' : 'codexGood';
+}
+
 function providerHealth(
   provider: 'Claude' | 'Codex',
   h5: LimitWindow,
@@ -154,7 +158,7 @@ function providerHealth(
   syncing: boolean,
   claudeStatusLabel?: string,
   claudeApiConnected = true,
-): HealthItem | null {
+): HealthItem {
   if (provider === 'Claude') {
     switch (claudeStatusLabel) {
       case 'rate limited':
@@ -168,19 +172,20 @@ function providerHealth(
       case 'api disconnected':
         return { key: 'claude', label: 'Claude offline', tone: 'danger', title: 'Claude API is unavailable.' };
       default:
-        if (!claudeApiConnected) {
-          return { key: 'claude', label: 'Claude offline', tone: 'danger', title: 'Claude API is unavailable.' };
-        }
         break;
     }
   }
 
   if (syncing || limitDataState(h5, syncing) === 'syncing' || limitDataState(week, syncing) === 'syncing') {
-    return { key: provider.toLowerCase(), label: `${provider} syncing`, tone: 'good', title: `${provider} limit data is syncing in the background.` };
+    return { key: provider.toLowerCase(), label: `${provider} syncing`, tone: providerOkTone(provider), title: `${provider} limit data is syncing in the background.` };
   }
 
   if (!hasLimitData(h5) && !hasLimitData(week)) {
     return { key: provider.toLowerCase(), label: `${provider} waiting`, tone: 'neutral', title: `${provider} limit data has not arrived yet.` };
+  }
+
+  if (provider === 'Claude' && !claudeApiConnected) {
+    return { key: 'claude', label: 'Claude offline', tone: 'danger', title: 'Claude API is unavailable.' };
   }
 
   const sources = [healthLabelForSource(h5), healthLabelForSource(week)].filter((label): label is string => !!label);
@@ -193,7 +198,12 @@ function providerHealth(
   if (sources.includes('Bridge')) {
     return { key: provider.toLowerCase(), label: `${provider} Bridge`, tone: 'neutral', title: `${provider} is using the local status-line bridge.` };
   }
-  return null;
+  return {
+    key: provider.toLowerCase(),
+    label: `${provider} OK`,
+    tone: providerOkTone(provider),
+    title: `${provider} account limit data is current.`,
+  };
 }
 
 function ProgressRow({
@@ -419,24 +429,23 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         state.apiStatusLabel,
         state.apiConnected,
       );
-      if (claudeHealth) items.push(claudeHealth);
+      items.push(claudeHealth);
     }
     if (provider !== 'claude') {
       const codexSyncing = state.historyWarmupPending && (!hasLimitData(state.limits.codexH5) || !hasLimitData(state.limits.codexWeek));
       const codexHealth = providerHealth('Codex', state.limits.codexH5, state.limits.codexWeek, codexSyncing);
-      if (codexHealth) items.push(codexHealth);
+      items.push(codexHealth);
     }
-    return items.length > 0
-      ? items
-      : [{ key: 'ok', label: 'OK', tone: 'good', title: 'Visible provider limits are current.' }];
+    return items;
   }, [state.apiConnected, state.apiStatusLabel, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5, state.limits.codexWeek, state.limits.h5, state.limits.week, state.settings.provider]);
 
   const healthToneStyle = useCallback((tone: HealthTone): React.CSSProperties => {
-    if (tone === 'good') return { color: C.accent, background: `${C.accent}14`, border: `1px solid ${C.accent}33` };
+    if (tone === 'claudeGood') return { color: C.sonnet, background: `${C.sonnet}14`, border: `1px solid ${C.sonnet}33` };
+    if (tone === 'codexGood') return { color: C.active, background: `${C.active}14`, border: `1px solid ${C.active}33` };
     if (tone === 'warning') return { color: C.waiting, background: `${C.waiting}14`, border: `1px solid ${C.waiting}33` };
     if (tone === 'danger') return { color: C.barRed, background: `${C.barRed}12`, border: `1px solid ${C.barRed}33` };
     return { color: C.textMuted, background: C.bgRow, border: `1px solid ${C.borderSub}` };
-  }, [C.accent, C.barRed, C.bgRow, C.borderSub, C.waiting, C.textMuted]);
+  }, [C.active, C.barRed, C.bgRow, C.borderSub, C.sonnet, C.waiting, C.textMuted]);
 
   const showFiveHourHint = agents.length > 1 && agents.every(agent =>
     agent.rows.some(row => row.label === '5h' && row.unknown && row.unknownLabel === 'waiting')

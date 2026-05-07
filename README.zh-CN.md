@@ -100,14 +100,14 @@
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
-- **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine；Codex 5h/1w 来自本地 Codex rate-limit 日志事件
+- **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine 回退；Codex 5h/1w 按 live Codex usage、缓存、本地 rate-limit 日志事件的顺序显示
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示消耗速度快于重置窗口
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
 - **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
 
 ### 分析与活动
-- **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、紧凑的 Claude/Codex 元数据，以及用于显示 Claude 回退/reset 状态的单一状态 pill
+- **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、紧凑的 Claude/Codex 元数据，以及 provider 级 health/fallback 状态
 - **启动友好的历史同步** — 先显示当前会话和最近用量，较早的历史会带着 `Partial History` 提示在后台继续同步
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
@@ -155,7 +155,7 @@
 
 启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在后台同步，这样托盘应用可以更快打开。
 
-头部状态 pill 会集中显示最重要的 Claude/API 状态。常见标签包括 `Local estimate`（使用本地回退数据）、`Reset unavailable`（已有当前用量但缺少 reset 时间）、`Rate limited` 和 `API offline`。把鼠标移到 pill 上可以查看最新细节。
+头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude limited` 和 `Claude offline`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
 
 ---
 
@@ -167,7 +167,7 @@ WhereMyTokens 也可以读取 Codex 的本地 JSONL 日志：`~/.codex/sessions/
 - 会话状态、项目/分支分组，以及 VS Code、Codex Exec 等 source 标签
 - GPT/Codex 模型使用量与 API 等价费用估算
 - input、cached input、output 令牌、缓存节省金额和全时段模型合计
-- 当本地日志包含 `rate_limits` 事件时，显示 Codex 5h/1w 使用率与 reset 时间
+- 当 live Codex usage 可用时显示 Codex 5h/1w 使用率与 reset 时间；失败时回退到缓存/本地 `rate_limits` 事件
 - Codex 日志提供 tool call，而不是每个工具的 output token，因此 Activity Breakdown 显示 tool event count
 
 **Codex 缓存计算：** Codex 日志提供 `input_tokens` 和 `cached_input_tokens`。WhereMyTokens 将 uncached input 保存为 `input_tokens - cached_input_tokens`，将 cached input 作为 cache-read token，并使用以下公式显示缓存效率：
@@ -190,13 +190,13 @@ cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens
 
 Claude 提供 input、output、cache creation 与 cache read。Codex 提供 raw input、cached input 与 output，因此 WhereMyTokens 会把 raw input 拆成 uncached input 与 cached input，避免缓存节省金额和模型合计重复计算。
 
-Claude 和 Codex 使用独立的 5h/1w reset window。Claude 限额优先使用 Anthropic API，其次使用 statusLine/cache；Codex 限额使用本地 Codex JSONL 中最新的 `rate_limits` 事件。
+Claude 和 Codex 使用独立的 5h/1w reset window。Claude 限额优先使用 Anthropic API，其次使用 statusLine/cache；Codex 限额优先使用 live Codex usage snapshot，其次使用 cache/local `rate_limits` 事件。实时请求仅针对启用的 provider，最短间隔为 5 分钟，并带有 timeout、响应大小限制和 backoff。
 
 ---
 
 ## 数据与隐私
 
-WhereMyTokens 仅读取本地文件 — 无云同步，无遥测。
+WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账号的 provider 使用量 API — 无云同步，无遥测。
 
 | 文件 | 用途 |
 |------|------|
@@ -204,6 +204,7 @@ WhereMyTokens 仅读取本地文件 — 无云同步，无遥测。
 | `~/.claude/projects/**/*.jsonl` | 对话日志（令牌数、费用） |
 | `~/.claude/.credentials.json` | OAuth 令牌 — 仅用于从 Anthropic 获取您的使用统计 |
 | `~/.codex/sessions/**/*.jsonl` | Codex 会话日志（令牌、cached input、模型、rate-limit 事件、tool call） |
+| `~/.codex/auth.json` | ChatGPT OAuth 令牌 — 仅用于获取您自己的 Codex 使用量 snapshot；WhereMyTokens 不会记录或保存该令牌 |
 | `%APPDATA%\WhereMyTokens\live-session.json` | `statusLine` 插件写入的桥接数据 |
 
 ---
