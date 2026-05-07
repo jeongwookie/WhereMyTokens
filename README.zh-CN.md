@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-Setup.exe"><strong>下载 v1.13.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-Setup.exe"><strong>下载 v1.13.1</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -59,11 +59,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 5/7 | 在主头部新增 Floating Quota Pace 小部件快捷开关，并修复小部件 toolbar 图标点击偶尔被识别为拖拽的问题 |
 | **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | 5/7 | 新增更稳健的 Codex live usage 同步、安全 API backoff、provider 级 Quota Pace health 标签，以及更清晰的 fallback/loading 状态 |
 | **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 5/6 | 新增 Floating Quota Pace 小部件、主布局自定义、带时间进度的使用量条、新截图，并强化小部件/设置同步 |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 4/27 | 新增安装程序启动时的 English/한국어/日本語/简体中文/Español 语言选择，同时保持 EULA 正文为英文 |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 稳定长时间运行时的弹出会话保留范围，阻止 changed file 让 scoped refresh 再次扩张的路径，并新增带开关的 crash/memory 诊断计测 |
-| **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | 将弹出会话列表稳定在最近 + 活跃工作范围内，降低隐藏托盘时的刷新成本，并加强主进程诊断日志 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-v1.13.0-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-v1.13.1-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -83,7 +83,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.13.0-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.13.1-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -126,7 +126,7 @@
 ### 个性化
 - **Auto/Light/Dark 主题** — 默认跟随系统偏好
 - **费用显示** — USD 或 KRW，可配置汇率
-- **Floating usage widget** — 始终置顶显示的小型 Quota Pace 悬浮窗口；可从托盘菜单、Settings 或小部件按钮显示/隐藏
+- **Floating usage widget** — 始终置顶显示的小型 Quota Pace 悬浮窗口；可从主头部、托盘菜单、Settings 或小部件按钮显示/隐藏
 - **托盘标签** — 在任务栏直接显示使用率 %、令牌数或费用
 - **项目管理** — 隐藏或完全排除项目
 - **随 Windows 启动** — 可选自动启动
@@ -147,7 +147,7 @@
 - **提醒** — 设置使用阈值（50% / 80% / 90%）
 - **主题** — Auto（跟随系统）/ Light / Dark
 - **托盘标签** — 选择任务栏显示内容
-- **Floating usage widget** — 启用小型 Quota Pace 窗口；之后可右键托盘图标显示或隐藏
+- **Floating usage widget** — 启用小型 Quota Pace 窗口；之后可用主头部开关或托盘菜单显示/隐藏
 
 ---
 
@@ -155,7 +155,7 @@
 
 启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在后台同步，这样托盘应用可以更快打开。
 
-头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude limited` 和 `Claude offline`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
+头部的小型 PiP 按钮可直接开关 Floating Quota Pace 小部件。头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude limited` 和 `Claude offline`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
 
 ---
 

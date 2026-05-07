@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-Setup.exe"><strong>Download v1.13.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-Setup.exe"><strong>Download v1.13.1</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -59,11 +59,11 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | May 7 | Add a main-header toggle for the floating Quota Pace widget and fix widget toolbar icon clicks that could be captured as drag gestures |
 | **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | May 7 | Add resilient Codex live usage syncing, safer API backoff, provider-specific Quota Pace health chips, and clearer fallback/loading states |
 | **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | May 6 | Add the floating Quota Pace widget, layout customization, time-elapsed usage bars, refreshed screenshots, and widget/settings hardening |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | Apr 27 | Add installer language selection for English, Korean, Japanese, Simplified Chinese, and Spanish while keeping the EULA in English |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | Apr 26 | Stabilize long-running popup session retention, stop scoped refresh growth from changed files, and add gated crash and memory instrumentation for troubleshooting |
-| **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | Apr 25 | Keep popup sessions focused on recent + active work, reduce hidden tray refresh cost, and add perf diagnostics for main-process troubleshooting |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-Setup.exe)** - just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-v1.13.0-win-x64.zip)** - no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-v1.13.1-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.13.0-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.13.1-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -127,7 +127,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ### Customization
 - **Auto/Light/Dark theme** — follows system preference by default
 - **Cost display** — USD or KRW with configurable exchange rate
-- **Floating usage widget** — compact Quota Pace window with always-on-top support; show/hide it from the tray menu, Settings, or widget controls
+- **Floating usage widget** — compact Quota Pace window with always-on-top support; show/hide it from the main header, tray menu, Settings, or widget controls
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
 - **Project management** — hide or fully exclude projects from tracking
 - **Start with Windows** — optional auto-launch at login
@@ -148,7 +148,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
 - **Tray label** — choose what to display in the taskbar
-- **Floating usage widget** — enable the compact Quota Pace window; right-click the tray icon to show or hide it later
+- **Floating usage widget** — enable the compact Quota Pace window; use the main header toggle or tray menu to show or hide it later
 
 ---
 
@@ -156,7 +156,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 
 At startup the dashboard shows current sessions and recent usage first. If you see `Partial History`, older history is still syncing in the background so the tray app can open quickly.
 
-The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude limited`, and `Claude offline`. The Quota Pace widget shows provider-specific health chips such as `Claude OK` and `Codex OK`; hover any pill for the latest detail.
+The small PiP button in the header toggles the floating Quota Pace widget. The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude limited`, and `Claude offline`. The Quota Pace widget shows provider-specific health chips such as `Claude OK` and `Codex OK`; hover any pill for the latest detail.
 
 ---
 

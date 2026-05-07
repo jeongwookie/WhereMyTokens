@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-Setup.exe"><strong>v1.13.0 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-Setup.exe"><strong>v1.13.1 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -59,11 +59,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 5/7 | Floating Quota Pace ウィジェットをメインヘッダーから直接オン/オフできるようにし、ウィジェット toolbar のアイコンクリックが drag として扱われることがある問題を修正 |
 | **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | 5/7 | 安定した Codex live usage 同期、安全な API backoff、provider 別 Quota Pace health チップ、より明確な fallback/loading 状態を追加 |
 | **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 5/6 | Floating Quota Pace ウィジェット、メインレイアウトのカスタマイズ、時間経過つき使用量バー、新しいスクリーンショット、ウィジェット/設定同期の安定化を追加 |
 | **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 4/27 | インストーラー起動時に English/한국어/日本語/简体中文/Español の言語選択を追加し、EULA 本文は英語のまま維持 |
 | **[v1.11.5](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.5)** | 4/26 | 長時間実行時のポップアップセッション保持範囲を安定化し、changed file で scoped refresh が再拡大する経路を止め、トラブルシュート用の crash/memory 計測をゲート付きで追加 |
-| **[v1.11.4](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.4)** | 4/25 | ポップアップのセッション一覧を recent + active な作業中心に安定化し、非表示トレイ時の更新コストを下げ、メインプロセス診断を強化 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.0/WhereMyTokens-v1.13.0-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.1/WhereMyTokens-v1.13.1-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -83,7 +83,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.13.0-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.13.1-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -126,7 +126,7 @@
 ### カスタマイズ
 - **Auto/Light/Dark テーマ** — デフォルトはシステム設定に従う
 - **コスト表示** — USD または KRW、為替レート設定可能
-- **Floating usage widget** — 常に最前面に表示される小さな Quota Pace ウィンドウ；トレイメニュー、Settings、ウィジェットボタンから表示/非表示を切替
+- **Floating usage widget** — 常に最前面に表示される小さな Quota Pace ウィンドウ；メインヘッダー、トレイメニュー、Settings、ウィジェットボタンから表示/非表示を切替
 - **トレイラベル** — 使用量 %、トークン数、コストを直接表示
 - **プロジェクト管理** — 非表示または追跡から完全除外
 - **Windows 起動時に自動起動** — オプション
@@ -147,7 +147,7 @@
 - **アラート** — 使用量しきい値の設定（50% / 80% / 90%）
 - **テーマ** — Auto（システム設定に従う）/ Light / Dark
 - **トレイラベル** — タスクバーに表示する情報を選択
-- **Floating usage widget** — 小さな Quota Pace ウィンドウを有効化できます。あとからトレイアイコンの右クリックで表示/非表示を切り替えられます
+- **Floating usage widget** — 小さな Quota Pace ウィンドウを有効化できます。あとからメインヘッダーのトグルやトレイメニューで表示/非表示を切り替えられます
 
 ---
 
@@ -155,7 +155,7 @@
 
 起動直後は現在のセッションと最近の使用量を先に表示します。`Partial History` が見える場合は、古い履歴をバックグラウンドで同期している途中で、トレイアプリを速く開くための動作です。
 
-ヘッダーのステータス pill は provider/API の重要な状態を 1 か所にまとめます。代表的なラベルは `Claude local`、`Claude partial`、`Claude limited`、`Claude offline` です。Quota Pace ウィジェットは `Claude OK`、`Codex OK` のように provider 別の health チップを表示し、pill やチップにホバーすると最新の詳細を確認できます。
+ヘッダーの小さな PiP ボタンで Floating Quota Pace ウィジェットを直接オン/オフできます。ヘッダーのステータス pill は provider/API の重要な状態を 1 か所にまとめます。代表的なラベルは `Claude local`、`Claude partial`、`Claude limited`、`Claude offline` です。Quota Pace ウィジェットは `Claude OK`、`Codex OK` のように provider 別の health チップを表示し、pill やチップにホバーすると最新の詳細を確認できます。
 
 ---
 

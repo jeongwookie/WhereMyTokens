@@ -219,6 +219,7 @@ function ContentEN() {
       <Section icon={<Signal size={15} />} title="Startup & Status">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — on startup the dashboard shows current sessions and recent usage first. Older history keeps syncing in the background so the tray app can open quickly.</div>
         <div style={{ marginBottom: 5 }}><B>Header metadata</B> — Claude and Codex details in the top bar are read-only labels, not action buttons. Provider mode decides whether Claude, Codex, or both appear.</div>
+        <div style={{ marginBottom: 5 }}><B>Header widget toggle</B> — the small PiP button in the top bar shows or hides the floating Quota Pace widget without opening Settings.</div>
         <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important provider health state and names the affected provider. Quota Pace Health shows separate chips such as <B>Claude OK</B> and <B>Codex OK</B>.</div>
         <div style={{ marginBottom: 5 }}><B>Source chips</B> — <B>API</B> means provider account usage, <B>Bridge</B> means Claude statusLine fallback, <B>Cache</B> means the last trusted snapshot, and <B>Log</B> means a local session-log estimate.</div>
         <div><B>Waiting / Syncing</B> — a limit card shows a soft loading state while provider data is still arriving instead of showing an empty dash.</div>
@@ -239,7 +240,7 @@ function ContentEN() {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both. Disabled providers do not make live usage requests.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
-          <InfoRow label="Widget">Settings → Floating usage widget opens the always-on-top compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window.</InfoRow>
+          <InfoRow label="Widget">Settings → Floating usage widget or the main header PiP button opens the always-on-top compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window.</InfoRow>
         </div>
       </Section>
     </>
@@ -353,7 +354,7 @@ function ContentKO() {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both. 꺼진 provider는 live usage 요청을 보내지 않습니다.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
-          <InfoRow label="Widget">Settings → Floating usage widget를 켜면 항상 위에 표시되는 작은 Quota Pace 창이 열립니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다.</InfoRow>
+          <InfoRow label="Widget">Settings → Floating usage widget 또는 메인 헤더 PiP 버튼으로 항상 위에 표시되는 작은 Quota Pace 창을 열고 닫을 수 있습니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다.</InfoRow>
         </div>
       </Section>
     </>
@@ -467,7 +468,7 @@ function ContentJA() {
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both。無効な provider は live usage request を送りません。</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup。</InfoRow>
-          <InfoRow label="Widget">Settings → Floating usage widget をオンにすると、常に最前面のコンパクトな Quota Pace ウィンドウが開きます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。</InfoRow>
+          <InfoRow label="Widget">Settings → Floating usage widget またはメインヘッダーの PiP ボタンで、常に最前面のコンパクトな Quota Pace ウィンドウを開閉できます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。</InfoRow>
         </div>
       </Section>
     </>
