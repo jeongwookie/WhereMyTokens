@@ -7,12 +7,15 @@ import path from 'node:path';
 import stateManagerModule from '../dist/main/stateManager.js';
 import * as jsonlCacheModule from '../dist/main/jsonlCache.js';
 import rateLimitFetcherModule from '../dist/main/rateLimitFetcher.js';
+import codexUsageFetcherModule from '../dist/main/codexUsageFetcher.js';
 
 const { StateManager } = stateManagerModule;
 const { JsonlCache } = jsonlCacheModule;
 const { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS } = rateLimitFetcherModule;
+const { CODEX_USAGE_CACHE_SCHEMA_VERSION } = codexUsageFetcherModule;
 const originalFetchApiUsagePct = rateLimitFetcherModule.fetchApiUsagePct;
 const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
+const originalCodexHome = process.env.CODEX_HOME;
 const tempClaudeDirs = [];
 
 function makeStore(overrides = {}) {
@@ -46,10 +49,24 @@ function withTempClaudeCredentials() {
   process.env.CLAUDE_CONFIG_DIR = dir;
 }
 
+function withTempCodexAuth() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-codex-state-test-'));
+  tempClaudeDirs.push(dir);
+  fs.writeFileSync(path.join(dir, 'auth.json'), JSON.stringify({
+    tokens: {
+      access_token: 'test-access-token',
+    },
+  }));
+  process.env.CODEX_HOME = dir;
+  return fs.statSync(path.join(dir, 'auth.json')).mtimeMs;
+}
+
 test.afterEach(() => {
   rateLimitFetcherModule.fetchApiUsagePct = originalFetchApiUsagePct;
   if (originalClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
   else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+  if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
+  else process.env.CODEX_HOME = originalCodexHome;
   for (const dir of tempClaudeDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -276,6 +293,106 @@ test('malformed Codex local-log rate limits are clamped or dropped', () => {
   const limits = manager.buildLimits();
 
   assert.equal(limits.codexH5.pct, 100);
+  assert.equal(limits.codexH5.source, 'localLog');
+  assert.equal(limits.codexWeek.pct, 0);
+  assert.equal(limits.codexWeek.source, undefined);
+});
+
+test('Codex live usage overrides stale local-log rate limits', () => {
+  const manager = new StateManager(makeStore(), () => {});
+  const now = Date.now();
+  manager.codexUsageConnected = true;
+  manager.codexUsagePctStoredAt = now;
+  manager.codexUsagePct = {
+    h5Available: true,
+    weekAvailable: true,
+    h5Pct: 100,
+    weekPct: 53,
+    h5ResetMs: 30 * 60 * 1000,
+    weekResetMs: 3 * 24 * 60 * 60 * 1000,
+    plan: 'pro',
+    credits: null,
+    limitReached: true,
+    rateLimitReachedType: 'rate_limit_reached',
+  };
+  manager.codexRateLimits = {
+    h5: {
+      pct: 9,
+      resetsAt: Math.floor((now + 4 * 60 * 60 * 1000) / 1000),
+      observedAt: now - 1000,
+    },
+    week: {
+      pct: 17,
+      resetsAt: Math.floor((now + 6 * 24 * 60 * 60 * 1000) / 1000),
+      observedAt: now - 1000,
+    },
+  };
+
+  const limits = manager.buildLimits();
+
+  assert.equal(limits.codexH5.pct, 100);
+  assert.equal(limits.codexH5.source, 'codexApi');
+  assert.equal(limits.codexWeek.pct, 53);
+  assert.equal(limits.codexWeek.source, 'codexApi');
+});
+
+test('cached Codex live usage is used before local logs and ages after startup', () => {
+  const authMtimeMs = withTempCodexAuth();
+  const manager = new StateManager(makeStore({
+    _cachedCodexUsagePct: {
+      schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
+      storedAt: Date.now() - 10_000,
+      authMtimeMs,
+      h5Available: true,
+      weekAvailable: true,
+      h5Pct: 5,
+      weekPct: 17,
+      h5ResetMs: 70_000,
+      weekResetMs: 130_000,
+      plan: 'pro',
+      credits: null,
+      limitReached: false,
+      rateLimitReachedType: null,
+    },
+  }), () => {});
+
+  const limits = manager.buildLimits();
+
+  assert.equal(limits.codexH5.pct, 5);
+  assert.equal(limits.codexH5.source, 'cache');
+  assert.ok((limits.codexH5.resetMs ?? 0) <= 70_000);
+  assert.equal(limits.codexWeek.pct, 17);
+  assert.equal(limits.codexWeek.source, 'cache');
+});
+
+test('expired Codex live cache falls back to fresh local-log windows', () => {
+  const manager = new StateManager(makeStore(), () => {});
+  const now = Date.now();
+  manager.codexUsageConnected = false;
+  manager.codexUsagePctStoredAt = now - 31 * 60 * 1000;
+  manager.codexUsagePct = {
+    h5Available: true,
+    weekAvailable: true,
+    h5Pct: 5,
+    weekPct: 17,
+    h5ResetMs: null,
+    weekResetMs: null,
+    plan: 'pro',
+    credits: null,
+    limitReached: false,
+    rateLimitReachedType: null,
+  };
+  manager.codexRateLimits = {
+    h5: {
+      pct: 23,
+      resetsAt: Math.floor((now + 2 * 60 * 60 * 1000) / 1000),
+      observedAt: now - 1000,
+    },
+  };
+
+  const limits = manager.buildLimits();
+
+  assert.equal(limits.codexH5.pct, 23);
   assert.equal(limits.codexH5.source, 'localLog');
   assert.equal(limits.codexWeek.pct, 0);
   assert.equal(limits.codexWeek.source, undefined);

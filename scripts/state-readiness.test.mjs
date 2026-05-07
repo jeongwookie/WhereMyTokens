@@ -64,12 +64,14 @@ test('renderer splash and session stabilization use initial readiness and daily 
   assert.match(source, /normalizeState\(next\)/);
 });
 
-test('renderer mutes cached Claude usage text while keeping the progress bar active', () => {
+test('renderer mutes cached usage text and shows soft loading states', () => {
   const source = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
 
-  assert.match(source, /cachedDisconnected = apiConnected === false && limitSourceLabel === 'cached'/);
+  assert.match(source, /cachedDisconnected = apiConnected === false && limitSourceLabel === 'Cache'/);
   assert.match(source, /limitValueColor = pendingLimit \? C\.textMuted : barColor/);
   assert.match(source, /noData \|\| cachedDisconnected \? C\.textMuted : limitValueColor/);
+  assert.match(source, /LimitStatusIndicator/);
+  assert.match(source, /LimitStatusBar/);
 });
 
 test('warmup mode marks Codex local-log limits as provisional and defers alerts', () => {
@@ -90,9 +92,16 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(widgetSource, /5h limits appear after first usage event/);
   assert.match(widgetSource, /scanning: codexH5Pending \|\| codexWeekPending/);
   assert.match(widgetSource, /agent\.scanning \? \(/);
-  assert.match(widgetSource, />--<\/span>/);
-  assert.doesNotMatch(widgetSource, /C\.accent[^>]+>scanning<\/span>/);
+  assert.match(widgetSource, /MiniLimitStatus/);
+  assert.match(widgetSource, /Provider limit-data health/);
+  assert.match(widgetSource, /\`\$\{provider\} OK\`/);
+  assert.match(widgetSource, /claudeGood/);
+  assert.match(widgetSource, /codexGood/);
+  assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
+  assert.match(stateSource, /API_MIN_INTERVAL_MS = 300_000/);
+  assert.match(stateSource, /settingsForApi\.provider !== 'codex' \? this\.refreshApiUsagePct\(force\) : Promise\.resolve\(false\)/);
+  assert.match(stateSource, /settingsForApi\.provider !== 'claude' \? this\.refreshCodexUsagePct\(force\) : Promise\.resolve\(false\)/);
   assert.match(mainSource, /historyWarmupPending \|\|/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);

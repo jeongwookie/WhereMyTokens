@@ -60,9 +60,10 @@ function formatSource(source: string | undefined): string {
   if (!source) return '';
   const labels: Record<string, string> = {
     api: 'API',
-    statusLine: 'statusLine',
-    cache: 'cache',
-    localLog: 'local log',
+    codexApi: 'API',
+    statusLine: 'Bridge',
+    cache: 'Cache',
+    localLog: 'Log',
   };
   return ` · source: ${labels[source] ?? source}`;
 }

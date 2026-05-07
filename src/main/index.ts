@@ -482,7 +482,7 @@ function applyRuntimeSettings() {
 }
 
 function isCodexLimitProvisional(state: AppState, limit: AppState['limits']['codexH5']): boolean {
-  return state.historyWarmupPending && (limit.source === 'localLog' || limit.pct > 0 || (limit.resetMs ?? 0) > 0);
+  return state.historyWarmupPending && limit.source === 'localLog';
 }
 
 function buildTrayTitle(state: AppState): string {

@@ -100,14 +100,14 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine; Codex 5h/1sem desde eventos locales de rate-limit en los logs
+- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine como respaldo; Codex 5h/1sem desde live Codex usage, caché y luego eventos locales de rate-limit
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
-- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y una sola píldora de estado para fallback/reset
+- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y estado health/fallback por provider
 - **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue cargando en segundo plano con el aviso `Partial History`
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
@@ -155,7 +155,7 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 
 Al iniciar, el panel muestra primero las sesiones actuales y el uso reciente. Si aparece `Partial History`, el historial antiguo sigue sincronizándose en segundo plano para que la app de bandeja abra rápido.
 
-La píldora de estado del encabezado resume el estado más importante de Claude/API. Las etiquetas más comunes son `Local estimate` (datos locales de respaldo), `Reset unavailable` (hay uso actual pero falta la hora de reset), `Rate limited` y `API offline`. Pasa el cursor por la píldora para ver el detalle más reciente.
+La píldora de estado del encabezado resume el estado más importante de provider/API. Las etiquetas comunes incluyen `Claude local`, `Claude partial`, `Claude limited` y `Claude offline`. El widget Quota Pace muestra chips de health por provider, como `Claude OK` y `Codex OK`; pasa el cursor por cualquier píldora o chip para ver el detalle más reciente.
 
 ---
 
@@ -167,7 +167,7 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 - Estado de sesión, agrupación por proyecto/rama y etiquetas de origen como VS Code o Codex Exec
 - Uso por modelo GPT/Codex y estimaciones de costo equivalentes a API
 - Tokens input, cached input y output, ahorro por caché y totales por modelo
-- Porcentajes y tiempos de reset de Codex 5h/1sem cuando el log local contiene eventos `rate_limits`
+- Porcentajes y tiempos de reset de Codex 5h/1sem desde live Codex usage cuando está disponible, con fallback a caché/eventos locales `rate_limits`
 - Activity Breakdown basado en tool events, porque los logs de Codex exponen llamadas a herramientas, no output tokens por herramienta
 
 **Cálculo de caché de Codex:** los logs de Codex reportan `input_tokens` y `cached_input_tokens`. WhereMyTokens guarda el input no cacheado como `input_tokens - cached_input_tokens`, guarda el cached input como cache-read tokens y muestra la eficiencia de caché como:
@@ -190,13 +190,13 @@ Los tokens incluyen **input + output + cache creation + cache reads** cuando est
 
 Claude reporta input, output, cache creation y cache read. Codex reporta raw input, cached input y output; WhereMyTokens divide el raw input en uncached input y cached input para evitar doble conteo en ahorro de caché y totales por modelo.
 
-Claude y Codex usan ventanas de reset 5h/1sem separadas. Claude usa Anthropic API primero y luego statusLine/cache como respaldo; Codex usa el evento `rate_limits` más reciente en los JSONL locales de Codex.
+Claude y Codex usan ventanas de reset 5h/1sem separadas. Claude usa Anthropic API primero y luego statusLine/cache como respaldo; Codex usa primero live Codex usage snapshot y luego cache/local `rate_limits`. Las solicitudes live solo se hacen para providers habilitados, con intervalo mínimo de 5 minutos, timeout, límite de tamaño de respuesta y backoff.
 
 ---
 
 ## Datos y Privacidad
 
-WhereMyTokens solo lee archivos locales — sin sincronización en la nube, sin telemetría.
+WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicitudes directas a las API de uso del provider para tu propia cuenta — sin sincronización en la nube, sin telemetría.
 
 | Archivo | Propósito |
 |---------|-----------|
@@ -204,6 +204,7 @@ WhereMyTokens solo lee archivos locales — sin sincronización en la nube, sin 
 | `~/.claude/projects/**/*.jsonl` | Registros de conversación (tokens, costos) |
 | `~/.claude/.credentials.json` | Token OAuth — solo para obtener tus estadísticas de uso de Anthropic |
 | `~/.codex/sessions/**/*.jsonl` | Logs de sesión Codex (tokens, cached input, modelos, eventos rate-limit, tool calls) |
+| `~/.codex/auth.json` | Token OAuth de ChatGPT — solo para obtener tu snapshot de uso de Codex; WhereMyTokens no lo registra ni lo almacena |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Datos del puente escritos por el plugin `statusLine` |
 
 ---

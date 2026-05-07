@@ -140,7 +140,7 @@ function ContentEN() {
           WhereMyTokens can track <B>Claude Code only</B>, <B>Codex only</B>, or <B>Claude + Codex together</B>. Choose the provider mode in Settings.
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> reads local Claude session/JSONL files and uses the Anthropic API or statusLine bridge for 5h/1w limits.</div>
-        <div><B>Codex</B> reads local <code>~/.codex/sessions/**/*.jsonl</code> logs, including model usage, token counts, cached input, tool events, and Codex rate-limit reset events when present.</div>
+        <div><B>Codex</B> prefers the live Codex usage snapshot for 5h/1w limits, then falls back to cached data and local <code>~/.codex/sessions/**/*.jsonl</code> logs for model usage, token counts, cached input, tool events, and reset events.</div>
       </Section>
 
       <Divider />
@@ -219,9 +219,9 @@ function ContentEN() {
       <Section icon={<Signal size={15} />} title="Startup & Status">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — on startup the dashboard shows current sessions and recent usage first. Older history keeps syncing in the background so the tray app can open quickly.</div>
         <div style={{ marginBottom: 5 }}><B>Header metadata</B> — Claude and Codex details in the top bar are read-only labels, not action buttons. Provider mode decides whether Claude, Codex, or both appear.</div>
-        <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important Claude/API state instead of showing multiple warning chips.</div>
-        <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API is unavailable, so the app is temporarily using local status-line or cached limit data.</div>
-        <div><B>Reset unavailable</B> — Claude API returned current usage without a reset timestamp. Usage % may still be current, but the reset countdown stays hidden until the API provides it again.</div>
+        <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important provider health state and names the affected provider. Quota Pace Health shows separate chips such as <B>Claude OK</B> and <B>Codex OK</B>.</div>
+        <div style={{ marginBottom: 5 }}><B>Source chips</B> — <B>API</B> means provider account usage, <B>Bridge</B> means Claude statusLine fallback, <B>Cache</B> means the last trusted snapshot, and <B>Log</B> means a local session-log estimate.</div>
+        <div><B>Waiting / Syncing</B> — a limit card shows a soft loading state while provider data is still arriving instead of showing an empty dash.</div>
       </Section>
 
       <Divider />
@@ -231,13 +231,13 @@ function ContentEN() {
           <B>Local logs</B> — Claude JSONL and Codex JSONL are parsed locally for tokens, models, cost estimates, sessions, and tool activity.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>Limit sources</B> — Claude uses Anthropic API first, then statusLine/cache fallback. Codex uses rate-limit events found in local Codex JSONL logs.
+          <B>Limit sources</B> — Claude uses Anthropic API first, then Bridge/Cache fallback. Codex uses live Codex usage first, then Cache/Log fallback. Live requests run only for enabled providers and are spaced by a few minutes.
         </SrcRow>
         <SrcRow badge="FB">
           <B>Last cached value</B> — kept when live limit data is unavailable. Stale data past its reset window is auto-cleared on startup.
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both.</InfoRow>
+          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both. Disabled providers do not make live usage requests.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget opens the always-on-top compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window.</InfoRow>
         </div>
@@ -255,7 +255,7 @@ function ContentKO() {
           WhereMyTokens는 <B>Claude Code만</B>, <B>Codex만</B>, 또는 <B>Claude + Codex 동시 추적</B>을 지원합니다. Settings에서 provider 모드를 선택합니다.
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B>는 로컬 Claude 세션/JSONL 파일을 읽고, 5h/1w 한도는 Anthropic API 또는 statusLine 브리지를 사용합니다.</div>
-        <div><B>Codex</B>는 로컬 <code>~/.codex/sessions/**/*.jsonl</code> 로그에서 모델 사용량, 토큰 수, cached input, 툴 이벤트, Codex rate-limit reset 이벤트를 읽습니다.</div>
+        <div><B>Codex</B>는 5h/1w 한도에 live Codex usage snapshot을 우선 사용하고, 실패 시 캐시와 로컬 <code>~/.codex/sessions/**/*.jsonl</code> 로그의 모델 사용량, 토큰 수, cached input, 툴 이벤트, reset 이벤트로 폴백합니다.</div>
       </Section>
 
       <Divider />
@@ -333,9 +333,9 @@ function ContentKO() {
       <Section icon={<Signal size={15} />} title="시작 상태 & 헤더 표시">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — 시작 직후에는 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 백그라운드에서 계속 동기화합니다. 그래서 트레이 앱이 더 빨리 열립니다.</div>
         <div style={{ marginBottom: 5 }}><B>헤더 메타데이터</B> — 상단의 Claude/Codex 정보는 클릭 버튼이 아니라 읽기 전용 라벨입니다. provider 모드에 따라 Claude만, Codex만, 또는 둘 다 표시됩니다.</div>
-        <div style={{ marginBottom: 5 }}><B>헤더 상태 pill</B> — 상단 한 개의 pill이 Claude/API 관련 핵심 상태를 요약해서 보여줍니다. 여러 경고 칩을 한 줄로 합친 개념입니다.</div>
-        <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API를 지금 사용할 수 없어서, 로컬 status-line 또는 캐시된 한도 데이터를 임시로 표시 중입니다.</div>
-        <div><B>Reset unavailable</B> — Claude API가 현재 사용량은 반환했지만 reset 시각은 주지 않은 상태입니다. 사용률 %는 최신일 수 있지만 reset 카운트다운은 API가 다시 제공할 때까지 숨겨집니다.</div>
+        <div style={{ marginBottom: 5 }}><B>헤더 상태 pill</B> — 상단 한 개의 pill이 핵심 provider health를 요약하고, 문제가 있는 provider 이름을 함께 표시합니다. Quota Pace Health는 <B>Claude OK</B>, <B>Codex OK</B>처럼 provider별 칩을 따로 보여줍니다.</div>
+        <div style={{ marginBottom: 5 }}><B>Source 칩</B> — <B>API</B>는 provider 계정 사용량, <B>Bridge</B>는 Claude statusLine 폴백, <B>Cache</B>는 마지막 신뢰 snapshot, <B>Log</B>는 로컬 세션 로그 추정값입니다.</div>
+        <div><B>Waiting / Syncing</B> — provider 데이터가 아직 도착하지 않았을 때 한도 카드가 빈 dash 대신 부드러운 대기 상태를 보여줍니다.</div>
       </Section>
 
       <Divider />
@@ -345,13 +345,13 @@ function ContentKO() {
           <B>로컬 로그</B> — Claude JSONL과 Codex JSONL을 로컬에서 파싱해 토큰, 모델, 비용 추정, 세션, 툴 활동을 계산합니다.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>한도 소스</B> — Claude는 Anthropic API를 우선 사용하고 statusLine/cache로 폴백합니다. Codex는 로컬 Codex JSONL의 rate-limit 이벤트를 사용합니다.
+          <B>한도 소스</B> — Claude는 Anthropic API를 우선 사용하고 Bridge/Cache로 폴백합니다. Codex는 live Codex usage를 우선 사용하고 Cache/Log로 폴백합니다. Live 요청은 켜진 provider에만 수행되며 몇 분 간격을 둡니다.
         </SrcRow>
         <SrcRow badge="FB">
           <B>마지막 캐시값</B> — 실시간 한도 데이터를 사용할 수 없을 때 직전 값을 유지합니다. 리셋 시각이 지난 stale 데이터는 시작 시 자동 초기화.
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both.</InfoRow>
+          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both. 꺼진 provider는 live usage 요청을 보내지 않습니다.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget를 켜면 항상 위에 표시되는 작은 Quota Pace 창이 열립니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다.</InfoRow>
         </div>
@@ -369,7 +369,7 @@ function ContentJA() {
           WhereMyTokens は <B>Claude Code のみ</B>、<B>Codex のみ</B>、または <B>Claude + Codex の同時追跡</B>に対応しています。Settings で provider モードを選択します。
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> はローカルの Claude セッション/JSONL ファイルを読み取り、5h/1w 制限は Anthropic API または statusLine ブリッジを使います。</div>
-        <div><B>Codex</B> はローカルの <code>~/.codex/sessions/**/*.jsonl</code> ログから、モデル使用量、トークン数、cached input、ツールイベント、Codex の rate-limit reset イベントを読み取ります。</div>
+        <div><B>Codex</B> は 5h/1w 制限では live Codex usage snapshot を優先し、失敗時はキャッシュとローカルの <code>~/.codex/sessions/**/*.jsonl</code> ログにあるモデル使用量、トークン数、cached input、ツールイベント、reset イベントへフォールバックします。</div>
       </Section>
 
       <Divider />
@@ -447,9 +447,9 @@ function ContentJA() {
       <Section icon={<Signal size={15} />} title="起動状態とヘッダーステータス">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — 起動直後は現在のセッションと最近の使用量を先に表示し、古い履歴はバックグラウンドで同期を続けます。これによりトレイアプリを素早く開けます。</div>
         <div style={{ marginBottom: 5 }}><B>ヘッダーメタデータ</B> — 上部の Claude/Codex 情報はクリック用ボタンではなく読み取り専用ラベルです。provider モードに応じて Claude のみ、Codex のみ、または両方を表示します。</div>
-        <div style={{ marginBottom: 5 }}><B>ヘッダーステータス pill</B> — 上部の 1 つの pill が Claude/API の重要な状態をまとめて表示します。複数の警告チップを 1 つに整理したものです。</div>
-        <div style={{ marginBottom: 5 }}><B>Local estimate</B> — Claude API が利用できないため、ローカルの status-line またはキャッシュ済み制限データを一時的に表示しています。</div>
-        <div><B>Reset unavailable</B> — Claude API は現在の使用量を返しましたが、reset 時刻は返していません。使用率 % は最新でも、reset カウントダウンは API が再び返すまで非表示になります。</div>
+        <div style={{ marginBottom: 5 }}><B>ヘッダーステータス pill</B> — 上部の 1 つの pill が重要な provider health をまとめ、影響を受ける provider 名も表示します。Quota Pace Health は <B>Claude OK</B>、<B>Codex OK</B> のように provider 別チップを表示します。</div>
+        <div style={{ marginBottom: 5 }}><B>Source チップ</B> — <B>API</B> は provider アカウント使用量、<B>Bridge</B> は Claude statusLine フォールバック、<B>Cache</B> は最後に信頼できた snapshot、<B>Log</B> はローカルセッションログ推定です。</div>
+        <div><B>Waiting / Syncing</B> — provider データがまだ届いていない場合、制限カードは空の dash ではなく柔らかい待機状態を表示します。</div>
       </Section>
 
       <Divider />
@@ -459,13 +459,13 @@ function ContentJA() {
           <B>ローカルログ</B> — Claude JSONL と Codex JSONL をローカルで解析し、トークン、モデル、コスト推定、セッション、ツール活動を計算します。
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>制限ソース</B> — Claude は Anthropic API を優先し、statusLine/cache にフォールバックします。Codex はローカル Codex JSONL 内の rate-limit イベントを使います。
+          <B>制限ソース</B> — Claude は Anthropic API を優先し、Bridge/Cache にフォールバックします。Codex は live Codex usage を優先し、Cache/Log にフォールバックします。Live request は有効な provider のみに行われ、数分間隔を空けます。
         </SrcRow>
         <SrcRow badge="FB">
           <B>最後のキャッシュ値</B> — ライブ制限データが利用できない場合に直近の値を保持。リセット済みの古いデータは起動時に自動削除。
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both。</InfoRow>
+          <InfoRow label="Provider">Settings → Tracking Provider: Claude / Codex / Both。無効な provider は live usage request を送りません。</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup。</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget をオンにすると、常に最前面のコンパクトな Quota Pace ウィンドウが開きます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。</InfoRow>
         </div>

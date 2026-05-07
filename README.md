@@ -101,14 +101,14 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …)
 
 ### Rate Limits & Alerts
-- **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine; Codex 5h/1w limits from local Codex rate-limit log events when available
+- **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine fallback; Codex 5h/1w limits from live Codex usage, cache, then local rate-limit log events
 - **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means your burn rate is ahead of the reset window
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
 - **Windows toast notifications** — at configurable usage thresholds (50% / 80% / 90%)
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
 
 ### Analytics & Activity
-- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, compact Claude/Codex metadata, and a single status pill for Claude fallback/reset states
+- **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, compact Claude/Codex metadata, and provider health/fallback status
 - **Startup-friendly history sync** — current sessions and recent usage appear first; older history continues in the background with a `Partial History` banner
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
@@ -156,7 +156,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 
 At startup the dashboard shows current sessions and recent usage first. If you see `Partial History`, older history is still syncing in the background so the tray app can open quickly.
 
-The header status pill summarizes the most important Claude/API state in one place. Common labels are `Local estimate` (local fallback data), `Reset unavailable` (usage loaded but reset timing is missing), `Rate limited`, and `API offline`. Hover the pill for the latest detail.
+The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude limited`, and `Claude offline`. The Quota Pace widget shows provider-specific health chips such as `Claude OK` and `Codex OK`; hover any pill for the latest detail.
 
 ---
 
@@ -182,7 +182,7 @@ WhereMyTokens can also read Codex's local JSONL logs from `~/.codex/sessions/**/
 - Session status, project/branch grouping, source labels such as VS Code or Codex Exec
 - Model usage and API-equivalent cost estimates for GPT/Codex models
 - Input, cached input, output tokens, cache savings, and all-time model totals
-- 5h/1w Codex limit percentages and reset times when `rate_limits` events are present in the local log
+- 5h/1w Codex limit percentages and reset times from live Codex usage when available, with cache/local `rate_limits` fallback
 - Activity Breakdown based on tool events, because Codex logs expose tool calls rather than per-tool output-token attribution
 
 **Codex cache math:** Codex logs report `input_tokens` and `cached_input_tokens`. WhereMyTokens stores uncached input as `input_tokens - cached_input_tokens`, stores cached input as cache-read tokens, and shows cache efficiency as:
@@ -205,12 +205,13 @@ Claude and Codex use separate limit sources and separate 5h/1w reset windows:
 
 | Priority | Source | Description |
 |----------|--------|-------------|
-| Claude 1st | **Anthropic API** | `/api/oauth/usage` — authoritative % and reset times. Fetched every 3 min; exponential backoff on 429. |
+| Claude 1st | **Anthropic API** | `/api/oauth/usage` — authoritative % and reset times. Fetched every 5 min for enabled provider modes; exponential backoff on 429. |
 | Claude 2nd | **Bridge (stdin)** | Live data from Claude Code via `statusLine`. Used as fallback when API is unavailable. |
-| Codex | **Local Codex logs** | `rate_limits` events inside `~/.codex/sessions/**/*.jsonl`, using the newest observed event. |
+| Codex 1st | **Live Codex usage** | Account usage snapshot fetched at most every 5 min for enabled provider modes, with HTTPS-only GET, timeout, response-size cap, and backoff. |
+| Codex 2nd | **Local Codex logs** | `rate_limits` events inside `~/.codex/sessions/**/*.jsonl`, using the newest observed event when live usage/cache is unavailable. |
 | Fallback | **Last known value** | On data failure, the last successful value is kept. Stale data past its reset window is auto-cleared. |
 
-The header status pill summarizes API fallback or reset availability. Hover it to see the latest Claude API detail.
+The header status pill summarizes API fallback or reset availability. The Quota Pace Health row shows each visible provider separately (`Claude OK`, `Codex OK`, `Cache`, `Bridge`, `Log`, `syncing`, or `waiting`).
 
 ---
 
@@ -225,7 +226,7 @@ Claude reports input, output, cache creation, and cache reads. Codex reports raw
 | Header (today) | Since midnight | In/Out/Cache + calls, sessions, cache savings |
 | Header (all) | All time | In/Out/Cache + calls, sessions, cache savings |
 | Plan Usage (Claude 5h / 1w) | Claude reset window | Claude token types + API/statusLine limits |
-| Plan Usage (Codex 5h / 1w) | Codex reset window | Codex token types + local rate-limit events |
+| Plan Usage (Codex 5h / 1w) | Codex reset window | Codex token types + live/cache/log limit source |
 | Model Usage | All time, top 4 models by provider | All token types |
 
 > **Note:** `$` values are estimates — not your actual bill. Claude Max/Pro subscriptions are flat monthly fees. The cost display shows how much usage value you are getting.
@@ -267,7 +268,7 @@ Click the **Details** button on any session row to expand activity by category. 
 
 ## Data & Privacy
 
-WhereMyTokens reads only local files — no cloud sync, no telemetry.
+WhereMyTokens reads local files and, when enabled, makes direct provider usage requests for your own account — no cloud sync, no telemetry.
 
 | File | Purpose |
 |------|---------|
@@ -275,6 +276,7 @@ WhereMyTokens reads only local files — no cloud sync, no telemetry.
 | `~/.claude/projects/**/*.jsonl` | Conversation logs (token counts, costs) |
 | `~/.claude/.credentials.json` | OAuth token — used only to fetch your own usage from Anthropic |
 | `~/.codex/sessions/**/*.jsonl` | Codex session logs (token counts, cached input, models, rate-limit events, tool calls) |
+| `~/.codex/auth.json` | ChatGPT OAuth token — used only to fetch your own Codex usage snapshot; never logged or stored by WhereMyTokens |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Bridge data written by the `statusLine` plugin |
 
 ---
@@ -321,6 +323,7 @@ src/
     sessionDiscovery.ts   Reads ~/.claude/sessions/*.json
     usageWindows.ts       5h/1w window aggregation + heatmaps
     rateLimitFetcher.ts   Anthropic API usage fetch (with backoff)
+    codexUsageFetcher.ts  Codex usage fetch (safe headers, backoff, cache)
     bridgeWatcher.ts      Watches live-session.json from statusLine bridge
     gitStatsCollector.ts  Git branch, commit, and line stats
     ipc.ts                IPC handlers, settings, integration setup

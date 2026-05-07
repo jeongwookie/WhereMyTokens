@@ -81,10 +81,10 @@ test.afterEach(() => {
   restoreMocks();
 });
 
-test('Claude API marks null resets as reset-unavailable without zeroing the window', async () => {
+test('Claude API marks core null resets as reset-unavailable without zeroing the window', async () => {
   withMockCredentials();
   withHttpResponse(200, {
-    five_hour: { utilization: 0.03, resets_at: '2026-04-24T05:00:00.000Z' },
+    five_hour: { utilization: 0.03, resets_at: null },
     seven_day: { utilization: 0.4, resets_at: '2026-04-28T00:00:00.000Z' },
     seven_day_sonnet: { utilization: 0, resets_at: null },
     extra_usage: {
@@ -101,12 +101,14 @@ test('Claude API marks null resets as reset-unavailable without zeroing the wind
   assert.ok(result.usage);
   assert.equal(result.status.code, 'reset-unavailable');
   assert.equal(result.status.connected, true);
+  assert.match(result.status.detail, /five_hour/);
+  assert.doesNotMatch(result.status.detail, /seven_day_sonnet/);
   assert.equal(result.usage.soResetMs, null);
   assert.equal(result.usage.extraUsage?.currency, 'USD');
   assert.equal(result.usage.plan, 'Max 5x');
 });
 
-test('Claude API treats an omitted Sonnet window as reset-unavailable', async () => {
+test('Claude API treats an omitted Sonnet window as optional partial data', async () => {
   withMockCredentials();
   withHttpResponse(200, {
     five_hour: { utilization: 5, resets_at: '2026-04-24T05:00:00.000Z' },
@@ -116,9 +118,10 @@ test('Claude API treats an omitted Sonnet window as reset-unavailable', async ()
   const result = await fetchApiUsagePct();
 
   assert.ok(result.usage);
-  assert.equal(result.status.code, 'reset-unavailable');
+  assert.equal(result.status.code, 'ok');
+  assert.equal(result.status.label, 'sonnet reset unavailable');
   assert.equal(result.status.resetFields?.sevenDaySonnet, 'missing');
-  assert.match(result.status.detail, /seven_day_sonnet/);
+  assert.equal(result.status.detail, '');
   assert.equal(result.usage.soPct, 0);
   assert.equal(result.usage.soResetMs, null);
 });
@@ -210,7 +213,8 @@ test('Claude API uses percentage units returned by the usage endpoint', async ()
   const result = await fetchApiUsagePct();
 
   assert.ok(result.usage);
-  assert.equal(result.status.code, 'reset-unavailable');
+  assert.equal(result.status.code, 'ok');
+  assert.equal(result.status.label, 'sonnet reset unavailable');
   assert.equal(result.usage.h5Pct, 5);
   assert.equal(result.usage.weekPct, 17);
   assert.match(String(lastRequestOptions?.headers?.['User-Agent']), /^claude-code\//);
@@ -281,7 +285,8 @@ test('Claude API treats utilization as percentage units when only Sonnet window 
   const result = await fetchApiUsagePct();
 
   assert.ok(result.usage);
-  assert.equal(result.status.code, 'reset-unavailable');
+  assert.equal(result.status.code, 'ok');
+  assert.equal(result.status.label, 'sonnet reset unavailable');
   assert.equal(result.usage.h5Pct, 0.03);
   assert.equal(result.usage.weekPct, 0.4);
   assert.equal(result.usage.soPct, 0);
