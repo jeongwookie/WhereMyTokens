@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.13.2 | 2026-05-08 | Fix Codex weekly limit display by keeping 5-hour and weekly API windows independent, honoring remaining-percent values, and invalidating stale Codex usage cache |
 | v1.13.1 | 2026-05-07 | Add a main-header toggle for the floating Quota Pace widget, fix widget toolbar icon clicks being captured as drag gestures, and document the new control across README/Help |
 | v1.13.0 | 2026-05-07 | Add resilient Codex live usage syncing, provider-specific Quota Pace health chips, safer polling/backoff, and updated multilingual docs for fallback/privacy behavior |
 | v1.12.0 | 2026-05-06 | Add floating Quota Pace widget, main layout customization, elapsed-time usage bars, refreshed README screenshots, and hardened widget/settings/provider synchronization |
