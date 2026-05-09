@@ -124,6 +124,10 @@ gh release create vX.Y.Z \
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
 | v1.11.7 | 2026-05-09 | Refresh Claude OAuth tokens only after usage 401s, persist credential-scoped 429 cooldowns with escalating backoff, and add `WMT_DISABLE_REFRESH` for emergency stop |
+| v1.13.2 | 2026-05-08 | Fix Codex weekly limit display by keeping 5-hour and weekly API windows independent, honoring remaining-percent values, and invalidating stale Codex usage cache |
+| v1.13.1 | 2026-05-07 | Add a main-header toggle for the floating Quota Pace widget, fix widget toolbar icon clicks being captured as drag gestures, and document the new control across README/Help |
+| v1.13.0 | 2026-05-07 | Add resilient Codex live usage syncing, provider-specific Quota Pace health chips, safer polling/backoff, and updated multilingual docs for fallback/privacy behavior |
+| v1.12.0 | 2026-05-06 | Add floating Quota Pace widget, main layout customization, elapsed-time usage bars, refreshed README screenshots, and hardened widget/settings/provider synchronization |
 | v1.11.6 | 2026-04-27 | Add installer language selection for English, Korean, Japanese, Simplified Chinese, and Spanish while keeping the EULA in English |
 | v1.11.5 | 2026-04-26 | Stabilize long-running popup session retention, stop scoped refresh growth from changed files, and add gated crash/memory diagnostics |
 | v1.11.4 | 2026-04-25 | Stabilize popup sessions around recent + active work, reduce hidden tray refresh/watch cost, and add main-process perf diagnostics |

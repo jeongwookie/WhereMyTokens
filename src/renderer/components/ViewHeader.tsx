@@ -6,12 +6,16 @@ interface Props {
   onBack: () => void;
 }
 
+const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
+const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
+
 export default function ViewHeader({ title, onBack }: Props) {
   const C = useTheme();
   const [hover, setHover] = useState(false);
 
   return (
     <div style={{
+      ...drag,
       display: 'flex', alignItems: 'center',
       padding: '10px 14px', borderBottom: `1px solid ${C.border}`,
       flexShrink: 0, background: C.bgCard,
@@ -21,6 +25,7 @@ export default function ViewHeader({ title, onBack }: Props) {
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
+          ...noDrag,
           background: hover ? C.bgHover : 'transparent',
           border: 'none', color: C.textDim, cursor: 'pointer',
           fontSize: 18, width: 28, height: 28, borderRadius: '50%',

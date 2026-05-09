@@ -9,8 +9,13 @@ import { EventEmitter } from 'node:events';
 import rateLimitFetcher from '../dist/main/rateLimitFetcher.js';
 import oauthRefresh from '../dist/main/oauthRefresh.js';
 
-const { fetchApiUsagePct, normalizeStoredApiUsagePct } = rateLimitFetcher;
 const { __setOAuthRefreshPostForTest, __clearOAuthRefreshForTest } = oauthRefresh;
+const {
+  API_USAGE_CACHE_SCHEMA_VERSION,
+  CLAUDE_API_MAX_BACKOFF_MS,
+  fetchApiUsagePct,
+  normalizeStoredApiUsagePct,
+} = rateLimitFetcher;
 
 const originalReadFileSync = fs.readFileSync;
 const originalRequest = https.request;
@@ -115,10 +120,10 @@ test.afterEach(() => {
   restoreMocks();
 });
 
-test('Claude API marks null resets as reset-unavailable without zeroing the window', async () => {
+test('Claude API marks core null resets as reset-unavailable without zeroing the window', async () => {
   withMockCredentials();
   withHttpResponse(200, {
-    five_hour: { utilization: 0.03, resets_at: '2026-04-24T05:00:00.000Z' },
+    five_hour: { utilization: 0.03, resets_at: null },
     seven_day: { utilization: 0.4, resets_at: '2026-04-28T00:00:00.000Z' },
     seven_day_sonnet: { utilization: 0, resets_at: null },
     extra_usage: {
@@ -135,7 +140,8 @@ test('Claude API marks null resets as reset-unavailable without zeroing the wind
   assert.ok(result.usage);
   assert.equal(result.status.code, 'reset-unavailable');
   assert.equal(result.status.connected, true);
-  assert.equal(result.status.label, '');
+  assert.match(result.status.detail, /five_hour/);
+  assert.doesNotMatch(result.status.detail, /seven_day_sonnet/);
   assert.equal(result.usage.soResetMs, null);
   assert.equal(result.usage.extraUsage?.currency, 'USD');
   assert.equal(result.usage.plan, 'Max 5x');
@@ -368,6 +374,7 @@ test('Claude API reports missing credentials without throwing', async () => {
 
 test('persisted Claude API cache is normalized before reuse', () => {
   const normalized = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
     h5Pct: 0.63,
     weekPct: 41,
     soPct: 7,
@@ -382,7 +389,7 @@ test('persisted Claude API cache is normalized before reuse', () => {
       utilization: 1,
       currency: 'USD',
     },
-    storedAt: 'bad',
+    storedAt: 1_000,
   });
 
   assert.ok(normalized);
@@ -395,6 +402,7 @@ test('persisted Claude API cache is normalized before reuse', () => {
 
 test('persisted extra usage clamps negative values', () => {
   const normalized = normalizeStoredApiUsagePct({
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
     h5Pct: 10,
     weekPct: 20,
     soPct: 30,
@@ -408,6 +416,7 @@ test('persisted extra usage clamps negative values', () => {
       usedCredits: -50,
       utilization: -10,
     },
+    storedAt: 1_000,
   });
 
   assert.ok(normalized?.extraUsage);

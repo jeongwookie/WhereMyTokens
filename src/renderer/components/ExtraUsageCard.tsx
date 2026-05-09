@@ -45,7 +45,7 @@ function ExtraUsageCard({ extraUsage, variant = 'row' }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
         <span style={{ fontSize: isBanner ? 12 : 11, color: isHigh ? C.barRed : C.textMuted, fontWeight: isHigh ? 800 : 400 }}>{title}</span>
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-          <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>${usedUSD} / ${limitUSD}</span>
+          <span style={{ fontSize: 11, color: C.textMuted, fontFamily: C.fontMono }}>${usedUSD} / ${limitUSD}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: barPct >= 99 ? C.barRed : barColor, fontFamily: C.fontMono }}>{Math.round(barPct)}%</span>
         </div>
       </div>
@@ -59,7 +59,7 @@ function ExtraUsageCard({ extraUsage, variant = 'row' }: Props) {
           }} />
         </div>
         {resetStr && (
-          <span style={{ fontSize: 9, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
+          <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
         )}
       </div>
     </div>

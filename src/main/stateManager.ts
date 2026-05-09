@@ -2,11 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
 import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDiscoveryScope, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
-import { scanJsonlSummaryCached } from './jsonlParser';
+import { scanCodexRateLimitsOnly, scanJsonlSummaryCached } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
-import { AppSettings, DEFAULT_SETTINGS } from './ipc';
-import { fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
+import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
+import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
+import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, fetchCodexUsagePct, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
@@ -14,7 +15,7 @@ import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGit
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
-import { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
+import { ActivityBreakdown, ActivityBreakdownKind, CodexRateLimitWindow, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 import { getOAuthCredentialFileState } from './oauthRefresh';
@@ -59,7 +60,7 @@ export interface DebugMemSnapshot {
   jsonlCache: ReturnType<JsonlCache['getDebugStats']>;
 }
 
-export type UsageLimitSource = 'api' | 'statusLine' | 'cache' | 'localLog';
+export type UsageLimitSource = 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog';
 
 export interface UsageLimitWindow {
   pct: number;
@@ -125,6 +126,8 @@ interface SessionBuildResult {
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
+const CODEX_H5_WINDOW_MS = 5 * 60 * 60 * 1000;
+const CODEX_WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getJsonlMtime(filePath: string): Date | null {
   try { return fs.statSync(filePath).mtime; }
@@ -162,11 +165,33 @@ function ageApiUsageSample(sample: ApiUsagePct, elapsedMs: number): ApiUsagePct 
   };
 }
 
+function ageCodexUsageSample(sample: CodexUsagePct, elapsedMs: number): CodexUsagePct {
+  const h5Expired = !sample.h5Available || (sample.h5ResetMs == null
+    ? elapsedMs > NULL_RESET_CACHE_TTL_MS
+    : elapsedMs > sample.h5ResetMs);
+  const weekExpired = !sample.weekAvailable || (sample.weekResetMs == null
+    ? elapsedMs > NULL_RESET_CACHE_TTL_MS
+    : elapsedMs > sample.weekResetMs);
+  return {
+    ...sample,
+    h5Available: !h5Expired,
+    weekAvailable: !weekExpired,
+    h5Pct: h5Expired ? 0 : sample.h5Pct,
+    weekPct: weekExpired ? 0 : sample.weekPct,
+    h5ResetMs: h5Expired ? null : ageResetMs(sample.h5ResetMs, elapsedMs),
+    weekResetMs: weekExpired ? null : ageResetMs(sample.weekResetMs, elapsedMs),
+    h5LimitReached: !h5Expired && sample.h5LimitReached,
+    weekLimitReached: !weekExpired && sample.weekLimitReached,
+    limitReached: sample.limitReached && (!h5Expired || !weekExpired),
+  };
+}
+
 function hasMeaningfulLimitWindow(window: UsageLimitWindow | null | undefined): boolean {
   if (!window) return false;
   return window.pct > 0
     || window.resetMs != null
     || !!window.resetLabel
+    || window.source === 'codexApi'
     || window.source === 'statusLine'
     || window.source === 'localLog';
 }
@@ -199,6 +224,10 @@ function isProcessAlive(pid: number): boolean {
 function currentSessionState(provider: SessionInfo['provider'], pid: number | null, lastModified: Date | null): SessionState {
   if (provider === 'claude' && pid != null && !isProcessAlive(pid)) return 'idle';
   return approximateSessionState(lastModified);
+}
+
+function providerMatchesMode(mode: AppSettings['provider'], provider: SessionInfo['provider']): boolean {
+  return mode === 'both' || mode === provider;
 }
 
 function gitStatsCacheKey(cwd: string): string {
@@ -269,9 +298,15 @@ export class StateManager {
   private lastApiCallMs = 0;
   private apiBackoffMs = 0;
   private lastOAuthCredentialMarker: string | null = null;
-  private apiRequestSeq = 0;
   private apiRecoveryTimer: NodeJS.Timeout | null = null;
   private apiRecoveryRetryMs = StateManager.API_RECOVERY_RETRY_INITIAL_MS;
+  private apiRequestSeq = 0;
+  private codexUsagePct: CodexUsagePct | null = null;
+  private codexUsagePctStoredAt = 0;
+  private codexUsageConnected = false;
+  private lastCodexUsageCallMs = 0;
+  private codexUsageBackoffMs = 0;
+  private codexUsageRequestSeq = 0;
   private bridgeWatcher: BridgeWatcher;
   private liveSession: LiveSessionData | null = null;
   private jsonlCache = new JsonlCache();
@@ -298,10 +333,11 @@ export class StateManager {
   private static readonly FAST_REFRESH_HIDDEN_MS = 300_000;
   private static readonly HEAVY_REFRESH_HIDDEN_MS = 900_000;
   private static readonly STARTUP_SCAN_BUDGET_MS = 2_500;
-  private static readonly STARTUP_WARMUP_DELAY_MS = 90_000;
+  private static readonly STARTUP_WARMUP_DELAY_MS = 30_000;
   private static readonly STARTUP_GIT_DELAY_MS = 60_000;
   private static readonly STARTUP_CLAUDE_FILE_LIMIT = 48;
   private static readonly STARTUP_CODEX_FILE_LIMIT = 96;
+  private static readonly CODEX_RATE_LIMIT_FAST_FILE_LIMIT = 24;
   private static readonly HIDDEN_CLAUDE_WATCH_LIMIT = 24;
   private static readonly HIDDEN_CODEX_WATCH_LIMIT = 48;
   private static readonly SESSION_SCOPE: SessionDiscoveryScope = 'recent-active';
@@ -311,13 +347,24 @@ export class StateManager {
     this.store = store;
     this.onUpdate = onUpdate;
     this.state = this.emptyState();
-    const cached = normalizeStoredApiUsagePct(
-      (this.store as unknown as Store<Record<string, unknown>>).get('_cachedApiPct', null)
-    );
+    const persistedStore = this.store as unknown as Store<Record<string, unknown>>;
+    const cachedRaw = persistedStore.get('_cachedApiPct', null);
+    const cached = normalizeStoredApiUsagePct(cachedRaw);
+    if (cachedRaw && !cached) {
+      persistedStore.delete('_cachedApiPct');
+    }
     if (cached && hasClaudeCredentials()) {
-      this.apiUsagePctStoredAt = cached.storedAt ?? 0;
-      const elapsed = this.apiUsagePctStoredAt ? Date.now() - this.apiUsagePctStoredAt : Infinity;
-      this.apiUsagePct = ageApiUsageSample(cached, elapsed);
+      this.apiUsagePctStoredAt = cached.storedAt;
+      this.apiUsagePct = cached;
+    }
+    const cachedCodexRaw = persistedStore.get('_cachedCodexUsagePct', null);
+    const cachedCodex = normalizeStoredCodexUsagePct(cachedCodexRaw, getCodexAuthMtimeMs());
+    if (cachedCodexRaw && !cachedCodex) {
+      persistedStore.delete('_cachedCodexUsagePct');
+    }
+    if (cachedCodex && hasCodexUsageCredentials()) {
+      this.codexUsagePctStoredAt = cachedCodex.storedAt;
+      this.codexUsagePct = cachedCodex;
     }
 
     this.bridgeWatcher = new BridgeWatcher((data) => {
@@ -336,7 +383,7 @@ export class StateManager {
   }
 
   private getSettings(): AppSettings {
-    return { ...DEFAULT_SETTINGS, ...this.store.store };
+    return normalizeSettings(this.store.store);
   }
 
   private emptyState(): AppState {
@@ -629,6 +676,13 @@ export class StateManager {
     return ageApiUsageSample(this.apiUsagePct, now - this.apiUsagePctStoredAt);
   }
 
+  private getAgedCodexUsagePct(now = Date.now()): CodexUsagePct | null {
+    if (!this.codexUsagePct) return null;
+    if (!this.codexUsagePctStoredAt) return this.codexUsagePct;
+    const aged = ageCodexUsageSample(this.codexUsagePct, now - this.codexUsagePctStoredAt);
+    return aged.h5Available || aged.weekAvailable ? aged : null;
+  }
+
   private mergeApiUsageSample(next: ApiUsagePct, status: ClaudeApiStatus, now = Date.now()): ApiUsagePct {
     if (status.code !== 'reset-unavailable') return next;
     if (next.soPct !== 0 || next.soResetMs != null) return next;
@@ -796,7 +850,7 @@ export class StateManager {
     const weekResetMs = !this.apiConnected && bridgeWeekResetMs != null
       ? bridgeWeekResetMs
       : (apiUsagePct?.weekResetMs ?? bridgeWeekResetMs);
-    const codexResetMs = this.getCodexResetMs(now);
+    const codexResetMs = this.getCodexLimitWindows(now);
     const usage = computeUsage(this.getVisibleSummaries(settings), effectiveLimits, {
       claude: { weekResetMs, h5ResetMs },
       codex: { weekResetMs: codexResetMs.week.resetMs, h5ResetMs: codexResetMs.h5.resetMs },
@@ -1109,6 +1163,7 @@ export class StateManager {
       : ((sessionResult = this.refreshCachedSessionInfos()).sessions);
     sessionPerf = this.finishPerfSample(sessionSample);
     const settings = this.getSettings();
+    await this.refreshRecentCodexRateLimits(settings);
     const derived = this.computeDerivedUsage(settings);
     const codexAccount = readCodexAccountState();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
@@ -1210,7 +1265,9 @@ export class StateManager {
           allTimeSessions: sessions.length,
         };
         this.onUpdate(this.state);
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+          deferCodexLocalLog: this.state.historyWarmupPending,
+        });
         this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
           uiVisible: false,
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
@@ -1268,7 +1325,9 @@ export class StateManager {
       this.onUpdate(this.state);
       if (!initialRefreshDone && !force) {
         this.scheduleGitWarmup();
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+          deferCodexLocalLog: startupPartial,
+        });
         await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
         if (!this.uiVisible) this.startWatcher('heavyRefresh:startupsync');
         this.logPerfTrace('heavyRefresh', totalPerf, {
@@ -1313,7 +1372,9 @@ export class StateManager {
       };
       this.onUpdate(this.state);
 
-      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider);
+      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+        deferCodexLocalLog: startupPartial,
+      });
       await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
       if (!this.uiVisible) this.startWatcher('heavyRefresh:hidden');
       this.logPerfTrace('heavyRefresh', totalPerf, {
@@ -1424,7 +1485,7 @@ export class StateManager {
   private buildLimits(): UsageLimits {
     const now = Date.now();
     const apiUsagePct = this.getAgedApiUsagePct(now);
-    const codexResetMs = this.getCodexResetMs(now);
+    const codexResetMs = this.getCodexLimitWindows(now);
     const codexH5 = codexResetMs.h5;
     const codexWeek = codexResetMs.week;
     const rl = this.liveSession?.rate_limits;
@@ -1518,14 +1579,47 @@ export class StateManager {
     };
   }
 
-  private getCodexResetMs(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
+  private getCodexLocalLogWindows(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
+    const toWindow = (window: CodexRateLimitWindow | undefined, maxWindowMs: number): UsageLimitWindow => {
+      if (!window) return emptyUsageLimitWindow();
+      const resetMs = window.resetsAt * 1000 - now;
+      if (!Number.isFinite(window.pct) || !Number.isFinite(resetMs) || resetMs <= 0 || resetMs > maxWindowMs) {
+        return emptyUsageLimitWindow();
+      }
+      return {
+        pct: Math.max(0, Math.min(100, window.pct)),
+        resetMs,
+        source: 'localLog',
+      };
+    };
     return {
-      h5: this.codexRateLimits?.h5
-        ? { pct: this.codexRateLimits.h5.pct, resetMs: Math.max(0, this.codexRateLimits.h5.resetsAt * 1000 - now), source: 'localLog' }
-        : emptyUsageLimitWindow(),
-      week: this.codexRateLimits?.week
-        ? { pct: this.codexRateLimits.week.pct, resetMs: Math.max(0, this.codexRateLimits.week.resetsAt * 1000 - now), source: 'localLog' }
-        : emptyUsageLimitWindow(),
+      h5: toWindow(this.codexRateLimits?.h5, CODEX_H5_WINDOW_MS),
+      week: toWindow(this.codexRateLimits?.week, CODEX_WEEK_WINDOW_MS),
+    };
+  }
+
+  private getCodexLimitWindows(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
+    const local = this.getCodexLocalLogWindows(now);
+    const live = this.getAgedCodexUsagePct(now);
+    if (!live) return local;
+    const source: UsageLimitSource = this.codexUsageConnected ? 'codexApi' : 'cache';
+    const liveWindow = (
+      available: boolean,
+      pct: number,
+      resetMs: number | null,
+      resetLabel: string,
+    ): UsageLimitWindow | null => {
+      if (!available) return null;
+      return {
+        pct: Math.max(0, Math.min(100, pct)),
+        resetMs,
+        resetLabel: resetMs == null ? resetLabel : undefined,
+        source,
+      };
+    };
+    return {
+      h5: liveWindow(live.h5Available, live.h5Pct, live.h5ResetMs, 'Codex 5h reset unavailable') ?? local.h5,
+      week: liveWindow(live.weekAvailable, live.weekPct, live.weekResetMs, 'Codex weekly reset unavailable') ?? local.week,
     };
   }
 
@@ -1540,14 +1634,26 @@ export class StateManager {
     return merged;
   }
 
-  private collectCodexRateLimits(settings: AppSettings = this.getSettings()): SessionSnapshot['codexRateLimits'] | null {
+  private collectCodexRateLimits(): SessionSnapshot['codexRateLimits'] | null {
     let merged: SessionSnapshot['codexRateLimits'] | null = null;
-    const visibleSummaries = this.getVisibleSummaries(settings);
-    for (const summary of visibleSummaries) {
+    for (const summary of this.summaries.values()) {
       if (summary.provider !== 'codex') continue;
       merged = this.mergeCodexRateLimits(merged, summary.sessionSnapshot.codexRateLimits);
     }
     return merged;
+  }
+
+  private async refreshRecentCodexRateLimits(settings: AppSettings = this.getSettings()): Promise<void> {
+    const provider = settings.provider ?? 'both';
+    if (provider === 'claude' || !fs.existsSync(CODEX_SESSIONS_DIR)) return;
+    let merged = this.codexRateLimits;
+    const recentFiles = this.listRecentCodexJsonlFiles(StateManager.CODEX_RATE_LIMIT_FAST_FILE_LIMIT).files;
+    for (const filePath of recentFiles) {
+      try {
+        merged = this.mergeCodexRateLimits(merged, await scanCodexRateLimitsOnly(filePath));
+      } catch { /* skip */ }
+    }
+    this.codexRateLimits = merged;
   }
 
   private async loadProviderSummaries(force = false, budgetMs: number | null = null): Promise<{
@@ -1688,7 +1794,14 @@ export class StateManager {
           partial = true;
           break;
         }
-        if (this.isExcludedSummary(filePath, 'codex', isExcluded)) continue;
+        const excludedForUsage = this.isExcludedSummary(filePath, 'codex', isExcluded);
+        if (excludedForUsage) {
+          try {
+            scannedFiles += 1;
+            codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, await scanCodexRateLimitsOnly(filePath));
+          } catch { /* skip */ }
+          continue;
+        }
         const cwd = hasExcludedProjects ? readJsonlCwd(filePath, 'codex') : null;
         if (cwd && isExcluded(projectKeysForCwd(cwd))) continue;
         const summary = await scanSummary(filePath, 'codex');
@@ -2138,6 +2251,27 @@ export class StateManager {
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
+      const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+      const sessions = this.state.sessions.filter(session =>
+        providerMatchesMode(settings.provider, session.provider)
+        && !isExcluded(this.sessionProjectKeys(session)),
+      );
+      const derived = this.computeDerivedUsage(settings);
+      const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      this.state = {
+        ...this.state,
+        sessions,
+        settings,
+        usage: derived.usage,
+        limits: derived.limits,
+        bridgeActive: derived.bridgeActive,
+        extraUsage: derived.extraUsage,
+        codeOutputStats,
+        codeOutputLoading: true,
+        allTimeSessions: sessions.length,
+        lastUpdated: Date.now(),
+      };
+      this.onUpdate(this.state);
       this.startWatcher();
       this.clearHistoryWarmup();
       this.clearGitWarmup();

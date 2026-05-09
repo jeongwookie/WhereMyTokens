@@ -1,3 +1,5 @@
+import type { MainSectionId } from './mainSections';
+
 export interface GitStats {
   branch: string | null;
   toplevel: string | null;
@@ -141,11 +143,11 @@ export interface UsageData {
 }
 
 export interface UsageLimits {
-  h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  so: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  codexH5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
-  codexWeek: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'statusLine' | 'cache' | 'localLog' };
+  h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  so: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  codexH5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+  codexWeek: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
 }
 
 export interface AppSettings {
@@ -153,13 +155,17 @@ export interface AppSettings {
   provider: 'claude' | 'codex' | 'both';
   alertThresholds: number[];
   openAtLogin: boolean;
+  alwaysOnTop: boolean;
   currency: 'USD' | 'KRW';
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
+  mainSectionOrder: MainSectionId[];
   hiddenProjects: string[];
   excludedProjects: string[];
+  compactWidgetEnabled: boolean;
+  compactWidgetBounds: { x: number; y: number } | null;
   theme: 'auto' | 'light' | 'dark';
 }
 
@@ -274,10 +280,16 @@ declare global {
       getIntegrationStatus: () => Promise<{ configured: boolean; command?: string }>;
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
+      openDashboard:      () => Promise<void>;
+      openSettings:       () => Promise<void>;
+      hideCompactWidget:  () => Promise<void>;
+      getCompactWidgetPosition: () => Promise<{ x: number; y: number } | null>;
+      setCompactWidgetPosition: (p: { x: number; y: number }) => Promise<void>;
       isDebugInstrumentationEnabled: () => Promise<boolean>;
       getDebugMemSnapshot: () => Promise<DebugMemSnapshot | null>;
       reportDebugRendererEvent: (payload: Record<string, unknown>) => Promise<void>;
       onUpdated:          (cb: (state: AppState) => void) => () => void;
+      onNavigate:         (cb: (view: 'main' | 'settings' | 'notifications' | 'help') => void) => () => void;
       getResolvedTheme:   () => Promise<'light' | 'dark'>;
       onThemeChanged:     (cb: (theme: 'light' | 'dark') => void) => () => void;
     };

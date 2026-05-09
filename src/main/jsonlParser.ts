@@ -351,6 +351,25 @@ function mergeCodexRateLimits(
   return merged;
 }
 
+export async function scanCodexRateLimitsOnly(filePath: string): Promise<SessionSnapshot['codexRateLimits']> {
+  let merged: SessionSnapshot['codexRateLimits'] = undefined;
+  await scanJsonlLines(filePath, 0, undefined, (line) => {
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+
+    const payload = obj.payload as Record<string, unknown> | undefined;
+    if (obj.type !== 'event_msg' || payload?.type !== 'token_count') return;
+    const observedMs = typeof obj.timestamp === 'string' ? new Date(obj.timestamp).getTime() : NaN;
+    const observedAt = Number.isFinite(observedMs) ? observedMs : Date.now();
+    merged = mergeCodexRateLimits(merged, parseCodexRateLimits(payload, observedAt));
+  });
+  return merged;
+}
+
 async function scanJsonlLines(
   filePath: string,
   startOffset: number,
@@ -581,7 +600,7 @@ function processCodexLine(summary: FileUsageSummary, filePath: string, line: str
   if (obj.type !== 'event_msg' || payload.type !== 'token_count') return;
 
   const observedMs = timestamp ? new Date(timestamp).getTime() : NaN;
-  const observedAt = Number.isFinite(observedMs) ? Math.floor(observedMs / 1000) : Math.floor(Date.now() / 1000);
+  const observedAt = Number.isFinite(observedMs) ? observedMs : Date.now();
   const nextRateLimits = parseCodexRateLimits(payload, observedAt);
 
   const info = payload.info as Record<string, unknown> | null | undefined;

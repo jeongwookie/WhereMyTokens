@@ -116,7 +116,7 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
         <div style={{
           position: 'absolute', left: Math.min(tooltip.x + 4, 220), top: Math.max(tooltip.y - 32, 0),
           background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4,
-          padding: '2px 6px', fontSize: 9, fontFamily: C.fontMono, pointerEvents: 'none', whiteSpace: 'nowrap',
+          padding: '2px 6px', fontSize: 10, fontFamily: C.fontMono, pointerEvents: 'none', whiteSpace: 'nowrap',
         }}>
           <span style={{ color: C.textMuted }}>{tooltip.day} {tooltip.hour}h </span>
           <span style={{ color: tooltip.tokens > 0 ? C.text : C.textMuted, fontWeight: 600 }}>
@@ -262,7 +262,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
         <div style={{
           position: 'absolute', left: Math.min(tooltip.x + 4, 220), top: Math.max(tooltip.y - 32, 0),
           background: C.bgCard, border: `1px solid ${C.border}`,
-          borderRadius: 4, padding: '3px 7px', fontSize: 10, pointerEvents: 'none', zIndex: 10,
+          borderRadius: 4, padding: '3px 7px', fontSize: 11, pointerEvents: 'none', zIndex: 10,
         }}>
           <span style={{ color: C.textMuted }}>{tooltip.date} </span>
           <span style={{ color: tooltip.tokens > 0 ? C.text : C.textMuted, fontWeight: 600 }}>
@@ -360,7 +360,7 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
         <div style={{
           position: 'absolute', top: 6, left: Math.min(tooltip.x, 220),
           background: C.bgCard, border: `1px solid ${C.border}`,
-          borderRadius: 4, padding: '3px 7px', fontSize: 10, pointerEvents: 'none', zIndex: 10,
+          borderRadius: 4, padding: '3px 7px', fontSize: 11, pointerEvents: 'none', zIndex: 10,
         }}>
           <span style={{ color: C.textMuted }}>{tooltip.hour}h </span>
           <span style={{ color: C.text, fontWeight: 600 }}>{fmtTokens(tooltip.tokens)} tok</span>
@@ -417,12 +417,12 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
             <div style={{
-              width: 52, fontSize: 9, fontWeight: isCurrent ? 700 : 400,
+              width: 52, fontSize: 10, fontWeight: isCurrent ? 700 : 400,
               color: isCurrent ? C.accent : C.textMuted, textAlign: 'right', flexShrink: 0,
               letterSpacing: -0.2,
             }}>
               {label}
-              <div style={{ fontSize: 8, color: C.textMuted, fontWeight: 400 }}>{weekRange(i)}</div>
+              <div style={{ fontSize: 9, color: C.textMuted, fontWeight: 400 }}>{weekRange(i)}</div>
             </div>
 
             <div style={{ flex: 1, position: 'relative', height: 14 }}>
@@ -436,7 +436,7 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
             </div>
 
             <div style={{
-              width: 62, fontSize: 10, fontWeight: isCurrent ? 700 : 400,
+              width: 62, fontSize: 11, fontWeight: isCurrent ? 700 : 400,
               color: isCurrent ? C.text : C.textDim, textAlign: 'right', flexShrink: 0,
             }}>
               {fmtTokens(entry.tokens)}
@@ -448,7 +448,7 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
       <div style={{
         marginTop: 4, paddingTop: 5, borderTop: `1px solid ${C.border}`,
         display: 'flex', justifyContent: 'space-between',
-        fontSize: 9, color: C.textMuted,
+        fontSize: 10, color: C.textMuted,
       }}>
         <span>
           <span style={{ color: C.textDim }}>4-week total </span>
@@ -480,7 +480,7 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
 
   if (data.every(b => b.tokens === 0)) {
     return (
-      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: C.textMuted }}>
+      <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.textMuted }}>
         No data
       </div>
     );
@@ -503,11 +503,11 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
           <div key={bucket.period} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 13, width: 18, textAlign: 'center' }}>{info.icon}</span>
             <span style={{
-              fontSize: 10, width: 52, flexShrink: 0, fontFamily: C.fontMono,
+              fontSize: 11, width: 52, flexShrink: 0, fontFamily: C.fontMono,
               color: isPeak ? info.color : C.textDim,
               fontWeight: isPeak ? 600 : 400,
             }}>{info.name}</span>
-            <span style={{ fontSize: 8, width: 34, flexShrink: 0, color: C.textMuted, fontFamily: C.fontMono }}>{info.time}</span>
+            <span style={{ fontSize: 9, width: 34, flexShrink: 0, color: C.textMuted, fontFamily: C.fontMono }}>{info.time}</span>
             <div style={{ flex: 1, height: 8, background: C.bgRow, borderRadius: 4, overflow: 'hidden' }}>
               <div style={{
                 width: `${Math.max(pct * 100, bucket.tokens > 0 ? 3 : 0)}%`,
@@ -516,7 +516,7 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
               }} />
             </div>
             <span style={{
-              width: 48, fontSize: 10, textAlign: 'right', flexShrink: 0,
+              width: 48, fontSize: 11, textAlign: 'right', flexShrink: 0,
               fontFamily: C.fontMono,
               color: isPeak ? info.color : C.textDim,
               fontWeight: isPeak ? 700 : 400,
@@ -539,12 +539,12 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
           }}>
             {/* Peak 헤더 + 30d total */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-              <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono }}>
+              <span style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
                 🔥 Peak: <strong style={{ color: peakColor }}>
                   {peakInfo?.name ?? peakPeriod.label}
                 </strong>
               </span>
-              <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>
+              <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>
                 30d · {fmtCost(totalCost, currency, usdToKrw)} total
               </span>
             </div>
@@ -563,9 +563,9 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
                   padding: '6px 8px', textAlign: 'center',
                   borderRight: i < 2 ? `1px solid ${C.border}` : 'none',
                 }}>
-                  <div style={{ fontSize: 8, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontSize: 9, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 2 }}>{item.label}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: peakColor, fontFamily: C.fontMono, lineHeight: 1.2 }}>{item.value}</div>
-                  <div style={{ fontSize: 8, color: C.textMuted, marginTop: 1 }}>{item.sub}</div>
+                  <div style={{ fontSize: 9, color: C.textMuted, marginTop: 1 }}>{item.sub}</div>
                 </div>
               ))}
             </div>
@@ -581,11 +581,11 @@ function ColorLegend() {
   const C = useTheme();
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 3 }}>
-      <span style={{ fontSize: 9, color: C.textMuted }}>less</span>
+      <span style={{ fontSize: 10, color: C.textMuted }}>less</span>
       {[0, 0.25, 0.5, 0.75, 1].map(i => (
         <div key={i} style={{ width: 7, height: 7, borderRadius: 1, background: blueIntensity(i) }} />
       ))}
-      <span style={{ fontSize: 9, color: C.textMuted }}>more</span>
+      <span style={{ fontSize: 10, color: C.textMuted }}>more</span>
     </div>
   );
 }
@@ -609,8 +609,8 @@ function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBucke
       {/* 헤더: 제목 + 탭 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
-          <span style={{ fontSize: 9, color: C.textDim, fontFamily: C.fontMono, background: C.bgRow, padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
+          <span style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono, background: C.bgRow, padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
             {LOCAL_TIME_ZONE_LABEL}
           </span>
         </span>
@@ -620,7 +620,7 @@ function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBucke
             const isActive = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
-                padding: '4px 8px', fontSize: 9, borderRadius: 3, cursor: 'pointer',
+                padding: '4px 8px', fontSize: 10, borderRadius: 3, cursor: 'pointer',
                 fontFamily: "'JetBrains Mono', monospace",
                 border: isActive && isRhythm ? '1px solid rgba(251,191,36,0.2)' :
                         isActive ? `1px solid rgba(13,148,136,0.15)` : '1px solid transparent',
@@ -647,20 +647,20 @@ function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBucke
         )}
         {tab === '5mo' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>5mo activity</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>5mo activity</div>
             <Heatmap90 data={heatmap90} />
             <ColorLegend />
           </>
         )}
         {tab === 'Hourly' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Hourly (30d)</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>Hourly (30d)</div>
             <HourlyDistribution data={heatmap30} />
           </>
         )}
         {tab === 'Weekly' && (
           <>
-            <div style={{ fontSize: 9, color: C.textMuted, marginBottom: 3 }}>Weekly (4w)</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>Weekly (4w)</div>
             <WeeklyGrowthChart data={weeklyTimeline} />
           </>
         )}

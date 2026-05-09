@@ -5,6 +5,13 @@ import * as os from 'os';
 import { execFileSync } from 'child_process';
 import { getOAuthCredentialState, refreshNow, RefreshOutcome } from './oauthRefresh';
 
+export const API_USAGE_CACHE_SCHEMA_VERSION = 2;
+export const CLAUDE_API_MAX_BACKOFF_MS = 600_000;
+
+const CLAUDE_USER_AGENT = 'claude-code/1.0';
+const MAX_SERVER_MESSAGE_LENGTH = 240;
+const MAX_CLAUDE_API_RESPONSE_BYTES = 256 * 1024;
+
 export interface AutoLimits {
   h5: number;
   week: number;
@@ -35,7 +42,8 @@ export interface ApiUsagePct {
 }
 
 export interface StoredApiUsagePct extends ApiUsagePct {
-  storedAt?: number;
+  storedAt: number;
+  schemaVersion: number;
 }
 
 export type ClaudeApiStatusCode =
@@ -172,6 +180,12 @@ export function getClaudeOAuthRefreshUserAgent(): string {
 function httpsGet(url: string, headers: Record<string, string>): Promise<string> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
+    let settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     const req = https.request(
       {
         hostname: u.hostname,
@@ -181,8 +195,20 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
       },
       (res) => {
         let body = '';
-        res.on('data', (chunk) => { body += chunk; });
+        let bodyBytes = 0;
+        res.on('data', (chunk: Buffer | string) => {
+          const chunkBytes = typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
+          bodyBytes += chunkBytes;
+          if (bodyBytes > MAX_CLAUDE_API_RESPONSE_BYTES) {
+            fail(new Error('response-too-large'));
+            req.destroy();
+            return;
+          }
+          body += chunk;
+        });
         res.on('end', () => {
+          if (settled) return;
+          settled = true;
           const statusCode = res.statusCode ?? 0;
           if (statusCode >= 200 && statusCode < 300) {
             resolve(body);
@@ -192,7 +218,7 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
         });
       },
     );
-    req.on('error', reject);
+    req.on('error', fail);
     req.setTimeout(8000, () => {
       req.destroy(new Error('timeout'));
     });
@@ -268,13 +294,16 @@ function normalizeResetValue(value: unknown): ApiResetMs {
 export function normalizeStoredApiUsagePct(value: unknown): StoredApiUsagePct | null {
   const record = asRecord(value);
   if (!record) return null;
+  if (record.schemaVersion !== API_USAGE_CACHE_SCHEMA_VERSION) return null;
   if (typeof record.plan !== 'string') return null;
 
   const storedAt = typeof record.storedAt === 'number' && Number.isFinite(record.storedAt)
     ? record.storedAt
-    : undefined;
+    : null;
+  if (storedAt == null || storedAt <= 0 || storedAt > Date.now()) return null;
 
   return {
+    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
     h5Pct: normalizePct(record.h5Pct),
     weekPct: normalizePct(record.weekPct),
     soPct: normalizePct(record.soPct),
@@ -299,8 +328,16 @@ function buildStatus(
 
 function cleanServerMessage(message: string): string {
   return message
+    .replace(/\s+/g, ' ')
     .replace(/\s*Please try again later\.?\s*$/i, '')
     .trim();
+}
+
+function boundedServerMessage(message: string): string | undefined {
+  const cleaned = cleanServerMessage(message);
+  if (!cleaned) return undefined;
+  if (cleaned.length <= MAX_SERVER_MESSAGE_LENGTH) return cleaned;
+  return `${cleaned.slice(0, MAX_SERVER_MESSAGE_LENGTH - 3).trimEnd()}...`;
 }
 
 function serverMessageFromBody(body: string): string | undefined {
@@ -343,8 +380,8 @@ function classifyHttpError(error: HttpResponseError): ClaudeApiStatus {
       return buildStatus(
         'unauthorized',
         false,
-        'login required',
-        withServerMessage('Refresh token rejected. Run `claude /login` to re-authenticate.', serverMessage),
+        'auth failed',
+        withServerMessage('Claude CLI token was rejected or expired.', serverMessage),
         { httpStatus: 401, serverMessage },
       );
     case 403:
@@ -382,6 +419,9 @@ function classifyRuntimeError(error: unknown): ClaudeApiStatus {
   if (error instanceof Error) {
     if (error.message === 'timeout') {
       return buildStatus('timeout', false, 'api timeout', 'Claude API request timed out.');
+    }
+    if (error.message === 'response-too-large') {
+      return buildStatus('http-error', false, 'api disconnected', 'Claude API response was too large.');
     }
 
     const code = (error as Error & { code?: string }).code;

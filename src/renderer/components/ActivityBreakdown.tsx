@@ -57,7 +57,7 @@ function ActivityBreakdown({ session }: Props) {
         <span style={{ fontSize: 15, fontWeight: 800, color: C.text, fontFamily: C.fontMono, lineHeight: 1 }}>
           {fmtValue(total)}
         </span>
-        <span style={{ fontSize: 9, color: C.textMuted }}>{totalLabel}</span>
+        <span style={{ fontSize: 10, color: C.textMuted }}>{totalLabel}</span>
       </div>
 
       {/* 스택 바 */}
@@ -82,12 +82,12 @@ function ActivityBreakdown({ session }: Props) {
           return (
             <div key={cat.key}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-                <span style={{ fontSize: 10, width: 14, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
-                <span style={{ fontSize: 10, color: C.textDim, flex: 1 }}>{cat.label}</span>
-                <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 42, textAlign: 'right', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, width: 14, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
+                <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{cat.label}</span>
+                <span style={{ fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, width: 42, textAlign: 'right', flexShrink: 0 }}>
                   {fmtValue(tokens)}
                 </span>
-                <span style={{ fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, width: 26, textAlign: 'right', flexShrink: 0 }}>
+                <span style={{ fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, width: 26, textAlign: 'right', flexShrink: 0 }}>
                   {Math.round(pct)}%
                 </span>
               </div>

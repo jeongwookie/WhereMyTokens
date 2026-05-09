@@ -73,23 +73,23 @@ function SessionRow({ session, expanded, onToggle }: {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           {session.modelName && (
-            <span title={session.modelName} style={{ fontSize: 8, background: mc + '18', color: mc, border: `1px solid ${mc}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span title={session.modelName} style={{ fontSize: 9, background: mc + '18', color: mc, border: `1px solid ${mc}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {session.modelName}
             </span>
           )}
-          <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+          <span style={{ fontSize: 9, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
             {session.provider === 'codex' ? 'Codex' : 'Claude'}
           </span>
-          <span title={session.source} style={{ fontSize: 10, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
+          <span title={session.source} style={{ fontSize: 11, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {showCtx && (
-            <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono }}>{Math.round(ctxPct)}% ctx</span>
+            <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>{Math.round(ctxPct)}% ctx</span>
           )}
-          <span style={{ fontSize: 8, background: 'rgba(255,255,255,0.04)', color: C.textMuted, borderRadius: 3, padding: '1px 5px', border: `1px solid rgba(255,255,255,0.04)` }}>
+          <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.04)', color: C.textMuted, borderRadius: 3, padding: '1px 5px', border: `1px solid rgba(255,255,255,0.04)` }}>
             {stateLabel(session.state)}
           </span>
-          <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
+          <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
         </div>
       </div>
     );
@@ -113,14 +113,14 @@ function SessionRow({ session, expanded, onToggle }: {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
             {session.modelName && (
-              <span title={session.modelName} style={{ fontSize: 8, background: mc + '18', color: mc, border: `1px solid ${mc}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span title={session.modelName} style={{ fontSize: 9, background: mc + '18', color: mc, border: `1px solid ${mc}33`, borderRadius: 3, padding: '1px 5px', fontWeight: 700, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {session.modelName}
               </span>
             )}
-            <span style={{ fontSize: 8, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+            <span style={{ fontSize: 9, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
               {session.provider === 'codex' ? 'Codex' : 'Claude'}
             </span>
-            <span title={session.source} style={{ fontSize: 10, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
+            <span title={session.source} style={{ fontSize: 11, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
             {hasBreakdown && (
@@ -138,7 +138,7 @@ function SessionRow({ session, expanded, onToggle }: {
                   color: isExpanded ? C.accent : C.textDim,
                   cursor: 'pointer',
                   padding: '0 6px',
-                  fontSize: 8,
+                  fontSize: 9,
                   fontFamily: C.fontMono,
                   fontWeight: 700,
                 }}
@@ -152,7 +152,7 @@ function SessionRow({ session, expanded, onToggle }: {
               </button>
             )}
             <span style={{
-              fontSize: 8, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
+              fontSize: 9, padding: '1px 5px', borderRadius: 3, fontWeight: 600,
               fontFamily: C.fontMono,
               background: session.state === 'active' ? C.active + '1a' :
                           session.state === 'waiting' ? C.waiting + '1a' : 'rgba(255,255,255,0.04)',
@@ -161,16 +161,16 @@ function SessionRow({ session, expanded, onToggle }: {
             }}>
               {stateLabel(session.state)}
             </span>
-            <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
+            <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
           </div>
         </div>
 
         {showCtx && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 9, color: ctxPct >= 95 ? C.barRed : C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 10, color: ctxPct >= 95 ? C.barRed : C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               Context {Math.round(ctxPct)}%
             </span>
-            <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {ctxLabel}
             </span>
           </div>
@@ -204,7 +204,7 @@ function SessionRow({ session, expanded, onToggle }: {
             <div style={{ display: 'flex', gap: 3, marginTop: 3, flexWrap: 'wrap', width: '100%' }}>
               {displayEntries.map(([name, count]) => (
                 <span key={name} style={{
-                  fontSize: 10, fontFamily: C.fontMono, padding: '2px 5px', borderRadius: 3,
+                  fontSize: 11, fontFamily: C.fontMono, padding: '2px 5px', borderRadius: 3,
                   background: 'rgba(255,255,255,0.04)', color: C.textMuted,
                   border: '1px solid rgba(255,255,255,0.05)',
                   maxWidth: 132, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -214,7 +214,7 @@ function SessionRow({ session, expanded, onToggle }: {
               ))}
               {hiddenToolCount > 0 && (
                 <span style={{
-                  fontSize: 10, fontFamily: C.fontMono, padding: '2px 5px', borderRadius: 3,
+                  fontSize: 11, fontFamily: C.fontMono, padding: '2px 5px', borderRadius: 3,
                   background: 'rgba(255,255,255,0.03)', color: C.textMuted,
                   border: '1px solid rgba(255,255,255,0.04)',
                 }}>
