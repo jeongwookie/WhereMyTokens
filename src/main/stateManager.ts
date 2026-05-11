@@ -18,6 +18,7 @@ import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGit
 import { ActivityBreakdown, ActivityBreakdownKind, CodexRateLimitWindow, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
+import { getOAuthCredentialFileState } from './oauthRefresh';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -297,6 +298,7 @@ export class StateManager {
   private lastApiCallMs = 0;
   private apiBackoffMs = 0;
   private apiRequestSeq = 0;
+  private lastOAuthCredentialMarker: string | null = null;
   private codexUsagePct: CodexUsagePct | null = null;
   private codexUsagePctStoredAt = 0;
   private codexUsageConnected = false;
@@ -690,11 +692,29 @@ export class StateManager {
     };
   }
 
+  private consumeOAuthCredentialChange(): boolean {
+    const state = getOAuthCredentialFileState();
+    const marker = state.hasCredentials
+      ? [
+          state.mtimeMs ?? 'no-mtime',
+          state.size ?? 'no-size',
+          state.expiresAt ?? 'no-expiry',
+          state.hasAccessToken ? 'access' : 'no-access',
+          state.hasRefreshToken ? 'refresh' : 'no-refresh',
+        ].join(':')
+      : 'missing';
+    const changed = this.lastOAuthCredentialMarker !== null && this.lastOAuthCredentialMarker !== marker;
+    this.lastOAuthCredentialMarker = marker;
+    return changed;
+  }
+
   private async refreshApiUsagePct(force = false): Promise<boolean> {
     const now = Date.now();
+    const credentialsChanged = this.consumeOAuthCredentialChange();
+    if (credentialsChanged) this.apiBackoffMs = 0;
     const elapsedSinceLastApiCall = now - this.lastApiCallMs;
-    if (this.apiBackoffMs > 0 && elapsedSinceLastApiCall < this.apiBackoffMs) return false;
-    if (!force && elapsedSinceLastApiCall < StateManager.API_MIN_INTERVAL_MS) return false;
+    if (!credentialsChanged && this.apiBackoffMs > 0 && elapsedSinceLastApiCall < this.apiBackoffMs) return false;
+    if (!force && !credentialsChanged && elapsedSinceLastApiCall < StateManager.API_MIN_INTERVAL_MS) return false;
     this.lastApiCallMs = now;
     const requestSeq = ++this.apiRequestSeq;
     const result = await fetchApiUsagePct();
@@ -725,7 +745,7 @@ export class StateManager {
         ? Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, result.status.retryAfterMs))
         : Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, CLAUDE_API_MAX_BACKOFF_MS);
       this.apiError = `${result.status.detail} Retry in ${Math.max(1, Math.ceil(this.apiBackoffMs / 60000))}m.`;
-      this.apiStatusLabel = 'rate limited';
+      this.apiStatusLabel = result.status.label || 'rate limited';
     } else {
       this.apiBackoffMs = 0;
     }

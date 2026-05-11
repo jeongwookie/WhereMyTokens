@@ -5,6 +5,7 @@ import { StateManager, AppState } from './stateManager';
 import { registerIpcHandlers, AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { Notification } from 'electron';
 import { appendCrashLog, buildErrorPayload, buildQuitTrace, collectRuntimeMemorySnapshot, getCrashLogPath, getDebugMemLogPath, isDebugInstrumentationEnabled, setListenerTargetsProvider } from './debugInstrumentation';
+import { initOAuthRefresh } from './oauthRefresh';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -590,6 +591,9 @@ function markPopupMoving() {
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.wheremytokens.app');
+  initOAuthRefresh(
+    store as unknown as { get(key: string): unknown; set(key: string, value: unknown): void; delete(key: string): void },
+  );
   registerDebugTargets();
   installDebugInstrumentation();
   if (isDebugInstrumentationEnabled()) {

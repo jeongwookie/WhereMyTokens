@@ -36,7 +36,7 @@ function makeStore(overrides = {}) {
   return store;
 }
 
-function withTempClaudeCredentials() {
+function withTempClaudeCredentials(oauthOverrides = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-test-'));
   tempClaudeDirs.push(dir);
   fs.writeFileSync(path.join(dir, '.credentials.json'), JSON.stringify({
@@ -44,9 +44,11 @@ function withTempClaudeCredentials() {
       accessToken: 'test-access-token',
       rateLimitTier: 'max_5x',
       subscriptionType: 'max',
+      ...oauthOverrides,
     },
   }));
   process.env.CLAUDE_CONFIG_DIR = dir;
+  return dir;
 }
 
 function withTempCodexAuth() {
@@ -724,6 +726,50 @@ test('forced Claude refresh does not bypass active Retry-After backoff', async (
   assert.equal(secondRefresh, false);
   assert.equal(calls, 1);
   assert.equal(manager.apiBackoffMs, 240_000);
+});
+
+test('updated Claude credentials bypass refresh-limited API backoff', async () => {
+  const dir = withTempClaudeCredentials({
+    refreshToken: 'old-refresh',
+    expiresAt: Date.now() - 1000,
+  });
+  const manager = new StateManager(makeStore(), () => {});
+  manager.consumeOAuthCredentialChange();
+  manager.apiBackoffMs = CLAUDE_API_MAX_BACKOFF_MS;
+  manager.lastApiCallMs = Date.now();
+  let calls = 0;
+  rateLimitFetcherModule.fetchApiUsagePct = async () => {
+    calls += 1;
+    return {
+      usage: {
+        h5Pct: 5,
+        weekPct: 17,
+        soPct: 0,
+        h5ResetMs: 5 * 60 * 60 * 1000,
+        weekResetMs: 6 * 24 * 60 * 60 * 1000,
+        soResetMs: null,
+        plan: 'Pro',
+        extraUsage: null,
+      },
+      status: { code: 'ok', connected: true, label: '', detail: '' },
+    };
+  };
+
+  fs.writeFileSync(path.join(dir, '.credentials.json'), JSON.stringify({
+    claudeAiOauth: {
+      accessToken: 'rotated-access',
+      refreshToken: 'rotated-refresh',
+      expiresAt: Date.now() + 60 * 60 * 1000,
+      rateLimitTier: 'max_5x',
+      subscriptionType: 'max',
+    },
+  }));
+  const refreshed = await manager.refreshApiUsagePct(false);
+
+  assert.equal(refreshed, true);
+  assert.equal(calls, 1);
+  assert.equal(manager.apiBackoffMs, 0);
+  assert.equal(manager.apiUsagePct.h5Pct, 5);
 });
 
 test('non-rate-limited Claude failure clears stale Retry-After backoff', async () => {

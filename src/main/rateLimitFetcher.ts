@@ -2,11 +2,13 @@ import * as fs from 'fs';
 import * as https from 'https';
 import * as path from 'path';
 import * as os from 'os';
+import { getOAuthCredentialState, refreshNow, RefreshOutcome } from './oauthRefresh';
 
 export const API_USAGE_CACHE_SCHEMA_VERSION = 2;
 export const CLAUDE_API_MAX_BACKOFF_MS = 600_000;
 
 const CLAUDE_USER_AGENT = 'claude-code/1.0';
+const CLAUDE_OAUTH_REFRESH_USER_AGENT = 'claude-code/1.0';
 const MAX_SERVER_MESSAGE_LENGTH = 240;
 const MAX_CLAUDE_API_RESPONSE_BYTES = 256 * 1024;
 
@@ -461,6 +463,107 @@ function limitsFromTier(tier: string, sub: string): AutoLimits {
   return { h5: 100, week: 500, sonnetWeek: 100_000_000, plan: sub || tier || 'Unknown', source: 'default' };
 }
 
+async function performUsageFetch(cred: Credentials): Promise<ApiUsageFetchResult> {
+  const body = await httpsGet('https://api.anthropic.com/api/oauth/usage', {
+    Authorization: `Bearer ${cred.accessToken}`,
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'anthropic-beta': 'oauth-2025-04-20',
+    'User-Agent': CLAUDE_USER_AGENT,
+  });
+
+  const parsed = JSON.parse(body) as unknown;
+  const data = asRecord(parsed);
+  if (!data) {
+    const status = buildStatus('schema-changed', false, 'schema changed', 'Claude API returned a non-object response.');
+    logStatus(status);
+    return { usage: null, status };
+  }
+
+  const fiveHour = asUsageWindow(data.five_hour);
+  const sevenDay = asUsageWindow(data.seven_day);
+  const sevenDaySonnet = asUsageWindow(data.seven_day_sonnet);
+  const responseKeys = Object.keys(data).sort();
+  const resetFields = {
+    fiveHour: resetFieldState(fiveHour),
+    sevenDay: resetFieldState(sevenDay),
+    sevenDaySonnet: resetFieldState(sevenDaySonnet),
+  } satisfies NonNullable<ClaudeApiStatus['resetFields']>;
+
+  if (!fiveHour || !sevenDay) {
+    const status = missingCoreWindowStatus(responseKeys, resetFields);
+    logStatus(status);
+    return { usage: null, status };
+  }
+
+  const invalidCoreFields: string[] = [];
+  if (!hasValidUtilization(fiveHour)) invalidCoreFields.push('five_hour.utilization');
+  if (!hasValidUtilization(sevenDay)) invalidCoreFields.push('seven_day.utilization');
+  if (!hasValidResetField(fiveHour)) invalidCoreFields.push('five_hour.resets_at');
+  if (!hasValidResetField(sevenDay)) invalidCoreFields.push('seven_day.resets_at');
+  if (invalidCoreFields.length > 0) {
+    const status = invalidCoreWindowStatus(responseKeys, resetFields, invalidCoreFields);
+    logStatus(status);
+    return { usage: null, status };
+  }
+
+  const validSonnetWindow = sevenDaySonnet && hasValidUtilization(sevenDaySonnet) && hasValidResetField(sevenDaySonnet)
+    ? sevenDaySonnet
+    : null;
+  const now = Date.now();
+  const usage: ApiUsagePct = {
+    h5Pct: normalizePct(fiveHour?.utilization),
+    weekPct: normalizePct(sevenDay?.utilization),
+    soPct: normalizePct(validSonnetWindow?.utilization),
+    h5ResetMs: resetMs(fiveHour?.resets_at, now),
+    weekResetMs: resetMs(sevenDay?.resets_at, now),
+    soResetMs: resetMs(validSonnetWindow?.resets_at, now),
+    plan: planFromTier(cred.rateLimitTier, cred.subscriptionType),
+    extraUsage: extraUsageSnapshot(data.extra_usage),
+  };
+
+  const coreUnknownResetFields = [
+    resetFields.fiveHour === 'null' ? 'five_hour' : null,
+    resetFields.sevenDay === 'null' ? 'seven_day' : null,
+  ].filter((field): field is string => !!field);
+  const optionalUnknownResetFields = [
+    resetFields.sevenDaySonnet !== 'present' || (sevenDaySonnet && !validSonnetWindow) ? 'seven_day_sonnet' : null,
+  ].filter((field): field is string => !!field);
+
+  const status = coreUnknownResetFields.length > 0
+    ? buildStatus(
+        'reset-unavailable',
+        true,
+        'reset partial',
+        `${coreUnknownResetFields.join(', ')} reset is unavailable.`,
+        { responseKeys, resetFields },
+      )
+    : buildStatus('ok', true, optionalUnknownResetFields.length > 0 ? 'sonnet reset unavailable' : '', '', { responseKeys, resetFields });
+
+  logStatus(status);
+  return { usage, status };
+}
+
+function loginRequiredStatus(message?: string): ClaudeApiStatus {
+  return buildStatus(
+    'unauthorized',
+    false,
+    'login required',
+    withServerMessage('Refresh token rejected. Run `claude /login` to re-authenticate.', message),
+    { httpStatus: 401, serverMessage: message },
+  );
+}
+
+function refreshRateLimitedStatus(outcome: Extract<RefreshOutcome, { kind: 'rate-limited' }>): ClaudeApiStatus {
+  return buildStatus(
+    'rate-limited',
+    false,
+    'refresh limited',
+    withServerMessage('Claude OAuth refresh is rate limited.', outcome.serverMessage),
+    { httpStatus: 429, retryAfterMs: outcome.retryAfterMs, serverMessage: outcome.serverMessage },
+  );
+}
+
 export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
   const cred = readCredentials();
   if (!cred) {
@@ -470,85 +573,39 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
   }
 
   try {
-    const body = await httpsGet('https://api.anthropic.com/api/oauth/usage', {
-      Authorization: `Bearer ${cred.accessToken}`,
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'oauth-2025-04-20',
-      'User-Agent': CLAUDE_USER_AGENT,
-    });
-
-    const parsed = JSON.parse(body) as unknown;
-    const data = asRecord(parsed);
-    if (!data) {
-      const status = buildStatus('schema-changed', false, 'schema changed', 'Claude API returned a non-object response.');
-      logStatus(status);
-      return { usage: null, status };
-    }
-
-    const fiveHour = asUsageWindow(data.five_hour);
-    const sevenDay = asUsageWindow(data.seven_day);
-    const sevenDaySonnet = asUsageWindow(data.seven_day_sonnet);
-    const responseKeys = Object.keys(data).sort();
-    const resetFields = {
-      fiveHour: resetFieldState(fiveHour),
-      sevenDay: resetFieldState(sevenDay),
-      sevenDaySonnet: resetFieldState(sevenDaySonnet),
-    } satisfies NonNullable<ClaudeApiStatus['resetFields']>;
-
-    if (!fiveHour || !sevenDay) {
-      const status = missingCoreWindowStatus(responseKeys, resetFields);
-      logStatus(status);
-      return { usage: null, status };
-    }
-
-    const invalidCoreFields: string[] = [];
-    if (!hasValidUtilization(fiveHour)) invalidCoreFields.push('five_hour.utilization');
-    if (!hasValidUtilization(sevenDay)) invalidCoreFields.push('seven_day.utilization');
-    if (!hasValidResetField(fiveHour)) invalidCoreFields.push('five_hour.resets_at');
-    if (!hasValidResetField(sevenDay)) invalidCoreFields.push('seven_day.resets_at');
-    if (invalidCoreFields.length > 0) {
-      const status = invalidCoreWindowStatus(responseKeys, resetFields, invalidCoreFields);
-      logStatus(status);
-      return { usage: null, status };
-    }
-
-    const validSonnetWindow = sevenDaySonnet && hasValidUtilization(sevenDaySonnet) && hasValidResetField(sevenDaySonnet)
-      ? sevenDaySonnet
-      : null;
-    const now = Date.now();
-    const usage: ApiUsagePct = {
-      h5Pct: normalizePct(fiveHour?.utilization),
-      weekPct: normalizePct(sevenDay?.utilization),
-      soPct: normalizePct(validSonnetWindow?.utilization),
-      h5ResetMs: resetMs(fiveHour?.resets_at, now),
-      weekResetMs: resetMs(sevenDay?.resets_at, now),
-      soResetMs: resetMs(validSonnetWindow?.resets_at, now),
-      plan: planFromTier(cred.rateLimitTier, cred.subscriptionType),
-      extraUsage: extraUsageSnapshot(data.extra_usage),
-    };
-
-    const coreUnknownResetFields = [
-      resetFields.fiveHour === 'null' ? 'five_hour' : null,
-      resetFields.sevenDay === 'null' ? 'seven_day' : null,
-    ].filter((field): field is string => !!field);
-    const optionalUnknownResetFields = [
-      resetFields.sevenDaySonnet !== 'present' || (sevenDaySonnet && !validSonnetWindow) ? 'seven_day_sonnet' : null,
-    ].filter((field): field is string => !!field);
-
-    const status = coreUnknownResetFields.length > 0
-      ? buildStatus(
-          'reset-unavailable',
-          true,
-          'reset partial',
-          `${coreUnknownResetFields.join(', ')} reset is unavailable.`,
-          { responseKeys, resetFields },
-        )
-      : buildStatus('ok', true, optionalUnknownResetFields.length > 0 ? 'sonnet reset unavailable' : '', '', { responseKeys, resetFields });
-
-    logStatus(status);
-    return { usage, status };
+    return await performUsageFetch(cred);
   } catch (error) {
+    if (error instanceof HttpResponseError && error.statusCode === 401) {
+      const state = getOAuthCredentialState();
+      const looksLikeExpiredToken = state.isExpired || (state.msUntilExpiry != null && state.msUntilExpiry < 60_000);
+      if (!looksLikeExpiredToken) {
+        const status = classifyHttpError(error);
+        logStatus(status);
+        return { usage: null, status };
+      }
+
+      const outcome = await refreshNow(CLAUDE_OAUTH_REFRESH_USER_AGENT, '401-retry');
+      if (outcome.kind === 'ok') {
+        try {
+          return await performUsageFetch({ ...cred, accessToken: outcome.accessToken });
+        } catch (retryError) {
+          const status = classifyRuntimeError(retryError);
+          logStatus(status);
+          return { usage: null, status };
+        }
+      }
+      if (outcome.kind === 'invalid-grant') {
+        const status = loginRequiredStatus(outcome.serverMessage ?? serverMessageFromBody(error.body));
+        logStatus(status);
+        return { usage: null, status };
+      }
+      if (outcome.kind === 'rate-limited') {
+        const status = refreshRateLimitedStatus(outcome);
+        logStatus(status);
+        return { usage: null, status };
+      }
+    }
+
     const status = classifyRuntimeError(error);
     logStatus(status);
     return { usage: null, status };

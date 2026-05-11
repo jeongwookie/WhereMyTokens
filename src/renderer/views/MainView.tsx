@@ -155,6 +155,8 @@ function buildHeaderStatus(args: {
   switch (apiStatusLabel) {
     case 'rate limited':
       return { label: 'Claude limited', title: apiError || 'Claude API returned HTTP 429.', tone: 'warning' };
+    case 'refresh limited':
+      return { label: 'Claude refresh', title: apiError || 'Claude OAuth refresh is rate limited.', tone: 'warning' };
     case 'schema changed':
       return { label: 'Claude schema', title: apiError || 'Claude API response changed shape.', tone: 'danger' };
     case 'reset partial':
@@ -163,6 +165,8 @@ function buildHeaderStatus(args: {
       return { label: 'Claude local', title: apiError || 'Claude credentials were not found. Showing local data only.', tone: 'warning' };
     case 'auth failed':
       return { label: 'Claude auth', title: apiError || 'Claude CLI token was rejected or expired.', tone: 'danger' };
+    case 'login required':
+      return { label: 'Claude login', title: apiError || 'Refresh token rejected. Run `claude /login` to re-authenticate.', tone: 'danger' };
     case 'forbidden':
       return { label: 'Claude blocked', title: apiError || 'Claude API denied this account or beta surface.', tone: 'danger' };
     case 'api disconnected':

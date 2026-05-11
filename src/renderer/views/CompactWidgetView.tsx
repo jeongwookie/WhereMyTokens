@@ -163,11 +163,14 @@ function providerHealth(
     switch (claudeStatusLabel) {
       case 'rate limited':
         return { key: 'claude', label: 'Claude limited', tone: 'warning', title: 'Claude API is rate limited; cached or bridge data may be used.' };
+      case 'refresh limited':
+        return { key: 'claude', label: 'Claude refresh', tone: 'warning', title: 'Claude OAuth refresh is rate limited; cached or bridge data may be used.' };
       case 'reset partial':
         return { key: 'claude', label: 'Claude partial', tone: 'warning', title: 'Claude usage loaded, but reset timing is unavailable.' };
       case 'local only':
         return { key: 'claude', label: 'Claude local', tone: 'warning', title: 'Claude credentials are unavailable, so local data is being used.' };
       case 'auth failed':
+      case 'login required':
       case 'forbidden':
       case 'api disconnected':
         return { key: 'claude', label: 'Claude offline', tone: 'danger', title: 'Claude API is unavailable.' };
