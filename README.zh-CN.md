@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-Setup.exe"><strong>下载 v1.13.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-Setup.exe"><strong>下载 v1.14.0</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -59,11 +59,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | 新增 Claude OAuth refresh 恢复、按凭据隔离的 API 缓存保护、Claude refresh/login 状态显示，以及 Floating 小部件隐藏/快捷键恢复修复 |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 5/8 | 修复 Codex 5 小时限制已满时每周限制也被显示为 100% 的问题 |
 | **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 5/7 | 在主头部新增 Floating Quota Pace 小部件快捷开关，并修复小部件 toolbar 图标点击偶尔被识别为拖拽的问题 |
 | **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | 5/7 | 新增更稳健的 Codex live usage 同步、安全 API backoff、provider 级 Quota Pace health 标签，以及更清晰的 fallback/loading 状态 |
 | **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 5/6 | 新增 Floating Quota Pace 小部件、主布局自定义、带时间进度的使用量条、新截图，并强化小部件/设置同步 |
-| **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 4/27 | 新增安装程序启动时的 English/한국어/日本語/简体中文/Español 语言选择，同时保持 EULA 正文为英文 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-v1.13.2-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-v1.14.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -83,7 +83,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.13.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.14.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -100,7 +100,7 @@
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
-- **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine 回退；Codex 5h/1w 按 live Codex usage、缓存、本地 rate-limit 日志事件的顺序显示
+- **速率限制条** — Claude 5h/1w 来自 Anthropic API/statusLine 回退，并可在本地 access token 过期时通过 passive OAuth refresh 恢复；Codex 5h/1w 按 live Codex usage、缓存、本地 rate-limit 日志事件的顺序显示
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示消耗速度快于重置窗口
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
@@ -155,7 +155,7 @@
 
 启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在后台同步，这样托盘应用可以更快打开。
 
-头部的小型 PiP 按钮可直接开关 Floating Quota Pace 小部件。头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude limited` 和 `Claude offline`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
+头部的小型 PiP 按钮可直接开关 Floating Quota Pace 小部件。头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude refresh`、`Claude login`、`Claude limited`、`Claude offline` 和 `refresh failed`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
 
 ---
 
@@ -190,19 +190,19 @@ cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens
 
 Claude 提供 input、output、cache creation 与 cache read。Codex 提供 raw input、cached input 与 output，因此 WhereMyTokens 会把 raw input 拆成 uncached input 与 cached input，避免缓存节省金额和模型合计重复计算。
 
-Claude 和 Codex 使用独立的 5h/1w reset window。Claude 限额优先使用 Anthropic API，其次使用 statusLine/cache；Codex 限额优先使用 live Codex usage snapshot，其次使用 cache/local `rate_limits` 事件。实时请求仅针对启用的 provider，最短间隔为 5 分钟，并带有 timeout、响应大小限制和 backoff。
+Claude 和 Codex 使用独立的 5h/1w reset window。Claude 限额优先使用 Anthropic API，其次使用 statusLine/cache；如果本地 access token 过期，WhereMyTokens 可以通过 Anthropic refresh 并原子写回更新后的 credentials。Codex 限额优先使用 live Codex usage snapshot，其次使用 cache/local `rate_limits` 事件。实时请求仅针对启用的 provider，最短间隔为 5 分钟，并带有 timeout、响应大小限制和 backoff。
 
 ---
 
 ## 数据与隐私
 
-WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账号的 provider 使用量 API — 无云同步，无遥测。
+WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账号的 provider 使用量 API — 无云同步，无遥测。Claude API polling 中本地 OAuth access token 过期时，应用可能通过 Anthropic refresh 并写回 `~/.claude/.credentials.json`；WhereMyTokens 不会保留单独的凭据备份。
 
 | 文件 | 用途 |
 |------|------|
 | `~/.claude/sessions/*.json` | 会话元数据（pid、cwd、模型） |
 | `~/.claude/projects/**/*.jsonl` | 对话日志（令牌数、费用） |
-| `~/.claude/.credentials.json` | OAuth 令牌 — 仅用于从 Anthropic 获取您的使用统计 |
+| `~/.claude/.credentials.json` | OAuth 令牌 — 仅用于从 Anthropic 获取您的使用统计，并 refresh 过期的 Claude access token |
 | `~/.codex/sessions/**/*.jsonl` | Codex 会话日志（令牌、cached input、模型、rate-limit 事件、tool call） |
 | `~/.codex/auth.json` | ChatGPT OAuth 令牌 — 仅用于获取您自己的 Codex 使用量 snapshot；WhereMyTokens 不会记录或保存该令牌 |
 | `%APPDATA%\WhereMyTokens\live-session.json` | `statusLine` 插件写入的桥接数据 |

@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-Setup.exe"><strong>Download v1.13.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-Setup.exe"><strong>Download v1.14.0</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -59,11 +59,11 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | May 11 | Add Claude OAuth refresh recovery, safer credential-aware API caching, clearer Claude refresh/login states, and floating widget hide/shortcut recovery |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | May 8 | Fix Codex weekly limit display so a reached 5-hour limit no longer forces the weekly window to 100% |
 | **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | May 7 | Add a main-header toggle for the floating Quota Pace widget and fix widget toolbar icon clicks that could be captured as drag gestures |
 | **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | May 7 | Add resilient Codex live usage syncing, safer API backoff, provider-specific Quota Pace health chips, and clearer fallback/loading states |
 | **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | May 6 | Add the floating Quota Pace widget, layout customization, time-elapsed usage bars, refreshed screenshots, and widget/settings hardening |
-| **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | Apr 27 | Add installer language selection for English, Korean, Japanese, Simplified Chinese, and Spanish while keeping the EULA in English |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-Setup.exe)** - just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-v1.13.2-win-x64.zip)** - no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-v1.14.0-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.13.2-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.14.0-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -101,7 +101,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …)
 
 ### Rate Limits & Alerts
-- **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine fallback; Codex 5h/1w limits from live Codex usage, cache, then local rate-limit log events
+- **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine fallback, with passive OAuth refresh recovery when the local access token expires; Codex 5h/1w limits from live Codex usage, cache, then local rate-limit log events
 - **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means your burn rate is ahead of the reset window
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
 - **Windows toast notifications** — at configurable usage thresholds (50% / 80% / 90%)
@@ -156,7 +156,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 
 At startup the dashboard shows current sessions and recent usage first. If you see `Partial History`, older history is still syncing in the background so the tray app can open quickly.
 
-The small PiP button in the header toggles the floating Quota Pace widget. The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude limited`, and `Claude offline`. The Quota Pace widget shows provider-specific health chips such as `Claude OK` and `Codex OK`; hover any pill for the latest detail.
+The small PiP button in the header toggles the floating Quota Pace widget. The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline`, and `refresh failed`. The Quota Pace widget shows provider-specific health chips such as `Claude OK` and `Codex OK`; hover any pill for the latest detail.
 
 ---
 
@@ -205,7 +205,7 @@ Claude and Codex use separate limit sources and separate 5h/1w reset windows:
 
 | Priority | Source | Description |
 |----------|--------|-------------|
-| Claude 1st | **Anthropic API** | `/api/oauth/usage` — authoritative % and reset times. Fetched every 5 min for enabled provider modes; exponential backoff on 429. |
+| Claude 1st | **Anthropic API** | `/api/oauth/usage` — authoritative % and reset times. Fetched every 5 min for enabled provider modes; exponential backoff on 429. If the local access token is expired, WhereMyTokens can refresh it through Anthropic and write the updated credentials atomically. |
 | Claude 2nd | **Bridge (stdin)** | Live data from Claude Code via `statusLine`. Used as fallback when API is unavailable. |
 | Codex 1st | **Live Codex usage** | Account usage snapshot fetched at most every 5 min for enabled provider modes, with HTTPS-only GET, timeout, response-size cap, and backoff. |
 | Codex 2nd | **Local Codex logs** | `rate_limits` events inside `~/.codex/sessions/**/*.jsonl`, using the newest observed event when live usage/cache is unavailable. |
@@ -268,13 +268,13 @@ Click the **Details** button on any session row to expand activity by category. 
 
 ## Data & Privacy
 
-WhereMyTokens reads local files and, when enabled, makes direct provider usage requests for your own account — no cloud sync, no telemetry.
+WhereMyTokens reads local files and, when enabled, makes direct provider usage requests for your own account — no cloud sync, no telemetry. For Claude API polling, an expired local OAuth access token may be refreshed through Anthropic and written back to `~/.claude/.credentials.json`; WhereMyTokens does not keep a separate credential backup.
 
 | File | Purpose |
 |------|---------|
 | `~/.claude/sessions/*.json` | Session metadata (pid, cwd, model) |
 | `~/.claude/projects/**/*.jsonl` | Conversation logs (token counts, costs) |
-| `~/.claude/.credentials.json` | OAuth token — used only to fetch your own usage from Anthropic |
+| `~/.claude/.credentials.json` | OAuth token — used only to fetch your own usage from Anthropic and refresh expired Claude access tokens |
 | `~/.codex/sessions/**/*.jsonl` | Codex session logs (token counts, cached input, models, rate-limit events, tool calls) |
 | `~/.codex/auth.json` | ChatGPT OAuth token — used only to fetch your own Codex usage snapshot; never logged or stored by WhereMyTokens |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Bridge data written by the `statusLine` plugin |

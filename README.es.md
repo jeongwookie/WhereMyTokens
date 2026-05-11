@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.13.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.14.0</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -59,11 +59,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 11 may | Añade recuperación de Claude OAuth refresh, caché de API ligada a credenciales, estados Claude refresh/login más claros y recuperación del widget flotante tras ocultarlo o usar atajos |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 8 may | Corrige el uso semanal de Codex para que un límite de 5 horas alcanzado no fuerce la ventana semanal a 100% |
 | **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 7 may | Añade un toggle en el encabezado principal para el widget flotante Quota Pace y corrige clics en iconos del toolbar del widget que podían capturarse como arrastre |
 | **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | 7 may | Añade sincronización live usage de Codex más robusta, backoff seguro de API, chips Quota Pace health por provider y estados fallback/loading más claros |
 | **[v1.12.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.12.0)** | 6 may | Añade el widget flotante Quota Pace, personalización del diseño principal, barras de uso con tiempo transcurrido, nuevas capturas y sincronización más robusta del widget y Settings |
-| **[v1.11.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.11.6)** | 27 abr | Añade selector de idioma del instalador para English, 한국어, 日本語, 简体中文 y Español, manteniendo el EULA en inglés |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.13.2/WhereMyTokens-v1.13.2-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.14.0/WhereMyTokens-v1.14.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.13.2-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.14.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -100,7 +100,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine como respaldo; Codex 5h/1sem desde live Codex usage, caché y luego eventos locales de rate-limit
+- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine como respaldo, con recuperación passive OAuth refresh si el access token local expira; Codex 5h/1sem desde live Codex usage, caché y luego eventos locales de rate-limit
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
@@ -155,7 +155,7 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 
 Al iniciar, el panel muestra primero las sesiones actuales y el uso reciente. Si aparece `Partial History`, el historial antiguo sigue sincronizándose en segundo plano para que la app de bandeja abra rápido.
 
-El pequeño botón PiP del encabezado activa o desactiva el widget flotante Quota Pace. La píldora de estado del encabezado resume el estado más importante de provider/API. Las etiquetas comunes incluyen `Claude local`, `Claude partial`, `Claude limited` y `Claude offline`. El widget Quota Pace muestra chips de health por provider, como `Claude OK` y `Codex OK`; pasa el cursor por cualquier píldora o chip para ver el detalle más reciente.
+El pequeño botón PiP del encabezado activa o desactiva el widget flotante Quota Pace. La píldora de estado del encabezado resume el estado más importante de provider/API. Las etiquetas comunes incluyen `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline` y `refresh failed`. El widget Quota Pace muestra chips de health por provider, como `Claude OK` y `Codex OK`; pasa el cursor por cualquier píldora o chip para ver el detalle más reciente.
 
 ---
 
@@ -190,19 +190,19 @@ Los tokens incluyen **input + output + cache creation + cache reads** cuando est
 
 Claude reporta input, output, cache creation y cache read. Codex reporta raw input, cached input y output; WhereMyTokens divide el raw input en uncached input y cached input para evitar doble conteo en ahorro de caché y totales por modelo.
 
-Claude y Codex usan ventanas de reset 5h/1sem separadas. Claude usa Anthropic API primero y luego statusLine/cache como respaldo; Codex usa primero live Codex usage snapshot y luego cache/local `rate_limits`. Las solicitudes live solo se hacen para providers habilitados, con intervalo mínimo de 5 minutos, timeout, límite de tamaño de respuesta y backoff.
+Claude y Codex usan ventanas de reset 5h/1sem separadas. Claude usa Anthropic API primero y luego statusLine/cache como respaldo; si el access token local expira, WhereMyTokens puede hacer refresh con Anthropic y escribir las credentials actualizadas de forma atómica. Codex usa primero live Codex usage snapshot y luego cache/local `rate_limits`. Las solicitudes live solo se hacen para providers habilitados, con intervalo mínimo de 5 minutos, timeout, límite de tamaño de respuesta y backoff.
 
 ---
 
 ## Datos y Privacidad
 
-WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicitudes directas a las API de uso del provider para tu propia cuenta — sin sincronización en la nube, sin telemetría.
+WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicitudes directas a las API de uso del provider para tu propia cuenta — sin sincronización en la nube, sin telemetría. Durante el polling de Claude API, un access token OAuth local expirado puede refrescarse con Anthropic y escribirse de vuelta en `~/.claude/.credentials.json`; WhereMyTokens no conserva una copia de respaldo separada de las credenciales.
 
 | Archivo | Propósito |
 |---------|-----------|
 | `~/.claude/sessions/*.json` | Metadatos de sesión (pid, cwd, modelo) |
 | `~/.claude/projects/**/*.jsonl` | Registros de conversación (tokens, costos) |
-| `~/.claude/.credentials.json` | Token OAuth — solo para obtener tus estadísticas de uso de Anthropic |
+| `~/.claude/.credentials.json` | Token OAuth — solo para obtener tus estadísticas de uso de Anthropic y refrescar access tokens de Claude expirados |
 | `~/.codex/sessions/**/*.jsonl` | Logs de sesión Codex (tokens, cached input, modelos, eventos rate-limit, tool calls) |
 | `~/.codex/auth.json` | Token OAuth de ChatGPT — solo para obtener tu snapshot de uso de Codex; WhereMyTokens no lo registra ni lo almacena |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Datos del puente escritos por el plugin `statusLine` |
