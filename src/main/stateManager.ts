@@ -1390,6 +1390,7 @@ export class StateManager {
       const derived = this.computeDerivedUsage(settings);
       const codexAccount = readCodexAccountState();
       const partialHistoryScan = effectiveScanBudgetMs !== null && loaded.partial;
+      const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded.partial;
       const historyWarmupStartsAt = partialHistoryScan
         ? this.scheduleHistoryWarmup()
         : null;
@@ -1409,8 +1410,8 @@ export class StateManager {
         autoLimits: this.autoLimits,
         codexAccount,
         initialRefreshComplete: true,
-        historyWarmupPending: partialHistoryScan,
-        historyWarmupStartsAt,
+        historyWarmupPending: showHistoryWarmupBanner,
+        historyWarmupStartsAt: showHistoryWarmupBanner ? historyWarmupStartsAt : null,
         lastUpdated: Date.now(),
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
@@ -1459,8 +1460,8 @@ export class StateManager {
         autoLimits: this.autoLimits,
         codexAccount,
         initialRefreshComplete: true,
-        historyWarmupPending: partialHistoryScan,
-        historyWarmupStartsAt,
+        historyWarmupPending: showHistoryWarmupBanner,
+        historyWarmupStartsAt: showHistoryWarmupBanner ? historyWarmupStartsAt : null,
         lastUpdated: Date.now(),
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
