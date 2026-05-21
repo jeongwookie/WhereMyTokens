@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.0/WhereMyTokens-Setup.exe"><strong>v1.15.0 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe"><strong>v1.15.1 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -59,11 +59,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | Hotkey popup은 빠르게 열리면서도 전체 세션 기록을 놓치지 않게 하고, 트레이 보조 창이 taskbar에 나타나지 않도록 수정 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | Compact 위젯의 waiting 애니메이션을 기본 꺼짐으로 유지하는 Settings 토글 추가, syncing 애니메이션은 유지 |
 | **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | Claude OAuth refresh 복구, 자격 증명 기준 API 캐시 안전장치, Claude refresh/login 상태 표시, Floating 위젯 숨김/단축키 복구 개선 |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 5/8 | Codex 5시간 한도에 도달했을 때 주간 한도까지 100%로 보이던 표시 오류 수정 |
 | **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 5/7 | Floating Quota Pace 위젯을 메인 헤더에서 바로 켜고 끌 수 있게 하고, 위젯 toolbar 아이콘 클릭이 drag로 처리될 수 있던 문제 수정 |
-| **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | 5/7 | 안정적인 Codex live usage 동기화, 안전한 API backoff, provider별 Quota Pace health 칩, 더 명확한 fallback/loading 상태 추가 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.0/WhereMyTokens-v1.15.0-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-v1.15.1-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -83,7 +83,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.15.0-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.15.1-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 

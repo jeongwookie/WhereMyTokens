@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.0/WhereMyTokens-Setup.exe"><strong>下载 v1.15.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe"><strong>下载 v1.15.1</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -59,11 +59,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | 保持 hotkey popup 快速响应，同时不丢失完整会话历史，并避免托盘辅助窗口出现在 taskbar 中 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | 新增 Settings 开关，默认关闭 compact widget 的 waiting animation，同时保留 syncing animation |
 | **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | 新增 Claude OAuth refresh 恢复、按凭据隔离的 API 缓存保护、Claude refresh/login 状态显示，以及 Floating 小部件隐藏/快捷键恢复修复 |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 5/8 | 修复 Codex 5 小时限制已满时每周限制也被显示为 100% 的问题 |
 | **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 5/7 | 在主头部新增 Floating Quota Pace 小部件快捷开关，并修复小部件 toolbar 图标点击偶尔被识别为拖拽的问题 |
-| **[v1.13.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.0)** | 5/7 | 新增更稳健的 Codex live usage 同步、安全 API backoff、provider 级 Quota Pace health 标签，以及更清晰的 fallback/loading 状态 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.0/WhereMyTokens-v1.15.0-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-v1.15.1-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -83,7 +83,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.15.0-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.15.1-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 

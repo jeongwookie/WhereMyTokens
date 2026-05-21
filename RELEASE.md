@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.15.1 | 2026-05-21 | Keep hotkey popups responsive without losing full-session history, promote watcher catch-up after popup show, and keep tray helper windows out of the taskbar |
 | v1.15.0 | 2026-05-14 | Add a Settings toggle for compact-widget waiting animations, default waiting motion to off to reduce visual interruption, and keep syncing states animated |
 | v1.14.0 | 2026-05-11 | Add Claude OAuth refresh recovery, credential-aware API cache invalidation, safer refresh write/cooldown handling, clearer Claude refresh/login states, and floating widget hide/shortcut recovery |
 | v1.13.2 | 2026-05-08 | Fix Codex weekly limit display by keeping 5-hour and weekly API windows independent, honoring remaining-percent values, and invalidating stale Codex usage cache |
