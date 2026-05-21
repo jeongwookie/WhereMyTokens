@@ -1051,6 +1051,75 @@ test('all-time usage scan includes archived Codex files and Claude agent logs wi
   assert.doesNotMatch(scopedBody, /listCodexUsageJsonlFiles/);
 });
 
+test('all-time session count comes from usage summaries instead of current UI rows', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const manager = new StateManager(makeStore(), () => {});
+  const now = Date.now();
+  const aggregate = (requestCount) => ({
+    requestCount,
+    inputTokens: requestCount,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: requestCount,
+    costUSD: 0,
+    cacheSavingsUSD: 0,
+  });
+  const summary = ({ provider = 'claude', recent = false, historical = 0 } = {}) => ({
+    provider,
+    sessionSnapshot: {
+      modelName: '',
+      rawModel: '',
+      latestInputTokens: 0,
+      latestCacheCreationTokens: 0,
+      latestCacheReadTokens: 0,
+      toolCounts: {},
+      activityBreakdown: {
+        read: 0, editWrite: 0, search: 0, git: 0, buildTest: 0,
+        terminal: 0, thinking: 0, response: 0, subagents: 0, web: 0,
+      },
+      activityBreakdownKind: provider === 'codex' ? 'events' : 'tokens',
+    },
+    recentEntries: recent ? [{
+      requestId: 'recent-1',
+      timestampMs: now,
+      model: provider === 'codex' ? 'GPT-5.4' : 'Sonnet',
+      provider,
+      inputTokens: 1,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      costUSD: 0,
+      cacheSavingsUSD: 0,
+    }] : [],
+    historicalRollup: {
+      aggregate: aggregate(historical),
+      modelTotals: {},
+      hourlyBuckets: {},
+    },
+    byteOffset: 0,
+    pendingBytes: 0,
+    mtimeMs: now,
+    size: 1,
+    lastAccessedAt: now,
+  });
+
+  manager.summaries = new Map([
+    ['visible-recent.jsonl', summary({ recent: true })],
+    ['visible-historical.jsonl', summary({ provider: 'codex', historical: 2 })],
+    ['empty.jsonl', summary()],
+  ]);
+  manager.state = {
+    ...manager.getState(),
+    sessions: [{}, {}, {}],
+  };
+
+  assert.equal(manager.countAllTimeUsageSessions(manager.getState().settings), 2);
+  assert.match(source, /private countAllTimeUsageSessions\(settings: AppSettings\): number/);
+  assert.match(source, /allTimeSessions = this\.countAllTimeUsageSessions\(settings\)/);
+  assert.doesNotMatch(source, /allTimeSessions: sessions\.length/);
+});
+
 test('visible fast refresh stays on cached session scope and logs anomalies', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const fastStart = source.indexOf('private async fastRefresh');

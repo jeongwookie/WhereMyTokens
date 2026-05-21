@@ -231,6 +231,10 @@ function providerMatchesMode(mode: AppSettings['provider'], provider: SessionInf
   return mode === 'both' || mode === provider;
 }
 
+function hasUsageRequests(summary: FileUsageSummary): boolean {
+  return summary.recentEntries.length > 0 || summary.historicalRollup.aggregate.requestCount > 0;
+}
+
 function gitStatsCacheKey(cwd: string): string {
   return normalizeGitCwdKey(cwd);
 }
@@ -1008,6 +1012,10 @@ export class StateManager {
     return visible;
   }
 
+  private countAllTimeUsageSessions(settings: AppSettings): number {
+    return this.getVisibleSummaries(settings).filter(hasUsageRequests).length;
+  }
+
   private sessionIdentityKey(session: Pick<DiscoveredSession, 'provider' | 'jsonlPath' | 'cwd' | 'sessionId'>): string {
     return session.jsonlPath
       ? `${session.provider}:${normalizeFileKey(session.jsonlPath)}`
@@ -1037,7 +1045,7 @@ export class StateManager {
   private sessionDebugExtras(nextSessions: SessionInfo[], extras: Partial<Omit<SessionBuildResult, 'sessions'>> = {}): Record<string, unknown> {
     const previousCount = this.state.sessions.length;
     const sessionCountDelta = extras.sessionCountDelta ?? (nextSessions.length - previousCount);
-    const comparisonBaseline = Math.max(this.state.allTimeSessions, previousCount);
+    const comparisonBaseline = previousCount;
     const anomaly = extras.anomaly
       ?? ((sessionCountDelta > StateManager.SESSION_SPIKE_MARGIN || nextSessions.length > comparisonBaseline + StateManager.SESSION_SPIKE_MARGIN)
         ? 'session-count-spike'
@@ -1132,7 +1140,7 @@ export class StateManager {
       dedupedCount: Math.max(0, discoveredCount - sessions.length),
       reusedCount,
       sessionCountDelta: sessions.length - this.state.sessions.length,
-      anomaly: sessions.length > Math.max(this.state.allTimeSessions, this.state.sessions.length) + StateManager.SESSION_SPIKE_MARGIN
+      anomaly: this.state.sessions.length > 0 && sessions.length > this.state.sessions.length + StateManager.SESSION_SPIKE_MARGIN
         ? 'session-count-spike'
         : undefined,
     };
@@ -1289,6 +1297,7 @@ export class StateManager {
     const derived = this.computeDerivedUsage(settings);
     const codexAccount = readCodexAccountState();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+    const allTimeSessions = this.countAllTimeUsageSessions(settings);
     this.state = {
       ...this.state,
       sessions,
@@ -1302,7 +1311,7 @@ export class StateManager {
       extraUsage: derived.extraUsage,
       codeOutputStats,
       codeOutputLoading: false,
-      allTimeSessions: sessions.length,
+      allTimeSessions,
       lastUpdated: Date.now(),
     };
     this.onUpdate(this.state);
@@ -1378,6 +1387,7 @@ export class StateManager {
         const sessions = sessionState.sessions;
         sessionResult = sessionState;
         const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+        const allTimeSessions = this.countAllTimeUsageSessions(settings);
         sessionPerf = this.finishPerfSample(sessionSample);
         this.state = {
           ...this.state,
@@ -1395,7 +1405,7 @@ export class StateManager {
           extraUsage: derived.extraUsage,
           codeOutputStats,
           codeOutputLoading: false,
-          allTimeSessions: sessions.length,
+          allTimeSessions,
         };
         this.onUpdate(this.state);
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
@@ -1426,6 +1436,7 @@ export class StateManager {
       const settings = this.getSettings();
       const derived = this.computeDerivedUsage(settings);
       const codexAccount = readCodexAccountState();
+      const allTimeSessions = this.countAllTimeUsageSessions(settings);
       const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded.partial;
       const historyWarmupStartsAt = partialHistoryScan
         ? this.scheduleHistoryWarmup(
@@ -1458,7 +1469,7 @@ export class StateManager {
         repoGitStats: this.state.repoGitStats,
         codeOutputStats: partialCodeOutputStats,
         codeOutputLoading: true,
-        allTimeSessions: sessions.length,
+        allTimeSessions,
       };
       this.onUpdate(this.state);
       if (!initialRefreshDone && !force) {
@@ -1508,7 +1519,7 @@ export class StateManager {
         repoGitStats,
         codeOutputStats,
         codeOutputLoading: false,
-        allTimeSessions: sessions.length,
+        allTimeSessions,
       };
       this.onUpdate(this.state);
 
@@ -2433,6 +2444,7 @@ export class StateManager {
       );
       const derived = this.computeDerivedUsage(settings);
       const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      const allTimeSessions = this.countAllTimeUsageSessions(settings);
       this.state = {
         ...this.state,
         sessions,
@@ -2443,7 +2455,7 @@ export class StateManager {
         extraUsage: derived.extraUsage,
         codeOutputStats,
         codeOutputLoading: true,
-        allTimeSessions: sessions.length,
+        allTimeSessions,
         lastUpdated: Date.now(),
       };
       this.onUpdate(this.state);
@@ -2457,7 +2469,8 @@ export class StateManager {
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, allTimeSessions: sessions.length, lastUpdated: Date.now() };
+    const allTimeSessions = this.countAllTimeUsageSessions(settings);
+    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, allTimeSessions, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 
