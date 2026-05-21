@@ -1004,6 +1004,7 @@ test('startup recovery and persisted summary cache guards remain in source', () 
   assert.match(appSource, /BOOT_FALLBACK_DELAY_MS/);
   assert.match(appSource, /Startup Recovery/);
   assert.match(cacheSource, /PERSISTED_SCHEMA_VERSION = 2/);
+  assert.match(cacheSource, /MAX_PERSISTED_SIZE = 2048/);
   assert.match(cacheSource, /pendingText: undefined/);
   assert.match(cacheSource, /version: PERSISTED_SCHEMA_VERSION/);
   assert.match(parserSource, /pendingBytes/);
@@ -1017,9 +1018,106 @@ test('session discovery keeps recent-active scope and tracked session hints in s
   assert.match(discoverySource, /trackedJsonlPaths\?: string\[\]/);
   assert.match(discoverySource, /discoverSessions\(provider: TrackingProvider = 'both', options: DiscoverSessionsOptions = \{\}\)/);
   assert.match(discoverySource, /dedupeDiscoveredSessions/);
+  assert.match(discoverySource, /CODEX_ARCHIVED_SESSIONS_DIR/);
+  assert.match(discoverySource, /CODEX_SESSION_CLEANUP_ARCHIVE_DIR/);
+  assert.match(discoverySource, /CODEX_USAGE_DIRS/);
   assert.match(stateSource, /private collectTrackedSessionFiles\(/);
   assert.match(stateSource, /collectTrackedSessionFiles\('codex', StateManager\.STARTUP_CODEX_FILE_LIMIT\)/);
   assert.match(stateSource, /collectTrackedSessionFiles\('claude', StateManager\.STARTUP_CLAUDE_FILE_LIMIT\)/);
+});
+
+test('all-time usage scan includes archived Codex files and Claude agent logs without expanding recent sessions', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const loadStart = source.indexOf('private async loadProviderSummaries');
+  const loadEnd = source.indexOf('private async refreshChangedSummaries', loadStart);
+  const loadBody = source.slice(loadStart, loadEnd);
+  const codexStart = loadBody.indexOf("if ((settings.provider === 'codex'");
+  const claudeLoadBody = codexStart >= 0 ? loadBody.slice(0, codexStart) : loadBody;
+  const scopedStart = source.indexOf('private buildScopedSessionInfosDetailed');
+  const scopedEnd = source.indexOf('private collectTrackedSessionFiles', scopedStart);
+  const scopedBody = source.slice(scopedStart, scopedEnd);
+
+  assert.match(source, /CODEX_USAGE_DIRS/);
+  assert.match(source, /private codexSessionDedupeKey/);
+  assert.match(source, /private listCodexUsageJsonlFiles/);
+  assert.match(source, /codexUsageRootRank/);
+  assert.match(source, /function isClaudeAgentJsonlPath/);
+  assert.match(source, /if \(isClaudeAgentJsonlPath\(filePath\)\) return null/);
+  assert.match(loadBody, /this\.listCodexUsageJsonlFiles\(\)/);
+  assert.match(loadBody, /const priorityCodexFiles = \[\.\.\.startupPriority\]\.filter\(filePath => isCodexUsagePath\(filePath\)\)/);
+  assert.match(claudeLoadBody, /this\.listJsonlFiles\(dirPath, Number\.POSITIVE_INFINITY, false\)/);
+  assert.doesNotMatch(claudeLoadBody, /!\w+\.startsWith\('agent-'\)/);
+  assert.match(scopedBody, /this\.listRecentCodexJsonlFiles\(StateManager\.STARTUP_CODEX_FILE_LIMIT\)/);
+  assert.doesNotMatch(scopedBody, /listCodexUsageJsonlFiles/);
+});
+
+test('all-time session count comes from usage summaries instead of current UI rows', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const manager = new StateManager(makeStore(), () => {});
+  const now = Date.now();
+  const aggregate = (requestCount) => ({
+    requestCount,
+    inputTokens: requestCount,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: requestCount,
+    costUSD: 0,
+    cacheSavingsUSD: 0,
+  });
+  const summary = ({ provider = 'claude', recent = false, historical = 0 } = {}) => ({
+    provider,
+    sessionSnapshot: {
+      modelName: '',
+      rawModel: '',
+      latestInputTokens: 0,
+      latestCacheCreationTokens: 0,
+      latestCacheReadTokens: 0,
+      toolCounts: {},
+      activityBreakdown: {
+        read: 0, editWrite: 0, search: 0, git: 0, buildTest: 0,
+        terminal: 0, thinking: 0, response: 0, subagents: 0, web: 0,
+      },
+      activityBreakdownKind: provider === 'codex' ? 'events' : 'tokens',
+    },
+    recentEntries: recent ? [{
+      requestId: 'recent-1',
+      timestampMs: now,
+      model: provider === 'codex' ? 'GPT-5.4' : 'Sonnet',
+      provider,
+      inputTokens: 1,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      costUSD: 0,
+      cacheSavingsUSD: 0,
+    }] : [],
+    historicalRollup: {
+      aggregate: aggregate(historical),
+      modelTotals: {},
+      hourlyBuckets: {},
+    },
+    byteOffset: 0,
+    pendingBytes: 0,
+    mtimeMs: now,
+    size: 1,
+    lastAccessedAt: now,
+  });
+
+  manager.summaries = new Map([
+    ['visible-recent.jsonl', summary({ recent: true })],
+    ['visible-historical.jsonl', summary({ provider: 'codex', historical: 2 })],
+    ['empty.jsonl', summary()],
+  ]);
+  manager.state = {
+    ...manager.getState(),
+    sessions: [{}, {}, {}],
+  };
+
+  assert.equal(manager.countAllTimeUsageSessions(manager.getState().settings), 2);
+  assert.match(source, /private countAllTimeUsageSessions\(settings: AppSettings\): number/);
+  assert.match(source, /allTimeSessions = this\.countAllTimeUsageSessions\(settings\)/);
+  assert.doesNotMatch(source, /allTimeSessions: sessions\.length/);
 });
 
 test('visible fast refresh stays on cached session scope and logs anomalies', () => {

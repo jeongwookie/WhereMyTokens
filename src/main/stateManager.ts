@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
-import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDiscoveryScope, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
+import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDiscoveryScope, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, CODEX_USAGE_DIRS, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
 import { scanCodexRateLimitsOnly, scanJsonlSummaryCached } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
@@ -231,6 +231,10 @@ function providerMatchesMode(mode: AppSettings['provider'], provider: SessionInf
   return mode === 'both' || mode === provider;
 }
 
+function hasUsageRequests(summary: FileUsageSummary): boolean {
+  return summary.recentEntries.length > 0 || summary.historicalRollup.aggregate.requestCount > 0;
+}
+
 function gitStatsCacheKey(cwd: string): string {
   return normalizeGitCwdKey(cwd);
 }
@@ -252,6 +256,23 @@ function isSameOrChildPath(parentPath: string | null, childPath: string | null):
   if (!parentPath || !childPath) return false;
   const relative = path.relative(parentPath, childPath);
   return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function isPathInRoot(filePath: string, rootPath: string): boolean {
+  return isSameOrChildPath(normalizeFileKey(rootPath), normalizeFileKey(filePath));
+}
+
+function isCodexUsagePath(filePath: string): boolean {
+  return CODEX_USAGE_DIRS.some(root => isPathInRoot(filePath, root));
+}
+
+function codexUsageRootRank(filePath: string): number | null {
+  if (isPathInRoot(filePath, CODEX_SESSIONS_DIR)) return 0;
+  return CODEX_USAGE_DIRS.some(root => root !== CODEX_SESSIONS_DIR && isPathInRoot(filePath, root)) ? 1 : null;
+}
+
+function isClaudeAgentJsonlPath(filePath: string): boolean {
+  return path.basename(filePath).startsWith('agent-');
 }
 
 export function resolveSessionRepoKeys(
@@ -967,7 +988,13 @@ export class StateManager {
     isExcluded: ReturnType<typeof makeExcludedMatcher>,
   ): boolean {
     const keys: string[] = [];
-    if (provider === 'claude') keys.push(path.basename(path.dirname(filePath)));
+    if (provider === 'claude') {
+      const relative = path.relative(PROJECTS_DIR, filePath);
+      const projectDir = relative && !relative.startsWith('..') && !path.isAbsolute(relative)
+        ? relative.split(path.sep)[0]
+        : null;
+      keys.push(projectDir ?? path.basename(path.dirname(filePath)));
+    }
     const cwd = readJsonlCwd(filePath, provider);
     if (cwd) keys.push(...projectKeysForCwd(cwd));
     return isExcluded(keys);
@@ -983,6 +1010,10 @@ export class StateManager {
       visible.push(summary);
     }
     return visible;
+  }
+
+  private countAllTimeUsageSessions(settings: AppSettings): number {
+    return this.getVisibleSummaries(settings).filter(hasUsageRequests).length;
   }
 
   private sessionIdentityKey(session: Pick<DiscoveredSession, 'provider' | 'jsonlPath' | 'cwd' | 'sessionId'>): string {
@@ -1014,7 +1045,7 @@ export class StateManager {
   private sessionDebugExtras(nextSessions: SessionInfo[], extras: Partial<Omit<SessionBuildResult, 'sessions'>> = {}): Record<string, unknown> {
     const previousCount = this.state.sessions.length;
     const sessionCountDelta = extras.sessionCountDelta ?? (nextSessions.length - previousCount);
-    const comparisonBaseline = Math.max(this.state.allTimeSessions, previousCount);
+    const comparisonBaseline = previousCount;
     const anomaly = extras.anomaly
       ?? ((sessionCountDelta > StateManager.SESSION_SPIKE_MARGIN || nextSessions.length > comparisonBaseline + StateManager.SESSION_SPIKE_MARGIN)
         ? 'session-count-spike'
@@ -1109,7 +1140,7 @@ export class StateManager {
       dedupedCount: Math.max(0, discoveredCount - sessions.length),
       reusedCount,
       sessionCountDelta: sessions.length - this.state.sessions.length,
-      anomaly: sessions.length > Math.max(this.state.allTimeSessions, this.state.sessions.length) + StateManager.SESSION_SPIKE_MARGIN
+      anomaly: this.state.sessions.length > 0 && sessions.length > this.state.sessions.length + StateManager.SESSION_SPIKE_MARGIN
         ? 'session-count-spike'
         : undefined,
     };
@@ -1266,6 +1297,7 @@ export class StateManager {
     const derived = this.computeDerivedUsage(settings);
     const codexAccount = readCodexAccountState();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+    const allTimeSessions = this.countAllTimeUsageSessions(settings);
     this.state = {
       ...this.state,
       sessions,
@@ -1279,7 +1311,7 @@ export class StateManager {
       extraUsage: derived.extraUsage,
       codeOutputStats,
       codeOutputLoading: false,
-      allTimeSessions: sessions.length,
+      allTimeSessions,
       lastUpdated: Date.now(),
     };
     this.onUpdate(this.state);
@@ -1355,6 +1387,7 @@ export class StateManager {
         const sessions = sessionState.sessions;
         sessionResult = sessionState;
         const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+        const allTimeSessions = this.countAllTimeUsageSessions(settings);
         sessionPerf = this.finishPerfSample(sessionSample);
         this.state = {
           ...this.state,
@@ -1372,7 +1405,7 @@ export class StateManager {
           extraUsage: derived.extraUsage,
           codeOutputStats,
           codeOutputLoading: false,
-          allTimeSessions: sessions.length,
+          allTimeSessions,
         };
         this.onUpdate(this.state);
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
@@ -1403,6 +1436,7 @@ export class StateManager {
       const settings = this.getSettings();
       const derived = this.computeDerivedUsage(settings);
       const codexAccount = readCodexAccountState();
+      const allTimeSessions = this.countAllTimeUsageSessions(settings);
       const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded.partial;
       const historyWarmupStartsAt = partialHistoryScan
         ? this.scheduleHistoryWarmup(
@@ -1435,7 +1469,7 @@ export class StateManager {
         repoGitStats: this.state.repoGitStats,
         codeOutputStats: partialCodeOutputStats,
         codeOutputLoading: true,
-        allTimeSessions: sessions.length,
+        allTimeSessions,
       };
       this.onUpdate(this.state);
       if (!initialRefreshDone && !force) {
@@ -1485,7 +1519,7 @@ export class StateManager {
         repoGitStats,
         codeOutputStats,
         codeOutputLoading: false,
-        allTimeSessions: sessions.length,
+        allTimeSessions,
       };
       this.onUpdate(this.state);
 
@@ -1536,6 +1570,7 @@ export class StateManager {
   }
 
   private buildStartupClaudeSession(filePath: string): DiscoveredSession | null {
+    if (isClaudeAgentJsonlPath(filePath)) return null;
     try {
       const stat = fs.statSync(filePath);
       const cwd = readJsonlCwd(filePath, 'claude');
@@ -1802,7 +1837,7 @@ export class StateManager {
     const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
     const shouldPrioritize = (filePath: string) => startupPriority.has(normalizeFileKey(filePath));
     const priorityClaudeFiles = [...startupPriority].filter(filePath => filePath.startsWith(normalizeFileKey(PROJECTS_DIR)));
-    const priorityCodexFiles = [...startupPriority].filter(filePath => filePath.startsWith(normalizeFileKey(CODEX_SESSIONS_DIR)));
+    const priorityCodexFiles = [...startupPriority].filter(filePath => isCodexUsagePath(filePath));
 
     const scanSummary = async (filePath: string, provider: 'claude' | 'codex'): Promise<FileUsageSummary | null> => {
       try {
@@ -1869,20 +1904,18 @@ export class StateManager {
             }
             const dirPath = path.join(PROJECTS_DIR, dir);
             try {
-              const files = fs.readdirSync(dirPath)
-                .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
-                .sort((a, b) => Number(shouldPrioritize(path.join(dirPath, b))) - Number(shouldPrioritize(path.join(dirPath, a))));
-              if (budgetMs !== null && shouldStopForBudget() && !files.some(file => shouldPrioritize(path.join(dirPath, file)))) {
+              const files = this.listJsonlFiles(dirPath, Number.POSITIVE_INFINITY, false)
+                .sort((a, b) => Number(shouldPrioritize(b)) - Number(shouldPrioritize(a)));
+              if (budgetMs !== null && shouldStopForBudget() && !files.some(filePath => shouldPrioritize(filePath))) {
                 partial = true;
                 break;
               }
               const cwd = hasExcludedProjects && files.length > 0
-                ? readJsonlCwd(path.join(dirPath, files[0]), 'claude')
+                ? readJsonlCwd(files[0], 'claude')
                 : null;
               if (isExcluded([dir, ...(cwd ? projectKeysForCwd(cwd) : [])])) continue;
               sessionCount += files.length;
-              for (const file of files) {
-                const filePath = path.join(dirPath, file);
+              for (const filePath of files) {
                 if (budgetMs !== null && shouldStopForBudget() && !shouldPrioritize(filePath)) {
                   partial = true;
                   break;
@@ -1896,7 +1929,7 @@ export class StateManager {
       }
     }
 
-    if ((settings.provider === 'codex' || settings.provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
+    if ((settings.provider === 'codex' || settings.provider === 'both') && CODEX_USAGE_DIRS.some(root => fs.existsSync(root))) {
       const recentCodex = budgetMs !== null
         ? this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT)
         : { files: [], truncated: false };
@@ -1904,7 +1937,7 @@ export class StateManager {
         ? (priorityCodexFiles.length > 0
             ? priorityCodexFiles
             : recentCodex.files)
-        : this.listJsonlFiles(CODEX_SESSIONS_DIR, Number.POSITIVE_INFINITY, false))
+        : this.listCodexUsageJsonlFiles())
         .sort((a, b) => Number(shouldPrioritize(b)) - Number(shouldPrioritize(a)));
       if (budgetMs !== null && (priorityCodexFiles.length > 0 || recentCodex.truncated)) partial = true;
       for (const filePath of codexFiles) {
@@ -1959,7 +1992,7 @@ export class StateManager {
   private providerForJsonlPath(filePath: string): 'claude' | 'codex' | null {
     const normalized = normalizeFileKey(filePath);
     if (normalized.startsWith(normalizeFileKey(PROJECTS_DIR))) return 'claude';
-    if (normalized.startsWith(normalizeFileKey(CODEX_SESSIONS_DIR))) return 'codex';
+    if (isCodexUsagePath(normalized)) return 'codex';
     return null;
   }
 
@@ -2002,6 +2035,41 @@ export class StateManager {
       files,
       truncated: truncated || files.length > maxFiles,
     };
+  }
+
+  private codexSessionDedupeKey(filePath: string): string {
+    const header = readCodexSessionHeader(filePath);
+    const sessionId = typeof header?.payload.id === 'string' && header.payload.id.trim()
+      ? header.payload.id.trim()
+      : path.basename(filePath, '.jsonl');
+    return sessionId.toLowerCase();
+  }
+
+  private listCodexUsageJsonlFiles(): string[] {
+    const deduped = new Map<string, { filePath: string; rank: number; mtimeMs: number }>();
+
+    for (const root of CODEX_USAGE_DIRS) {
+      if (!fs.existsSync(root)) continue;
+      for (const filePath of this.listJsonlFiles(root, Number.POSITIVE_INFINITY, false)) {
+        let mtimeMs = 0;
+        try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch { continue; }
+        const rank = codexUsageRootRank(filePath);
+        if (rank == null) continue;
+
+        const key = this.codexSessionDedupeKey(filePath);
+        const current = deduped.get(key);
+        if (!current
+          || rank < current.rank
+          || (rank === current.rank && mtimeMs > current.mtimeMs)
+          || (rank === current.rank && mtimeMs === current.mtimeMs && filePath.localeCompare(current.filePath) < 0)) {
+          deduped.set(key, { filePath, rank, mtimeMs });
+        }
+      }
+    }
+
+    return [...deduped.values()]
+      .sort((a, b) => a.rank - b.rank || a.filePath.localeCompare(b.filePath))
+      .map(entry => entry.filePath);
   }
 
   private listRecentCodexJsonlFiles(maxFiles: number): { files: string[]; truncated: boolean } {
@@ -2376,6 +2444,7 @@ export class StateManager {
       );
       const derived = this.computeDerivedUsage(settings);
       const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
+      const allTimeSessions = this.countAllTimeUsageSessions(settings);
       this.state = {
         ...this.state,
         sessions,
@@ -2386,7 +2455,7 @@ export class StateManager {
         extraUsage: derived.extraUsage,
         codeOutputStats,
         codeOutputLoading: true,
-        allTimeSessions: sessions.length,
+        allTimeSessions,
         lastUpdated: Date.now(),
       };
       this.onUpdate(this.state);
@@ -2400,7 +2469,8 @@ export class StateManager {
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
-    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, allTimeSessions: sessions.length, lastUpdated: Date.now() };
+    const allTimeSessions = this.countAllTimeUsageSessions(settings);
+    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, allTimeSessions, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 

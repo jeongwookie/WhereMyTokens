@@ -36,7 +36,11 @@ export interface DiscoveredSession {
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
+const CODEX_HOME_DIR = path.join(os.homedir(), '.codex');
+const CODEX_SESSIONS_DIR = path.join(CODEX_HOME_DIR, 'sessions');
+const CODEX_ARCHIVED_SESSIONS_DIR = path.join(CODEX_HOME_DIR, 'archived_sessions');
+const CODEX_SESSION_CLEANUP_ARCHIVE_DIR = path.join(CODEX_HOME_DIR, 'session-cleanup-archive');
+const CODEX_USAGE_DIRS = [CODEX_SESSIONS_DIR, CODEX_ARCHIVED_SESSIONS_DIR, CODEX_SESSION_CLEANUP_ARCHIVE_DIR] as const;
 const DEFAULT_RECENT_CLAUDE_SESSION_LIMIT = 48;
 const DEFAULT_RECENT_CODEX_FILE_LIMIT = 96;
 const worktreeCache = new Map<string, { mainName: string; branch: string } | null>();
@@ -467,4 +471,11 @@ export function discoverSessions(provider: TrackingProvider = 'both', options: D
   return dedupeDiscoveredSessions(results);
 }
 
-export { CODEX_SESSIONS_DIR, PROJECTS_DIR as CLAUDE_PROJECTS_DIR, SESSIONS_DIR as CLAUDE_SESSIONS_DIR };
+export {
+  CODEX_ARCHIVED_SESSIONS_DIR,
+  CODEX_SESSION_CLEANUP_ARCHIVE_DIR,
+  CODEX_SESSIONS_DIR,
+  CODEX_USAGE_DIRS,
+  PROJECTS_DIR as CLAUDE_PROJECTS_DIR,
+  SESSIONS_DIR as CLAUDE_SESSIONS_DIR,
+};
