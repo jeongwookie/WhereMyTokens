@@ -29,7 +29,7 @@ export interface JsonlCacheDebugStats {
 
 export class JsonlCache {
   private readonly MAX_SIZE = 256;
-  private readonly MAX_PERSISTED_SIZE = 512;
+  private readonly MAX_PERSISTED_SIZE = 2048;
   private readonly MEMORY_TTL_MS = 30 * 60 * 1000;
   private cache = new Map<string, FileUsageSummary>();
   private pendingPersisted = new Map<string, PersistedSummaryEntry | null>();
