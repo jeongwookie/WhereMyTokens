@@ -124,6 +124,13 @@ function createTray(): Tray {
   return t;
 }
 
+function keepWindowOutOfTaskbar(win: BrowserWindow) {
+  if (win.isDestroyed()) return;
+  try {
+    win.setSkipTaskbar(true);
+  } catch { /* 창 종료 타이밍과 겹치는 일시적 오류는 무시한다. */ }
+}
+
 function createPopupWindow(): BrowserWindow {
   const settings = getSettings();
   const win = new BrowserWindow({
@@ -142,11 +149,15 @@ function createPopupWindow(): BrowserWindow {
     },
   });
 
+  keepWindowOutOfTaskbar(win);
   installNavigationGuards(win);
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath);
   win.on('move', markPopupMoving);
-  win.on('show', syncUiVisibility);
+  win.on('show', () => {
+    keepWindowOutOfTaskbar(win);
+    syncUiVisibility();
+  });
   win.on('hide', syncUiVisibility);
   win.webContents.on('context-menu', openDashboardContextMenu);
   registerDebugTargets();
@@ -233,6 +244,7 @@ function applyCompactWidgetBounds(settings = getSettings()) {
   const [x, y] = widgetWindow.getPosition();
   const position = constrainWidgetPosition({ x, y }, size);
   widgetWindow.setBounds({ ...position, ...size }, false);
+  keepWindowOutOfTaskbar(widgetWindow);
   if (position.x !== x || position.y !== y) schedulePersistWidgetPosition(widgetWindow);
 }
 
@@ -241,7 +253,9 @@ function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
   if (!win.isVisible() && !readyWidgetWindows.has(win)) return;
   applyCompactWidgetBounds(settings);
   win.setAlwaysOnTop(true);
+  keepWindowOutOfTaskbar(win);
   if (!win.isVisible()) win.showInactive();
+  keepWindowOutOfTaskbar(win);
   syncUiVisibility();
   const currentState = stateManager?.getState();
   if (currentState) win.webContents.send('state:updated', currentState);
@@ -297,11 +311,15 @@ function createWidgetWindow(): BrowserWindow {
     },
   });
 
+  keepWindowOutOfTaskbar(win);
   installNavigationGuards(win);
   const rendererPath = path.join(app.getAppPath(), 'dist', 'renderer', 'index.html');
   win.loadFile(rendererPath, { query: { view: 'widget' } });
   win.on('move', () => schedulePersistWidgetPosition(win));
-  win.on('show', syncWidgetVisibility);
+  win.on('show', () => {
+    keepWindowOutOfTaskbar(win);
+    syncWidgetVisibility();
+  });
   win.on('hide', syncWidgetVisibility);
   win.once('ready-to-show', () => {
     readyWidgetWindows.add(win);
@@ -379,6 +397,7 @@ function showPopup(view: AppView = 'main') {
   popupWindow.setBounds(resolvePopupBounds(tray.getBounds()));
   popupWindow.show();
   popupWindow.focus();
+  keepWindowOutOfTaskbar(popupWindow);
   sendPopupNavigation(view);
   const currentState = stateManager?.getState();
   if (currentState) {
@@ -397,6 +416,7 @@ function sendWidgetStateUpdate(state: AppState) {
   }
   if (!widgetWindow.isVisible()) return;
   applyCompactWidgetBounds(state.settings);
+  keepWindowOutOfTaskbar(widgetWindow);
   widgetWindow.webContents.send('state:updated', state);
 }
 
@@ -442,9 +462,11 @@ function applyWindowSettings() {
   const settings = getSettings();
   if (popupWindow && !popupWindow.isDestroyed()) {
     popupWindow.setAlwaysOnTop(settings.alwaysOnTop);
+    keepWindowOutOfTaskbar(popupWindow);
   }
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.setAlwaysOnTop(true);
+    keepWindowOutOfTaskbar(widgetWindow);
   }
 }
 
@@ -557,6 +579,7 @@ function updateTray(state: AppState) {
 
 function queueRendererStateUpdate(state: AppState) {
   if (!popupWindow || popupWindow.isDestroyed() || !popupWindow.isVisible()) return;
+  keepWindowOutOfTaskbar(popupWindow);
   pendingStateUpdate = state;
   if (stateUpdateTimer) clearTimeout(stateUpdateTimer);
   stateUpdateTimer = setTimeout(flushRendererStateUpdate, popupMoving ? 250 : 150);
@@ -665,6 +688,7 @@ app.whenReady().then(() => {
     const size = compactWidgetSize(getSettings());
     const next = constrainWidgetPosition({ x: position.x, y: position.y }, size);
     widgetWindow.setBounds({ ...next, width: size.width, height: size.height });
+    keepWindowOutOfTaskbar(widgetWindow);
     schedulePersistWidgetPosition(widgetWindow);
   });
 
