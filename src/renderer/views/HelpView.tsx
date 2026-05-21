@@ -140,7 +140,7 @@ function ContentEN() {
           WhereMyTokens can track <B>Claude Code only</B>, <B>Codex only</B>, or <B>Claude + Codex together</B>. Choose the provider mode in Settings.
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> reads local Claude session/JSONL files and uses the Anthropic API or statusLine bridge for 5h/1w limits.</div>
-        <div><B>Codex</B> prefers the live Codex usage snapshot for 5h/1w limits, then falls back to cached data and local <code>~/.codex/sessions/**/*.jsonl</code> logs for model usage, token counts, cached input, tool events, and reset events.</div>
+        <div><B>Codex</B> prefers the live Codex usage snapshot for 5h/1w limits, then falls back to cached data and local <code>~/.codex/sessions/**/*.jsonl</code>, <code>~/.codex/archived_sessions/**/*.jsonl</code>, and <code>~/.codex/session-cleanup-archive/**/*.jsonl</code> logs for model usage, token counts, cached input, tool events, and reset events.</div>
       </Section>
 
       <Divider />
@@ -174,7 +174,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — lines added minus lines removed (net change).</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-added-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 added. Lower = more efficient.</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — all-time cumulative net line progress with today's commit count.</div>
-        <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats.</div>
+        <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats. All-time session counts come from usage-bearing history logs.</div>
         <div style={{ marginBottom: 5 }}><B>Current session repo scope</B> — git totals follow repos linked to the sessions currently tracked in the dashboard, so they can differ from just the repo you are viewing.</div>
         <div style={{ marginBottom: 5 }}><B>All-time scope</B> — counts commits and line changes across local branches, not only the current HEAD.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
@@ -257,7 +257,7 @@ function ContentKO() {
           WhereMyTokens는 <B>Claude Code만</B>, <B>Codex만</B>, 또는 <B>Claude + Codex 동시 추적</B>을 지원합니다. Settings에서 provider 모드를 선택합니다.
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B>는 로컬 Claude 세션/JSONL 파일을 읽고, 5h/1w 한도는 Anthropic API 또는 statusLine 브리지를 사용합니다.</div>
-        <div><B>Codex</B>는 5h/1w 한도에 live Codex usage snapshot을 우선 사용하고, 실패 시 캐시와 로컬 <code>~/.codex/sessions/**/*.jsonl</code> 로그의 모델 사용량, 토큰 수, cached input, 툴 이벤트, reset 이벤트로 폴백합니다.</div>
+        <div><B>Codex</B>는 5h/1w 한도에 live Codex usage snapshot을 우선 사용하고, 실패 시 캐시와 로컬 <code>~/.codex/sessions/**/*.jsonl</code>, <code>~/.codex/archived_sessions/**/*.jsonl</code>, <code>~/.codex/session-cleanup-archive/**/*.jsonl</code> 로그의 모델 사용량, 토큰 수, cached input, 툴 이벤트, reset 이벤트로 폴백합니다.</div>
       </Section>
 
       <Divider />
@@ -291,7 +291,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 추가 라인 - 삭제 라인 (순 변경량).</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 추가 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 added. 값이 낮을수록 효율적.</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 전체 기간 순 라인 누적 성장과 오늘 커밋 수를 보여줍니다.</div>
-        <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환.</div>
+        <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환. 전체 기간 세션 수는 사용량이 있는 전체 기록 로그 기준입니다.</div>
         <div style={{ marginBottom: 5 }}><B>현재 세션 repo 범위</B> — git 합계는 대시보드에서 현재 추적 중인 세션에 연결된 repo 기준으로 잡히므로, 지금 보고 있는 단일 저장소 값과 다를 수 있습니다.</div>
         <div style={{ marginBottom: 5 }}><B>전체 기간 범위</B> — 현재 HEAD만이 아니라 로컬 브랜치 전체의 커밋과 라인 변경을 집계합니다.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
@@ -372,7 +372,7 @@ function ContentJA() {
           WhereMyTokens は <B>Claude Code のみ</B>、<B>Codex のみ</B>、または <B>Claude + Codex の同時追跡</B>に対応しています。Settings で provider モードを選択します。
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> はローカルの Claude セッション/JSONL ファイルを読み取り、5h/1w 制限は Anthropic API または statusLine ブリッジを使います。</div>
-        <div><B>Codex</B> は 5h/1w 制限では live Codex usage snapshot を優先し、失敗時はキャッシュとローカルの <code>~/.codex/sessions/**/*.jsonl</code> ログにあるモデル使用量、トークン数、cached input、ツールイベント、reset イベントへフォールバックします。</div>
+        <div><B>Codex</B> は 5h/1w 制限では live Codex usage snapshot を優先し、失敗時はキャッシュとローカルの <code>~/.codex/sessions/**/*.jsonl</code>、<code>~/.codex/archived_sessions/**/*.jsonl</code>、<code>~/.codex/session-cleanup-archive/**/*.jsonl</code> ログにあるモデル使用量、トークン数、cached input、ツールイベント、reset イベントへフォールバックします。</div>
       </Section>
 
       <Divider />
@@ -406,7 +406,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>Net Lines</B> — 追加行数 − 削除行数（純変更量）。</div>
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の追加行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 added。値が低いほど効率的。</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 全期間の純変更の累積成長と今日のコミット数を表示します。</div>
-        <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。</div>
+        <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。全期間のセッション数は使用量を含む履歴ログに基づきます。</div>
         <div style={{ marginBottom: 5 }}><B>現在のセッション repo 範囲</B> — git 合計はダッシュボードで現在追跡中のセッションに結び付いた repo を基準にするため、いま見ている単一リポジトリの値とは異なる場合があります。</div>
         <div style={{ marginBottom: 5 }}><B>全期間の範囲</B> — 現在の HEAD だけでなく、ローカルブランチ全体のコミットと行変更を集計します。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>

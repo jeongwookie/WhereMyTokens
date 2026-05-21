@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.15.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.15.2</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -59,11 +59,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 21 may | Incluye logs archivados de Codex y logs agent de Claude en el uso all-time, y muestra sesiones all-time desde el historial completo |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 21 may | Mantiene ágil el hotkey popup sin perder el historial completo de sesiones y evita que las ventanas auxiliares de la bandeja aparezcan en la taskbar |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 14 may | Añade un toggle en Settings que mantiene desactivadas por defecto las animaciones waiting del widget compacto, conservando la animación syncing |
 | **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 11 may | Añade recuperación de Claude OAuth refresh, caché de API ligada a credenciales, estados Claude refresh/login más claros y recuperación del widget flotante tras ocultarlo o usar atajos |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 8 may | Corrige el uso semanal de Codex para que un límite de 5 horas alcanzado no fuerce la ventana semanal a 100% |
-| **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 7 may | Añade un toggle en el encabezado principal para el widget flotante Quota Pace y corrige clics en iconos del toolbar del widget que podían capturarse como arrastre |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-v1.15.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-v1.15.2-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.15.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.15.2-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -107,7 +107,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
-- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y estado health/fallback por provider
+- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y estado health/fallback por provider. En `all`, el conteo de sesiones viene del historial completo
 - **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue cargando en segundo plano con el aviso `Partial History`
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
@@ -120,7 +120,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Gráfico de crecimiento de Output** — muestra el crecimiento acumulado de líneas netas en los últimos 7 días locales
 - **Ámbito de repos de la sesión actual** — Code Output ahora etiqueta que los totales git se calculan sobre los repos vinculados a las sesiones que estás rastreando
 - **Histórico por ramas** — Code Output histórico cuenta commits y cambios de líneas en todas las ramas locales, usando tu email local de git
-- **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` y sesiones Codex desde `~/.codex/sessions/`
+- **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` incluyendo logs agent, y sesiones Codex desde `~/.codex/sessions/`, `~/.codex/archived_sessions/`, `~/.codex/session-cleanup-archive/`
 - **Solo tus commits** — filtrado por `git config user.email`
 
 ### Personalización
@@ -167,7 +167,7 @@ WhereMyTokens es una app de bandeja Electron local-first. El renderer no lee arc
 | Sesiones Claude | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
 | Puente Claude | stdin de Claude Code `statusLine` | `%APPDATA%\WhereMyTokens\live-session.json` | No |
 | Límites de uso Claude | OAuth token en `~/.claude/.credentials.json` | Anthropic `/api/oauth/usage` | Sí, directo a Anthropic |
-| Sesiones Codex | `~/.codex/sessions/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
+| Sesiones Codex | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
 | Límites de uso Codex | OAuth token en `~/.codex/auth.json` | ChatGPT/Codex usage endpoint | Sí, directo a OpenAI/ChatGPT |
 
 La prioridad de límites depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; Codex usa primero live usage y luego eventos locales `rate_limits` de los logs JSONL; ambos conservan el último valor conocido solo hasta que queda stale.
@@ -183,7 +183,9 @@ WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicit
 | `~/.claude/sessions/*.json` | Metadatos de sesión Claude, como pid, cwd y modelo. |
 | `~/.claude/projects/**/*.jsonl` | Logs de conversación Claude para tokens, costos, contexto y resúmenes de actividad. |
 | `~/.claude/.credentials.json` | Material OAuth de Claude usado solo para solicitudes de uso de Anthropic y refresh de access tokens expirados. |
-| `~/.codex/sessions/**/*.jsonl` | Logs de sesión Codex para tokens, cached input, modelos, eventos rate-limit y actividad de herramientas. |
+| `~/.codex/sessions/**/*.jsonl` | Logs actuales de sesión Codex para tokens, cached input, modelos, eventos rate-limit y actividad de herramientas. |
+| `~/.codex/archived_sessions/**/*.jsonl` | Logs archivados de Codex incluidos en el uso all-time. |
+| `~/.codex/session-cleanup-archive/**/*.jsonl` | Logs de cleanup archive de Codex incluidos en el uso all-time. |
 | `~/.codex/auth.json` | Material OAuth de ChatGPT usado solo para snapshots de uso de Codex; no se copia al storage de la app ni se registra en logs. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Snapshot local escrito por el bridge `statusLine` de Claude Code. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | Ajustes de la app, cachés locales, historial de notificaciones y estado del bridge. |
@@ -212,7 +214,7 @@ WhereMyTokens puede recibir contexto, modelo, costo y datos de límite de uso co
 
 ### Seguimiento de Codex
 
-WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`. En Settings, elige **Claude**, **Codex** o **Both**.
+WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl` y `~/.codex/session-cleanup-archive/**/*.jsonl`. En Settings, elige **Claude**, **Codex** o **Both**.
 
 **El seguimiento de Codex incluye:**
 - Estado de sesión, agrupación por proyecto/rama y etiquetas de origen como VS Code o Codex Exec

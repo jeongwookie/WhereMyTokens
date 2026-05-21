@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe"><strong>v1.15.1 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe"><strong>v1.15.2 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -59,11 +59,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex 아카이브 로그와 Claude agent 로그를 all-time 사용량에 포함하고, all-time 세션 수를 전체 사용 기록 기준으로 표시 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | Hotkey popup은 빠르게 열리면서도 전체 세션 기록을 놓치지 않게 하고, 트레이 보조 창이 taskbar에 나타나지 않도록 수정 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | Compact 위젯의 waiting 애니메이션을 기본 꺼짐으로 유지하는 Settings 토글 추가, syncing 애니메이션은 유지 |
 | **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | Claude OAuth refresh 복구, 자격 증명 기준 API 캐시 안전장치, Claude refresh/login 상태 표시, Floating 위젯 숨김/단축키 복구 개선 |
 | **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 5/8 | Codex 5시간 한도에 도달했을 때 주간 한도까지 100%로 보이던 표시 오류 수정 |
-| **[v1.13.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.1)** | 5/7 | Floating Quota Pace 위젯을 메인 헤더에서 바로 켜고 끌 수 있게 하고, 위젯 toolbar 아이콘 클릭이 drag로 처리될 수 있던 문제 수정 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.1/WhereMyTokens-v1.15.1-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-v1.15.2-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -83,7 +83,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.15.1-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.15.2-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -107,7 +107,7 @@
 - **Claude Extra Usage 예산** — Claude 월간 크레딧 사용량 / 한도 / 이용률 표시
 
 ### 분석 & 활동
-- **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 Claude/Codex 메타데이터, provider별 health/fallback 상태
+- **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 Claude/Codex 메타데이터, provider별 health/fallback 상태. `all`의 세션 수는 현재 표시 중인 행이 아니라 전체 사용 기록 기준입니다
 - **시작 친화적 히스토리 동기화** — 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 `Partial History` 배너와 함께 백그라운드에서 계속 동기화
 - **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교
 - **Rhythm 탭** — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 그라데이션 바, 피크 상세 통계, 로컬 타임존
@@ -120,7 +120,7 @@
 - **Output 성장 그래프** — 최근 7일 로컬 날짜별로 전체 누적 순 라인 증가 흐름 표시
 - **현재 세션 repo 범위** — Code Output은 현재 추적 중인 세션에 연결된 repo 기준으로 집계된다는 라벨을 함께 표시
 - **브랜치 반영 전체 기간** — Code Output의 전체 기간은 로컬 브랜치 전체의 커밋과 라인 변경을 로컬 git 작성자 이메일 기준으로 집계
-- **자동 발견** — Claude 프로젝트는 `~/.claude/projects/`, Codex 세션은 `~/.codex/sessions/`에서 자동 포함
+- **자동 발견** — Claude 프로젝트는 `~/.claude/projects/`에서 agent 사용 로그까지 포함하고, Codex 세션은 `~/.codex/sessions/`, `~/.codex/archived_sessions/`, `~/.codex/session-cleanup-archive/`에서 자동 포함
 - **본인 커밋만** — `git config user.email` 기준 필터링
 
 ### 커스터마이징
@@ -167,7 +167,7 @@ WhereMyTokens는 local-first Electron 트레이 앱입니다. renderer는 로컬
 | Claude 세션 | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | main process parser/cache, 이후 renderer state | 없음 |
 | Claude 브리지 | Claude Code `statusLine` stdin | `%APPDATA%\WhereMyTokens\live-session.json` | 없음 |
 | Claude 사용량 한도 | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | 있음, Anthropic 직접 호출 |
-| Codex 세션 | `~/.codex/sessions/**/*.jsonl` | main process parser/cache, 이후 renderer state | 없음 |
+| Codex 세션 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process parser/cache, 이후 renderer state | 없음 |
 | Codex 사용량 한도 | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint | 있음, OpenAI/ChatGPT 직접 호출 |
 
 속도 제한 우선순위는 provider별로 다릅니다. Claude는 Anthropic API를 1순위로 사용하고 `statusLine` bridge를 폴백으로 사용합니다. Codex는 live usage를 1순위로 사용하고 JSONL 로그의 로컬 `rate_limits` 이벤트를 폴백으로 사용합니다. 두 provider 모두 마지막 성공 값은 stale 상태가 되기 전까지만 유지합니다.
@@ -183,7 +183,9 @@ WhereMyTokens는 로컬 파일을 읽고, 활성화된 경우 본인 계정의 p
 | `~/.claude/sessions/*.json` | pid, cwd, 모델 같은 Claude 세션 메타데이터. |
 | `~/.claude/projects/**/*.jsonl` | 토큰 수, 비용, 컨텍스트, 활동 요약 계산용 Claude 대화 로그. |
 | `~/.claude/.credentials.json` | Anthropic 사용량 조회와 만료된 access token refresh에만 쓰는 Claude OAuth 정보. |
-| `~/.codex/sessions/**/*.jsonl` | 토큰, cached input, 모델, rate-limit 이벤트, tool 활동 계산용 Codex 세션 로그. |
+| `~/.codex/sessions/**/*.jsonl` | 최근 Codex 세션의 토큰, cached input, 모델, rate-limit 이벤트, tool 활동 계산용 로그. |
+| `~/.codex/archived_sessions/**/*.jsonl` | all-time 사용량 합계에 포함되는 Codex 아카이브 세션 로그. |
+| `~/.codex/session-cleanup-archive/**/*.jsonl` | all-time 사용량 합계에 포함되는 Codex 세션 정리 아카이브 로그. |
 | `~/.codex/auth.json` | Codex 사용량 snapshot 조회에만 쓰는 ChatGPT OAuth 정보. 앱 storage에 복사하거나 로그로 남기지 않습니다. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Claude Code `statusLine` bridge가 쓰는 로컬 bridge snapshot. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | 앱 설정, 로컬 캐시, 알림 기록, bridge 상태. |
@@ -212,7 +214,7 @@ WhereMyTokens는 Claude Code의 공식 `statusLine` 플러그인 메커니즘을
 
 ### Codex 추적
 
-WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`)도 읽을 수 있습니다. Settings에서 **Claude**, **Codex**, **Both** 중 하나를 선택합니다.
+WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl`)도 읽을 수 있습니다. Settings에서 **Claude**, **Codex**, **Both** 중 하나를 선택합니다.
 
 **Codex 추적에 포함되는 내용:**
 - 세션 상태, 프로젝트/브랜치 그루핑, VS Code 또는 Codex Exec 같은 source 표시
