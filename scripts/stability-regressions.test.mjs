@@ -1073,3 +1073,56 @@ test('cached session refresh prunes retained sessions back to the recent-active 
   assert.match(refreshBody, /this\.retainScopedSessionInfos\(next\)/);
   assert.match(refreshBody, /this\.retainScopedSessionInfos\(this\.state\.sessions\)/);
 });
+
+test('popup show starts with recent watcher and promotes wide watcher later', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const visibleStart = source.indexOf('  setUiVisible(visible: boolean): void');
+  const visibleEnd = source.indexOf('  private clearForegroundTimers', visibleStart);
+  const visibleBody = source.slice(visibleStart, visibleEnd);
+  const watcherStart = source.indexOf('  private startWatcher');
+  const watcherEnd = source.indexOf('  private async fastRefresh', watcherStart);
+  const watcherBody = source.slice(watcherStart, watcherEnd);
+  const promotionStart = source.indexOf('  private scheduleWideWatcherPromotion');
+  const promotionEnd = source.indexOf('  private isPerfDebugEnabled', promotionStart);
+  const promotionBody = source.slice(promotionStart, promotionEnd);
+
+  assert.match(visibleBody, /this\.startWatcher\('popup:show:recent', 'recent'\)/);
+  assert.match(visibleBody, /this\.scheduleWideWatcherPromotion\(\)/);
+  assert.match(watcherBody, /mode: WatcherMode = 'auto'/);
+  assert.match(watcherBody, /const useWideWatcher = mode === 'wide' \|\| \(mode === 'auto' && this\.uiVisible\)/);
+  assert.match(source, /this\.startWatcher\('popup:show:wide', 'wide'\)/);
+  assert.match(promotionBody, /this\.scheduleForegroundRefresh\(\)/);
+});
+
+test('foreground refresh uses a scan budget while force refresh remains full', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const scheduleStart = source.indexOf('  private scheduleForegroundRefresh');
+  const scheduleEnd = source.indexOf('  private scheduleWideWatcherPromotion', scheduleStart);
+  const scheduleBody = source.slice(scheduleStart, scheduleEnd);
+  const forceStart = source.indexOf('  async forceRefresh');
+  const forceEnd = source.indexOf('  private startTimers', forceStart);
+  const forceBody = source.slice(forceStart, forceEnd);
+  const heavyStart = source.indexOf('  private async heavyRefresh');
+  const heavyEnd = source.indexOf('  private buildStartupPriorityFiles', heavyStart);
+  const heavyBody = source.slice(heavyStart, heavyEnd);
+
+  assert.match(scheduleBody, /this\.heavyRefresh\(false, false, StateManager\.FOREGROUND_SCAN_BUDGET_MS\)/);
+  assert.match(source, /FOREGROUND_WARMUP_DELAY_MS = 3_000/);
+  assert.match(heavyBody, /scanBudgetMs: number \| null = null/);
+  assert.match(heavyBody, /allowHiddenFullScan = false/);
+  assert.match(heavyBody, /!allowHiddenFullScan && initialRefreshDone && !this\.uiVisible/);
+  assert.match(heavyBody, /const effectiveScanBudgetMs = scanBudgetMs \?\? /);
+  assert.match(heavyBody, /const partialHistoryScan = effectiveScanBudgetMs !== null && loaded\.partial/);
+  assert.match(heavyBody, /const nextSummaries = partialHistoryScan && initialRefreshDone/);
+  assert.match(heavyBody, /new Map\(\[\.\.\.this\.summaries, \.\.\.loaded\.summaries\]\)/);
+  assert.match(heavyBody, /this\.mergeCodexRateLimits\(this\.codexRateLimits, loaded\.codexRateLimits \?\? undefined\)/);
+  assert.match(heavyBody, /const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded\.partial/);
+  assert.match(heavyBody, /this\.scheduleHistoryWarmup\(/);
+  assert.match(heavyBody, /showHistoryWarmupBanner \? StateManager\.STARTUP_WARMUP_DELAY_MS : StateManager\.FOREGROUND_WARMUP_DELAY_MS/);
+  assert.match(heavyBody, /true,\s*\)/);
+  assert.match(heavyBody, /historyWarmupPending: showHistoryWarmupBanner/);
+  assert.match(heavyBody, /historyWarmupStartsAt: showHistoryWarmupBanner \? historyWarmupStartsAt : null/);
+  assert.doesNotMatch(heavyBody, /historyWarmupPending: partialHistoryScan/);
+  assert.match(forceBody, /await this\.heavyRefresh\(true\)/);
+  assert.doesNotMatch(forceBody, /FOREGROUND_SCAN_BUDGET_MS/);
+});

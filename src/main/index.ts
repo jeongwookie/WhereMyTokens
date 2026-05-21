@@ -392,6 +392,7 @@ function resolvePopupBounds(trayBounds: Electron.Rectangle): Electron.Rectangle 
 function showPopup(view: AppView = 'main') {
   if (!popupWindow || popupWindow.isDestroyed()) popupWindow = createPopupWindow();
   if (!tray) return;
+  const currentState = stateManager?.getState();
   syncCompactWidget();
 
   popupWindow.setBounds(resolvePopupBounds(tray.getBounds()));
@@ -399,7 +400,6 @@ function showPopup(view: AppView = 'main') {
   popupWindow.focus();
   keepWindowOutOfTaskbar(popupWindow);
   sendPopupNavigation(view);
-  const currentState = stateManager?.getState();
   if (currentState) {
     pendingStateUpdate = null;
     if (stateUpdateTimer) clearTimeout(stateUpdateTimer);

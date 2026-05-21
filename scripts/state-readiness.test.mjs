@@ -106,7 +106,7 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(mainSource, /historyWarmupPending \|\|/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);
-  assert.match(stateSource, /deferCodexLocalLog: startupPartial/);
+  assert.match(stateSource, /deferCodexLocalLog: partialHistoryScan/);
 });
 
 test('settings and widget integration guard malformed persisted values', () => {
@@ -179,6 +179,31 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(settingsSource, /Use Ctrl\+Shift or Ctrl\+Alt/);
 });
 
+test('popup show path sends cached state without forcing refresh', () => {
+  const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
+  const showStart = mainSource.indexOf('function showPopup');
+  const showEnd = mainSource.indexOf('function sendWidgetStateUpdate', showStart);
+  const showBody = mainSource.slice(showStart, showEnd);
+
+  assert.match(showBody, /popupWindow\.show\(\)/);
+  assert.match(showBody, /popupWindow\.webContents\.send\('state:updated', currentState\)/);
+  assert.doesNotMatch(showBody, /forceRefresh\(/);
+  assert.doesNotMatch(showBody, /heavyRefresh\(/);
+  assert.doesNotMatch(showBody, /await /);
+});
+
+test('visible UI transition schedules refresh instead of running heavy refresh inline', () => {
+  const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const visibleStart = stateSource.indexOf('  setUiVisible(visible: boolean): void');
+  const visibleEnd = stateSource.indexOf('  private clearForegroundTimers', visibleStart);
+  const visibleBody = stateSource.slice(visibleStart, visibleEnd);
+
+  assert.match(visibleBody, /this\.scheduleForegroundRefresh\(\)/);
+  assert.match(visibleBody, /this\.scheduleWideWatcherPromotion\(\)/);
+  assert.doesNotMatch(visibleBody, /void this\.heavyRefresh\(/);
+  assert.doesNotMatch(visibleBody, /this\.heavyRefresh\(/);
+});
+
 test('Codex account limit collection is separated from visible usage filters', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const collectStart = source.indexOf('private collectCodexRateLimits');
@@ -207,7 +232,7 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   const mainSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
 
-  assert.match(mainSource, /buildScopedSessionInfosDetailed\(loaded\.summaries\)/);
+  assert.match(mainSource, /buildScopedSessionInfosDetailed\(nextSummaries\)/);
   assert.match(mainSource, /buildStartupPriorityFiles/);
   assert.match(mainSource, /historyWarmupStartsAt/);
   assert.match(rendererSource, /apiStatusLabel/);
