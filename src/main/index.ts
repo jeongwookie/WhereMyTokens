@@ -128,7 +128,7 @@ function keepWindowOutOfTaskbar(win: BrowserWindow) {
   if (win.isDestroyed()) return;
   try {
     win.setSkipTaskbar(true);
-  } catch { /* ignore transient window teardown races */ }
+  } catch { /* 창 종료 타이밍과 겹치는 일시적 오류는 무시한다. */ }
 }
 
 function createPopupWindow(): BrowserWindow {
@@ -688,6 +688,7 @@ app.whenReady().then(() => {
     const size = compactWidgetSize(getSettings());
     const next = constrainWidgetPosition({ x: position.x, y: position.y }, size);
     widgetWindow.setBounds({ ...next, width: size.width, height: size.height });
+    keepWindowOutOfTaskbar(widgetWindow);
     schedulePersistWidgetPosition(widgetWindow);
   });
 

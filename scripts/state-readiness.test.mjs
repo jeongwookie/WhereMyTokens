@@ -141,6 +141,11 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(mainSource, /win\.setSkipTaskbar\(true\)/);
   assert.match(mainSource, /keepWindowOutOfTaskbar\(popupWindow\)/);
   assert.match(mainSource, /keepWindowOutOfTaskbar\(win\)/);
+  const widgetDragStart = mainSource.indexOf("ipcMain.handle('window:set-compact-widget-position'");
+  const widgetDragEnd = mainSource.indexOf("ipcMain.handle('theme:resolved'", widgetDragStart);
+  const widgetDragBody = mainSource.slice(widgetDragStart, widgetDragEnd);
+  assert.match(widgetDragBody, /widgetWindow\.setBounds/);
+  assert.match(widgetDragBody, /keepWindowOutOfTaskbar\(widgetWindow\)/);
   assert.match(mainSource, /readyWidgetWindows/);
   assert.doesNotMatch(mainSource, /did-finish-load[^;]+revealCompactWidget/);
   assert.match(mainSource, /schedulePersistWidgetPosition/);
