@@ -19,6 +19,7 @@ import { ActivityBreakdown, ActivityBreakdownKind, CodexRateLimitWindow, FileUsa
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 import { getOAuthCredentialMarker } from './oauthRefresh';
+import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -307,14 +308,12 @@ export class StateManager {
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
   private bridgeWatcher: BridgeWatcher;
+  private refreshScheduler: RefreshScheduler;
   private liveSession: LiveSessionData | null = null;
   private jsonlCache = new JsonlCache();
   private codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private dirtySessionFiles = new Set<string>();
-  private deferredFastFiles = new Set<string>();
-  private heavyInFlight = false;
-  private heavyPending = false;
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
   private foregroundRefreshTimer: NodeJS.Timeout | null = null;
@@ -353,6 +352,11 @@ export class StateManager {
     this.state = this.emptyState();
     const oauthCredentialMarker = getOAuthCredentialMarker();
     this.lastOAuthCredentialMarker = oauthCredentialMarker;
+    this.refreshScheduler = new RefreshScheduler({
+      foregroundScanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+      getState: () => ({ uiVisible: this.uiVisible, uiBusy: this.uiBusy }),
+      execute: (work) => this.executeRefresh(work),
+    });
     const cachedRaw = this.getPersistedValue('_cachedApiPct', null);
     const cached = normalizeStoredApiUsagePct(cachedRaw, oauthCredentialMarker);
     if (cachedRaw && !cached) {
@@ -511,7 +515,7 @@ export class StateManager {
 
   start() {
     this.bridgeWatcher.start();
-    void this.heavyRefresh(false, true);
+    void this.requestRefresh({ mode: 'heavy', reason: 'startup', allowStartupBudget: true });
     this.startTimers();
     this.startWatcher();
     this.startDebugMemTimer();
@@ -538,18 +542,31 @@ export class StateManager {
     this.jsonlCache.flushPersisted();
   }
 
+  private requestRefresh(request: RefreshRequest): Promise<void> {
+    const changedFiles = request.changedFiles
+      ? [...request.changedFiles].map(file => normalizeFileKey(file))
+      : undefined;
+    return this.refreshScheduler.request({ ...request, changedFiles });
+  }
+
+  private async executeRefresh(work: RefreshWork): Promise<void> {
+    if (work.mode === 'fast') {
+      await this.fastRefresh(work.changedFiles);
+      return;
+    }
+
+    await this.heavyRefresh(
+      work.force,
+      work.allowStartupBudget,
+      work.scanBudgetMs,
+      work.allowHiddenFullScan,
+      work.changedFiles,
+    );
+  }
+
   setUiBusy(busy: boolean): void {
     this.uiBusy = busy;
-    if (busy) return;
-    if (this.deferredFastFiles.size > 0) {
-      const files = new Set(this.deferredFastFiles);
-      this.deferredFastFiles.clear();
-      void this.fastRefresh(files);
-    }
-    if (this.heavyPending) {
-      this.heavyPending = false;
-      void this.heavyRefresh();
-    }
+    if (!busy) this.refreshScheduler.notifyStateChanged();
   }
 
   setUiVisible(visible: boolean): void {
@@ -562,10 +579,12 @@ export class StateManager {
         this.scheduleForegroundRefresh();
         this.scheduleWideWatcherPromotion();
       }
+      this.refreshScheduler.notifyStateChanged();
       return;
     }
     this.clearForegroundTimers();
     this.startWatcher('popup:hide', 'recent');
+    this.refreshScheduler.notifyStateChanged();
   }
 
   private clearForegroundTimers(): void {
@@ -584,7 +603,11 @@ export class StateManager {
         this.scheduleForegroundRefresh();
         return;
       }
-      void this.heavyRefresh(false, false, StateManager.FOREGROUND_SCAN_BUDGET_MS);
+      void this.requestRefresh({
+        mode: 'heavy',
+        reason: 'foreground',
+        scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+      });
     }, StateManager.FOREGROUND_REFRESH_DELAY_MS);
   }
 
@@ -654,7 +677,7 @@ export class StateManager {
       cachePersistedLimit: cacheStats.persistedLimit,
       gitCacheEntries: this.gitStatsCache.size,
       dirtyFiles: this.dirtySessionFiles.size,
-      deferredFastFiles: this.deferredFastFiles.size,
+      deferredFastFiles: this.refreshScheduler.getPendingChangedFileCount(),
     };
   }
 
@@ -713,7 +736,7 @@ export class StateManager {
         repoGitStats: Object.keys(this.state.repoGitStats).length,
         gitStatsCache: this.gitStatsCache.size,
         dirtySessionFiles: this.dirtySessionFiles.size,
-        deferredFastFiles: this.deferredFastFiles.size,
+        deferredFastFiles: this.refreshScheduler.getPendingChangedFileCount(),
       },
       watcher: {
         profile: this.watcherProfile,
@@ -876,7 +899,7 @@ export class StateManager {
   async forceRefresh(): Promise<void> {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
-    await this.heavyRefresh(true);
+    await this.requestRefresh({ mode: 'heavy', reason: 'manual', force: true });
   }
 
   private startTimers() {
@@ -888,9 +911,9 @@ export class StateManager {
     const heavyIntervalMs = this.uiVisible
       ? StateManager.HEAVY_REFRESH_VISIBLE_MS
       : StateManager.HEAVY_REFRESH_HIDDEN_MS;
-    this.fastTimer = setInterval(() => { void this.fastRefresh(); }, fastIntervalMs);
+    this.fastTimer = setInterval(() => { void this.requestRefresh({ mode: 'fast', reason: 'timer' }); }, fastIntervalMs);
     this.heavyTimer = setInterval(() => {
-      void this.heavyRefresh(!this.uiVisible);
+      void this.requestRefresh({ mode: 'heavy', reason: 'timer', allowHiddenFullScan: true });
     }, heavyIntervalMs);
     if (!this.isPerfDebugEnabled()) return;
     console.info('[WhereMyTokens][runtime]', {
@@ -907,7 +930,7 @@ export class StateManager {
     const startsAt = Date.now() + delayMs;
     this.historyWarmupTimer = setTimeout(() => {
       this.historyWarmupTimer = null;
-      void this.heavyRefresh(false, false, null, allowHiddenFullScan);
+      void this.requestRefresh({ mode: 'heavy', reason: 'history-warmup', allowHiddenFullScan });
     }, delayMs);
     return startsAt;
   }
@@ -1122,7 +1145,7 @@ export class StateManager {
       this.fastDebounce = null;
       const files = this.dirtySessionFiles.size > 0 ? new Set(this.dirtySessionFiles) : undefined;
       this.dirtySessionFiles.clear();
-      void this.fastRefresh(files);
+      void this.requestRefresh({ mode: 'fast', reason: 'watcher', changedFiles: files });
     }, 1200);
   }
 
@@ -1222,7 +1245,7 @@ export class StateManager {
       if (filePath.endsWith('.jsonl')) {
         this.debouncedFastRefresh(filePath);
       } else {
-        void this.fastRefresh();
+        void this.requestRefresh({ mode: 'fast', reason: 'watcher' });
       }
     });
     this.watcher.on('unlink', (filePath: string) => {
@@ -1245,10 +1268,6 @@ export class StateManager {
     let changedPerf: PerfMetrics | null = null;
     let sessionPerf: PerfMetrics | null = null;
     let sessionResult: SessionBuildResult | null = null;
-    if (this.uiBusy) {
-      if (changedFiles) for (const file of changedFiles) this.deferredFastFiles.add(normalizeFileKey(file));
-      return;
-    }
 
     if (changedFiles && changedFiles.size > 0) {
       const changedSample = this.beginPerfSample();
@@ -1293,7 +1312,7 @@ export class StateManager {
   }
 
   private async refreshGitStatsAfterStartup(): Promise<void> {
-    if (this.uiBusy || this.heavyInFlight) {
+    if (this.uiBusy || this.refreshScheduler.isRunning()) {
       this.scheduleGitWarmup(5_000);
       return;
     }
@@ -1318,6 +1337,7 @@ export class StateManager {
     allowStartupBudget = false,
     scanBudgetMs: number | null = null,
     allowHiddenFullScan = false,
+    priorityFiles?: Set<string>,
   ) {
     const totalPerf = this.beginPerfSample();
     let apiPerf: PerfMetrics | null = null;
@@ -1325,16 +1345,6 @@ export class StateManager {
     let sessionPerf: PerfMetrics | null = null;
     let gitPerf: PerfMetrics | null = null;
     let sessionResult: SessionBuildResult | null = null;
-    if (this.uiBusy && !force) {
-      this.heavyPending = true;
-      return;
-    }
-    if (this.heavyInFlight) {
-      this.heavyPending = true;
-      return;
-    }
-    this.heavyInFlight = true;
-    try {
       await this.logMemorySnapshot('heavyRefresh:start');
       const apiSample = this.beginPerfSample();
       const settingsForApi = this.getSettings();
@@ -1387,7 +1397,7 @@ export class StateManager {
         return;
       }
       const loadSample = this.beginPerfSample();
-      const loaded = await this.loadProviderSummaries(force, effectiveScanBudgetMs);
+      const loaded = await this.loadProviderSummaries(force, effectiveScanBudgetMs, priorityFiles);
       loadPerf = this.finishPerfSample(loadSample);
       this.jsonlCache.flushPersisted();
       const partialHistoryScan = effectiveScanBudgetMs !== null && loaded.partial;
@@ -1505,13 +1515,6 @@ export class StateManager {
         ...(gitPerf ? this.perfFields('git', gitPerf) : {}),
         ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
       });
-    } finally {
-      this.heavyInFlight = false;
-      if (this.heavyPending && !this.uiBusy) {
-        this.heavyPending = false;
-        void this.heavyRefresh();
-      }
-    }
   }
 
   private buildStartupPriorityFiles(provider: AppSettings['provider']): Set<string> {
@@ -1774,7 +1777,11 @@ export class StateManager {
     this.codexRateLimits = merged;
   }
 
-  private async loadProviderSummaries(force = false, budgetMs: number | null = null): Promise<{
+  private async loadProviderSummaries(
+    force = false,
+    budgetMs: number | null = null,
+    priorityFiles?: Iterable<string>,
+  ): Promise<{
     summaries: Map<string, FileUsageSummary>;
     sessionCount: number;
     codexRateLimits: SessionSnapshot['codexRateLimits'] | null;
@@ -1790,6 +1797,8 @@ export class StateManager {
     let scannedFiles = 0;
     let partial = false;
     const startedAt = Date.now();
+    const explicitPriority = new Set<string>();
+    for (const filePath of priorityFiles ?? []) explicitPriority.add(normalizeFileKey(filePath));
     const startupPriority = budgetMs !== null
       ? this.buildStartupPriorityFiles(settings.provider)
       : new Set(
@@ -1798,6 +1807,7 @@ export class StateManager {
             .filter((filePath): filePath is string => !!filePath)
             .map(filePath => normalizeFileKey(filePath))
         );
+    for (const filePath of explicitPriority) startupPriority.add(filePath);
 
     const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
     const shouldPrioritize = (filePath: string) => startupPriority.has(normalizeFileKey(filePath));
@@ -2393,7 +2403,7 @@ export class StateManager {
       this.startWatcher();
       this.clearHistoryWarmup();
       this.clearGitWarmup();
-      void this.heavyRefresh(true);
+      void this.requestRefresh({ mode: 'heavy', reason: 'settings', force: true });
       return;
     }
 
@@ -2442,7 +2452,7 @@ export class StateManager {
         watcherProfile: this.watcherProfile,
         watcherTargets: this.watcherTargetCount,
         dirtyFiles: this.dirtySessionFiles.size,
-        deferredFastFiles: this.deferredFastFiles.size,
+        deferredFastFiles: this.refreshScheduler.getPendingChangedFileCount(),
         scannedFiles,
       });
       appendDebugMemoryLog('memory-snapshot', {
@@ -2459,7 +2469,7 @@ export class StateManager {
           repoGitStats: Object.keys(this.state.repoGitStats).length,
           gitStatsCache: this.gitStatsCache.size,
           dirtySessionFiles: this.dirtySessionFiles.size,
-          deferredFastFiles: this.deferredFastFiles.size,
+          deferredFastFiles: this.refreshScheduler.getPendingChangedFileCount(),
         },
         watcher: {
           profile: this.watcherProfile,

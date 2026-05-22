@@ -1106,7 +1106,12 @@ test('foreground refresh uses a scan budget while force refresh remains full', (
   const heavyEnd = source.indexOf('  private buildStartupPriorityFiles', heavyStart);
   const heavyBody = source.slice(heavyStart, heavyEnd);
 
-  assert.match(scheduleBody, /this\.heavyRefresh\(false, false, StateManager\.FOREGROUND_SCAN_BUDGET_MS\)/);
+  assert.match(source, /new RefreshScheduler\(\{/);
+  assert.match(source, /execute: \(work\) => this\.executeRefresh\(work\)/);
+  assert.match(scheduleBody, /this\.requestRefresh\(\{/);
+  assert.match(scheduleBody, /mode: 'heavy'/);
+  assert.match(scheduleBody, /reason: 'foreground'/);
+  assert.match(scheduleBody, /scanBudgetMs: StateManager\.FOREGROUND_SCAN_BUDGET_MS/);
   assert.match(source, /FOREGROUND_WARMUP_DELAY_MS = 3_000/);
   assert.match(heavyBody, /scanBudgetMs: number \| null = null/);
   assert.match(heavyBody, /allowHiddenFullScan = false/);
@@ -1123,6 +1128,6 @@ test('foreground refresh uses a scan budget while force refresh remains full', (
   assert.match(heavyBody, /historyWarmupPending: showHistoryWarmupBanner/);
   assert.match(heavyBody, /historyWarmupStartsAt: showHistoryWarmupBanner \? historyWarmupStartsAt : null/);
   assert.doesNotMatch(heavyBody, /historyWarmupPending: partialHistoryScan/);
-  assert.match(forceBody, /await this\.heavyRefresh\(true\)/);
+  assert.match(forceBody, /await this\.requestRefresh\(\{ mode: 'heavy', reason: 'manual', force: true \}\)/);
   assert.doesNotMatch(forceBody, /FOREGROUND_SCAN_BUDGET_MS/);
 });
