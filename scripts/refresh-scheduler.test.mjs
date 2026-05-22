@@ -80,7 +80,7 @@ test('heavy refresh supersedes pending fast refresh and keeps foreground scan bu
   assert.deepEqual(works[1].reasons.sort(), ['foreground', 'watcher']);
 });
 
-test('hidden heavy refresh can run without a foreground budget', async () => {
+test('hidden automatic heavy refresh still keeps a scan budget so hotkeys stay responsive', async () => {
   const works = [];
   const scheduler = new RefreshScheduler({
     foregroundScanBudgetMs: 2500,
@@ -93,8 +93,24 @@ test('hidden heavy refresh can run without a foreground budget', async () => {
   await scheduler.request({ mode: 'heavy', reason: 'timer', allowHiddenFullScan: true });
 
   assert.equal(works.length, 1);
-  assert.equal(works[0].scanBudgetMs, null);
+  assert.equal(works[0].scanBudgetMs, 2500);
   assert.equal(works[0].allowHiddenFullScan, true);
+});
+
+test('manual force refresh can still request an unbudgeted scan', async () => {
+  const works = [];
+  const scheduler = new RefreshScheduler({
+    foregroundScanBudgetMs: 2500,
+    getState: () => ({ uiVisible: false, uiBusy: false }),
+    execute: async (work) => {
+      works.push(work);
+    },
+  });
+
+  await scheduler.request({ mode: 'heavy', reason: 'manual', force: true });
+
+  assert.equal(works.length, 1);
+  assert.equal(works[0].scanBudgetMs, null);
 });
 
 test('non-forced refresh waits while UI is busy', async () => {

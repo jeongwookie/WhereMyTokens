@@ -163,6 +163,6 @@ export class RefreshScheduler {
     if (pending.mode === 'fast') return null;
     if (pending.scanBudgetMs !== undefined) return pending.scanBudgetMs;
     if (pending.force) return null;
-    return state.uiVisible ? this.options.foregroundScanBudgetMs : null;
+    return this.options.foregroundScanBudgetMs;
   }
 }
