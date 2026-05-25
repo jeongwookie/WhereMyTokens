@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe"><strong>下载 v1.15.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe"><strong>下载 v1.15.3</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -59,11 +59,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | 通过 scheduler 串行化并预算 refresh 工作，让 startup、watcher、history、manual refresh 期间托盘 UI 和 hotkey popup 保持响应 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | 将 Codex 归档日志和 Claude agent 日志纳入 all-time 使用量，并让 all-time 会话数基于完整使用历史显示 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | 保持 hotkey popup 快速响应，同时不丢失完整会话历史，并避免托盘辅助窗口出现在 taskbar 中 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | 新增 Settings 开关，默认关闭 compact widget 的 waiting animation，同时保留 syncing animation |
 | **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | 新增 Claude OAuth refresh 恢复、按凭据隔离的 API 缓存保护、Claude refresh/login 状态显示，以及 Floating 小部件隐藏/快捷键恢复修复 |
-| **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 5/8 | 修复 Codex 5 小时限制已满时每周限制也被显示为 100% 的问题 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-v1.15.2-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-v1.15.3-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -83,7 +83,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.15.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.15.3-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -108,7 +108,7 @@
 
 ### 分析与活动
 - **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、紧凑的 Claude/Codex 元数据，以及 provider 级 health/fallback 状态。`all` 的会话数来自完整使用历史
-- **启动友好的历史同步** — 先显示当前会话和最近用量，较早的历史会带着 `Partial History` 提示在后台继续同步
+- **启动友好的历史同步** — 先显示当前会话和最近用量；较早的历史会通过 budgeted refresh scheduler 在后台继续同步，让 hotkey popup 和 UI 保持响应
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
 - **模型分析** — 按热门模型的令牌和费用总计，渐变条
@@ -200,7 +200,7 @@ WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账
 
 ## 启动与头部状态
 
-启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在后台同步，这样托盘应用可以更快打开。
+启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在按 budgeted background slice 同步，这样托盘应用和 hotkey popup 可以保持响应。
 
 头部的小型 PiP 按钮可直接开关 Floating Quota Pace 小部件。头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude refresh`、`Claude login`、`Claude limited`、`Claude offline` 和 `refresh failed`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
 

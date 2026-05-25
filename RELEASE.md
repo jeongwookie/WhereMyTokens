@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.15.3 | 2026-05-25 | Route refresh work through a scheduler, coalesce overlapping scans, keep hidden automatic scans budgeted, and preserve manual full refresh as the explicit full-scan path |
 | v1.15.2 | 2026-05-21 | Include archived Codex logs and Claude agent logs in all-time usage, and show all-time session counts from full usage history |
 | v1.15.1 | 2026-05-21 | Keep hotkey popups responsive without losing full-session history, promote watcher catch-up after popup show, and keep tray helper windows out of the taskbar |
 | v1.15.0 | 2026-05-14 | Add a Settings toggle for compact-widget waiting animations, default waiting motion to off to reduce visual interruption, and keep syncing states animated |

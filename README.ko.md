@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe"><strong>v1.15.2 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe"><strong>v1.15.3 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -59,11 +59,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | Refresh 작업을 scheduler로 직렬화하고 기본 budget을 적용해 startup, watcher, history, manual refresh 중에도 tray UI와 hotkey popup 반응성을 유지 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex 아카이브 로그와 Claude agent 로그를 all-time 사용량에 포함하고, all-time 세션 수를 전체 사용 기록 기준으로 표시 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | Hotkey popup은 빠르게 열리면서도 전체 세션 기록을 놓치지 않게 하고, 트레이 보조 창이 taskbar에 나타나지 않도록 수정 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | Compact 위젯의 waiting 애니메이션을 기본 꺼짐으로 유지하는 Settings 토글 추가, syncing 애니메이션은 유지 |
 | **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | Claude OAuth refresh 복구, 자격 증명 기준 API 캐시 안전장치, Claude refresh/login 상태 표시, Floating 위젯 숨김/단축키 복구 개선 |
-| **[v1.13.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.13.2)** | 5/8 | Codex 5시간 한도에 도달했을 때 주간 한도까지 100%로 보이던 표시 오류 수정 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.2/WhereMyTokens-v1.15.2-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-v1.15.3-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -83,7 +83,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.15.2-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.15.3-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -108,7 +108,7 @@
 
 ### 분석 & 활동
 - **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 Claude/Codex 메타데이터, provider별 health/fallback 상태. `all`의 세션 수는 현재 표시 중인 행이 아니라 전체 사용 기록 기준입니다
-- **시작 친화적 히스토리 동기화** — 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 `Partial History` 배너와 함께 백그라운드에서 계속 동기화
+- **시작 친화적 히스토리 동기화** — 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 budgeted refresh scheduler를 통해 백그라운드에서 계속 동기화되어 hotkey popup과 UI 반응성을 유지
 - **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교
 - **Rhythm 탭** — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 그라데이션 바, 피크 상세 통계, 로컬 타임존
 - **모델별 분석** — 상위 모델별 토큰·비용 합계, 그라데이션 바
@@ -200,7 +200,7 @@ Claude Code bridge를 끄려면 **Settings -> Claude Code Integration -> Disable
 
 ## 시작 & 헤더 상태
 
-시작 직후에는 현재 세션과 최근 사용량을 먼저 보여줍니다. `Partial History`가 보이면 오래된 히스토리를 백그라운드에서 계속 동기화 중이라는 뜻이며, 트레이 앱을 빨리 열기 위한 동작입니다.
+시작 직후에는 현재 세션과 최근 사용량을 먼저 보여줍니다. `Partial History`가 보이면 오래된 히스토리를 budgeted background slice로 계속 동기화 중이라는 뜻이며, 트레이 앱과 hotkey popup이 빠르게 반응하도록 하기 위한 동작입니다.
 
 헤더의 작은 PiP 버튼은 Floating Quota Pace 위젯을 바로 켜고 끕니다. 헤더 상태 pill은 provider/API 관련 핵심 상태를 한 곳에 요약합니다. 대표 라벨은 `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline`, `refresh failed`입니다. Quota Pace 위젯은 `Claude OK`, `Codex OK`처럼 provider별 health 칩을 따로 보여주며, pill이나 칩에 마우스를 올리면 최신 상세 사유를 볼 수 있습니다.
 
