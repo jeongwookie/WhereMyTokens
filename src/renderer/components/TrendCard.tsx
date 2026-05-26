@@ -32,7 +32,8 @@ interface TrendRow {
 
 const GRAINS: Grain[] = ['day', 'week', 'month'];
 const METRICS: Metric[] = ['cost', 'tokens'];
-const CHART = { width: 320, height: 126, left: 38, right: 38, top: 12, bottom: 24 };
+const TREND_COST_COLOR = 'gpt4';
+const CHART = { width: 330, height: 126, left: 14, right: 14, top: 12, bottom: 24 };
 
 function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const C = useTheme();
@@ -53,7 +54,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const outputScale = makeScale(outputValues, true);
   const activeIndex = Math.max(0, Math.min(rows.length - 1, hoverIndex === null ? rows.length - 1 : hoverIndex));
   const activeRow = rows[activeIndex] ?? rows[rows.length - 1];
-  const primaryColor = metric === 'cost' ? C.accent : C.input;
+  const primaryColor = metric === 'cost' ? C[TREND_COST_COLOR] : C.input;
   const outputColor = C.active;
   const totalPrimary = primaryValues.reduce((sum, value) => sum + value, 0);
   const totalOutput = rows.reduce((sum, row) => sum + row.netLines, 0);
@@ -76,6 +77,11 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
     const ratio = (rawX - CHART.left) / Math.max(plotWidth, 1);
     const nextIndex = Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
     setHoverIndex(nextIndex);
+  }
+
+  function activateHitZone(e: React.MouseEvent<SVGRectElement>, index: number) {
+    e.stopPropagation();
+    setHoverIndex(index);
   }
 
   return (
@@ -120,6 +126,22 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
               <circle cx={point.x} cy={point.outputY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? outputColor : C.bgCard} stroke={outputColor} strokeWidth={1.2} />
             </g>
           ))}
+          {points.map((_, index) => {
+            const zone = hitZoneFor(index, rows.length);
+            return (
+              <rect
+                key={`hit-${rows[index].key}`}
+                x={zone.x}
+                y={CHART.top}
+                width={zone.width}
+                height={CHART.height - CHART.top - CHART.bottom}
+                fill="transparent"
+                style={{ pointerEvents: 'all' }}
+                onMouseEnter={(e) => activateHitZone(e, index)}
+                onMouseMove={(e) => activateHitZone(e, index)}
+              />
+            );
+          })}
           {rows.map((row, index) => xLabels.has(index) && (
             <text key={row.key} x={xFor(index, rows.length)} y={CHART.height - 5} fill={index === rows.length - 1 ? C.accent : C.textMuted} fontSize={8} fontFamily={C.fontMono} fontWeight={index === rows.length - 1 ? 700 : 400} textAnchor="middle">
               {row.axisLabel}
@@ -289,6 +311,14 @@ function xFor(index: number, count: number): number {
   return CHART.left + (index / (count - 1)) * plotWidth;
 }
 
+function hitZoneFor(index: number, count: number): { x: number; width: number } {
+  if (count <= 1) return { x: CHART.left, width: CHART.width - CHART.left - CHART.right };
+  const center = xFor(index, count);
+  const previous = index === 0 ? CHART.left : (xFor(index - 1, count) + center) / 2;
+  const next = index === count - 1 ? CHART.width - CHART.right : (center + xFor(index + 1, count)) / 2;
+  return { x: previous, width: Math.max(1, next - previous) };
+}
+
 function yFor(value: number, scale: { min: number; max: number }): number {
   const plotHeight = CHART.height - CHART.top - CHART.bottom;
   return CHART.height - CHART.bottom - ((value - scale.min) / Math.max(scale.max - scale.min, 1)) * plotHeight;
@@ -306,7 +336,7 @@ function labelIndexes(length: number): Set<number> {
 
 function tooltipLeft(index: number, count: number): number {
   const x = xFor(index, count);
-  return Math.max(44, Math.min(286, x + 12));
+  return Math.max(16, Math.min(CHART.width - 16, x + 12));
 }
 
 function weekStartKey(dateKey: string): string {

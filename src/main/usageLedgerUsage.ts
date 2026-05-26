@@ -16,6 +16,8 @@ export interface UsageTrendData {
   monthly: UsageTrendPoint[];
 }
 
+export type UsageProviderMode = 'claude' | 'codex' | 'both';
+
 interface KeyedAggregate {
   key: string;
   provider: UsageLedgerProvider;
@@ -121,6 +123,10 @@ function parseHourKey(key: string, aggregate: UsageAggregate): { timestampMs: nu
   return { timestampMs, provider, aggregate };
 }
 
+function providerMatchesMode(provider: UsageLedgerProvider, mode: UsageProviderMode): boolean {
+  return mode === 'both' || provider === mode;
+}
+
 function addModelTotal(modelMap: Map<string, ModelUsage>, model: string, provider: ModelUsage['provider'], tokens: number, costUSD: number): void {
   const key = `${provider}:${model}`;
   const modelUsage = modelMap.get(key) ?? { model, provider, tokens: 0, costUSD: 0 };
@@ -146,7 +152,7 @@ export function emptyUsageTrendData(): UsageTrendData {
   return { daily: [], weekly: [], monthly: [] };
 }
 
-export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = Date.now()): UsageTrendData {
+export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = Date.now(), providerMode: UsageProviderMode = 'both'): UsageTrendData {
   const daily = new Map<string, UsageTrendPoint>();
   const weekly = new Map<string, UsageTrendPoint>();
   const monthly = new Map<string, UsageTrendPoint>();
@@ -154,6 +160,7 @@ export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = 
   for (const [key, aggregate] of Object.entries(snapshot.dailyModel)) {
     const row = parseModelKey(key, aggregate, 'daily');
     if (!row?.date) continue;
+    if (!providerMatchesMode(row.provider, providerMode)) continue;
     addTrendPoint(daily, row.date, aggregate, 'date');
     addTrendPoint(weekly, weekStartForDateMs(row.timestampMs), aggregate, 'weekStart');
   }
@@ -161,6 +168,7 @@ export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = 
   for (const [key, aggregate] of Object.entries(snapshot.monthlyModel)) {
     const row = parseModelKey(key, aggregate, 'monthly');
     if (!row?.month) continue;
+    if (!providerMatchesMode(row.provider, providerMode)) continue;
     addTrendPoint(monthly, row.month, aggregate, 'month');
   }
 
@@ -179,6 +187,7 @@ export function computeUsageFromLedger(
     codex?: { weekResetMs?: number | null; h5ResetMs?: number | null };
   } = {},
   nowMs = Date.now(),
+  providerMode: UsageProviderMode = 'both',
 ): UsageData {
   const weekStart = getWeekStartMs(nowMs);
   const claudeH5Start = windowStart(H5_MS, resets.claude?.h5ResetMs, nowMs - H5_MS, nowMs);
@@ -263,13 +272,24 @@ export function computeUsageFromLedger(
       : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
   };
 
-  const dailyMonths = new Set<string>();
+  const monthlyModelKeys = new Set<string>();
+  for (const [key, aggregate] of Object.entries(snapshot.monthlyModel)) {
+    const row = parseModelKey(key, aggregate, 'monthly');
+    if (!row?.month) continue;
+    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    monthlyModelKeys.add(`${row.month}|${row.provider}|${row.model}`);
+    addAllTime(row.provider, aggregate);
+    addModelTotal(modelMap, row.model, row.provider, aggregate.totalTokens, aggregate.costUSD);
+  }
+
   for (const [key, aggregate] of Object.entries(snapshot.dailyModel)) {
     const row = parseModelKey(key, aggregate, 'daily');
     if (!row?.date) continue;
-    dailyMonths.add(row.date.slice(0, 7));
-    addAllTime(row.provider, aggregate);
-    addModelTotal(modelMap, row.model, row.provider, aggregate.totalTokens, aggregate.costUSD);
+    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    if (!monthlyModelKeys.has(`${row.date.slice(0, 7)}|${row.provider}|${row.model}`)) {
+      addAllTime(row.provider, aggregate);
+      addModelTotal(modelMap, row.model, row.provider, aggregate.totalTokens, aggregate.costUSD);
+    }
     addToTimeline(row.timestampMs, aggregate.totalTokens, aggregate.costUSD);
     if (row.date === today) {
       todayTokens += aggregate.totalTokens;
@@ -281,16 +301,10 @@ export function computeUsageFromLedger(
     }
   }
 
-  for (const [key, aggregate] of Object.entries(snapshot.monthlyModel)) {
-    const row = parseModelKey(key, aggregate, 'monthly');
-    if (!row?.month || dailyMonths.has(row.month)) continue;
-    addAllTime(row.provider, aggregate);
-    addModelTotal(modelMap, row.model, row.provider, aggregate.totalTokens, aggregate.costUSD);
-  }
-
   for (const [key, aggregate] of Object.entries(snapshot.minuteRecent)) {
     const row = parseMinuteKey(key, aggregate);
     if (!row) continue;
+    if (!providerMatchesMode(row.provider, providerMode)) continue;
     if (row.provider === 'claude') {
       if (row.timestampMs >= claudeH5Start) addAggregate(h5, aggregate);
       if (row.timestampMs >= claudeWeekStart) {
@@ -306,6 +320,7 @@ export function computeUsageFromLedger(
   for (const [key, aggregate] of Object.entries(snapshot.hourlyActivity)) {
     const row = parseHourKey(key, aggregate);
     if (!row) continue;
+    if (!providerMatchesMode(row.provider, providerMode)) continue;
     addToHeatmap(heatMap7, day7Start, row.timestampMs, aggregate.totalTokens);
     addToHeatmap(heatMap30, day30Start, row.timestampMs, aggregate.totalTokens);
     addToHeatmap(heatMap150, day150Start, row.timestampMs, aggregate.totalTokens);
@@ -319,7 +334,9 @@ export function computeUsageFromLedger(
 
   const recentClaudeOutput = Object.entries(snapshot.minuteRecent).reduce((sum, [key, aggregate]) => {
     const row = parseMinuteKey(key, aggregate);
-    return row?.provider === 'claude' && row.timestampMs >= nowMs - 5 * 60 * 1000
+    return row?.provider === 'claude'
+      && providerMatchesMode(row.provider, providerMode)
+      && row.timestampMs >= nowMs - 5 * 60 * 1000
       ? sum + aggregate.outputTokens
       : sum;
   }, 0);

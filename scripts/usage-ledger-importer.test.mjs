@@ -55,6 +55,47 @@ test('usage importer does not double count unchanged source', async () => {
   assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
 });
 
+test('usage importer marks checkpoints without usage entries', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'empty.jsonl');
+  fs.writeFileSync(filePath, `${JSON.stringify({ type: 'summary', timestamp: '2026-05-25T10:00:00.000Z' })}\n`, 'utf8');
+
+  const next = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'));
+  const checkpoint = next.sourceCheckpoints[sourceHashForPath(filePath)];
+
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.hasUsage, false);
+});
+
+test('usage importer appends without duplicating old records outside repair window', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'append.jsonl');
+  const oldLine = claudeLine({ id: 'old', timestamp: '2026-03-01T10:00:00.000Z', input: 5, output: 10 });
+  const newLine = claudeLine({ id: 'new', timestamp: '2026-05-25T10:15:00.000Z', input: 7, output: 11 });
+  fs.writeFileSync(filePath, `${oldLine}\n`, 'utf8');
+
+  const first = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'));
+  fs.appendFileSync(filePath, `${newLine}\n`, 'utf8');
+  const second = await importUsageJsonlIntoSnapshot(first, filePath, 'claude', Date.parse('2026-05-25T12:01:00.000Z'));
+
+  assert.equal(second.dailyModel[dayModelKey('2026-03-01', 'claude', MODEL)].requestCount, 1);
+  assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
+  assert.notEqual(second.sourceCheckpoints[sourceHashForPath(filePath)].needsRebuild, true);
+});
+
+test('usage importer replaces appended duplicate recent Claude request', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'append-duplicate.jsonl');
+  fs.writeFileSync(filePath, `${claudeLine({ id: 'dup', timestamp: '2026-05-25T10:15:00.000Z', output: 10 })}\n`, 'utf8');
+
+  const first = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'));
+  fs.appendFileSync(filePath, `${claudeLine({ id: 'dup', timestamp: '2026-05-25T10:16:00.000Z', output: 25 })}\n`, 'utf8');
+  const second = await importUsageJsonlIntoSnapshot(first, filePath, 'claude', Date.parse('2026-05-25T12:01:00.000Z'));
+
+  assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
+  assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].outputTokens, 25);
+});
+
 test('usage importer replaces duplicate recent Claude request with larger output', async () => {
   const dir = tempDir();
   const filePath = path.join(dir, 'duplicate.jsonl');

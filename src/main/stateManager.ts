@@ -1028,7 +1028,7 @@ export class StateManager {
     };
     const ledgerSnapshot = this.usageLedgerStore.getSnapshot();
     const usage = this.canUseUsageLedger(ledgerSnapshot, settings)
-      ? computeUsageFromLedger(ledgerSnapshot, effectiveLimits, resetWindows, now)
+      ? computeUsageFromLedger(ledgerSnapshot, effectiveLimits, resetWindows, now, settings.provider ?? 'both')
       : computeUsage(this.getVisibleSummaries(settings), effectiveLimits, resetWindows);
     return {
       usage,
@@ -1040,11 +1040,15 @@ export class StateManager {
 
   private canUseUsageLedger(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
     if ((settings.excludedProjects?.length ?? 0) > 0) return false;
+    if (Object.values(snapshot.sourceCheckpoints).some(checkpoint => checkpoint.needsRebuild)) return false;
     return Object.keys(snapshot.dailyModel).length > 0 || Object.keys(snapshot.monthlyModel).length > 0;
   }
 
-  private buildUsageTrend(): UsageTrendData {
-    return buildTrendDataFromLedger(this.usageLedgerStore.getSnapshot());
+  private buildUsageTrend(settings = this.getSettings()): UsageTrendData {
+    const snapshot = this.usageLedgerStore.getSnapshot();
+    return this.canUseUsageLedger(snapshot, settings)
+      ? buildTrendDataFromLedger(snapshot, Date.now(), settings.provider ?? 'both')
+      : emptyUsageTrendData();
   }
 
   private isExcludedSummary(
@@ -1080,7 +1084,11 @@ export class StateManager {
   private countAllTimeUsageSessions(settings: AppSettings): number {
     const snapshot = this.usageLedgerStore.getSnapshot();
     if (this.canUseUsageLedger(snapshot, settings)) {
-      return Object.values(snapshot.sourceCheckpoints).filter(checkpoint => !checkpoint.needsRebuild).length;
+      return Object.values(snapshot.sourceCheckpoints).filter(checkpoint =>
+        checkpoint.hasUsage !== false
+        && !checkpoint.needsRebuild
+        && ((settings.provider ?? 'both') === 'both' || checkpoint.provider === settings.provider)
+      ).length;
     }
     return this.getVisibleSummaries(settings).filter(hasUsageRequests).length;
   }
@@ -1875,6 +1883,7 @@ export class StateManager {
 
   private async refreshUsageLedgerFromFiles(files: Array<{ filePath: string; provider: 'claude' | 'codex' }>): Promise<void> {
     if (files.length === 0) return;
+    if ((this.getSettings().excludedProjects?.length ?? 0) > 0) return;
     let snapshot = this.usageLedgerStore.getSnapshot();
     for (const file of files) {
       try {

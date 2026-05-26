@@ -649,7 +649,7 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
         Partial History
       </div>
       <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
-        Showing current sessions and recent usage first. Full history sync {statusLabel} to keep startup responsive.
+        Showing current sessions and recent usage first. Full history sync {statusLabel}. Trend and totals may keep changing until this banner disappears.
       </div>
     </div>
   );

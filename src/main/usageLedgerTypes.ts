@@ -32,6 +32,7 @@ export interface SourceCheckpoint {
   mtimeMs: number;
   byteOffset: number;
   lastImportedAt: number;
+  hasUsage?: boolean;
   needsRebuild?: boolean;
   rebuildReason?: string;
 }
