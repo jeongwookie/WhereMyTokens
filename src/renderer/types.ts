@@ -142,6 +142,21 @@ export interface UsageData {
   todBuckets: TimeOfDayBucket[];
 }
 
+export interface UsageTrendPoint {
+  date?: string;
+  weekStart?: string;
+  month?: string;
+  tokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+
+export interface UsageTrendData {
+  daily: UsageTrendPoint[];
+  weekly: UsageTrendPoint[];
+  monthly: UsageTrendPoint[];
+}
+
 export interface UsageLimits {
   h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
   week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
@@ -205,6 +220,7 @@ export interface CodexAccountState {
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
+  usageTrend: UsageTrendData;
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;

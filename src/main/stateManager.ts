@@ -20,6 +20,9 @@ import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
+import { importUsageJsonlIntoSnapshot } from './usageLedgerImporter';
+import { UsageLedgerStore } from './usageLedgerStore';
+import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -81,6 +84,7 @@ export interface UsageLimits {
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
+  usageTrend: UsageTrendData;
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;
@@ -335,6 +339,7 @@ export class StateManager {
   private codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private dirtySessionFiles = new Set<string>();
+  private usageLedgerStore = new UsageLedgerStore();
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
   private foregroundRefreshTimer: NodeJS.Timeout | null = null;
@@ -476,6 +481,7 @@ export class StateManager {
         burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
         todBuckets: [],
       },
+      usageTrend: emptyUsageTrendData(),
       limits: {
         h5: { pct: 0, resetMs: null, source: 'cache' },
         week: { pct: 0, resetMs: null, source: 'cache' },
@@ -1000,16 +1006,29 @@ export class StateManager {
       ? bridgeWeekResetMs
       : (apiUsagePct?.weekResetMs ?? bridgeWeekResetMs);
     const codexResetMs = this.getCodexLimitWindows(now);
-    const usage = computeUsage(this.getVisibleSummaries(settings), effectiveLimits, {
+    const resetWindows = {
       claude: { weekResetMs, h5ResetMs },
       codex: { weekResetMs: codexResetMs.week.resetMs, h5ResetMs: codexResetMs.h5.resetMs },
-    });
+    };
+    const ledgerSnapshot = this.usageLedgerStore.getSnapshot();
+    const usage = this.canUseUsageLedger(ledgerSnapshot, settings)
+      ? computeUsageFromLedger(ledgerSnapshot, effectiveLimits, resetWindows, now)
+      : computeUsage(this.getVisibleSummaries(settings), effectiveLimits, resetWindows);
     return {
       usage,
       limits: this.buildLimits(),
       bridgeActive,
       extraUsage: apiUsagePct?.extraUsage ?? null,
     };
+  }
+
+  private canUseUsageLedger(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
+    if ((settings.excludedProjects?.length ?? 0) > 0) return false;
+    return Object.keys(snapshot.dailyModel).length > 0 || Object.keys(snapshot.monthlyModel).length > 0;
+  }
+
+  private buildUsageTrend(): UsageTrendData {
+    return buildTrendDataFromLedger(this.usageLedgerStore.getSnapshot());
   }
 
   private isExcludedSummary(
@@ -1043,6 +1062,10 @@ export class StateManager {
   }
 
   private countAllTimeUsageSessions(settings: AppSettings): number {
+    const snapshot = this.usageLedgerStore.getSnapshot();
+    if (this.canUseUsageLedger(snapshot, settings)) {
+      return Object.values(snapshot.sourceCheckpoints).filter(checkpoint => !checkpoint.needsRebuild).length;
+    }
     return this.getVisibleSummaries(settings).filter(hasUsageRequests).length;
   }
 
@@ -1321,6 +1344,7 @@ export class StateManager {
     const settings = this.getSettings();
     await this.refreshRecentCodexRateLimits(settings);
     const derived = this.computeDerivedUsage(settings);
+    const usageTrend = this.buildUsageTrend();
     const codexAccount = readCodexAccountState();
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     const allTimeSessions = this.countAllTimeUsageSessions(settings);
@@ -1329,6 +1353,7 @@ export class StateManager {
       sessions,
       settings,
       usage: derived.usage,
+      usageTrend,
       limits: derived.limits,
       codexAccount,
       bridgeActive: derived.bridgeActive,
@@ -1400,6 +1425,7 @@ export class StateManager {
         const sessionSample = this.beginPerfSample();
         const settings = this.getSettings();
         const derived = this.computeDerivedUsage(settings);
+        const usageTrend = this.buildUsageTrend();
         const codexAccount = readCodexAccountState();
         const sessionState = this.refreshCachedSessionInfos();
         const sessions = sessionState.sessions;
@@ -1411,6 +1437,7 @@ export class StateManager {
           ...this.state,
           sessions,
           usage: derived.usage,
+          usageTrend,
           limits: derived.limits,
           settings,
           autoLimits: this.autoLimits,
@@ -1440,6 +1467,7 @@ export class StateManager {
       const loadSample = this.beginPerfSample();
       const loaded = await this.loadProviderSummaries(force, effectiveScanBudgetMs, priorityFiles, includeFullHistory);
       loadPerf = this.finishPerfSample(loadSample);
+      await this.refreshUsageLedgerFromFiles(this.ledgerFilesFromSummaries(loaded.summaries));
       this.jsonlCache.flushPersisted();
       const partialHistoryScan = effectiveScanBudgetMs !== null && loaded.partial;
       const nextSummaries = partialHistoryScan && initialRefreshDone
@@ -1453,6 +1481,7 @@ export class StateManager {
 
       const settings = this.getSettings();
       const derived = this.computeDerivedUsage(settings);
+      const usageTrend = this.buildUsageTrend();
       const codexAccount = readCodexAccountState();
       const allTimeSessions = this.countAllTimeUsageSessions(settings);
       const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded.partial;
@@ -1473,6 +1502,7 @@ export class StateManager {
       this.state = {
         sessions,
         usage: derived.usage,
+        usageTrend,
         limits: derived.limits,
         settings,
         autoLimits: this.autoLimits,
@@ -1523,6 +1553,7 @@ export class StateManager {
       this.state = {
         sessions,
         usage: derived.usage,
+        usageTrend,
         limits: derived.limits,
         settings,
         autoLimits: this.autoLimits,
@@ -1822,6 +1853,24 @@ export class StateManager {
     this.codexRateLimits = merged;
   }
 
+  private ledgerFilesFromSummaries(summaries: Map<string, FileUsageSummary>): Array<{ filePath: string; provider: 'claude' | 'codex' }> {
+    return [...summaries.entries()].map(([filePath, summary]) => ({ filePath, provider: summary.provider }));
+  }
+
+  private async refreshUsageLedgerFromFiles(files: Array<{ filePath: string; provider: 'claude' | 'codex' }>): Promise<void> {
+    if (files.length === 0) return;
+    let snapshot = this.usageLedgerStore.getSnapshot();
+    for (const file of files) {
+      try {
+        snapshot = await importUsageJsonlIntoSnapshot(snapshot, file.filePath, file.provider);
+      } catch {
+        // JSONL summary cache remains the fallback if a ledger import for one source fails.
+      }
+    }
+    this.usageLedgerStore.replaceSnapshot(snapshot);
+    this.usageLedgerStore.compact();
+  }
+
   private async loadProviderSummaries(
     force = false,
     budgetMs: number | null = null,
@@ -1994,6 +2043,7 @@ export class StateManager {
 
   private async refreshChangedSummaries(changedFiles: Set<string>): Promise<void> {
     const providerMode = this.getSettings().provider ?? 'both';
+    const ledgerFiles: Array<{ filePath: string; provider: 'claude' | 'codex' }> = [];
     for (const file of changedFiles) {
       const provider = this.providerForJsonlPath(file);
       if (!provider) continue;
@@ -2005,7 +2055,9 @@ export class StateManager {
       }
       const summary = await scanJsonlSummaryCached(file, provider, this.jsonlCache);
       this.summaries.set(normalizeFileKey(file), summary);
+      ledgerFiles.push({ filePath: file, provider });
     }
+    await this.refreshUsageLedgerFromFiles(ledgerFiles);
     this.jsonlCache.flushPersisted();
     this.codexRateLimits = this.collectCodexRateLimits();
   }
@@ -2464,6 +2516,7 @@ export class StateManager {
         && !isExcluded(this.sessionProjectKeys(session)),
       );
       const derived = this.computeDerivedUsage(settings);
+      const usageTrend = this.buildUsageTrend();
       const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
       const allTimeSessions = this.countAllTimeUsageSessions(settings);
       this.state = {
@@ -2471,6 +2524,7 @@ export class StateManager {
         sessions,
         settings,
         usage: derived.usage,
+        usageTrend,
         limits: derived.limits,
         bridgeActive: derived.bridgeActive,
         extraUsage: derived.extraUsage,
@@ -2491,7 +2545,7 @@ export class StateManager {
     const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     const allTimeSessions = this.countAllTimeUsageSessions(settings);
-    this.state = { ...this.state, sessions, settings, codeOutputStats, codeOutputLoading: false, allTimeSessions, lastUpdated: Date.now() };
+    this.state = { ...this.state, sessions, settings, usageTrend: this.buildUsageTrend(), codeOutputStats, codeOutputLoading: false, allTimeSessions, lastUpdated: Date.now() };
     this.onUpdate(this.state);
   }
 

@@ -21,6 +21,7 @@ const EMPTY_CODE_OUTPUT = {
   repoCount: 0,
   scopeLabel: 'Current session repos',
 };
+const EMPTY_USAGE_TREND = { daily: [], weekly: [], monthly: [] };
 const BOOT_FALLBACK_DELAY_MS = 12_000;
 
 const DEFAULT_STATE: AppState = {
@@ -38,6 +39,7 @@ const DEFAULT_STATE: AppState = {
     burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
     todBuckets: [],
   },
+  usageTrend: EMPTY_USAGE_TREND,
   limits: {
     h5: { pct:0, resetMs:null }, week: { pct:0, resetMs:null }, so: { pct:0, resetMs:null },
     codexH5: { pct:0, resetMs:null }, codexWeek: { pct:0, resetMs:null },
@@ -176,6 +178,11 @@ function normalizeState(next: AppState): AppState {
       weeklyTimeline: arrayOrEmpty(next.usage?.weeklyTimeline),
       todBuckets: arrayOrEmpty(next.usage?.todBuckets),
       burnRate: { ...DEFAULT_STATE.usage.burnRate, ...next.usage?.burnRate },
+    },
+    usageTrend: {
+      daily: arrayOrEmpty(next.usageTrend?.daily),
+      weekly: arrayOrEmpty(next.usageTrend?.weekly),
+      monthly: arrayOrEmpty(next.usageTrend?.monthly),
     },
     limits: {
       h5: normalizeLimitWindow(next.limits?.h5),
