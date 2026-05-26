@@ -2104,10 +2104,12 @@ export class StateManager {
     let changed = false;
     let scannedFiles = 0;
     let partial = !includeFullHistory && sourceList.partial && !alreadyCompletedFullImport;
+    let stoppedForBudget = false;
 
     const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
     for (const source of sourceList.files) {
       if (!source.priority && shouldStopForBudget()) {
+        stoppedForBudget = true;
         partial = !alreadyCompletedFullImport;
         break;
       }
@@ -2122,11 +2124,12 @@ export class StateManager {
       }
     }
 
+    const completedFullImport = includeFullHistory && !stoppedForBudget;
     if (changed) {
-      if (includeFullHistory) snapshot = { ...snapshot, lastFullImportAt: Date.now() };
+      if (completedFullImport) snapshot = { ...snapshot, lastFullImportAt: Date.now() };
       this.usageLedgerStore.replaceSnapshot(snapshot);
       this.usageLedgerStore.compact();
-    } else if (includeFullHistory) {
+    } else if (completedFullImport) {
       this.usageLedgerStore.replaceSnapshot({ ...snapshot, lastFullImportAt: Date.now() });
     }
 
