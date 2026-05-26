@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe"><strong>下载 v1.15.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe"><strong>下载 v1.16.0</strong></a>
   ·
   <a href="#功能特性">功能特性</a>
   ·
@@ -59,11 +59,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 新增持久化使用账本、即时启动 snapshot，以及把 cost/token 历史与 git 净行数产出叠加显示的 Trend 卡片 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | 通过 scheduler 串行化并预算 refresh 工作，让 startup、watcher、history、manual refresh 期间托盘 UI 和 hotkey popup 保持响应 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | 将 Codex 归档日志和 Claude agent 日志纳入 all-time 使用量，并让 all-time 会话数基于完整使用历史显示 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | 保持 hotkey popup 快速响应，同时不丢失完整会话历史，并避免托盘辅助窗口出现在 taskbar 中 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | 新增 Settings 开关，默认关闭 compact widget 的 waiting animation，同时保留 syncing animation |
-| **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | 新增 Claude OAuth refresh 恢复、按凭据隔离的 API 缓存保护、Claude refresh/login 状态显示，以及 Floating 小部件隐藏/快捷键恢复修复 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 下载
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-v1.15.3-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-v1.16.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -83,7 +83,7 @@
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.15.3-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.16.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -108,9 +108,10 @@
 
 ### 分析与活动
 - **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、紧凑的 Claude/Codex 元数据，以及 provider 级 health/fallback 状态。`all` 的会话数来自完整使用历史
+- **即时启动 snapshot** — 立即恢复上一次成功显示的 UI 状态，新的扫描继续在后台运行
 - **启动友好的历史同步** — 先显示当前会话和最近用量；较早的历史会通过 budgeted refresh scheduler 在后台继续同步，让 hotkey popup 和 UI 保持响应
-- **持久化使用账本** — 将本地 JSONL 用量滚入聚合账本，让较早的总量不再依赖 JSONL cache，并在 warmup 后提升刷新速度
-- **Trend 卡片** — 按天、周、月查看 cost/token 趋势，并叠加 git 净行数产出
+- **持久化使用账本** — 将本地 JSONL 用量写入本地聚合账本，让较早的总量不再依赖 JSONL cache；必要时可在 Settings 中重建
+- **Trend 卡片** — 按天、周、月查看 cost/token 趋势，并叠加 git 净行数产出；缺失数据不会被误画成 0
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
 - **模型分析** — 按热门模型的令牌和费用总计，渐变条

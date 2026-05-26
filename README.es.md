@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe"><strong>Descargar v1.15.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.16.0</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -59,11 +59,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 26 may | Añade el ledger persistente de uso, snapshots de inicio instantáneo y la tarjeta Trend con historial de costos/tokens y líneas netas de git |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 25 may | Enruta el refresh por un scheduler serializado y con presupuesto para que la UI de bandeja y el hotkey popup sigan respondiendo durante startup, watcher, history y refresh manual |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 21 may | Incluye logs archivados de Codex y logs agent de Claude en el uso all-time, y muestra sesiones all-time desde el historial completo |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 21 may | Mantiene ágil el hotkey popup sin perder el historial completo de sesiones y evita que las ventanas auxiliares de la bandeja aparezcan en la taskbar |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 14 may | Añade un toggle en Settings que mantiene desactivadas por defecto las animaciones waiting del widget compacto, conservando la animación syncing |
-| **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 11 may | Añade recuperación de Claude OAuth refresh, caché de API ligada a credenciales, estados Claude refresh/login más claros y recuperación del widget flotante tras ocultarlo o usar atajos |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-v1.15.3-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-v1.16.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.15.3-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.16.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -108,7 +108,10 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 
 ### Análisis y Actividad
 - **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y estado health/fallback por provider. En `all`, el conteo de sesiones viene del historial completo
+- **Snapshots de inicio instantáneo** — restaura al instante el último estado válido de la UI mientras los nuevos escaneos continúan en segundo plano
 - **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue por un budgeted refresh scheduler para mantener responsive el hotkey popup y la UI
+- **Ledger persistente de uso** — agrega el uso local de JSONL en un ledger local para que los totales antiguos dependan menos de la caché JSONL y puedan reconstruirse desde Settings
+- **Tarjeta Trend** — muestra tendencias diarias, semanales o mensuales de costo/tokens junto con líneas netas de git, sin dibujar datos faltantes como ceros
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
 - **Desglose por modelo** — tokens y costos de los modelos principales con barras de gradiente

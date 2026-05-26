@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe"><strong>v1.15.3 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe"><strong>v1.16.0 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -59,11 +59,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 永続 usage ledger、即時起動 snapshot、cost/token 履歴と git net-line output を重ねる Trend カードを追加 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | refresh 処理を scheduler で直列化し、startup / watcher / history / manual refresh 中も tray UI と hotkey popup の応答性を維持 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex アーカイブログと Claude agent ログを all-time 使用量に含め、all-time セッション数を全使用履歴ベースで表示 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | hotkey popup の応答性を保ちながら全セッション履歴を取りこぼさないようにし、トレイ補助ウィンドウを taskbar に出さないよう修正 |
 | **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | compact widget の waiting animation をデフォルトでオフにする Settings トグルを追加し、syncing animation は維持 |
-| **[v1.14.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.14.0)** | 5/11 | Claude OAuth refresh 復旧、認証情報に紐づく API キャッシュ保護、Claude refresh/login 状態表示、Floating ウィジェットの非表示/ショートカット復旧を追加 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.15.3/WhereMyTokens-v1.15.3-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-v1.16.0-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -83,7 +83,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.15.3-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.16.0-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -108,7 +108,10 @@
 
 ### 分析 & アクティビティ
 - **ヘッダー統計** — today/all-time 切替: コスト、API 呼び出し、セッション、キャッシュ効率、節約額、コンパクトな Claude/Codex メタデータ、provider ごとの health/fallback 状態。`all` のセッション数は全使用履歴に基づきます
+- **即時起動 snapshot** — 最後に正常表示された UI 状態をすぐに復元し、新しい scan はバックグラウンドで続行
 - **起動にやさしい履歴同期** — 現在のセッションと最近の使用量を先に表示し、古い履歴は budgeted refresh scheduler 経由でバックグラウンド同期され、hotkey popup と UI の応答性を保ちます
+- **永続 usage ledger** — ローカル JSONL 使用量を集計 ledger に保存し、古い合計が JSONL cache eviction に依存しにくくなり、必要に応じて Settings から再構築できます
+- **Trend カード** — 日/週/月の cost/token 履歴に git net-line output を重ねて表示し、欠けている series を 0 として誤表示しません
 - **アクティビティタブ** — 7 日間ヒートマップ、5 ヶ月カレンダー（GitHub スタイル）、時間帯別分布、4 週間比較
 - **Rhythm タブ** — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、グラデーションバー、ピーク詳細統計、ローカルタイムゾーン
 - **モデル別分析** — 上位モデルごとのトークン・コスト合計、グラデーションバー
