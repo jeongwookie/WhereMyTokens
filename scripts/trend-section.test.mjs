@@ -39,8 +39,11 @@ test('TrendCard hover uses one full-width overlay and skips redundant hover upda
 test('TrendCard hides tooltip when the pointer leaves the chart', () => {
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(trendCard, /const showHoverDetail = hoverIndex !== null/);
+  assert.match(trendCard, /function handleMouseLeave\(\)/);
+  assert.match(trendCard, /setHoverIndex\(prev => prev === null \? prev : null\)/);
+  assert.match(trendCard, /onMouseLeave=\{handleMouseLeave\}/);
   assert.match(trendCard, /\{showHoverDetail && activeRow && points\[activeIndex\] && \(/);
-  assert.match(trendCard, /\{showHoverDetail && activeRow && \(/);
+  assert.match(trendCard, /\{showHoverDetail && activeRow && rows\.length > 0 && \(/);
 });
 
 test('history warmup banner explains changing totals during full-history sync', () => {
@@ -73,8 +76,24 @@ test('TrendCard labels title totals with the visible grain window', () => {
   assert.match(trendCard, /day: \{ limit: 14, label: '14d' \}/);
   assert.match(trendCard, /week: \{ limit: 12, label: '12w' \}/);
   assert.match(trendCard, /month: \{ limit: 12, label: '12m' \}/);
-  assert.match(trendCard, /\{GRAIN_WINDOWS\[grain\]\.label\}: \{formatPrimary\(totalPrimary, metric, currency, usdToKrw\)\}/);
-  assert.match(trendCard, /\{fmtSignedCompact\(totalOutput\)\} net/);
+  assert.match(trendCard, /rows\.length === 0/);
+  assert.match(trendCard, /\`\$\{GRAIN_WINDOWS\[grain\]\.label\}: no trend data yet\`/);
+  assert.match(trendCard, /hasUsageSeries \? formatPrimary\(totalPrimary, metric, currency, usdToKrw\) : 'usage pending'/);
+  assert.match(trendCard, /hasOutputSeries \? fmtSignedCompact\(totalOutput\) : 'output pending'/);
+  assert.match(trendCard, /\/ \$\{hasOutputSeries \? fmtSignedCompact\(totalOutput\) : 'output pending'\} net/);
   assert.doesNotMatch(trendCard, /total \{formatPrimary\(totalPrimary, metric, currency, usdToKrw\)\}/);
   assert.match(trendCard, /const limit = GRAIN_WINDOWS\[grain\]\.limit/);
+});
+
+test('TrendCard does not draw missing usage or output buckets as zero-value trend lines', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /const primaryValues = rows\.filter\(row => row\.hasUsage\)\.map/);
+  assert.match(trendCard, /const outputValues = rows\.filter\(row => row\.hasOutput\)\.map/);
+  assert.match(trendCard, /const primaryPaths = hasUsageSeries \? pathsForRows\(rows, points, row => row\.hasUsage, point => point\.primaryY\) : \[\]/);
+  assert.match(trendCard, /const outputPaths = hasOutputSeries \? pathsForRows\(rows, points, row => row\.hasOutput, point => point\.outputY\) : \[\]/);
+  assert.match(trendCard, /function pathsForRows\(/);
+  assert.doesNotMatch(trendCard, /pathFor\(points\.map\(point => \(\{ x: point\.x, y: point\.primaryY \}\)\)\)/);
+  assert.doesNotMatch(trendCard, /pathFor\(points\.map\(point => \(\{ x: point\.x, y: point\.outputY \}\)\)\)/);
+  assert.match(trendCard, /No trend data yet/);
+  assert.doesNotMatch(trendCard, /Syncing history/);
 });

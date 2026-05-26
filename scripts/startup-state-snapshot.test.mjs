@@ -74,7 +74,7 @@ test('startup snapshot normalizer rejects stale and mismatched snapshots', () =>
   assert.equal(normalizeStartupStateSnapshot({ schemaVersion: STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, savedAt: now }, BASE_STATE, now), null);
 });
 
-test('StateManager revives restored snapshot session dates before watcher sorting', () => {
+test('StateManager revives restored snapshot session dates without persisted local paths', () => {
   const startedAt = '2026-05-26T00:00:00.000Z';
   const lastModified = '2026-05-26T00:10:00.000Z';
   const snapshot = makeStartupStateSnapshot({
@@ -83,13 +83,13 @@ test('StateManager revives restored snapshot session dates before watcher sortin
       provider: 'claude',
       pid: null,
       sessionId: 'restored-session',
-      cwd: 'D:\\Git\\wheremytokens-ledger',
-      projectName: 'wheremytokens-ledger',
+      cwd: 'C:\\Users\\example\\my-project',
+      projectName: 'my-project',
       startedAt,
       entrypoint: 'cli',
       source: 'Terminal',
       state: 'waiting',
-      jsonlPath: 'D:\\Temp\\restored-session.jsonl',
+      jsonlPath: 'C:\\Users\\example\\AppData\\Local\\my-app\\restored-session.jsonl',
       lastModified,
       modelName: '',
       contextUsed: 0,
@@ -109,7 +109,64 @@ test('StateManager revives restored snapshot session dates before watcher sortin
   const restored = manager.getState().sessions[0];
   assert.ok(restored.startedAt instanceof Date);
   assert.ok(restored.lastModified instanceof Date);
-  assert.deepEqual(manager.collectTrackedSessionFiles('claude', 1), ['D:\\Temp\\restored-session.jsonl']);
+  assert.equal(restored.cwd, '');
+  assert.equal(restored.projectName, 'Previous session');
+  assert.equal(restored.jsonlPath, null);
+  assert.deepEqual(manager.collectTrackedSessionFiles('claude', 1), []);
+});
+
+test('startup snapshot normalizer rejects malformed session lists', () => {
+  const now = Date.now();
+  const snapshot = {
+    schemaVersion: STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION,
+    savedAt: now,
+    state: {
+      ...BASE_STATE,
+      sessions: { bad: true },
+    },
+  };
+
+  assert.equal(normalizeStartupStateSnapshot(snapshot, BASE_STATE, now), null);
+});
+
+test('startup snapshot normalizer sanitizes schema-valid persisted sessions', () => {
+  const now = Date.now();
+  const snapshot = {
+    schemaVersion: STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION,
+    savedAt: now,
+    state: {
+      ...BASE_STATE,
+      sessions: [{
+        cwd: 'C:\\Users\\example\\my-project',
+        projectName: 'my-project',
+        jsonlPath: 'C:\\Users\\example\\AppData\\Local\\my-app\\session.jsonl',
+        gitStats: { toplevel: 'C:\\Users\\example\\my-project' },
+      }],
+      repoGitStats: {
+        repo: { toplevel: 'C:\\Users\\example\\my-project' },
+      },
+      settings: { provider: 'codex' },
+    },
+  };
+
+  const restored = normalizeStartupStateSnapshot(snapshot, BASE_STATE, now);
+  assert.ok(restored);
+  assert.equal(restored.sessions[0].cwd, '');
+  assert.equal(restored.sessions[0].projectName, 'Previous session');
+  assert.equal(restored.sessions[0].jsonlPath, null);
+  assert.deepEqual(restored.sessions[0].gitStats, null);
+  assert.deepEqual(restored.repoGitStats, {});
+  assert.equal('settings' in restored, false);
+});
+
+test('startup snapshot normalizer rejects legacy snapshot schema', () => {
+  const now = Date.now();
+  const snapshot = makeStartupStateSnapshot(BASE_STATE, now);
+
+  assert.equal(
+    normalizeStartupStateSnapshot({ ...snapshot, schemaVersion: STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION - 1 }, BASE_STATE, now),
+    null,
+  );
 });
 
 test('StateManager keeps live settings when restoring a cached startup snapshot', () => {

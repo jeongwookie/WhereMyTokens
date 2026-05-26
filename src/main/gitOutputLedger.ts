@@ -1,4 +1,5 @@
 import Store from 'electron-store';
+import * as crypto from 'crypto';
 
 export interface GitDailyOutputRow {
   date: string;
@@ -47,14 +48,36 @@ function normalizeSnapshot(value: unknown): GitOutputLedgerSnapshot {
   if (raw.schemaVersion !== SCHEMA_VERSION || !raw.dailyOutput || typeof raw.dailyOutput !== 'object') {
     return emptyGitOutputLedgerSnapshot();
   }
+  const dailyOutput: Record<string, GitDailyOutputRow> = {};
+  for (const row of Object.values(raw.dailyOutput)) {
+    if (!row || typeof row !== 'object') continue;
+    const item = row as Partial<GitDailyOutputRow>;
+    if (typeof item.date !== 'string' || typeof item.repoKey !== 'string') continue;
+    const commits = Number.isFinite(item.commits) ? item.commits as number : 0;
+    const added = Number.isFinite(item.added) ? item.added as number : 0;
+    const removed = Number.isFinite(item.removed) ? item.removed as number : 0;
+    const repoKey = item.repoKey.startsWith('repo:') ? item.repoKey : repoLedgerKey(item.repoKey);
+    dailyOutput[`${item.date}|${repoKey}`] = {
+      date: item.date,
+      repoKey,
+      commits,
+      added,
+      removed,
+      netLines: added - removed,
+    };
+  }
   return {
     schemaVersion: SCHEMA_VERSION,
-    dailyOutput: Object.fromEntries(Object.entries(raw.dailyOutput).filter(([, row]) => !!row && typeof row === 'object')) as Record<string, GitDailyOutputRow>,
+    dailyOutput,
   };
 }
 
 function dateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function repoLedgerKey(repoKey: string): string {
+  return `repo:${crypto.createHash('sha256').update(repoKey).digest('base64url')}`;
 }
 
 function buildDaily7dWindow(today: string): GitDailyInput[] {
@@ -70,11 +93,18 @@ function buildDaily7dWindow(today: string): GitDailyInput[] {
 
 export function mergeGitDailyOutput(snapshot: GitOutputLedgerSnapshot, repoKey: string, days: GitDailyInput[]): void {
   if (!repoKey) return;
+  const ledgerRepoKey = repoLedgerKey(repoKey);
+  const incomingDates = new Set(days.map(day => day.date).filter(Boolean));
+  if (incomingDates.size > 0) {
+    for (const [key, row] of Object.entries(snapshot.dailyOutput)) {
+      if (row.repoKey === ledgerRepoKey && !incomingDates.has(row.date)) delete snapshot.dailyOutput[key];
+    }
+  }
   for (const day of days) {
     if (!day.date) continue;
-    snapshot.dailyOutput[`${day.date}|${repoKey}`] = {
+    snapshot.dailyOutput[`${day.date}|${ledgerRepoKey}`] = {
       date: day.date,
-      repoKey,
+      repoKey: ledgerRepoKey,
       commits: Number.isFinite(day.commits) ? day.commits : 0,
       added: Number.isFinite(day.added) ? day.added : 0,
       removed: Number.isFinite(day.removed) ? day.removed : 0,
@@ -89,7 +119,7 @@ export function buildCodeOutputFromGitLedger(
   today = dateKey(new Date()),
   scopeLabel = repoKeys.length > 0 ? `Current session repos (${repoKeys.length})` : 'Current session repos',
 ): CodeOutputStatsLike {
-  const allowed = new Set(repoKeys.filter(Boolean));
+  const allowed = new Set(repoKeys.filter(Boolean).map(repoLedgerKey));
   const rows = Object.values(snapshot.dailyOutput)
     .filter(row => allowed.size === 0 || allowed.has(row.repoKey))
     .sort((a, b) => a.date.localeCompare(b.date) || a.repoKey.localeCompare(b.repoKey));

@@ -37,6 +37,7 @@ export function emptyUsageLedgerSnapshot(): UsageLedgerSnapshot {
     sourceCheckpoints: {},
     sourceRepairRollup: {},
     lastCompactedAt: 0,
+    lastFullImportAt: 0,
   };
 }
 

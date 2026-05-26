@@ -15,6 +15,7 @@ export interface RefreshRequest {
   reason: RefreshReason;
   changedFiles?: Iterable<string>;
   force?: boolean;
+  forceProviderUsage?: boolean;
   includeFullHistory?: boolean;
   allowStartupBudget?: boolean;
   allowHiddenFullScan?: boolean;
@@ -26,6 +27,7 @@ export interface RefreshWork {
   reasons: RefreshReason[];
   changedFiles?: Set<string>;
   force: boolean;
+  forceProviderUsage: boolean;
   includeFullHistory: boolean;
   allowStartupBudget: boolean;
   allowHiddenFullScan: boolean;
@@ -42,6 +44,7 @@ interface PendingRefresh {
   reasons: Set<RefreshReason>;
   changedFiles: Set<string>;
   force: boolean;
+  forceProviderUsage: boolean;
   includeFullHistory: boolean;
   allowStartupBudget: boolean;
   allowHiddenFullScan: boolean;
@@ -97,6 +100,7 @@ export class RefreshScheduler {
       reasons,
       changedFiles,
       force: (current?.force ?? false) || request.force === true,
+      forceProviderUsage: (current?.forceProviderUsage ?? false) || request.forceProviderUsage === true,
       includeFullHistory: (current?.includeFullHistory ?? false) || request.includeFullHistory === true,
       allowStartupBudget: (current?.allowStartupBudget ?? false) || request.allowStartupBudget === true,
       allowHiddenFullScan: (current?.allowHiddenFullScan ?? false) || request.allowHiddenFullScan === true,
@@ -155,6 +159,7 @@ export class RefreshScheduler {
         reasons: [...pending.reasons],
         changedFiles: pending.changedFiles.size > 0 ? new Set(pending.changedFiles) : undefined,
         force: pending.force,
+        forceProviderUsage: pending.forceProviderUsage,
         includeFullHistory: pending.includeFullHistory,
         allowStartupBudget: pending.allowStartupBudget,
         allowHiddenFullScan: !state.uiVisible && pending.allowHiddenFullScan,

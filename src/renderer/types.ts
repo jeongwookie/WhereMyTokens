@@ -234,6 +234,7 @@ export interface AppState {
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
+  usageLedgerNeedsRebuild: boolean;
   lastUpdated: number;
   apiConnected: boolean;
   apiStatusLabel?: string;

@@ -103,8 +103,11 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
   assert.match(stateSource, /API_MIN_INTERVAL_MS = 300_000/);
-  assert.match(stateSource, /settingsForApi\.provider !== 'codex' \? this\.refreshApiUsagePct\(force\) : Promise\.resolve\(false\)/);
-  assert.match(stateSource, /settingsForApi\.provider !== 'claude' \? this\.refreshCodexUsagePct\(force\) : Promise\.resolve\(false\)/);
+  assert.match(stateSource, /MANUAL_PROVIDER_USAGE_FORCE_MIN_INTERVAL_MS = 60_000/);
+  assert.match(stateSource, /consumeManualProviderUsageForce/);
+  assert.match(stateSource, /forceProviderUsage: this\.consumeManualProviderUsageForce\(\)/);
+  assert.match(stateSource, /settingsForApi\.provider !== 'codex' \? this\.refreshApiUsagePct\(force \|\| forceProviderUsage\) : Promise\.resolve\(false\)/);
+  assert.match(stateSource, /settingsForApi\.provider !== 'claude' \? this\.refreshCodexUsagePct\(force \|\| forceProviderUsage\) : Promise\.resolve\(false\)/);
   assert.match(mainSource, /historyWarmupPending \|\|/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);

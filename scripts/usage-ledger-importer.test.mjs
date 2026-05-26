@@ -33,6 +33,32 @@ function claudeLine({ id, timestamp, input = 10, output = 20 }) {
   });
 }
 
+function codexMetaLine({ id = 'codex-session-a', model = 'gpt-5-codex' } = {}) {
+  return JSON.stringify({
+    type: 'session_meta',
+    timestamp: '2026-05-25T10:00:00.000Z',
+    payload: { id, model },
+  });
+}
+
+function codexTokenLine({ timestamp, input = 100, cached = 40, output = 20 }) {
+  return JSON.stringify({
+    type: 'event_msg',
+    timestamp,
+    payload: {
+      type: 'token_count',
+      info: {
+        last_token_usage: {
+          input_tokens: input,
+          cached_input_tokens: cached,
+          output_tokens: output,
+        },
+        model_context_window: 200000,
+      },
+    },
+  });
+}
+
 test('usage importer writes minute, hourly, daily, monthly, and checkpoint aggregates', async () => {
   const dir = tempDir();
   const filePath = path.join(dir, 'claude.jsonl');
@@ -43,7 +69,10 @@ test('usage importer writes minute, hourly, daily, monthly, and checkpoint aggre
   assert.equal(Object.keys(next.hourlyActivity).length, 1);
   assert.equal(next.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
   assert.equal(next.monthlyModel[monthModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
-  assert.ok(next.sourceCheckpoints[sourceHashForPath(filePath)]);
+  const checkpoint = next.sourceCheckpoints[sourceHashForPath(filePath)];
+  assert.ok(checkpoint);
+  assert.equal('sourceIdentity' in checkpoint, false);
+  assert.equal('normalizedPath' in checkpoint, false);
 });
 
 test('usage importer does not double count unchanged source', async () => {
@@ -107,6 +136,66 @@ test('usage importer replaces duplicate recent Claude request with larger output
   const next = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'));
   assert.equal(next.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
   assert.equal(next.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].outputTokens, 25);
+});
+
+test('usage importer keeps Codex raw model across incremental appends', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'codex.jsonl');
+  fs.writeFileSync(filePath, [
+    codexMetaLine(),
+    codexTokenLine({ timestamp: '2026-05-25T10:15:00.000Z', output: 20 }),
+    '',
+  ].join('\n'), 'utf8');
+
+  const first = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'codex', Date.parse('2026-05-25T12:00:00.000Z'));
+  fs.appendFileSync(filePath, `${codexTokenLine({ timestamp: '2026-05-25T10:16:00.000Z', output: 30 })}\n`, 'utf8');
+  const second = await importUsageJsonlIntoSnapshot(first, filePath, 'codex', Date.parse('2026-05-25T12:01:00.000Z'));
+
+  const row = second.dailyModel[dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX')];
+  assert.equal(row.requestCount, 2);
+  assert.equal(row.outputTokens, 50);
+  assert.equal(second.sourceCheckpoints[sourceHashForPath(filePath, 'codex')].rawModel, 'gpt-5-codex');
+});
+
+test('usage importer dedupes a Codex session imported from active and archive paths', async () => {
+  const dir = tempDir();
+  const activePath = path.join(dir, 'sessions', 'session.jsonl');
+  const archivePath = path.join(dir, 'archived_sessions', 'session.jsonl');
+  fs.mkdirSync(path.dirname(activePath), { recursive: true });
+  fs.mkdirSync(path.dirname(archivePath), { recursive: true });
+  const body = [
+    codexMetaLine({ id: 'same-codex-session' }),
+    codexTokenLine({ timestamp: '2026-05-25T10:15:00.000Z', output: 20 }),
+    '',
+  ].join('\n');
+  fs.writeFileSync(activePath, body, 'utf8');
+  fs.writeFileSync(archivePath, body, 'utf8');
+
+  const first = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), activePath, 'codex', Date.parse('2026-05-25T12:00:00.000Z'));
+  const second = await importUsageJsonlIntoSnapshot(first, archivePath, 'codex', Date.parse('2026-05-25T12:01:00.000Z'));
+
+  const row = second.dailyModel[dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX')];
+  assert.equal(row.requestCount, 1);
+  assert.equal(Object.keys(second.sourceCheckpoints).length, 1);
+});
+
+test('usage importer marks shrunken sources for rebuild instead of partially subtracting old rows', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'shrink.jsonl');
+  fs.writeFileSync(filePath, [
+    claudeLine({ id: 'one', timestamp: '2026-05-25T10:15:00.000Z', output: 20 }),
+    claudeLine({ id: 'two', timestamp: '2026-05-25T10:16:00.000Z', output: 30 }),
+    '',
+  ].join('\n'), 'utf8');
+  const first = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'));
+
+  fs.writeFileSync(filePath, `${claudeLine({ id: 'one', timestamp: '2026-05-25T10:15:00.000Z', output: 20 })}\n`, 'utf8');
+  const second = await importUsageJsonlIntoSnapshot(first, filePath, 'claude', Date.parse('2026-05-25T12:01:00.000Z'));
+
+  const row = second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)];
+  assert.equal(row.requestCount, 2);
+  assert.equal(row.outputTokens, 50);
+  assert.equal(second.sourceCheckpoints[sourceHashForPath(filePath)].needsRebuild, true);
 });
 
 test('usage importer yields during large source aggregation', () => {

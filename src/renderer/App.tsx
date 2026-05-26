@@ -64,6 +64,7 @@ const DEFAULT_STATE: AppState = {
   initialRefreshComplete: false,
   historyWarmupPending: false,
   historyWarmupStartsAt: null,
+  usageLedgerNeedsRebuild: false,
   lastUpdated: 0,
   apiConnected: false,
   apiStatusLabel: undefined,
@@ -222,6 +223,7 @@ function normalizeState(next: AppState): AppState {
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt
       : null,
+    usageLedgerNeedsRebuild: next.usageLedgerNeedsRebuild === true,
     apiStatusLabel: typeof next.apiStatusLabel === 'string' ? next.apiStatusLabel : undefined,
     apiError: typeof next.apiError === 'string' ? next.apiError : undefined,
     extraUsage: normalizeExtraUsage(next.extraUsage),

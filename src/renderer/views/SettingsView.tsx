@@ -398,11 +398,11 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <div>
             <div style={labelStyle}>Usage ledger</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Replays local history into the aggregate usage ledger
+              Rebuilds local-only aggregates from Claude/Codex history; totals may change during sync
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            {ledgerMsg && <span style={{ fontSize: 10, color: C.textMuted }}>{ledgerMsg}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+            {ledgerMsg && <span title={ledgerMsg} style={{ fontSize: 10, color: C.textMuted, minWidth: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ledgerMsg}</span>}
             <button
               type="button"
               disabled={rebuildingLedger}

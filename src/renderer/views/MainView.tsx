@@ -643,6 +643,27 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
   );
 });
 
+const LedgerNeedsRebuildBanner = React.memo(function LedgerNeedsRebuildBanner() {
+  const C = useTheme();
+  return (
+    <div style={{
+      margin: '10px 8px 0',
+      padding: '9px 12px',
+      borderRadius: 10,
+      border: `1px solid ${C.barRed}30`,
+      background: `${C.barRed}10`,
+      color: C.textDim,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.barRed, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        Ledger Needs Rebuild
+      </div>
+      <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
+        Historical totals are using recent fallback data until the local usage ledger is rebuilt from Settings.
+      </div>
+    </div>
+  );
+});
+
 const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, onToggle }: {
   item: Extract<SessionListItem, { type: 'stack' }>;
   expanded: boolean;
@@ -1209,6 +1230,11 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
         <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
+        {state.usageLedgerNeedsRebuild && (
+          <RenderErrorBoundary label="Usage Ledger Rebuild Banner">
+            <LedgerNeedsRebuildBanner />
+          </RenderErrorBoundary>
+        )}
         {state.historyWarmupPending && (
           <RenderErrorBoundary label="History Warmup Banner">
             <HistoryWarmupBanner historyWarmupStartsAt={state.historyWarmupStartsAt} />

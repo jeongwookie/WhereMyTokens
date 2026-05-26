@@ -102,11 +102,28 @@ test('all-time session count ignores ledger checkpoints without usage', () => {
   assert.match(countBody, /checkpoint\.hasUsage !== false/);
 });
 
-test('usage ledger is not globally disabled when one checkpoint needs rebuild', () => {
+test('usage ledger is disabled for a provider with a checkpoint that needs rebuild', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
   const canUseMatch = src.match(/private canUseUsageLedger\([\s\S]*?\): boolean \{([\s\S]*?)\n  \}/);
   assert.ok(canUseMatch);
-  assert.doesNotMatch(canUseMatch[1], /needsRebuild/);
+  assert.match(canUseMatch[1], /usageLedgerNeedsRebuild\(settings, snapshot\)/);
+  const rebuildMatch = src.match(/private usageLedgerNeedsRebuild\([\s\S]*?\): boolean \{([\s\S]*?)\n  \}/);
+  assert.ok(rebuildMatch);
+  assert.match(rebuildMatch[1], /checkpoint\.needsRebuild/);
+  assert.match(rebuildMatch[1], /provider === 'both' \|\| checkpoint\.provider === provider/);
+});
+
+test('usage ledger rebuild state is surfaced and completed imports suppress repeated startup warmup', () => {
+  const stateSource = fs.readFileSync('src/main/stateManager.ts', 'utf8');
+  const rendererSource = fs.readFileSync('src/renderer/views/MainView.tsx', 'utf8');
+
+  assert.match(stateSource, /usageLedgerNeedsRebuild: boolean/);
+  assert.match(stateSource, /private hasCompletedUsageLedgerImport/);
+  assert.match(stateSource, /lastFullImportAt \?\? 0/);
+  assert.match(stateSource, /sourceList\.partial && !alreadyCompletedFullImport/);
+  assert.match(rendererSource, /LedgerNeedsRebuildBanner/);
+  assert.match(rendererSource, /state\.usageLedgerNeedsRebuild/);
+  assert.match(rendererSource, /Historical totals are using recent fallback data/);
 });
 
 test('trend falls back when excluded projects disable the ledger', () => {

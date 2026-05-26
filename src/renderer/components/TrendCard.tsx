@@ -28,6 +28,8 @@ interface TrendRow {
   requestCount: number;
   netLines: number;
   commits: number;
+  hasUsage: boolean;
+  hasOutput: boolean;
 }
 
 const GRAINS: Grain[] = ['day', 'week', 'month'];
@@ -51,10 +53,10 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
     [codeOutputStats.dailyAll, grain, usageTrend],
   );
 
-  if (rows.length === 0) return null;
-
-  const primaryValues = rows.map(row => metric === 'cost' ? row.costUSD : row.tokens);
-  const outputValues = rows.map(row => row.netLines);
+  const primaryValues = rows.filter(row => row.hasUsage).map(row => metric === 'cost' ? row.costUSD : row.tokens);
+  const outputValues = rows.filter(row => row.hasOutput).map(row => row.netLines);
+  const hasUsageSeries = rows.some(row => row.hasUsage);
+  const hasOutputSeries = rows.some(row => row.hasOutput);
   const primaryScale = makeScale(primaryValues, true);
   const outputScale = makeScale(outputValues, true);
   const activeIndex = Math.max(0, Math.min(rows.length - 1, hoverIndex === null ? rows.length - 1 : hoverIndex));
@@ -62,7 +64,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const showHoverDetail = hoverIndex !== null;
   const primaryColor = metric === 'cost' ? C[TREND_COST_COLOR] : C.input;
   const outputColor = C.active;
-  const totalPrimary = primaryValues.reduce((sum, value) => sum + value, 0);
+  const totalPrimary = rows.reduce((sum, row) => sum + (metric === 'cost' ? row.costUSD : row.tokens), 0);
   const totalOutput = rows.reduce((sum, row) => sum + row.netLines, 0);
   const xLabels = labelIndexes(rows.length);
 
@@ -71,8 +73,8 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
     primaryY: yFor(metric === 'cost' ? row.costUSD : row.tokens, primaryScale),
     outputY: yFor(row.netLines, outputScale),
   }));
-  const primaryPath = pathFor(points.map(point => ({ x: point.x, y: point.primaryY })));
-  const outputPath = pathFor(points.map(point => ({ x: point.x, y: point.outputY })));
+  const primaryPaths = hasUsageSeries ? pathsForRows(rows, points, row => row.hasUsage, point => point.primaryY) : [];
+  const outputPaths = hasOutputSeries ? pathsForRows(rows, points, row => row.hasOutput, point => point.outputY) : [];
 
   function selectHoverIndex(nextIndex: number) {
     setHoverIndex(prev => prev === nextIndex ? prev : nextIndex);
@@ -96,7 +98,9 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Trend</div>
           <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {GRAIN_WINDOWS[grain].label}: {formatPrimary(totalPrimary, metric, currency, usdToKrw)} - {fmtSignedCompact(totalOutput)} net
+            {rows.length === 0
+              ? `${GRAIN_WINDOWS[grain].label}: no trend data yet`
+              : `${GRAIN_WINDOWS[grain].label}: ${hasUsageSeries ? formatPrimary(totalPrimary, metric, currency, usdToKrw) : 'usage pending'} / ${hasOutputSeries ? fmtSignedCompact(totalOutput) : 'output pending'} net`}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -116,20 +120,25 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
             aria-label="Trend"
             style={{ width: '100%', display: 'block', overflow: 'visible' }}
           >
-            {[0, 0.5, 1].map(tick => {
+            {rows.length === 0 && (
+              <text x={CHART.width / 2} y={CHART.height / 2} textAnchor="middle" fill={C.textMuted} fontSize={10} fontFamily={C.fontMono}>
+                No trend data yet
+              </text>
+            )}
+            {rows.length > 0 && [0, 0.5, 1].map(tick => {
               const y = CHART.top + tick * (CHART.height - CHART.top - CHART.bottom);
               return <line key={tick} x1={CHART.left} x2={CHART.width - CHART.right} y1={y} y2={y} stroke={C.borderSub} strokeWidth={1} />;
             })}
-            <text x={2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.max, metric, currency, usdToKrw)}</text>
-            <text x={2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.min, metric, currency, usdToKrw)}</text>
-            <text x={CHART.width - 2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.max)}</text>
-            <text x={CHART.width - 2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.min)}</text>
-            {primaryPath && <path d={primaryPath} fill="none" stroke={primaryColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />}
-            {outputPath && <path d={outputPath} fill="none" stroke={outputColor} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />}
+            {rows.length > 0 && hasUsageSeries && <text x={2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.max, metric, currency, usdToKrw)}</text>}
+            {rows.length > 0 && hasUsageSeries && <text x={2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.min, metric, currency, usdToKrw)}</text>}
+            {rows.length > 0 && hasOutputSeries && <text x={CHART.width - 2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.max)}</text>}
+            {rows.length > 0 && hasOutputSeries && <text x={CHART.width - 2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.min)}</text>}
+            {primaryPaths.map((path, index) => <path key={`primary-${index}`} d={path} fill="none" stroke={primaryColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />)}
+            {outputPaths.map((path, index) => <path key={`output-${index}`} d={path} fill="none" stroke={outputColor} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />)}
             {points.map((point, index) => (
               <g key={rows[index].key}>
-                <circle cx={point.x} cy={point.primaryY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? primaryColor : C.bgCard} stroke={primaryColor} strokeWidth={1.2} />
-                <circle cx={point.x} cy={point.outputY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? outputColor : C.bgCard} stroke={outputColor} strokeWidth={1.2} />
+                {rows[index].hasUsage && <circle cx={point.x} cy={point.primaryY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? primaryColor : C.bgCard} stroke={primaryColor} strokeWidth={1.2} />}
+                {rows[index].hasOutput && <circle cx={point.x} cy={point.outputY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? outputColor : C.bgCard} stroke={outputColor} strokeWidth={1.2} />}
               </g>
             ))}
             {rows.map((row, index) => xLabels.has(index) && (
@@ -151,7 +160,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
             />
           </svg>
 
-          {showHoverDetail && activeRow && (
+            {showHoverDetail && activeRow && rows.length > 0 && (
             <div style={{
               position: 'absolute',
               top: 12,
@@ -169,18 +178,18 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
               whiteSpace: 'nowrap',
             }}>
               <div style={{ color: C.text, fontWeight: 700 }}>{activeRow.label}</div>
-              <div><span style={{ color: primaryColor }}>{formatPrimary(metric === 'cost' ? activeRow.costUSD : activeRow.tokens, metric, currency, usdToKrw)}</span> / {activeRow.requestCount} calls</div>
-              <div style={{ color: outputColor }}>{fmtSignedCompact(activeRow.netLines)} net lines</div>
+              {activeRow.hasUsage && <div><span style={{ color: primaryColor }}>{formatPrimary(metric === 'cost' ? activeRow.costUSD : activeRow.tokens, metric, currency, usdToKrw)}</span> / {activeRow.requestCount} calls</div>}
+              {activeRow.hasOutput && <div style={{ color: outputColor }}>{fmtSignedCompact(activeRow.netLines)} net lines</div>}
             </div>
           )}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 3px 0', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, opacity: hasUsageSeries ? 1 : 0.45 }}>
             <span style={{ width: 16, height: 2, background: primaryColor, display: 'inline-block', borderRadius: 999 }} />
             <span>{metric}</span>
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, opacity: hasOutputSeries ? 1 : 0.45 }}>
             <span style={{ width: 16, height: 2, background: outputColor, display: 'inline-block', borderRadius: 999 }} />
             <span>net lines</span>
           </span>
@@ -255,9 +264,11 @@ function buildTrendRows(usageTrend: UsageTrendData, dailyOutput: GitDailyStats[]
         requestCount: point?.requestCount ?? 0,
         netLines: output.added - output.removed,
         commits: output.commits,
+        hasUsage: !!point && (point.tokens > 0 || point.costUSD > 0 || point.requestCount > 0),
+        hasOutput: output.commits > 0 || output.added !== 0 || output.removed !== 0,
       };
     })
-    .filter(row => row.tokens > 0 || row.costUSD > 0 || row.requestCount > 0 || row.commits > 0 || row.netLines !== 0);
+    .filter(row => row.hasUsage || row.hasOutput);
 }
 
 function trendPointsForGrain(usageTrend: UsageTrendData, grain: Grain): UsageTrendPoint[] {
@@ -329,6 +340,27 @@ function yFor(value: number, scale: { min: number; max: number }): number {
 function pathFor(points: Array<{ x: number; y: number }>): string {
   if (points.length === 0) return '';
   return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+}
+
+function pathsForRows(
+  rows: TrendRow[],
+  points: Array<{ x: number; primaryY: number; outputY: number }>,
+  hasValue: (row: TrendRow) => boolean,
+  yValue: (point: { x: number; primaryY: number; outputY: number }) => number,
+): string[] {
+  const paths: string[] = [];
+  let segment: Array<{ x: number; y: number }> = [];
+  rows.forEach((row, index) => {
+    if (hasValue(row)) {
+      const point = points[index];
+      segment.push({ x: point.x, y: yValue(point) });
+      return;
+    }
+    if (segment.length > 1) paths.push(pathFor(segment));
+    segment = [];
+  });
+  if (segment.length > 1) paths.push(pathFor(segment));
+  return paths;
 }
 
 function labelIndexes(length: number): Set<number> {

@@ -113,6 +113,24 @@ test('manual force refresh can still request an unbudgeted scan', async () => {
   assert.equal(works[0].scanBudgetMs, null);
 });
 
+test('manual provider refresh keeps foreground scan budget without force', async () => {
+  const works = [];
+  const scheduler = new RefreshScheduler({
+    foregroundScanBudgetMs: 2500,
+    getState: () => ({ uiVisible: true, uiBusy: false }),
+    execute: async (work) => {
+      works.push(work);
+    },
+  });
+
+  await scheduler.request({ mode: 'heavy', reason: 'manual', forceProviderUsage: true, scanBudgetMs: 1200 });
+
+  assert.equal(works.length, 1);
+  assert.equal(works[0].force, false);
+  assert.equal(works[0].forceProviderUsage, true);
+  assert.equal(works[0].scanBudgetMs, 1200);
+});
+
 test('manual force refresh overrides an already pending scan budget', async () => {
   const works = [];
   let uiBusy = true;

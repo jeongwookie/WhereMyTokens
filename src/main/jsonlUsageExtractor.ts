@@ -96,8 +96,8 @@ function hashString(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-export function codexEntryId(filePath: string, line: string, timestamp?: string): string {
-  return `${filePath}-${timestamp ?? 'no-ts'}-${hashString(line)}`;
+export function codexEntryId(sourceKey: string, line: string, timestamp?: string): string {
+  return `${hashString(sourceKey)}-${timestamp ?? 'no-ts'}-${hashString(line)}`;
 }
 
 function parseTimestampMs(timestamp: unknown, fallbackMs: number): number {
@@ -169,7 +169,7 @@ export function extractClaudeUsageLine(line: string, now: number): ExtractedUsag
 }
 
 export function extractCodexUsageLine(
-  filePath: string,
+  sourceKey: string,
   line: string,
   now: number,
   fallbackRawModel = '',
@@ -205,7 +205,7 @@ export function extractCodexUsageLine(
       rawModel,
       contextMax: asNumber(info?.model_context_window),
       entry: {
-        requestId: codexEntryId(filePath, line, timestamp),
+        requestId: codexEntryId(sourceKey, line, timestamp),
         timestampMs,
         model: normalizeModel(rawModel),
         provider: 'codex',
@@ -233,7 +233,7 @@ export function extractCodexUsageLine(
     rawModel,
     contextMax: asNumber(usage.model_context_window ?? payload.model_context_window),
     entry: {
-      requestId: codexEntryId(filePath, line, timestamp),
+      requestId: codexEntryId(sourceKey, line, timestamp),
       timestampMs,
       model: normalizeModel(rawModel),
       provider: 'codex',

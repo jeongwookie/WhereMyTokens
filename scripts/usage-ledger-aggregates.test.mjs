@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import aggregates from '../dist/main/usageLedgerAggregates.js';
+import types from '../dist/main/usageLedgerTypes.js';
 
 const {
   addUsageAggregate,
@@ -13,6 +14,7 @@ const {
   monthModelKey,
   compactUsageLedgerSnapshot,
 } = aggregates;
+const { USAGE_LEDGER_SCHEMA_VERSION } = types;
 
 test('usage aggregate add and subtract preserve all token fields', () => {
   const target = emptyUsageAggregate();
@@ -58,7 +60,7 @@ test('usage ledger key builders are stable strings', () => {
 test('compaction removes expired minute, request index, hourly, daily, and source repair rows', () => {
   const now = Date.parse('2026-05-25T12:00:00Z');
   const snapshot = {
-    schemaVersion: 1,
+    schemaVersion: USAGE_LEDGER_SCHEMA_VERSION,
     minuteRecent: {
       [minuteKey(now - 9 * 24 * 60 * 60 * 1000, 'claude', 'old')]: emptyUsageAggregate(),
       [minuteKey(now - 60_000, 'claude', 'new')]: emptyUsageAggregate(),

@@ -24,6 +24,7 @@ import {
 } from './usageLedgerAggregates';
 import { CompactRecentEntry } from './jsonlTypes';
 import { extractClaudeUsageLine, extractCodexUsageLine } from './jsonlUsageExtractor';
+import { readCodexSessionHeader } from './sessionMetadata';
 
 type ImportProvider = 'claude' | 'codex';
 
@@ -37,6 +38,7 @@ interface SourceEntry {
 interface SourceScanResult {
   entries: SourceEntry[];
   byteOffset: number;
+  rawModel?: string;
 }
 
 function cooperativeYield(): Promise<void> {
@@ -48,8 +50,24 @@ export function normalizedSourcePath(filePath: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-export function sourceHashForPath(filePath: string): string {
-  return crypto.createHash('sha256').update(normalizedSourcePath(filePath)).digest('base64url');
+export function sourceIdentityForPath(filePath: string, provider: ImportProvider): string {
+  if (provider === 'codex') {
+    const header = readCodexSessionHeader(filePath);
+    const headerId = typeof header?.payload.id === 'string' && header.payload.id.trim()
+      ? header.payload.id.trim()
+      : '';
+    const fallbackId = path.basename(filePath, '.jsonl').trim();
+    return `codex:${headerId || fallbackId || normalizedSourcePath(filePath)}`;
+  }
+  return `claude:${normalizedSourcePath(filePath)}`;
+}
+
+export function sourceHashForIdentity(identity: string): string {
+  return crypto.createHash('sha256').update(identity).digest('base64url');
+}
+
+export function sourceHashForPath(filePath: string, provider: ImportProvider = 'claude'): string {
+  return sourceHashForIdentity(sourceIdentityForPath(filePath, provider));
 }
 
 function cloneAggregate(aggregate: UsageAggregate): UsageAggregate {
@@ -164,7 +182,14 @@ async function scanJsonlLines(filePath: string, onLine: (line: string) => void, 
   return startOffset + consumedBytes;
 }
 
-async function collectSourceEntries(filePath: string, provider: ImportProvider, nowMs: number, startOffset = 0): Promise<SourceScanResult> {
+async function collectSourceEntries(
+  filePath: string,
+  provider: ImportProvider,
+  nowMs: number,
+  startOffset = 0,
+  fallbackRawModel = '',
+  sourceIdentity = normalizedSourcePath(filePath),
+): Promise<SourceScanResult> {
   if (provider === 'claude') {
     const byRequest = new Map<string, SourceEntry>();
     const byteOffset = await scanJsonlLines(filePath, (line) => {
@@ -181,7 +206,7 @@ async function collectSourceEntries(filePath: string, provider: ImportProvider, 
   }
 
   const entries: SourceEntry[] = [];
-  let rawModel = '';
+  let rawModel = fallbackRawModel;
   const byteOffset = await scanJsonlLines(filePath, (line) => {
     let obj: Record<string, unknown>;
     try {
@@ -202,12 +227,12 @@ async function collectSourceEntries(filePath: string, provider: ImportProvider, 
       if (model) rawModel = model;
     }
 
-    const extracted = extractCodexUsageLine(filePath, line, nowMs, rawModel);
+    const extracted = extractCodexUsageLine(sourceIdentity, line, nowMs, rawModel);
     if (!extracted || extracted.entry.provider !== 'codex') return;
     if (!rawModel) rawModel = extracted.rawModel;
     entries.push({ entry: extracted.entry, aggregate: asAggregate(extracted.entry) });
   }, startOffset);
-  return { entries, byteOffset };
+  return { entries, byteOffset, rawModel };
 }
 
 function markNeedsRebuild(checkpoint: SourceCheckpoint, nowMs: number, reason: string): SourceCheckpoint {
@@ -217,33 +242,6 @@ function markNeedsRebuild(checkpoint: SourceCheckpoint, nowMs: number, reason: s
     rebuildReason: reason,
     lastImportedAt: nowMs,
   };
-}
-
-function subtractPreviousSource(next: UsageLedgerSnapshot, sourceHash: string, provider: ImportProvider, nowMs: number): boolean {
-  const repairRows = Object.entries(next.sourceRepairRollup)
-    .filter(([key]) => key.startsWith(`${sourceHash}|`));
-  if (repairRows.length === 0) return false;
-
-  const repairCutoff = nowMs - SOURCE_REPAIR_RETENTION_MS;
-  if (repairRows.some(([key]) => Number(key.split('|')[1]) < repairCutoff)) return false;
-
-  for (const [key, aggregate] of repairRows) {
-    const [, hourStartRaw, rowProvider, model] = key.split('|');
-    const hourStartMs = Number(hourStartRaw);
-    if (!Number.isFinite(hourStartMs) || (rowProvider !== 'claude' && rowProvider !== 'codex')) continue;
-    subtractFromRecord(next.hourlyActivity, hourProviderKey(hourStartMs, rowProvider), aggregate);
-    subtractFromRecord(next.dailyModel, dayModelKey(hourStartMs, rowProvider, model), aggregate);
-    subtractFromRecord(next.monthlyModel, monthModelKey(hourStartMs, rowProvider, model), aggregate);
-    delete next.sourceRepairRollup[key];
-  }
-
-  for (const [key, value] of Object.entries(next.recentRequestIndex)) {
-    if (!key.startsWith(`${sourceHash}|`)) continue;
-    subtractFromRecord(next.minuteRecent, value.minuteKey, value.aggregate);
-    delete next.recentRequestIndex[key];
-  }
-
-  return true;
 }
 
 function addEntryToSnapshot(next: UsageLedgerSnapshot, sourceHash: string, sourceEntry: SourceEntry, nowMs: number): void {
@@ -300,19 +298,27 @@ export async function importUsageJsonlIntoSnapshot(
     return snapshot;
   }
 
-  const sourceHash = sourceHashForPath(filePath);
+  const sourceIdentity = sourceIdentityForPath(filePath, provider);
+  const sourceHash = sourceHashForIdentity(sourceIdentity);
   const currentCheckpoint = snapshot.sourceCheckpoints[sourceHash];
   if (unchangedCheckpoint(currentCheckpoint, stat)) return snapshot;
 
   const next = cloneSnapshot(snapshot);
-  const startOffset = currentCheckpoint ? currentCheckpoint.byteOffset : 0;
   if (currentCheckpoint?.needsRebuild) return next;
+  const startOffset = currentCheckpoint ? currentCheckpoint.byteOffset : 0;
   if (currentCheckpoint && stat.size < startOffset) {
     next.sourceCheckpoints[sourceHash] = markNeedsRebuild(currentCheckpoint, nowMs, 'source shrank before checkpoint offset');
     return next;
   }
 
-  const { entries, byteOffset } = await collectSourceEntries(filePath, provider, nowMs, startOffset);
+  const { entries, byteOffset, rawModel } = await collectSourceEntries(
+    filePath,
+    provider,
+    nowMs,
+    startOffset,
+    currentCheckpoint?.rawModel ?? '',
+    sourceIdentity,
+  );
   let processedEntries = 0;
   for (const entry of entries) {
     addEntryToSnapshot(next, sourceHash, entry, nowMs);
@@ -323,12 +329,12 @@ export async function importUsageJsonlIntoSnapshot(
   next.sourceCheckpoints[sourceHash] = {
     provider,
     sourceHash,
-    normalizedPath: normalizedSourcePath(filePath),
     size: stat.size,
     mtimeMs: stat.mtimeMs,
     byteOffset,
     lastImportedAt: nowMs,
     hasUsage: (currentCheckpoint?.hasUsage ?? false) || entries.length > 0,
+    ...(rawModel ? { rawModel } : (currentCheckpoint?.rawModel ? { rawModel: currentCheckpoint.rawModel } : {})),
   };
 
   return next;
