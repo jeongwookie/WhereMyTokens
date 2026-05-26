@@ -62,6 +62,8 @@ export interface UsageData {
   todayInputTokens: number;
   todayOutputTokens: number;
   todayCacheTokens: number;
+  todayCacheSavingsUSD: number;
+  todayCacheEfficiency: number;
   allTimeRequestCount: number;
   allTimeCost: number;
   allTimeCacheTokens: number;
@@ -83,6 +85,12 @@ interface AggregateLike {
   totalTokens: number;
   costUSD: number;
   cacheSavingsUSD: number;
+}
+
+interface CacheMetricLike {
+  inputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
 }
 
 function emptyWindow(): WindowStats {
@@ -122,18 +130,22 @@ function addEntry(target: AggregateLike, entry: CompactRecentEntry): void {
 }
 
 function finalize(window: WindowStats, provider: 'claude' | 'codex'): void {
-  const denominator = provider === 'codex'
-    ? window.inputTokens + window.cacheReadTokens
-    : window.cacheReadTokens + window.cacheCreationTokens;
+  const denominator = cacheEfficiencyDenominator(provider, window);
   window.cacheEfficiency = denominator > 0 ? (window.cacheReadTokens / denominator) * 100 : 0;
 }
 
-function getWeekStart(): Date {
-  const now = new Date();
-  const day = now.getDay();
+function cacheEfficiencyDenominator(provider: 'claude' | 'codex' | 'other', aggregate: CacheMetricLike): number {
+  return provider === 'codex'
+    ? aggregate.inputTokens + aggregate.cacheReadTokens
+    : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
+}
+
+function getWeekStart(timestampMs = Date.now()): Date {
+  const date = new Date(timestampMs);
+  const day = date.getDay();
   const diff = day === 0 ? 6 : day - 1;
-  const start = new Date(now);
-  start.setDate(now.getDate() - diff);
+  const start = new Date(date);
+  start.setDate(date.getDate() - diff);
   start.setHours(0, 0, 0, 0);
   return start;
 }
@@ -166,16 +178,17 @@ export function computeUsage(
   };
 
   const claudeH5Start = windowStart(h5Ms, resets.claude?.h5ResetMs, now - h5Ms);
-  const claudeWeekStart = windowStart(weekMs, resets.claude?.weekResetMs, getWeekStart().getTime());
+  const currentWeekStart = getWeekStart(now).getTime();
+  const claudeWeekStart = windowStart(weekMs, resets.claude?.weekResetMs, currentWeekStart);
   const codexH5Start = windowStart(h5Ms, resets.codex?.h5ResetMs, now - h5Ms);
-  const codexWeekStart = windowStart(weekMs, resets.codex?.weekResetMs, getWeekStart().getTime());
+  const codexWeekStart = windowStart(weekMs, resets.codex?.weekResetMs, currentWeekStart);
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayMidnight = todayStart.getTime();
   const day7Start = todayMidnight - 6 * dayMs;
   const day30Start = todayMidnight - 29 * dayMs;
   const day90Start = todayMidnight - 149 * dayMs;
-  const timelineStart = now - 19 * weekMs;
+  const timelineStart = currentWeekStart - 19 * weekMs;
 
   const h5 = emptyWindow();
   const week = emptyWindow();
@@ -193,6 +206,9 @@ export function computeUsage(
   let todayInputTokens = 0;
   let todayOutputTokens = 0;
   let todayCacheTokens = 0;
+  let todayCacheReadTokens = 0;
+  let todayCacheSavingsUSD = 0;
+  let todayCacheDenominator = 0;
   let sonnetWeekTokens = 0;
 
   const todMap: Record<TimeOfDayBucket['period'], TimeOfDayBucket> = {
@@ -213,10 +229,10 @@ export function computeUsage(
   };
 
   const addToTimeline = (timestampMs: number, tokens: number, costUSD: number) => {
-    if (timestampMs < timelineStart) return;
-    const weeksAgo = Math.floor((now - timestampMs) / weekMs);
+    const rowWeekStart = getWeekStart(timestampMs).getTime();
+    if (rowWeekStart < timelineStart || rowWeekStart > currentWeekStart) return;
+    const weeksAgo = Math.round((currentWeekStart - rowWeekStart) / weekMs);
     const weekIndex = 19 - weeksAgo;
-    const weekStartMs = getWeekStart().getTime() - weeksAgo * weekMs;
     const current = timelineMap.get(weekIndex);
     if (current) {
       current.tokens += tokens;
@@ -224,7 +240,7 @@ export function computeUsage(
     } else {
       timelineMap.set(weekIndex, {
         weekIndex,
-        weekLabel: weekLabelFromStart(weekStartMs),
+        weekLabel: weekLabelFromStart(rowWeekStart),
         tokens,
         costUSD,
       });
@@ -291,6 +307,9 @@ export function computeUsage(
         todayInputTokens += entry.inputTokens;
         todayOutputTokens += entry.outputTokens;
         todayCacheTokens += entry.cacheReadTokens + entry.cacheCreationTokens;
+        todayCacheReadTokens += entry.cacheReadTokens;
+        todayCacheSavingsUSD += entry.cacheSavingsUSD;
+        todayCacheDenominator += cacheEfficiencyDenominator(entry.provider, entry);
       }
 
       if (entry.provider === 'claude') {
@@ -328,20 +347,19 @@ export function computeUsage(
     const historical = Object.values(summary.historicalRollup.modelTotals).length > 0 ? summary.historicalRollup.aggregate : null;
     let total = sum;
     if (historical) {
-      total += summary.provider === 'codex'
-        ? historical.inputTokens + historical.cacheReadTokens
-        : historical.cacheReadTokens + historical.cacheCreationTokens;
+      total += cacheEfficiencyDenominator(summary.provider, historical);
     }
     for (const entry of summary.recentEntries) {
-      total += entry.provider === 'codex'
-        ? entry.inputTokens + entry.cacheReadTokens
-        : entry.cacheReadTokens + entry.cacheCreationTokens;
+      total += cacheEfficiencyDenominator(entry.provider, entry);
     }
     return total;
   }, 0);
 
   const allTimeAvgCacheEfficiency = allTimeCacheDenominator > 0
     ? (allTime.cacheReadTokens / allTimeCacheDenominator) * 100
+    : 0;
+  const todayCacheEfficiency = todayCacheDenominator > 0
+    ? (todayCacheReadTokens / todayCacheDenominator) * 100
     : 0;
 
   return {
@@ -360,6 +378,8 @@ export function computeUsage(
     todayInputTokens,
     todayOutputTokens,
     todayCacheTokens,
+    todayCacheSavingsUSD,
+    todayCacheEfficiency,
     allTimeRequestCount: allTime.requestCount,
     allTimeCost: allTime.costUSD,
     allTimeCacheTokens: allTime.cacheReadTokens + allTime.cacheCreationTokens,

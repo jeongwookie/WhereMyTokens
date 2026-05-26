@@ -46,12 +46,18 @@ interface HealthItem {
   title: string;
 }
 
-function formatRefreshLabel(lastUpdated: number): string {
+function formatRefreshAge(lastUpdated: number): string {
   if (!lastUpdated) return 'refresh';
   const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
   if (elapsed < 60) return 'now';
   if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
   return `${Math.floor(elapsed / 3600)}h`;
+}
+
+function formatRefreshLabel(lastUpdated: number, stateFreshness: AppState['stateFreshness']): string {
+  const age = formatRefreshAge(lastUpdated);
+  if (stateFreshness === 'restored' && lastUpdated) return `last run · ${age}`;
+  return age;
 }
 
 function formatPct(pct: number | null): string {
@@ -387,17 +393,17 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
 
 export default function CompactWidgetView({ state, onRefresh }: Props) {
   const C = useTheme();
-  const [refreshLabel, setRefreshLabel] = useState(() => formatRefreshLabel(state.lastUpdated));
+  const [refreshLabel, setRefreshLabel] = useState(() => formatRefreshLabel(state.lastUpdated, state.stateFreshness));
   const [refreshing, setRefreshing] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const dragSeqRef = useRef(0);
   const movedRef = useRef(false);
 
   useEffect(() => {
-    setRefreshLabel(formatRefreshLabel(state.lastUpdated));
-    const timer = window.setInterval(() => setRefreshLabel(formatRefreshLabel(state.lastUpdated)), 30_000);
+    setRefreshLabel(formatRefreshLabel(state.lastUpdated, state.stateFreshness));
+    const timer = window.setInterval(() => setRefreshLabel(formatRefreshLabel(state.lastUpdated, state.stateFreshness)), 30_000);
     return () => window.clearInterval(timer);
-  }, [state.lastUpdated]);
+  }, [state.lastUpdated, state.stateFreshness]);
 
   const agents = useMemo<WidgetAgent[]>(() => {
     const provider = state.settings.provider ?? 'both';

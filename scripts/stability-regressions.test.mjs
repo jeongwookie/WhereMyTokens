@@ -998,6 +998,8 @@ test('persisted summary cache rejects malformed nested rollups', () => {
 
 test('startup recovery and persisted summary cache guards remain in source', () => {
   const appSource = fs.readFileSync(path.resolve('src', 'renderer', 'App.tsx'), 'utf8');
+  const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const startupSnapshotSource = fs.readFileSync(path.resolve('src', 'main', 'startupStateSnapshot.ts'), 'utf8');
   const cacheSource = fs.readFileSync(path.resolve('src', 'main', 'jsonlCache.ts'), 'utf8');
   const parserSource = fs.readFileSync(path.resolve('src', 'main', 'jsonlParser.ts'), 'utf8');
 
@@ -1008,6 +1010,10 @@ test('startup recovery and persisted summary cache guards remain in source', () 
   assert.match(cacheSource, /pendingText: undefined/);
   assert.match(cacheSource, /version: PERSISTED_SCHEMA_VERSION/);
   assert.match(parserSource, /pendingBytes/);
+  assert.match(stateSource, /private startupFreshComplete = false/);
+  assert.match(stateSource, /const initialRefreshDone = this\.startupFreshComplete/);
+  assert.match(startupSnapshotSource, /stateFreshness: 'restored'/);
+  assert.match(stateSource, /stateFreshness: 'fresh'/);
 });
 
 test('session discovery keeps recent-active scope and tracked session hints in source', () => {
@@ -1192,13 +1198,13 @@ test('popup show starts with recent watcher and promotes wide watcher later', ()
   assert.match(promotionBody, /this\.scheduleForegroundRefresh\(\)/);
 });
 
-test('foreground refresh uses a scan budget while force refresh remains full', () => {
+test('foreground and manual refresh use budgeted ledger-backed history scans', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const scheduleStart = source.indexOf('  private scheduleForegroundRefresh');
   const scheduleEnd = source.indexOf('  private scheduleWideWatcherPromotion', scheduleStart);
   const scheduleBody = source.slice(scheduleStart, scheduleEnd);
   const forceStart = source.indexOf('  async forceRefresh');
-  const forceEnd = source.indexOf('  private startTimers', forceStart);
+  const forceEnd = source.indexOf('  async rebuildUsageLedger', forceStart);
   const forceBody = source.slice(forceStart, forceEnd);
   const heavyStart = source.indexOf('  private async heavyRefresh');
   const heavyEnd = source.indexOf('  private buildStartupPriorityFiles', heavyStart);
@@ -1212,17 +1218,22 @@ test('foreground refresh uses a scan budget while force refresh remains full', (
   assert.match(scheduleBody, /this\.requestRefresh\(\{/);
   assert.match(scheduleBody, /mode: 'heavy'/);
   assert.match(scheduleBody, /reason: 'foreground'/);
-  assert.match(scheduleBody, /scanBudgetMs: StateManager\.FOREGROUND_SCAN_BUDGET_MS/);
+  assert.match(scheduleBody, /scanBudgetMs = StateManager\.FOREGROUND_SCAN_BUDGET_MS/);
+  assert.match(scheduleBody, /scanBudgetMs,/);
   assert.match(source, /FOREGROUND_WARMUP_DELAY_MS = 3_000/);
   assert.match(heavyBody, /scanBudgetMs: number \| null = null/);
   assert.match(heavyBody, /allowHiddenFullScan = false/);
   assert.match(heavyBody, /!allowHiddenFullScan && initialRefreshDone && !this\.uiVisible/);
   assert.match(heavyBody, /const effectiveScanBudgetMs = scanBudgetMs \?\? /);
-  assert.match(heavyBody, /const partialHistoryScan = effectiveScanBudgetMs !== null && loaded\.partial/);
+  assert.match(heavyBody, /const ledgerRefresh = await this\.refreshUsageLedgerFromDiscoveredSources\(/);
+  assert.match(heavyBody, /const summaryForce = force && hasExcludedProjects/);
+  assert.match(heavyBody, /const summaryIncludeFullHistory = includeFullHistory && hasExcludedProjects/);
+  assert.match(heavyBody, /this\.loadProviderSummaries\(summaryForce, effectiveScanBudgetMs, priorityFiles, summaryIncludeFullHistory\)/);
+  assert.match(heavyBody, /const partialHistoryScan = effectiveScanBudgetMs !== null && \(ledgerRefresh\.partial \|\| \(hasExcludedProjects && loaded\.partial\)\)/);
   assert.match(heavyBody, /const nextSummaries = partialHistoryScan && initialRefreshDone/);
   assert.match(heavyBody, /new Map\(\[\.\.\.this\.summaries, \.\.\.loaded\.summaries\]\)/);
   assert.match(heavyBody, /this\.mergeCodexRateLimits\(this\.codexRateLimits, loaded\.codexRateLimits \?\? undefined\)/);
-  assert.match(heavyBody, /const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded\.partial/);
+  assert.match(heavyBody, /const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && partialHistoryScan/);
   assert.match(heavyBody, /this\.scheduleHistoryWarmup\(/);
   assert.match(heavyBody, /showHistoryWarmupBanner \? StateManager\.STARTUP_WARMUP_DELAY_MS : StateManager\.FOREGROUND_WARMUP_DELAY_MS/);
   assert.match(heavyBody, /true,\s*\)/);
@@ -1234,6 +1245,8 @@ test('foreground refresh uses a scan budget while force refresh remains full', (
   assert.match(heavyBody, /historyWarmupPending: keepHistoryWarmupBanner/);
   assert.match(heavyBody, /historyWarmupStartsAt: keepHistoryWarmupBanner \? historyWarmupStartsAt : null/);
   assert.doesNotMatch(heavyBody, /historyWarmupPending: partialHistoryScan/);
-  assert.match(forceBody, /await this\.requestRefresh\(\{ mode: 'heavy', reason: 'manual', force: true \}\)/);
-  assert.doesNotMatch(forceBody, /FOREGROUND_SCAN_BUDGET_MS/);
+  assert.match(forceBody, /reason: 'manual'/);
+  assert.match(forceBody, /includeFullHistory: true/);
+  assert.match(forceBody, /scanBudgetMs: StateManager\.FOREGROUND_SCAN_BUDGET_MS/);
+  assert.doesNotMatch(forceBody, /force: true/);
 });

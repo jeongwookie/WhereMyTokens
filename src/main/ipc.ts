@@ -11,7 +11,7 @@ import {
   setupIntegration,
 } from './integration';
 
-const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'sessions', 'activity', 'modelUsage'];
+const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'];
 const MAIN_SECTION_IDS = new Set(DEFAULT_MAIN_SECTION_ORDER);
 
 export interface CompactWidgetBounds {
@@ -34,6 +34,7 @@ export interface AppSettings {
   enableAlerts: boolean;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   mainSectionOrder: string[];
+  hiddenMainSections: string[];
   hiddenProjects: string[];
   excludedProjects: string[];
   compactWidgetEnabled: boolean;
@@ -93,6 +94,21 @@ function normalizeMainSectionOrder(value: unknown): string[] | null {
   return normalized;
 }
 
+function normalizeHiddenMainSections(value: unknown, order: string[] = DEFAULT_MAIN_SECTION_ORDER): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const ordered = normalizeMainSectionOrder(order) ?? DEFAULT_MAIN_SECTION_ORDER;
+  const valid = new Set<string>(ordered);
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const id of value) {
+    if (typeof id !== 'string' || !valid.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    normalized.push(id);
+  }
+  if (normalized.length >= ordered.length) return [];
+  return normalized;
+}
+
 function normalizeCompactWidgetBounds(value: unknown): CompactWidgetBounds | null | undefined {
   if (value == null) return null;
   const record = asRecord(value);
@@ -122,6 +138,8 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (record.trayDisplay === 'none' || record.trayDisplay === 'h5pct' || record.trayDisplay === 'tokens' || record.trayDisplay === 'cost') next.trayDisplay = record.trayDisplay;
   const mainSectionOrder = normalizeMainSectionOrder(record.mainSectionOrder);
   if (mainSectionOrder) next.mainSectionOrder = mainSectionOrder;
+  const hiddenMainSections = normalizeHiddenMainSections(record.hiddenMainSections, mainSectionOrder ?? DEFAULT_MAIN_SECTION_ORDER);
+  if (hiddenMainSections) next.hiddenMainSections = hiddenMainSections;
   const hiddenProjects = stringArray(record.hiddenProjects);
   if (hiddenProjects) next.hiddenProjects = hiddenProjects;
   const excludedProjects = stringArray(record.excludedProjects);
@@ -143,6 +161,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     ...DEFAULT_SETTINGS,
     ...sanitized,
     mainSectionOrder: sanitized.mainSectionOrder ?? DEFAULT_SETTINGS.mainSectionOrder,
+    hiddenMainSections: sanitized.hiddenMainSections ?? DEFAULT_SETTINGS.hiddenMainSections,
     hiddenProjects: sanitized.hiddenProjects ?? DEFAULT_SETTINGS.hiddenProjects,
     excludedProjects: sanitized.excludedProjects ?? DEFAULT_SETTINGS.excludedProjects,
   };
@@ -160,6 +179,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableAlerts: true,
   trayDisplay: 'h5pct',
   mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
+  hiddenMainSections: [],
   hiddenProjects: [],
   excludedProjects: [],
   compactWidgetEnabled: false,
@@ -181,6 +201,7 @@ export function registerIpcHandlers(
   getState: () => AppState,
   forceRefresh: () => Promise<void>,
   applySettingsChange: () => void,
+  rebuildUsageLedger?: () => Promise<void>,
   getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>,
   windowActions?: {
     openDashboard: () => void;
@@ -190,6 +211,10 @@ export function registerIpcHandlers(
 ) {
   ipcMain.handle('state:get', () => getState());
   ipcMain.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
+  ipcMain.handle('ledger:rebuild', async () => {
+    if (rebuildUsageLedger) await rebuildUsageLedger();
+    return getState();
+  });
 
   ipcMain.handle('settings:get', () => normalizeSettings(store.store));
 

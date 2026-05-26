@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import path from 'path';
 import Store from 'electron-store';
+import { getGitOutputLedgerStore } from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
 import { isStaleGitStats, normalizeGitCwdKey, normalizeGitPathKey, preferGitStats } from './gitStatsKeys';
 
@@ -98,6 +99,8 @@ function saveStats(cwd: string, stats: GitStats): void {
     const current = store.get('cache') ?? {};
     const preferred = preferGitStats(current[key], normalizedStats);
     store.set('cache', { ...current, [key]: preferred ?? normalizedStats });
+    const repoKey = normalizedStats.gitCommonDir ?? normalizedStats.toplevel ?? key;
+    getGitOutputLedgerStore().mergeRepoDays(repoKey, normalizedStats.dailyAll);
   } catch { /* 저장 실패는 무시 */ }
 }
 function loadStats(cwd: string): GitStats | null {

@@ -110,6 +110,8 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ### Analytics & Activity
 - **Header stats** - today/all-time toggle: cost, API calls, sessions, cache efficiency, savings, compact Claude/Codex metadata, and provider health/fallback status. In `all`, session count comes from full usage history, not just currently visible rows
 - **Startup-friendly history sync** — current sessions and recent usage appear first; older history continues through a budgeted refresh scheduler with a `Partial History` banner so hotkeys and popup interactions stay responsive
+- **Persistent usage ledger** — rolls local JSONL usage into an aggregate ledger so older totals survive JSONL cache eviction and refresh faster after warmup
+- **Trend card** — daily, weekly, or monthly cost/token trend overlaid with git net-line output
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
 - **Model breakdown** — top per-model token and cost totals with gradient bars
@@ -129,6 +131,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Cost display** — USD or KRW with configurable exchange rate
 - **Floating usage widget** — compact Quota Pace window with always-on-top support; show/hide it from the main header, tray menu, Settings, or widget controls. Waiting animations are off by default and can be re-enabled in Settings
 - **Tray label** — show usage %, token count, or cost directly in the taskbar
+- **Dashboard layout** — reorder cards and hide cards you do not need
 - **Project management** — hide or fully exclude projects from tracking
 - **Start with Windows** — optional auto-launch at login
 
@@ -148,6 +151,8 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
 - **Tray label** — choose what to display in the taskbar
+- **Main Layout** — reorder dashboard cards or hide optional cards
+- **Data -> Rebuild ledger** — reset and replay the aggregate usage ledger from local history if you need to repair totals
 - **Floating usage widget** — enable the compact Quota Pace window; use the main header toggle or tray menu to show or hide it later
 
 ---
@@ -170,6 +175,8 @@ WhereMyTokens is a local-first Electron tray app. The renderer never reads local
 | Claude usage limits | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | Yes, direct to Anthropic |
 | Codex sessions | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Main-process parser/cache, then renderer state | No |
 | Codex usage limits | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint | Yes, direct to OpenAI/ChatGPT |
+| Aggregate usage ledger | Local JSONL usage summaries | `%APPDATA%\WhereMyTokens\usage-ledger.json` | No |
+| Git output ledger | Local git scans | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | No |
 
 Rate-limit precedence is provider-specific: Claude uses the Anthropic API first, then the `statusLine` bridge as fallback; Codex uses live usage first, then local `rate_limits` events from JSONL logs; both providers keep the last known value only until it becomes stale.
 
@@ -189,6 +196,8 @@ WhereMyTokens reads local files and, when enabled, makes direct provider usage r
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | Codex session-cleanup archives included in all-time usage totals. |
 | `~/.codex/auth.json` | ChatGPT OAuth material used only for Codex usage snapshots; it is not logged or copied into app storage. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Local bridge snapshot written by the Claude Code `statusLine` bridge. |
+| `%APPDATA%\WhereMyTokens\usage-ledger.json` | Aggregated local usage ledger for long-range totals, trend buckets, and heatmaps. |
+| `%APPDATA%\WhereMyTokens\git-output-ledger.json` | Aggregated daily git output snapshots used by Code Output and Trend. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | App settings, local caches, notification history, and bridge state. |
 
 Credential handling is intentionally narrow: WhereMyTokens reads provider credentials from the official local CLI files, does not ask you to paste API keys, does not store a separate credential backup, and redacts credential details from status output. If Claude's local access token expires, the app may refresh it through Anthropic and atomically write the updated credentials back to `~/.claude/.credentials.json`.

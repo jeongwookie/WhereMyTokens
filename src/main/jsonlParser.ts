@@ -13,6 +13,7 @@ import {
   emptyHistoricalRollup,
   emptySessionSnapshot,
 } from './jsonlTypes';
+import { extractClaudeUsageLine, extractCodexUsageLine } from './jsonlUsageExtractor';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_MS = 8 * DAY_MS;
@@ -476,41 +477,18 @@ function processClaudeLine(summary: FileUsageSummary, line: string, now: number)
 
   if (obj.type !== 'assistant') return;
 
-  const msgUsage = (obj.message as Record<string, unknown>)?.usage as Record<string, number> | undefined;
-  const msgModel = (obj.message as Record<string, unknown>)?.model as string | undefined;
-  const reqId = (obj.message as Record<string, unknown>)?.id as string | undefined;
-  const topUsage = obj.usage as Record<string, number> | undefined;
-  const topModel = obj.model as string | undefined;
-
-  const usage = msgUsage ?? topUsage;
-  const rawModel = msgModel ?? topModel ?? '';
-  const timestamp = obj.timestamp as string | undefined;
-  if (!usage || !rawModel) return;
-
-  const inp = usage.input_tokens ?? 0;
-  const out = usage.output_tokens ?? 0;
-  const cw = usage.cache_creation_input_tokens ?? 0;
-  const cr = usage.cache_read_input_tokens ?? usage.cached_prompt_tokens ?? 0;
-  if (inp + out + cw + cr === 0) return;
+  const extracted = extractClaudeUsageLine(line, now);
+  if (!extracted) return;
+  const nextEntry = extracted.entry;
+  const rawModel = extracted.rawModel;
+  const inp = nextEntry.inputTokens;
+  const out = nextEntry.outputTokens;
+  const cw = nextEntry.cacheCreationTokens;
+  const cr = nextEntry.cacheReadTokens;
 
   updateClaudeSnapshot(summary, rawModel, inp, cw, cr);
 
-  const requestId = reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`;
-  const timestampMs = timestamp ? new Date(timestamp).getTime() : 0;
-  const nextEntry: CompactRecentEntry = {
-    requestId,
-    timestampMs,
-    model: normalizeModel(rawModel),
-    provider: getProvider(rawModel),
-    inputTokens: inp,
-    outputTokens: out,
-    cacheCreationTokens: cw,
-    cacheReadTokens: cr,
-    costUSD: calcCost(rawModel, inp, out, cw, cr),
-    cacheSavingsUSD: calcCacheSavings(rawModel, cr),
-  };
-
-  const previous = summary.requestIndex?.[requestId];
+  const previous = summary.requestIndex?.[nextEntry.requestId];
   if (previous) {
     if (out > previous.outputTokens) replaceClaudeEntry(summary, previous, nextEntry);
     return;
@@ -604,34 +582,18 @@ function processCodexLine(summary: FileUsageSummary, filePath: string, line: str
   const nextRateLimits = parseCodexRateLimits(payload, observedAt);
 
   const info = payload.info as Record<string, unknown> | null | undefined;
-  const usage = info?.last_token_usage as Record<string, unknown> | undefined;
-  if (!usage) return;
+  const extracted = extractCodexUsageLine(filePath, line, now, summary.sessionSnapshot.rawModel);
+  if (!extracted) return;
+  const entry = extracted.entry;
 
-  const rawInput = asNumber(usage.input_tokens);
-  const cachedInput = Math.min(rawInput, asNumber(usage.cached_input_tokens));
-  const inp = Math.max(0, rawInput - cachedInput);
-  const out = asNumber(usage.output_tokens);
-  const cr = cachedInput;
-  if (inp + out + cr === 0) return;
-
-  const rawModel = summary.sessionSnapshot.rawModel || inferCodexModel(payload, info, usage);
-  if (!rawModel) return;
-
-  updateCodexSnapshot(summary, rawModel, inp, cr, asNumber(info?.model_context_window), nextRateLimits);
-
-  const entry: CompactRecentEntry = {
-    requestId: codexEntryId(filePath, line, timestamp),
-    timestampMs: timestamp ? new Date(timestamp).getTime() : 0,
-    model: normalizeModel(rawModel),
-    provider: 'codex',
-    inputTokens: inp,
-    outputTokens: out,
-    cacheCreationTokens: 0,
-    cacheReadTokens: cr,
-    costUSD: calcCost(rawModel, inp, out, 0, cr),
-    cacheSavingsUSD: calcCacheSavings(rawModel, cr),
-  };
-
+  updateCodexSnapshot(
+    summary,
+    extracted.rawModel,
+    entry.inputTokens,
+    entry.cacheReadTokens,
+    extracted.contextMax ?? asNumber(info?.model_context_window),
+    nextRateLimits,
+  );
   addSummaryEntry(summary, entry, now);
 }
 

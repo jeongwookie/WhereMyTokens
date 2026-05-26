@@ -8,7 +8,7 @@ import CompactWidgetView from './views/CompactWidgetView';
 import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars, Theme } from './theme';
 import { ThemeProvider } from './ThemeContext';
-import { DEFAULT_MAIN_SECTION_ORDER, normalizeMainSectionOrder } from './mainSections';
+import { DEFAULT_MAIN_SECTION_ORDER, normalizeHiddenMainSections, normalizeMainSectionOrder } from './mainSections';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
@@ -21,6 +21,7 @@ const EMPTY_CODE_OUTPUT = {
   repoCount: 0,
   scopeLabel: 'Current session repos',
 };
+const EMPTY_USAGE_TREND = { daily: [], weekly: [], monthly: [] };
 const BOOT_FALLBACK_DELAY_MS = 12_000;
 
 const DEFAULT_STATE: AppState = {
@@ -31,6 +32,7 @@ const DEFAULT_STATE: AppState = {
     models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
     todayTokens: 0, todayCost: 0, todayRequestCount: 0,
     todayInputTokens: 0, todayOutputTokens: 0, todayCacheTokens: 0,
+    todayCacheSavingsUSD: 0, todayCacheEfficiency: 0,
     allTimeRequestCount: 0, allTimeCost: 0, allTimeCacheTokens: 0,
     allTimeInputTokens: 0, allTimeOutputTokens: 0,
     allTimeSavedUSD: 0, allTimeAvgCacheEfficiency: 0,
@@ -38,6 +40,7 @@ const DEFAULT_STATE: AppState = {
     burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
     todBuckets: [],
   },
+  usageTrend: EMPTY_USAGE_TREND,
   limits: {
     h5: { pct:0, resetMs:null }, week: { pct:0, resetMs:null }, so: { pct:0, resetMs:null },
     codexH5: { pct:0, resetMs:null }, codexWeek: { pct:0, resetMs:null },
@@ -51,14 +54,17 @@ const DEFAULT_STATE: AppState = {
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     trayDisplay: 'h5pct', theme: 'auto',
     mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
+    hiddenMainSections: [],
     hiddenProjects: [], excludedProjects: [],
     compactWidgetEnabled: false, compactWidgetWaitingAnimationEnabled: false, compactWidgetBounds: null,
   },
   autoLimits: null,
   codexAccount: { serviceTier: null },
+  stateFreshness: 'empty',
   initialRefreshComplete: false,
   historyWarmupPending: false,
   historyWarmupStartsAt: null,
+  usageLedgerNeedsRebuild: false,
   lastUpdated: 0,
   apiConnected: false,
   apiStatusLabel: undefined,
@@ -113,6 +119,11 @@ function normalizeExtraUsage(extraUsage: AppState['extraUsage'] | null | undefin
   };
 }
 
+function normalizeStateFreshness(value: unknown, initialRefreshComplete: boolean): AppState['stateFreshness'] {
+  if (value === 'empty' || value === 'restored' || value === 'fresh') return value;
+  return initialRefreshComplete ? 'fresh' : 'empty';
+}
+
 function normalizeSession(session: Partial<AppState['sessions'][number]> | null | undefined): AppState['sessions'][number] {
   const state = session?.state;
   const normalizedState = state === 'active' || state === 'waiting' || state === 'idle' || state === 'compacting'
@@ -158,9 +169,11 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
 }
 
 function normalizeState(next: AppState): AppState {
+  const mainSectionOrder = normalizeMainSectionOrder(next.settings?.mainSectionOrder);
   return {
     ...DEFAULT_STATE,
     ...next,
+    stateFreshness: normalizeStateFreshness(next.stateFreshness, next.initialRefreshComplete === true),
     sessions: arrayOrEmpty(next.sessions).map(session => normalizeSession(session)),
     usage: {
       ...DEFAULT_STATE.usage,
@@ -177,6 +190,11 @@ function normalizeState(next: AppState): AppState {
       todBuckets: arrayOrEmpty(next.usage?.todBuckets),
       burnRate: { ...DEFAULT_STATE.usage.burnRate, ...next.usage?.burnRate },
     },
+    usageTrend: {
+      daily: arrayOrEmpty(next.usageTrend?.daily),
+      weekly: arrayOrEmpty(next.usageTrend?.weekly),
+      monthly: arrayOrEmpty(next.usageTrend?.monthly),
+    },
     limits: {
       h5: normalizeLimitWindow(next.limits?.h5),
       week: normalizeLimitWindow(next.limits?.week),
@@ -188,7 +206,8 @@ function normalizeState(next: AppState): AppState {
       ...DEFAULT_STATE.settings,
       ...next.settings,
       alertThresholds: arrayOrEmpty(next.settings?.alertThresholds),
-      mainSectionOrder: normalizeMainSectionOrder(next.settings?.mainSectionOrder),
+      mainSectionOrder,
+      hiddenMainSections: normalizeHiddenMainSections(next.settings?.hiddenMainSections, mainSectionOrder),
       hiddenProjects: arrayOrEmpty(next.settings?.hiddenProjects),
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
       compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,
@@ -204,6 +223,7 @@ function normalizeState(next: AppState): AppState {
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt
       : null,
+    usageLedgerNeedsRebuild: next.usageLedgerNeedsRebuild === true,
     apiStatusLabel: typeof next.apiStatusLabel === 'string' ? next.apiStatusLabel : undefined,
     apiError: typeof next.apiError === 'string' ? next.apiError : undefined,
     extraUsage: normalizeExtraUsage(next.extraUsage),

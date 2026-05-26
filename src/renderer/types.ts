@@ -130,6 +130,8 @@ export interface UsageData {
   todayInputTokens: number;
   todayOutputTokens: number;
   todayCacheTokens: number;
+  todayCacheSavingsUSD: number;
+  todayCacheEfficiency: number;
   allTimeRequestCount: number;
   allTimeCost: number;
   allTimeCacheTokens: number;
@@ -141,6 +143,23 @@ export interface UsageData {
   burnRate: BurnRate;
   todBuckets: TimeOfDayBucket[];
 }
+
+export interface UsageTrendPoint {
+  date?: string;
+  weekStart?: string;
+  month?: string;
+  tokens: number;
+  costUSD: number;
+  requestCount: number;
+}
+
+export interface UsageTrendData {
+  daily: UsageTrendPoint[];
+  weekly: UsageTrendPoint[];
+  monthly: UsageTrendPoint[];
+}
+
+export type StateFreshness = 'empty' | 'restored' | 'fresh';
 
 export interface UsageLimits {
   h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
@@ -162,6 +181,7 @@ export interface AppSettings {
   enableAlerts: boolean;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   mainSectionOrder: MainSectionId[];
+  hiddenMainSections: MainSectionId[];
   hiddenProjects: string[];
   excludedProjects: string[];
   compactWidgetEnabled: boolean;
@@ -205,13 +225,16 @@ export interface CodexAccountState {
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
+  usageTrend: UsageTrendData;
   limits: UsageLimits;
   settings: AppSettings;
   autoLimits: AutoLimits | null;
   codexAccount: CodexAccountState;
+  stateFreshness: StateFreshness;
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
+  usageLedgerNeedsRebuild: boolean;
   lastUpdated: number;
   apiConnected: boolean;
   apiStatusLabel?: string;
@@ -286,6 +309,7 @@ declare global {
     wmt: {
       getState:           () => Promise<AppState>;
       forceRefresh:       () => Promise<AppState>;
+      rebuildLedger:      () => Promise<AppState>;
       getSettings:        () => Promise<AppSettings>;
       setSettings:        (p: Partial<AppSettings>) => Promise<AppSettings>;
       getNotifications:   () => Promise<HistoryItem[]>;

@@ -105,6 +105,40 @@ test('Claude duplicate request updates output delta without double counting', as
   assert.equal(summary.recentEntries[0].outputTokens, 25);
 });
 
+test('ledger extractor emits compact usage entries for Claude and Codex lines', async () => {
+  const extractor = await import('../dist/main/jsonlUsageExtractor.js');
+  const claudeLine = claudeAssistantLine({
+    id: 'extract-claude',
+    model: 'claude-sonnet-4',
+    input: 11,
+    output: 22,
+    cacheCreation: 3,
+    cacheRead: 4,
+  });
+  const claude = extractor.extractClaudeUsageLine(claudeLine, Date.now());
+  assert.equal(claude.entry.requestId, 'extract-claude');
+  assert.equal(claude.entry.provider, 'claude');
+  assert.equal(claude.entry.inputTokens, 11);
+  assert.equal(claude.entry.outputTokens, 22);
+
+  const codexLine = JSON.stringify({
+    type: 'response_item',
+    timestamp: recentIso(),
+    payload: {
+      type: 'usage',
+      model: 'gpt-5-codex',
+      input_tokens: 7,
+      output_tokens: 8,
+      cached_input_tokens: 9,
+    },
+  });
+  const codex = extractor.extractCodexUsageLine('C:/tmp/session.jsonl', codexLine, Date.now());
+  assert.equal(codex.entry.provider, 'codex');
+  assert.equal(codex.entry.inputTokens, 7);
+  assert.equal(codex.entry.outputTokens, 8);
+  assert.equal(codex.entry.cacheReadTokens, 9);
+});
+
 test('Codex rate-limit-only scan reads account windows without usage data', async () => {
   const dir = tempDir();
   const filePath = path.join(dir, 'codex-limits.jsonl');

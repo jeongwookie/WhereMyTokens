@@ -637,6 +637,7 @@ app.whenReady().then(() => {
       manager.applySettingsChange();
       applyRuntimeSettings();
     },
+    () => manager.rebuildUsageLedger(),
     () => manager.getDebugMemSnapshot('ipc'),
     {
       openDashboard: () => showPopup('main'),
