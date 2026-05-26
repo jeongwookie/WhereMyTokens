@@ -195,3 +195,19 @@ test('state manager skips persisted usage ledger writes when sources are unchang
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('budgeted full-history ledger scans do not mark the import complete when truncated', async () => {
+  const usageLedgerStore = new CountingUsageLedgerStore(emptyUsageLedgerSnapshot());
+  const manager = new StateManager(makeStore(), () => {});
+  manager.usageLedgerStore = usageLedgerStore;
+  manager.ledgerSourceFiles = () => ({
+    files: [{ filePath: path.join(os.tmpdir(), 'unreached.jsonl'), provider: 'claude', priority: false }],
+    partial: false,
+  });
+
+  const result = await manager.refreshUsageLedgerFromDiscoveredSources(0, undefined, true);
+
+  assert.equal(result.partial, true);
+  assert.equal(result.scannedFiles, 0);
+  assert.equal(usageLedgerStore.snapshot.lastFullImportAt ?? 0, 0);
+});
