@@ -8,7 +8,7 @@ import CompactWidgetView from './views/CompactWidgetView';
 import RenderErrorBoundary from './components/RenderErrorBoundary';
 import { getTheme, applyThemeCssVars, Theme } from './theme';
 import { ThemeProvider } from './ThemeContext';
-import { DEFAULT_MAIN_SECTION_ORDER, normalizeMainSectionOrder } from './mainSections';
+import { DEFAULT_MAIN_SECTION_ORDER, normalizeHiddenMainSections, normalizeMainSectionOrder } from './mainSections';
 
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
@@ -53,6 +53,7 @@ const DEFAULT_STATE: AppState = {
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     trayDisplay: 'h5pct', theme: 'auto',
     mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
+    hiddenMainSections: [],
     hiddenProjects: [], excludedProjects: [],
     compactWidgetEnabled: false, compactWidgetWaitingAnimationEnabled: false, compactWidgetBounds: null,
   },
@@ -160,6 +161,7 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
 }
 
 function normalizeState(next: AppState): AppState {
+  const mainSectionOrder = normalizeMainSectionOrder(next.settings?.mainSectionOrder);
   return {
     ...DEFAULT_STATE,
     ...next,
@@ -195,7 +197,8 @@ function normalizeState(next: AppState): AppState {
       ...DEFAULT_STATE.settings,
       ...next.settings,
       alertThresholds: arrayOrEmpty(next.settings?.alertThresholds),
-      mainSectionOrder: normalizeMainSectionOrder(next.settings?.mainSectionOrder),
+      mainSectionOrder,
+      hiddenMainSections: normalizeHiddenMainSections(next.settings?.hiddenMainSections, mainSectionOrder),
       hiddenProjects: arrayOrEmpty(next.settings?.hiddenProjects),
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
       compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,

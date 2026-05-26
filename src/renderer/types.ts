@@ -177,6 +177,7 @@ export interface AppSettings {
   enableAlerts: boolean;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   mainSectionOrder: MainSectionId[];
+  hiddenMainSections: MainSectionId[];
   hiddenProjects: string[];
   excludedProjects: string[];
   compactWidgetEnabled: boolean;
@@ -302,6 +303,7 @@ declare global {
     wmt: {
       getState:           () => Promise<AppState>;
       forceRefresh:       () => Promise<AppState>;
+      rebuildLedger:      () => Promise<AppState>;
       getSettings:        () => Promise<AppSettings>;
       setSettings:        (p: Partial<AppSettings>) => Promise<AppSettings>;
       getNotifications:   () => Promise<HistoryItem[]>;

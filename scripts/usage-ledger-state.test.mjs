@@ -12,6 +12,8 @@ test('state manager owns usage ledger import and query paths', () => {
 
 test('manual refresh does not clear persisted usage ledger', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
-  const forceRefresh = src.slice(src.indexOf('async forceRefresh'), src.indexOf('private startTimers'));
+  const forceRefreshMatch = src.match(/async forceRefresh\(\): Promise<void> \{([\s\S]*?)\n  \}/);
+  assert.ok(forceRefreshMatch);
+  const forceRefresh = forceRefreshMatch[1];
   assert.doesNotMatch(forceRefresh, /usageLedgerStore\.reset/);
 });

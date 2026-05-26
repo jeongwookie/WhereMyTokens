@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AppSettings, IntegrationStatus } from '../types';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
-import { DEFAULT_MAIN_SECTION_ORDER, MAIN_SECTION_LABELS, MainSectionId, normalizeMainSectionOrder } from '../mainSections';
+import { DEFAULT_MAIN_SECTION_ORDER, MAIN_SECTION_LABELS, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 
 interface Props { settings: AppSettings; onSave: (s: Partial<AppSettings>) => void; onBack: () => void; }
 
@@ -75,6 +75,7 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'enableAlerts',
   'trayDisplay',
   'mainSectionOrder',
+  'hiddenMainSections',
   'hiddenProjects',
   'excludedProjects',
   'compactWidgetEnabled',
@@ -83,11 +84,17 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
 ];
 
 function normalizeSettingsDraft(settings: AppSettings): AppSettings {
-  return { ...settings, mainSectionOrder: normalizeMainSectionOrder(settings.mainSectionOrder) };
+  const mainSectionOrder = normalizeMainSectionOrder(settings.mainSectionOrder);
+  return {
+    ...settings,
+    mainSectionOrder,
+    hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
+  };
 }
 
 function settingValue(settings: AppSettings, key: EditableSettingKey): unknown {
   if (key === 'mainSectionOrder') return normalizeMainSectionOrder(settings.mainSectionOrder);
+  if (key === 'hiddenMainSections') return normalizeHiddenMainSections(settings.hiddenMainSections, settings.mainSectionOrder);
   return settings[key];
 }
 
@@ -113,6 +120,8 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
   const [integrationMsg, setIntegrationMsg] = useState('');
+  const [rebuildingLedger, setRebuildingLedger] = useState(false);
+  const [ledgerMsg, setLedgerMsg] = useState('');
   const latestSettings = useMemo(() => normalizeSettingsDraft(settings), [settings]);
   const settingsToSave = useMemo(() => buildSettingsPatch(s, baseSettings, latestSettings), [s, baseSettings, latestSettings]);
 
@@ -168,6 +177,21 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
     setTimeout(() => setIntegrationMsg(''), 4000);
   }
 
+  async function handleRebuildLedger() {
+    if (rebuildingLedger) return;
+    setRebuildingLedger(true);
+    setLedgerMsg('Rebuilding...');
+    try {
+      await window.wmt.rebuildLedger();
+      setLedgerMsg('Rebuild complete.');
+    } catch (e) {
+      setLedgerMsg(`Failed: ${String(e)}`);
+    } finally {
+      setRebuildingLedger(false);
+      setTimeout(() => setLedgerMsg(''), 5000);
+    }
+  }
+
   function integrationLabel(status: IntegrationStatus | null): string {
     if (!status) return '';
     if (status.owner === 'wmt') return 'Connected';
@@ -217,7 +241,19 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
     setS({ ...s, mainSectionOrder: next });
   }
 
+  function toggleMainSectionHidden(id: MainSectionId) {
+    const order = normalizeMainSectionOrder(s.mainSectionOrder);
+    const hidden = normalizeHiddenMainSections(s.hiddenMainSections, order);
+    const isHidden = hidden.includes(id);
+    const visibleCount = order.length - hidden.length;
+    if (!isHidden && visibleCount <= 1) return;
+    const nextHidden = isHidden ? hidden.filter(hiddenId => hiddenId !== id) : [...hidden, id];
+    setS({ ...s, hiddenMainSections: normalizeHiddenMainSections(nextHidden, order) });
+  }
+
   const mainSectionOrder = normalizeMainSectionOrder(s.mainSectionOrder);
+  const hiddenMainSections = normalizeHiddenMainSections(s.hiddenMainSections, mainSectionOrder);
+  const visibleSectionCount = mainSectionOrder.length - hiddenMainSections.length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
@@ -357,6 +393,36 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           </div>
         </div>
 
+        <SectionHeader label="Data" />
+        <div style={row}>
+          <div>
+            <div style={labelStyle}>Usage ledger</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Replays local history into the aggregate usage ledger
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {ledgerMsg && <span style={{ fontSize: 10, color: C.textMuted }}>{ledgerMsg}</span>}
+            <button
+              type="button"
+              disabled={rebuildingLedger}
+              onClick={handleRebuildLedger}
+              style={{
+                background: rebuildingLedger ? C.bgRow : C.accent,
+                color: rebuildingLedger ? C.textMuted : '#fff',
+                border: `1px solid ${rebuildingLedger ? C.border : C.accent}`,
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 11,
+                cursor: rebuildingLedger ? 'wait' : 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Rebuild ledger
+            </button>
+          </div>
+        </div>
+
         <SectionHeader label="Currency" />
         <div style={row}>
           <span style={labelStyle}>Currency</span>
@@ -388,8 +454,28 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           <div style={{ display: 'grid', gap: 4 }}>
             {mainSectionOrder.map((id, index) => (
               <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 0' }}>
-                <span style={{ fontSize: 12, color: C.textDim, minWidth: 0 }}>{MAIN_SECTION_LABELS[id]}</span>
+                <span style={{ fontSize: 12, color: hiddenMainSections.includes(id) ? C.textMuted : C.textDim, minWidth: 0 }}>{MAIN_SECTION_LABELS[id]}</span>
                 <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    title={hiddenMainSections.includes(id) ? 'Show card' : 'Hide card'}
+                    disabled={!hiddenMainSections.includes(id) && visibleSectionCount <= 1}
+                    onClick={() => toggleMainSectionHidden(id)}
+                    style={{
+                      background: hiddenMainSections.includes(id) ? `${C.accent}22` : C.bgRow,
+                      border: `1px solid ${hiddenMainSections.includes(id) ? C.accent + '55' : C.border}`,
+                      color: hiddenMainSections.includes(id) ? C.accent : (!hiddenMainSections.includes(id) && visibleSectionCount <= 1 ? C.textMuted : C.textDim),
+                      opacity: !hiddenMainSections.includes(id) && visibleSectionCount <= 1 ? 0.45 : 1,
+                      cursor: !hiddenMainSections.includes(id) && visibleSectionCount <= 1 ? 'default' : 'pointer',
+                      borderRadius: 4,
+                      width: 42,
+                      height: 22,
+                      fontSize: 11,
+                      fontFamily: C.fontMono,
+                    }}
+                  >
+                    {hiddenMainSections.includes(id) ? 'Show' : 'Hide'}
+                  </button>
                   <button
                     type="button"
                     title="Move up"
@@ -432,13 +518,22 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setS({ ...s, mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER })}
-            style={{ marginTop: 6, background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
-          >
-            Reset order
-          </button>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+            <button
+              type="button"
+              onClick={() => setS({ ...s, mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER })}
+              style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
+            >
+              Reset order
+            </button>
+            <button
+              type="button"
+              onClick={() => setS({ ...s, hiddenMainSections: [] })}
+              style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
+            >
+              Show all
+            </button>
+          </div>
         </div>
 
         <SectionHeader label="Appearance" />

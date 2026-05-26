@@ -9,8 +9,9 @@ import ActivityChart from '../components/ActivityChart';
 import ModelBreakdown from '../components/ModelBreakdown';
 import ExtraUsageCard from '../components/ExtraUsageCard';
 import CodeOutputCard from '../components/CodeOutputCard';
+import TrendCard from '../components/TrendCard';
 import RenderErrorBoundary from '../components/RenderErrorBoundary';
-import { MainSectionId, normalizeMainSectionOrder } from '../mainSections';
+import { MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 import { hasLimitData, limitDataState, limitSourceDisplay } from '../limitDisplay';
 
 interface Props {
@@ -1131,6 +1132,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
     [sessions]
   );
   const mainSectionOrder = useMemo(() => normalizeMainSectionOrder(settings.mainSectionOrder), [settings.mainSectionOrder]);
+  const hiddenMainSections = useMemo(() => normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder), [mainSectionOrder, settings.hiddenMainSections]);
+  const visibleMainSections = useMemo(() => mainSectionOrder.filter(id => !hiddenMainSections.includes(id)), [hiddenMainSections, mainSectionOrder]);
 
   const handleScroll = useCallback(() => {
     const node = scrollRef.current;
@@ -1182,6 +1185,12 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
             <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
           </RenderErrorBoundary>
         );
+      case 'trend':
+        return (
+          <RenderErrorBoundary key={sectionId} label="Trend Card">
+            <TrendCard usageTrend={state.usageTrend} codeOutputStats={state.codeOutputStats} currency={currency} usdToKrw={usdToKrw} />
+          </RenderErrorBoundary>
+        );
       case 'sessions':
         return (
           <RenderErrorBoundary key={sectionId} label="Sessions Panel">
@@ -1203,7 +1212,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
       default:
         return null;
     }
-  }, [allTimeCost, currency, providerMode, sessions, settings, state.apiConnected, state.codeOutputLoading, state.codeOutputStats, state.extraUsage, state.historyWarmupPending, state.historyWarmupStartsAt, state.limits, usage, usdToKrw]);
+  }, [allTimeCost, currency, providerMode, sessions, settings, state.apiConnected, state.codeOutputLoading, state.codeOutputStats, state.extraUsage, state.historyWarmupPending, state.historyWarmupStartsAt, state.limits, state.usageTrend, usage, usdToKrw]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
@@ -1216,7 +1225,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
             <HistoryWarmupBanner historyWarmupStartsAt={state.historyWarmupStartsAt} />
           </RenderErrorBoundary>
         )}
-        {mainSectionOrder.map(renderMainSection)}
+        {visibleMainSections.map(renderMainSection)}
       </div>
       <RenderErrorBoundary label="Bottom Navigation">
         <BottomNav

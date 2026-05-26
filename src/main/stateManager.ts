@@ -12,6 +12,7 @@ import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGitStatsAsync, GitDailyStats, GitStats } from './gitStatsCollector';
+import { GitOutputLedgerStore, buildCodeOutputFromGitLedger } from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
@@ -340,6 +341,7 @@ export class StateManager {
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private dirtySessionFiles = new Set<string>();
   private usageLedgerStore = new UsageLedgerStore();
+  private gitOutputLedgerStore = new GitOutputLedgerStore();
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
   private foregroundRefreshTimer: NodeJS.Timeout | null = null;
@@ -928,6 +930,20 @@ export class StateManager {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
     await this.requestRefresh({ mode: 'heavy', reason: 'manual', force: true });
+  }
+
+  async rebuildUsageLedger(): Promise<void> {
+    this.clearHistoryWarmup();
+    this.clearGitWarmup();
+    this.usageLedgerStore.reset();
+    this.state = { ...this.state, usageTrend: emptyUsageTrendData(), historyWarmupPending: true };
+    this.onUpdate(this.state);
+    await this.requestRefresh({
+      mode: 'heavy',
+      reason: 'manual',
+      force: true,
+      includeFullHistory: true,
+    });
   }
 
   private startTimers() {
@@ -2326,6 +2342,14 @@ export class StateManager {
       all.commits += stats.totalCommits;
       all.added += stats.totalLinesAdded;
       all.removed += stats.totalLinesRemoved ?? 0;
+    }
+
+    const ledgerRepoKeys = repoStats
+      .map(stats => repoKeyFromGitStats(stats) ?? normalizeGitPathKey(stats.toplevel))
+      .filter((key): key is string => !!key);
+    const ledgerStats = buildCodeOutputFromGitLedger(this.gitOutputLedgerStore.getSnapshot(), ledgerRepoKeys, undefined, scopeLabel);
+    if (ledgerRepoKeys.length > 0 && ledgerStats.dailyAll.length > 0) {
+      return { ...ledgerStats, repoCount, scopeLabel };
     }
 
     return {
