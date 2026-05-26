@@ -33,7 +33,12 @@ interface TrendRow {
 const GRAINS: Grain[] = ['day', 'week', 'month'];
 const METRICS: Metric[] = ['cost', 'tokens'];
 const TREND_COST_COLOR = 'gpt4';
-const CHART = { width: 330, height: 126, left: 14, right: 14, top: 12, bottom: 24 };
+const CHART = { width: 330, height: 126, left: 12, right: 52, top: 12, bottom: 24 };
+const GRAIN_WINDOWS: Record<Grain, { limit: number; label: string }> = {
+  day: { limit: 14, label: '14d' },
+  week: { limit: 12, label: '12w' },
+  month: { limit: 12, label: '12m' },
+};
 
 function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const C = useTheme();
@@ -54,6 +59,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const outputScale = makeScale(outputValues, true);
   const activeIndex = Math.max(0, Math.min(rows.length - 1, hoverIndex === null ? rows.length - 1 : hoverIndex));
   const activeRow = rows[activeIndex] ?? rows[rows.length - 1];
+  const showHoverDetail = hoverIndex !== null;
   const primaryColor = metric === 'cost' ? C[TREND_COST_COLOR] : C.input;
   const outputColor = C.active;
   const totalPrimary = primaryValues.reduce((sum, value) => sum + value, 0);
@@ -61,36 +67,36 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const xLabels = labelIndexes(rows.length);
 
   const points = rows.map((row, index) => ({
-    x: xFor(index, rows.length),
+    x: xFor(index, rows.length, CHART.width),
     primaryY: yFor(metric === 'cost' ? row.costUSD : row.tokens, primaryScale),
     outputY: yFor(row.netLines, outputScale),
   }));
   const primaryPath = pathFor(points.map(point => ({ x: point.x, y: point.primaryY })));
   const outputPath = pathFor(points.map(point => ({ x: point.x, y: point.outputY })));
 
-  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    if (rows.length <= 1) return;
+  function selectHoverIndex(nextIndex: number) {
+    setHoverIndex(prev => prev === nextIndex ? prev : nextIndex);
+  }
+
+  function handleMouseMove(e: React.MouseEvent<SVGRectElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const scaleX = CHART.width / Math.max(rect.width, 1);
     const rawX = (e.clientX - rect.left) * scaleX;
-    const plotWidth = CHART.width - CHART.left - CHART.right;
-    const ratio = (rawX - CHART.left) / Math.max(plotWidth, 1);
-    const nextIndex = Math.max(0, Math.min(rows.length - 1, Math.round(ratio * (rows.length - 1))));
-    setHoverIndex(nextIndex);
+    const nextIndex = hoverIndexForX(rawX, rows.length, CHART.width);
+    selectHoverIndex(nextIndex);
   }
 
-  function activateHitZone(e: React.MouseEvent<SVGRectElement>, index: number) {
-    e.stopPropagation();
-    setHoverIndex(index);
+  function handleMouseLeave() {
+    setHoverIndex(prev => prev === null ? prev : null);
   }
 
   return (
-    <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
+    <div onMouseLeave={handleMouseLeave} style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Trend</div>
           <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {formatPrimary(totalPrimary, metric, currency, usdToKrw)} - {fmtSignedCompact(totalOutput)} net lines
+            {GRAIN_WINDOWS[grain].label}: {formatPrimary(totalPrimary, metric, currency, usdToKrw)} - {fmtSignedCompact(totalOutput)} net
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -99,81 +105,75 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
         </div>
       </div>
 
-      <div style={{ position: 'relative', padding: '8px 10px 6px' }}>
-        <svg
-          viewBox={`0 0 ${CHART.width} ${CHART.height}`}
-          width="100%"
-          height={CHART.height}
-          role="img"
-          aria-label="Trend"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={() => setHoverIndex(null)}
-          style={{ display: 'block', overflow: 'visible' }}
-        >
-          {[0, 0.5, 1].map(tick => {
-            const y = CHART.top + tick * (CHART.height - CHART.top - CHART.bottom);
-            return <line key={tick} x1={CHART.left} x2={CHART.width - CHART.right} y1={y} y2={y} stroke={C.borderSub} strokeWidth={1} />;
-          })}
-          <text x={2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.max, metric, currency, usdToKrw)}</text>
-          <text x={2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.min, metric, currency, usdToKrw)}</text>
-          <text x={CHART.width - 2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.max)}</text>
-          <text x={CHART.width - 2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.min)}</text>
-          {primaryPath && <path d={primaryPath} fill="none" stroke={primaryColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />}
-          {outputPath && <path d={outputPath} fill="none" stroke={outputColor} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />}
-          {points.map((point, index) => (
-            <g key={rows[index].key}>
-              <circle cx={point.x} cy={point.primaryY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? primaryColor : C.bgCard} stroke={primaryColor} strokeWidth={1.2} />
-              <circle cx={point.x} cy={point.outputY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? outputColor : C.bgCard} stroke={outputColor} strokeWidth={1.2} />
-            </g>
-          ))}
-          {points.map((_, index) => {
-            const zone = hitZoneFor(index, rows.length);
-            return (
-              <rect
-                key={`hit-${rows[index].key}`}
-                x={zone.x}
-                y={CHART.top}
-                width={zone.width}
-                height={CHART.height - CHART.top - CHART.bottom}
-                fill="transparent"
-                style={{ pointerEvents: 'all' }}
-                onMouseEnter={(e) => activateHitZone(e, index)}
-                onMouseMove={(e) => activateHitZone(e, index)}
-              />
-            );
-          })}
-          {rows.map((row, index) => xLabels.has(index) && (
-            <text key={row.key} x={xFor(index, rows.length)} y={CHART.height - 5} fill={index === rows.length - 1 ? C.accent : C.textMuted} fontSize={8} fontFamily={C.fontMono} fontWeight={index === rows.length - 1 ? 700 : 400} textAnchor="middle">
-              {row.axisLabel}
-            </text>
-          ))}
-          {activeRow && points[activeIndex] && (
-            <line x1={points[activeIndex].x} x2={points[activeIndex].x} y1={CHART.top} y2={CHART.height - CHART.bottom} stroke={C.border} strokeWidth={1} strokeDasharray="3 3" />
-          )}
-        </svg>
+      <div style={{ position: 'relative', padding: '8px 12px 6px' }}>
+        <div style={{ position: 'relative' }}>
+          <svg
+            viewBox={`0 0 ${CHART.width} ${CHART.height}`}
+            width={CHART.width}
+            height={CHART.height}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label="Trend"
+            style={{ width: '100%', display: 'block', overflow: 'visible' }}
+          >
+            {[0, 0.5, 1].map(tick => {
+              const y = CHART.top + tick * (CHART.height - CHART.top - CHART.bottom);
+              return <line key={tick} x1={CHART.left} x2={CHART.width - CHART.right} y1={y} y2={y} stroke={C.borderSub} strokeWidth={1} />;
+            })}
+            <text x={2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.max, metric, currency, usdToKrw)}</text>
+            <text x={2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono}>{formatAxis(primaryScale.min, metric, currency, usdToKrw)}</text>
+            <text x={CHART.width - 2} y={CHART.top + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.max)}</text>
+            <text x={CHART.width - 2} y={CHART.height - CHART.bottom + 3} fill={C.textMuted} fontSize={8} fontFamily={C.fontMono} textAnchor="end">{fmtSignedCompact(outputScale.min)}</text>
+            {primaryPath && <path d={primaryPath} fill="none" stroke={primaryColor} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />}
+            {outputPath && <path d={outputPath} fill="none" stroke={outputColor} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />}
+            {points.map((point, index) => (
+              <g key={rows[index].key}>
+                <circle cx={point.x} cy={point.primaryY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? primaryColor : C.bgCard} stroke={primaryColor} strokeWidth={1.2} />
+                <circle cx={point.x} cy={point.outputY} r={index === activeIndex ? 3 : 2} fill={index === activeIndex ? outputColor : C.bgCard} stroke={outputColor} strokeWidth={1.2} />
+              </g>
+            ))}
+            {rows.map((row, index) => xLabels.has(index) && (
+              <text key={row.key} x={xFor(index, rows.length, CHART.width)} y={CHART.height - 5} fill={index === rows.length - 1 ? C.accent : C.textMuted} fontSize={8} fontFamily={C.fontMono} fontWeight={index === rows.length - 1 ? 700 : 400} textAnchor="middle">
+                {row.axisLabel}
+              </text>
+            ))}
+            {showHoverDetail && activeRow && points[activeIndex] && (
+              <line x1={points[activeIndex].x} x2={points[activeIndex].x} y1={CHART.top} y2={CHART.height - CHART.bottom} stroke={C.border} strokeWidth={1} strokeDasharray="3 3" />
+            )}
+            <rect
+              x={0}
+              y={CHART.top}
+              width={CHART.width}
+              height={CHART.height - CHART.top - CHART.bottom}
+              fill="transparent"
+              style={{ pointerEvents: 'all' }}
+              onMouseMove={handleMouseMove}
+            />
+          </svg>
 
-        {activeRow && (
-          <div style={{
-            position: 'absolute',
-            top: 12,
-            left: tooltipLeft(activeIndex, rows.length),
-            transform: activeIndex > rows.length / 2 ? 'translateX(-100%)' : 'none',
-            background: C.bgCard,
-            border: `1px solid ${C.border}`,
-            borderRadius: 6,
-            padding: '4px 6px',
-            boxShadow: '0 3px 10px rgba(0,0,0,0.08)',
-            fontSize: 10,
-            fontFamily: C.fontMono,
-            color: C.textDim,
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-          }}>
-            <div style={{ color: C.text, fontWeight: 700 }}>{activeRow.label}</div>
-            <div><span style={{ color: primaryColor }}>{formatPrimary(metric === 'cost' ? activeRow.costUSD : activeRow.tokens, metric, currency, usdToKrw)}</span> / {activeRow.requestCount} calls</div>
-            <div style={{ color: outputColor }}>{fmtSignedCompact(activeRow.netLines)} net lines</div>
-          </div>
-        )}
+          {showHoverDetail && activeRow && (
+            <div style={{
+              position: 'absolute',
+              top: 12,
+              left: tooltipLeft(activeIndex, rows.length, CHART.width),
+              transform: activeIndex > rows.length / 2 ? 'translateX(-100%)' : 'none',
+              background: C.bgCard,
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              padding: '4px 6px',
+              boxShadow: '0 3px 10px rgba(0,0,0,0.08)',
+              fontSize: 10,
+              fontFamily: C.fontMono,
+              color: C.textDim,
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+            }}>
+              <div style={{ color: C.text, fontWeight: 700 }}>{activeRow.label}</div>
+              <div><span style={{ color: primaryColor }}>{formatPrimary(metric === 'cost' ? activeRow.costUSD : activeRow.tokens, metric, currency, usdToKrw)}</span> / {activeRow.requestCount} calls</div>
+              <div style={{ color: outputColor }}>{fmtSignedCompact(activeRow.netLines)} net lines</div>
+            </div>
+          )}
+        </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 3px 0', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
@@ -239,7 +239,7 @@ function buildTrendRows(usageTrend: UsageTrendData, dailyOutput: GitDailyStats[]
   }
 
   const keys = new Set<string>([...usageMap.keys(), ...outputMap.keys()]);
-  const limit = grain === 'day' ? 14 : grain === 'week' ? 12 : 12;
+  const limit = GRAIN_WINDOWS[grain].limit;
   return [...keys]
     .sort()
     .slice(-limit)
@@ -305,18 +305,20 @@ function makeScale(values: number[], includeZero: boolean): { min: number; max: 
   return { min, max };
 }
 
-function xFor(index: number, count: number): number {
-  const plotWidth = CHART.width - CHART.left - CHART.right;
+function xFor(index: number, count: number, chartWidth: number): number {
+  const plotWidth = chartWidth - CHART.left - CHART.right;
   if (count <= 1) return CHART.left + plotWidth / 2;
   return CHART.left + (index / (count - 1)) * plotWidth;
 }
 
-function hitZoneFor(index: number, count: number): { x: number; width: number } {
-  if (count <= 1) return { x: CHART.left, width: CHART.width - CHART.left - CHART.right };
-  const center = xFor(index, count);
-  const previous = index === 0 ? CHART.left : (xFor(index - 1, count) + center) / 2;
-  const next = index === count - 1 ? CHART.width - CHART.right : (center + xFor(index + 1, count)) / 2;
-  return { x: previous, width: Math.max(1, next - previous) };
+function hoverIndexForX(rawX: number, count: number, chartWidth: number): number {
+  if (count <= 1) return 0;
+  const x = Math.max(0, Math.min(chartWidth, rawX));
+  for (let index = 0; index < count - 1; index++) {
+    const boundary = (xFor(index, count, chartWidth) + xFor(index + 1, count, chartWidth)) / 2;
+    if (x < boundary) return index;
+  }
+  return count - 1;
 }
 
 function yFor(value: number, scale: { min: number; max: number }): number {
@@ -334,9 +336,11 @@ function labelIndexes(length: number): Set<number> {
   return new Set([0, Math.floor((length - 1) / 2), length - 1]);
 }
 
-function tooltipLeft(index: number, count: number): number {
-  const x = xFor(index, count);
-  return Math.max(16, Math.min(CHART.width - 16, x + 12));
+function tooltipLeft(index: number, count: number, chartWidth: number): number {
+  const x = xFor(index, count, chartWidth);
+  if (index === 0) return 6;
+  if (index === count - 1) return chartWidth - 6;
+  return Math.max(6, Math.min(chartWidth - 6, x + 8));
 }
 
 function weekStartKey(dateKey: string): string {

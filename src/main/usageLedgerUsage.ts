@@ -58,10 +58,14 @@ function addAggregate(target: UsageAggregate, aggregate: UsageAggregate): void {
 }
 
 function finalize(window: WindowStats, provider: 'claude' | 'codex'): void {
-  const denominator = provider === 'codex'
-    ? window.inputTokens + window.cacheReadTokens
-    : window.cacheReadTokens + window.cacheCreationTokens;
+  const denominator = cacheEfficiencyDenominator(provider, window);
   window.cacheEfficiency = denominator > 0 ? (window.cacheReadTokens / denominator) * 100 : 0;
+}
+
+function cacheEfficiencyDenominator(provider: UsageLedgerProvider, aggregate: Pick<UsageAggregate, 'inputTokens' | 'cacheCreationTokens' | 'cacheReadTokens'>): number {
+  return provider === 'codex'
+    ? aggregate.inputTokens + aggregate.cacheReadTokens
+    : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
 }
 
 function localDateKey(timestampMs: number): string {
@@ -199,7 +203,8 @@ export function computeUsageFromLedger(
   const day7Start = todayStart - 6 * DAY_MS;
   const day30Start = todayStart - 29 * DAY_MS;
   const day150Start = todayStart - 149 * DAY_MS;
-  const timelineStart = nowMs - 19 * WEEK_MS;
+  const currentWeekStart = getWeekStartMs(nowMs);
+  const timelineStart = currentWeekStart - 19 * WEEK_MS;
 
   const h5 = emptyWindow();
   const week = emptyWindow();
@@ -217,6 +222,9 @@ export function computeUsageFromLedger(
   let todayInputTokens = 0;
   let todayOutputTokens = 0;
   let todayCacheTokens = 0;
+  let todayCacheReadTokens = 0;
+  let todayCacheSavingsUSD = 0;
+  let todayCacheDenominator = 0;
   let sonnetWeekTokens = 0;
   let allTimeCacheDenominator = 0;
 
@@ -238,10 +246,10 @@ export function computeUsageFromLedger(
   };
 
   const addToTimeline = (timestampMs: number, tokens: number, costUSD: number) => {
-    if (timestampMs < timelineStart) return;
-    const weeksAgo = Math.floor((nowMs - timestampMs) / WEEK_MS);
+    const rowWeekStart = getWeekStartMs(timestampMs);
+    if (rowWeekStart < timelineStart || rowWeekStart > currentWeekStart) return;
+    const weeksAgo = Math.round((currentWeekStart - rowWeekStart) / WEEK_MS);
     const weekIndex = 19 - weeksAgo;
-    const weekStartMs = weekStart - weeksAgo * WEEK_MS;
     const current = timelineMap.get(weekIndex);
     if (current) {
       current.tokens += tokens;
@@ -249,7 +257,7 @@ export function computeUsageFromLedger(
     } else {
       timelineMap.set(weekIndex, {
         weekIndex,
-        weekLabel: weekLabelFromStart(weekStartMs),
+        weekLabel: weekLabelFromStart(rowWeekStart),
         tokens,
         costUSD,
       });
@@ -267,9 +275,7 @@ export function computeUsageFromLedger(
 
   const addAllTime = (provider: UsageLedgerProvider, aggregate: UsageAggregate) => {
     addAggregate(allTime, aggregate);
-    allTimeCacheDenominator += provider === 'codex'
-      ? aggregate.inputTokens + aggregate.cacheReadTokens
-      : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
+    allTimeCacheDenominator += cacheEfficiencyDenominator(provider, aggregate);
   };
 
   const monthlyModelKeys = new Set<string>();
@@ -298,6 +304,9 @@ export function computeUsageFromLedger(
       todayInputTokens += aggregate.inputTokens;
       todayOutputTokens += aggregate.outputTokens;
       todayCacheTokens += aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
+      todayCacheReadTokens += aggregate.cacheReadTokens;
+      todayCacheSavingsUSD += aggregate.cacheSavingsUSD;
+      todayCacheDenominator += cacheEfficiencyDenominator(row.provider, aggregate);
     }
   }
 
@@ -349,6 +358,9 @@ export function computeUsageFromLedger(
   const allTimeAvgCacheEfficiency = allTimeCacheDenominator > 0
     ? (allTime.cacheReadTokens / allTimeCacheDenominator) * 100
     : 0;
+  const todayCacheEfficiency = todayCacheDenominator > 0
+    ? (todayCacheReadTokens / todayCacheDenominator) * 100
+    : 0;
 
   return {
     h5,
@@ -366,6 +378,8 @@ export function computeUsageFromLedger(
     todayInputTokens,
     todayOutputTokens,
     todayCacheTokens,
+    todayCacheSavingsUSD,
+    todayCacheEfficiency,
     allTimeRequestCount: allTime.requestCount,
     allTimeCost: allTime.costUSD,
     allTimeCacheTokens: allTime.cacheReadTokens + allTime.cacheCreationTokens,

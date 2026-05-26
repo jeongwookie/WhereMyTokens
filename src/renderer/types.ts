@@ -130,6 +130,8 @@ export interface UsageData {
   todayInputTokens: number;
   todayOutputTokens: number;
   todayCacheTokens: number;
+  todayCacheSavingsUSD: number;
+  todayCacheEfficiency: number;
   allTimeRequestCount: number;
   allTimeCost: number;
   allTimeCacheTokens: number;
@@ -156,6 +158,8 @@ export interface UsageTrendData {
   weekly: UsageTrendPoint[];
   monthly: UsageTrendPoint[];
 }
+
+export type StateFreshness = 'empty' | 'restored' | 'fresh';
 
 export interface UsageLimits {
   h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
@@ -226,6 +230,7 @@ export interface AppState {
   settings: AppSettings;
   autoLimits: AutoLimits | null;
   codexAccount: CodexAccountState;
+  stateFreshness: StateFreshness;
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;

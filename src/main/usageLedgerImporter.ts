@@ -27,6 +27,8 @@ import { extractClaudeUsageLine, extractCodexUsageLine } from './jsonlUsageExtra
 
 type ImportProvider = 'claude' | 'codex';
 
+const LEDGER_IMPORT_YIELD_EVERY = 250;
+
 interface SourceEntry {
   entry: CompactRecentEntry;
   aggregate: UsageAggregate;
@@ -35,6 +37,10 @@ interface SourceEntry {
 interface SourceScanResult {
   entries: SourceEntry[];
   byteOffset: number;
+}
+
+function cooperativeYield(): Promise<void> {
+  return new Promise(resolve => setImmediate(resolve));
 }
 
 export function normalizedSourcePath(filePath: string): string {
@@ -307,7 +313,12 @@ export async function importUsageJsonlIntoSnapshot(
   }
 
   const { entries, byteOffset } = await collectSourceEntries(filePath, provider, nowMs, startOffset);
-  for (const entry of entries) addEntryToSnapshot(next, sourceHash, entry, nowMs);
+  let processedEntries = 0;
+  for (const entry of entries) {
+    addEntryToSnapshot(next, sourceHash, entry, nowMs);
+    processedEntries += 1;
+    if (processedEntries % LEDGER_IMPORT_YIELD_EVERY === 0) await cooperativeYield();
+  }
 
   next.sourceCheckpoints[sourceHash] = {
     provider,

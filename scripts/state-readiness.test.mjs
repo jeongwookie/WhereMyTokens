@@ -62,6 +62,8 @@ test('renderer splash and session stabilization use initial readiness and daily 
   assert.match(source, /state\.initialRefreshComplete/);
   assert.match(source, /sameDailyStats\(a\.daily7d, b\.daily7d\)/);
   assert.match(source, /normalizeState\(next\)/);
+  assert.match(source, /stateFreshness: 'empty'/);
+  assert.match(source, /normalizeStateFreshness/);
 });
 
 test('renderer mutes cached usage text and shows soft loading states', () => {
@@ -204,6 +206,25 @@ test('visible UI transition schedules refresh instead of running heavy refresh i
   assert.doesNotMatch(visibleBody, /this\.heavyRefresh\(/);
 });
 
+test('restored startup state uses the normal async startup refresh budget', () => {
+  const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const startStart = stateSource.indexOf('  start()');
+  const startEnd = stateSource.indexOf('  stop()', startStart);
+  const startBody = stateSource.slice(startStart, startEnd);
+  const visibleStart = stateSource.indexOf('  setUiVisible(visible: boolean): void');
+  const visibleEnd = stateSource.indexOf('  private clearForegroundTimers', visibleStart);
+  const visibleBody = stateSource.slice(visibleStart, visibleEnd);
+  const promotionStart = stateSource.indexOf('  private scheduleWideWatcherPromotion');
+  const promotionEnd = stateSource.indexOf('  private isPerfDebugEnabled', promotionStart);
+  const promotionBody = stateSource.slice(promotionStart, promotionEnd);
+
+  assert.doesNotMatch(stateSource, /RESTORED_STARTUP_REFRESH_DELAY_MS = 30_000/);
+  assert.doesNotMatch(stateSource, /RESTORED_STARTUP_SCAN_BUDGET_MS = 250/);
+  assert.match(startBody, /void this\.requestRefresh\(\{ mode: 'heavy', reason: 'startup', allowStartupBudget: true \}\)/);
+  assert.match(visibleBody, /this\.scheduleForegroundRefresh\(\)/);
+  assert.match(promotionBody, /this\.scheduleForegroundRefresh\(\)/);
+});
+
 test('Codex account limit collection is separated from visible usage filters', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const collectStart = source.indexOf('private collectCodexRateLimits');
@@ -226,6 +247,16 @@ test('bottom refresh label distinguishes scan countdown from update age', () => 
 
   assert.match(source, /\$\{elapsed\}s ago/);
   assert.match(source, /scan \$\{formatWarmupEta\(historyWarmupStartsAt\)\}/);
+  assert.match(source, /last run ·/);
+  assert.doesNotMatch(source, /Restoring/);
+  assert.doesNotMatch(source, /Restored/);
+});
+
+test('header today cache metric uses today aggregates instead of the 5-hour window', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+
+  assert.match(source, /const cacheEff = isAll \? usage\.allTimeAvgCacheEfficiency : usage\.todayCacheEfficiency/);
+  assert.match(source, /const saved = isAll \? usage\.allTimeSavedUSD : usage\.todayCacheSavingsUSD/);
 });
 
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {

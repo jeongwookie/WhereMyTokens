@@ -108,3 +108,11 @@ test('usage importer replaces duplicate recent Claude request with larger output
   assert.equal(next.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
   assert.equal(next.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].outputTokens, 25);
 });
+
+test('usage importer yields during large source aggregation', () => {
+  const source = fs.readFileSync('src/main/usageLedgerImporter.ts', 'utf8');
+  assert.match(source, /const LEDGER_IMPORT_YIELD_EVERY = 250/);
+  assert.match(source, /function cooperativeYield\(\): Promise<void>/);
+  assert.match(source, /setImmediate\(resolve\)/);
+  assert.match(source, /await cooperativeYield\(\)/);
+});

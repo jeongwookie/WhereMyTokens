@@ -24,6 +24,7 @@ import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshSchedule
 import { importUsageJsonlIntoSnapshot } from './usageLedgerImporter';
 import { UsageLedgerStore } from './usageLedgerStore';
 import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
+import { makeStartupStateSnapshot, normalizeStartupStateSnapshot, StateFreshness } from './startupStateSnapshot';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -90,6 +91,7 @@ export interface AppState {
   settings: AppSettings;
   autoLimits: AutoLimits | null;
   codexAccount: CodexAccountState;
+  stateFreshness: StateFreshness;
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
@@ -130,11 +132,17 @@ interface SessionBuildResult {
   anomaly?: string;
 }
 
+interface LedgerRefreshResult {
+  partial: boolean;
+  scannedFiles: number;
+}
+
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
 const CODEX_H5_WINDOW_MS = 5 * 60 * 60 * 1000;
 const CODEX_WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const STARTUP_STATE_SNAPSHOT_KEY = '_startupStateSnapshot';
 
 function getJsonlMtime(filePath: string): Date | null {
   try { return fs.statSync(filePath).mtime; }
@@ -349,6 +357,7 @@ export class StateManager {
   private debugMemTimer: NodeJS.Timeout | null = null;
   private uiBusy = false;
   private uiVisible = false;
+  private startupFreshComplete = false;
   private watcherProfile: WatcherProfile = 'off';
   private watcherTargetCount = 0;
   private repoGitStatsLastRefresh = 0;
@@ -378,6 +387,11 @@ export class StateManager {
     this.store = store;
     this.onUpdate = onUpdate;
     this.state = this.emptyState();
+    const restoredState = normalizeStartupStateSnapshot(
+      this.getPersistedValue(STARTUP_STATE_SNAPSHOT_KEY, null),
+      this.state,
+    );
+    if (restoredState) this.state = this.reviveRestoredState(restoredState);
     const oauthCredentialMarker = getOAuthCredentialMarker();
     this.lastOAuthCredentialMarker = oauthCredentialMarker;
     this.refreshScheduler = new RefreshScheduler({
@@ -414,8 +428,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        stateFreshness: this.currentStateFreshness(),
       };
-      this.onUpdate(this.state);
+      this.publishState();
     });
   }
 
@@ -441,6 +456,40 @@ export class StateManager {
     } catch {
       // 캐시 정리에 실패해도 다음 정규화 단계에서 다시 무시된다.
     }
+  }
+
+  private publishState(persistSnapshot = true): void {
+    this.onUpdate(this.state);
+    if (persistSnapshot && this.state.stateFreshness === 'fresh') {
+      this.persistStartupStateSnapshot();
+    }
+  }
+
+  private persistStartupStateSnapshot(): void {
+    this.setPersistedValue(STARTUP_STATE_SNAPSHOT_KEY, makeStartupStateSnapshot(this.state));
+  }
+
+  private currentStateFreshness(): StateFreshness {
+    return this.startupFreshComplete ? 'fresh' : this.state.stateFreshness;
+  }
+
+  private reviveRestoredState(state: AppState): AppState {
+    return {
+      ...state,
+      settings: this.getSettings(),
+      sessions: state.sessions.map(session => ({
+        ...session,
+        startedAt: this.reviveDate(session.startedAt) ?? new Date(0),
+        lastModified: this.reviveDate(session.lastModified),
+      })),
+    };
+  }
+
+  private reviveDate(value: Date | string | null | undefined): Date | null {
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    if (typeof value !== 'string') return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private clearClaudeApiCache(): void {
@@ -472,6 +521,8 @@ export class StateManager {
         todayInputTokens: 0,
         todayOutputTokens: 0,
         todayCacheTokens: 0,
+        todayCacheSavingsUSD: 0,
+        todayCacheEfficiency: 0,
         allTimeRequestCount: 0,
         allTimeCost: 0,
         allTimeCacheTokens: 0,
@@ -494,6 +545,7 @@ export class StateManager {
       settings: this.getSettings(),
       autoLimits: null,
       codexAccount: readCodexAccountState(),
+      stateFreshness: 'empty',
       initialRefreshComplete: false,
       historyWarmupPending: false,
       historyWarmupStartsAt: null,
@@ -624,21 +676,24 @@ export class StateManager {
     this.wideWatcherPromotionTimer = null;
   }
 
-  private scheduleForegroundRefresh(): void {
+  private scheduleForegroundRefresh(
+    delayMs = StateManager.FOREGROUND_REFRESH_DELAY_MS,
+    scanBudgetMs = StateManager.FOREGROUND_SCAN_BUDGET_MS,
+  ): void {
     if (this.foregroundRefreshTimer) clearTimeout(this.foregroundRefreshTimer);
     this.foregroundRefreshTimer = setTimeout(() => {
       this.foregroundRefreshTimer = null;
       if (!this.uiVisible) return;
       if (this.uiBusy) {
-        this.scheduleForegroundRefresh();
+        this.scheduleForegroundRefresh(delayMs, scanBudgetMs);
         return;
       }
       void this.requestRefresh({
         mode: 'heavy',
         reason: 'foreground',
-        scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+        scanBudgetMs,
       });
-    }, StateManager.FOREGROUND_REFRESH_DELAY_MS);
+    }, delayMs);
   }
 
   private scheduleWideWatcherPromotion(): void {
@@ -929,15 +984,25 @@ export class StateManager {
   async forceRefresh(): Promise<void> {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
-    await this.requestRefresh({ mode: 'heavy', reason: 'manual', force: true });
+    await this.requestRefresh({
+      mode: 'heavy',
+      reason: 'manual',
+      includeFullHistory: true,
+      scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+    });
   }
 
   async rebuildUsageLedger(): Promise<void> {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
     this.usageLedgerStore.reset();
-    this.state = { ...this.state, usageTrend: emptyUsageTrendData(), historyWarmupPending: true };
-    this.onUpdate(this.state);
+    this.state = {
+      ...this.state,
+      usageTrend: emptyUsageTrendData(),
+      historyWarmupPending: true,
+      stateFreshness: this.currentStateFreshness(),
+    };
+    this.publishState();
     await this.requestRefresh({
       mode: 'heavy',
       reason: 'manual',
@@ -1040,8 +1105,11 @@ export class StateManager {
 
   private canUseUsageLedger(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
     if ((settings.excludedProjects?.length ?? 0) > 0) return false;
-    if (Object.values(snapshot.sourceCheckpoints).some(checkpoint => checkpoint.needsRebuild)) return false;
-    return Object.keys(snapshot.dailyModel).length > 0 || Object.keys(snapshot.monthlyModel).length > 0;
+    const provider = settings.provider ?? 'both';
+    const hasProviderRows = (record: Record<string, unknown>) => Object.keys(record).some(key =>
+      provider === 'both' || key.includes(`|${provider}|`)
+    );
+    return hasProviderRows(snapshot.dailyModel) || hasProviderRows(snapshot.monthlyModel);
   }
 
   private buildUsageTrend(settings = this.getSettings()): UsageTrendData {
@@ -1387,9 +1455,10 @@ export class StateManager {
       codeOutputStats,
       codeOutputLoading: false,
       allTimeSessions,
+      stateFreshness: this.currentStateFreshness(),
       lastUpdated: Date.now(),
     };
-    this.onUpdate(this.state);
+    this.publishState();
     this.logPerfTrace('fastRefresh', totalPerf, {
       changedFiles: changedFiles?.size ?? 0,
       uiVisible: this.uiVisible,
@@ -1415,9 +1484,10 @@ export class StateManager {
       repoGitStats,
       codeOutputStats,
       codeOutputLoading: false,
+      stateFreshness: this.currentStateFreshness(),
       lastUpdated: Date.now(),
     };
-    this.onUpdate(this.state);
+    this.publishState();
   }
 
   private async heavyRefresh(
@@ -1430,6 +1500,7 @@ export class StateManager {
   ) {
     const totalPerf = this.beginPerfSample();
     let apiPerf: PerfMetrics | null = null;
+    let ledgerPerf: PerfMetrics | null = null;
     let loadPerf: PerfMetrics | null = null;
     let sessionPerf: PerfMetrics | null = null;
     let gitPerf: PerfMetrics | null = null;
@@ -1443,7 +1514,7 @@ export class StateManager {
         settingsForApi.provider !== 'claude' ? this.refreshCodexUsagePct(force) : Promise.resolve(false),
       ]);
       apiPerf = this.finishPerfSample(apiSample);
-      const initialRefreshDone = this.state.initialRefreshComplete;
+      const initialRefreshDone = this.startupFreshComplete;
       const effectiveScanBudgetMs = scanBudgetMs ?? (allowStartupBudget && !initialRefreshDone ? StateManager.STARTUP_SCAN_BUDGET_MS : null);
       if (!force && !allowHiddenFullScan && initialRefreshDone && !this.uiVisible) {
         const sessionSample = this.beginPerfSample();
@@ -1475,8 +1546,9 @@ export class StateManager {
           codeOutputStats,
           codeOutputLoading: false,
           allTimeSessions,
+          stateFreshness: this.currentStateFreshness(),
         };
-        this.onUpdate(this.state);
+        this.publishState();
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
           deferCodexLocalLog: this.state.historyWarmupPending,
         });
@@ -1488,12 +1560,25 @@ export class StateManager {
         });
         return;
       }
+      const settingsBeforeLoad = this.getSettings();
+      const hasExcludedProjects = (settingsBeforeLoad.excludedProjects?.length ?? 0) > 0;
+      const ledgerSample = this.beginPerfSample();
+      const ledgerRefresh = await this.refreshUsageLedgerFromDiscoveredSources(
+        effectiveScanBudgetMs,
+        priorityFiles,
+        includeFullHistory,
+      );
+      ledgerPerf = this.finishPerfSample(ledgerSample);
       const loadSample = this.beginPerfSample();
-      const loaded = await this.loadProviderSummaries(force, effectiveScanBudgetMs, priorityFiles, includeFullHistory);
+      const summaryForce = force && hasExcludedProjects;
+      const summaryIncludeFullHistory = includeFullHistory && hasExcludedProjects;
+      const loaded = await this.loadProviderSummaries(summaryForce, effectiveScanBudgetMs, priorityFiles, summaryIncludeFullHistory);
       loadPerf = this.finishPerfSample(loadSample);
       await this.refreshUsageLedgerFromFiles(this.ledgerFilesFromSummaries(loaded.summaries));
+      this.startupFreshComplete = true;
       this.jsonlCache.flushPersisted();
-      const partialHistoryScan = effectiveScanBudgetMs !== null && loaded.partial;
+      const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
+      const partialHistoryScan = effectiveScanBudgetMs !== null && (ledgerRefresh.partial || (hasExcludedProjects && loaded.partial));
       const nextSummaries = partialHistoryScan && initialRefreshDone
         ? new Map([...this.summaries, ...loaded.summaries])
         : loaded.summaries;
@@ -1508,7 +1593,7 @@ export class StateManager {
       const usageTrend = this.buildUsageTrend();
       const codexAccount = readCodexAccountState();
       const allTimeSessions = this.countAllTimeUsageSessions(settings);
-      const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && loaded.partial;
+      const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && partialHistoryScan;
       const historyWarmupStartsAt = partialHistoryScan
         ? this.scheduleHistoryWarmup(
             showHistoryWarmupBanner ? StateManager.STARTUP_WARMUP_DELAY_MS : StateManager.FOREGROUND_WARMUP_DELAY_MS,
@@ -1531,6 +1616,7 @@ export class StateManager {
         settings,
         autoLimits: this.autoLimits,
         codexAccount,
+        stateFreshness: 'fresh',
         initialRefreshComplete: true,
         historyWarmupPending: keepHistoryWarmupBanner,
         historyWarmupStartsAt: keepHistoryWarmupBanner ? historyWarmupStartsAt : null,
@@ -1545,21 +1631,26 @@ export class StateManager {
         codeOutputLoading: true,
         allTimeSessions,
       };
-      this.onUpdate(this.state);
+      this.publishState();
       if (!initialRefreshDone && !force) {
         this.scheduleGitWarmup();
         checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
           deferCodexLocalLog: partialHistoryScan,
         });
-        await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
+        await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
         if (!this.uiVisible) this.startWatcher('heavyRefresh:startupsync');
         else this.scheduleWideWatcherPromotion();
         this.logPerfTrace('heavyRefresh', totalPerf, {
           force,
-          scannedFiles: loaded.scannedFiles,
-          partial: loaded.partial,
+          scannedFiles: totalScannedFiles,
+          summaryScannedFiles: loaded.scannedFiles,
+          ledgerScannedFiles: ledgerRefresh.scannedFiles,
+          partial: partialHistoryScan,
+          summaryPartial: loaded.partial,
+          ledgerPartial: ledgerRefresh.partial,
           scanBudgetMs: effectiveScanBudgetMs,
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
+          ...(ledgerPerf ? this.perfFields('ledger', ledgerPerf) : {}),
           ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
           ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
           ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
@@ -1582,6 +1673,7 @@ export class StateManager {
         settings,
         autoLimits: this.autoLimits,
         codexAccount,
+        stateFreshness: 'fresh',
         initialRefreshComplete: true,
         historyWarmupPending: keepHistoryWarmupBanner,
         historyWarmupStartsAt: keepHistoryWarmupBanner ? historyWarmupStartsAt : null,
@@ -1596,19 +1688,24 @@ export class StateManager {
         codeOutputLoading: false,
         allTimeSessions,
       };
-      this.onUpdate(this.state);
+      this.publishState();
 
       checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
         deferCodexLocalLog: partialHistoryScan,
       });
-      await this.logMemorySnapshot('heavyRefresh:end', loaded.scannedFiles);
+      await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
       if (!this.uiVisible) this.startWatcher('heavyRefresh:hidden');
       this.logPerfTrace('heavyRefresh', totalPerf, {
         force,
-        scannedFiles: loaded.scannedFiles,
-        partial: loaded.partial,
+        scannedFiles: totalScannedFiles,
+        summaryScannedFiles: loaded.scannedFiles,
+        ledgerScannedFiles: ledgerRefresh.scannedFiles,
+        partial: partialHistoryScan,
+        summaryPartial: loaded.partial,
+        ledgerPartial: ledgerRefresh.partial,
         scanBudgetMs: effectiveScanBudgetMs,
         ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
+        ...(ledgerPerf ? this.perfFields('ledger', ledgerPerf) : {}),
         ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
         ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
         ...(gitPerf ? this.perfFields('git', gitPerf) : {}),
@@ -1885,15 +1982,114 @@ export class StateManager {
     if (files.length === 0) return;
     if ((this.getSettings().excludedProjects?.length ?? 0) > 0) return;
     let snapshot = this.usageLedgerStore.getSnapshot();
+    let changed = false;
     for (const file of files) {
       try {
-        snapshot = await importUsageJsonlIntoSnapshot(snapshot, file.filePath, file.provider);
+        const nextSnapshot = await importUsageJsonlIntoSnapshot(snapshot, file.filePath, file.provider);
+        if (nextSnapshot !== snapshot) changed = true;
+        snapshot = nextSnapshot;
       } catch {
         // JSONL summary cache remains the fallback if a ledger import for one source fails.
       }
     }
+    if (!changed) return;
     this.usageLedgerStore.replaceSnapshot(snapshot);
     this.usageLedgerStore.compact();
+  }
+
+  private ledgerSourceFiles(
+    settings: AppSettings,
+    includeFullHistory: boolean,
+    priorityFiles?: Iterable<string>,
+  ): { files: Array<{ filePath: string; provider: 'claude' | 'codex'; priority: boolean }>; partial: boolean } {
+    const files: Array<{ filePath: string; provider: 'claude' | 'codex'; priority: boolean }> = [];
+    const seen = new Set<string>();
+    const priority = new Set<string>();
+    for (const filePath of priorityFiles ?? []) priority.add(normalizeFileKey(filePath));
+
+    let partial = false;
+    const pushFile = (filePath: string, provider: 'claude' | 'codex', isPriority = false) => {
+      if (!providerMatchesMode(settings.provider, provider)) return;
+      const normalized = normalizeFileKey(filePath);
+      if (seen.has(normalized)) return;
+      seen.add(normalized);
+      files.push({ filePath: normalized, provider, priority: isPriority || priority.has(normalized) });
+    };
+
+    for (const filePath of priority) {
+      const provider = this.providerForJsonlPath(filePath);
+      if (provider) pushFile(filePath, provider, true);
+    }
+
+    if ((settings.provider === 'claude' || settings.provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
+      if (includeFullHistory) {
+        try {
+          const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name);
+          for (const dir of projectDirs) {
+            for (const filePath of this.listJsonlFiles(path.join(PROJECTS_DIR, dir), Number.POSITIVE_INFINITY, false)) {
+              pushFile(filePath, 'claude');
+            }
+          }
+        } catch { /* skip */ }
+      } else {
+        const recentClaude = this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT);
+        partial = partial || recentClaude.truncated;
+        for (const filePath of recentClaude.files) pushFile(filePath, 'claude');
+      }
+    }
+
+    if ((settings.provider === 'codex' || settings.provider === 'both') && CODEX_USAGE_DIRS.some(root => fs.existsSync(root))) {
+      const codexFiles = includeFullHistory
+        ? { files: this.listCodexUsageJsonlFiles(), truncated: false }
+        : this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT);
+      partial = partial || codexFiles.truncated;
+      for (const filePath of codexFiles.files) pushFile(filePath, 'codex');
+    }
+
+    return { files, partial };
+  }
+
+  private async refreshUsageLedgerFromDiscoveredSources(
+    budgetMs: number | null,
+    priorityFiles: Iterable<string> | undefined,
+    includeFullHistory: boolean,
+  ): Promise<LedgerRefreshResult> {
+    const settings = this.getSettings();
+    if ((settings.excludedProjects?.length ?? 0) > 0) return { partial: false, scannedFiles: 0 };
+
+    let snapshot = this.usageLedgerStore.getSnapshot();
+    const hadUsableLedger = this.canUseUsageLedger(snapshot, settings);
+    const sourceList = this.ledgerSourceFiles(settings, includeFullHistory, priorityFiles);
+    const startedAt = Date.now();
+    let changed = false;
+    let scannedFiles = 0;
+    let partial = !includeFullHistory && !hadUsableLedger && sourceList.partial;
+
+    const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
+    for (const source of sourceList.files) {
+      if (!source.priority && shouldStopForBudget()) {
+        partial = true;
+        break;
+      }
+
+      try {
+        const nextSnapshot = await importUsageJsonlIntoSnapshot(snapshot, source.filePath, source.provider);
+        scannedFiles += 1;
+        if (nextSnapshot !== snapshot) changed = true;
+        snapshot = nextSnapshot;
+      } catch {
+        // Summary cache remains a fallback for session-local data when an import fails.
+      }
+    }
+
+    if (changed) {
+      this.usageLedgerStore.replaceSnapshot(snapshot);
+      this.usageLedgerStore.compact();
+    }
+
+    return { partial, scannedFiles };
   }
 
   private async loadProviderSummaries(
@@ -2539,7 +2735,6 @@ export class StateManager {
     const providerChanged = settings.provider !== this.state.settings.provider;
     if (providerChanged) {
       this.summaries.clear();
-      this.jsonlCache.clearAll();
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
@@ -2564,13 +2759,19 @@ export class StateManager {
         codeOutputStats,
         codeOutputLoading: true,
         allTimeSessions,
+        stateFreshness: this.currentStateFreshness(),
         lastUpdated: Date.now(),
       };
-      this.onUpdate(this.state);
+      this.publishState();
       this.startWatcher();
       this.clearHistoryWarmup();
       this.clearGitWarmup();
-      void this.requestRefresh({ mode: 'heavy', reason: 'settings', force: true });
+      void this.requestRefresh({
+        mode: 'heavy',
+        reason: 'settings',
+        includeFullHistory: true,
+        scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+      });
       return;
     }
 
@@ -2578,8 +2779,18 @@ export class StateManager {
     const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     const allTimeSessions = this.countAllTimeUsageSessions(settings);
-    this.state = { ...this.state, sessions, settings, usageTrend: this.buildUsageTrend(), codeOutputStats, codeOutputLoading: false, allTimeSessions, lastUpdated: Date.now() };
-    this.onUpdate(this.state);
+    this.state = {
+      ...this.state,
+      sessions,
+      settings,
+      usageTrend: this.buildUsageTrend(),
+      codeOutputStats,
+      codeOutputLoading: false,
+      allTimeSessions,
+      stateFreshness: this.currentStateFreshness(),
+      lastUpdated: Date.now(),
+    };
+    this.publishState();
   }
 
   private async logMemorySnapshot(label: string, scannedFiles = 0): Promise<void> {

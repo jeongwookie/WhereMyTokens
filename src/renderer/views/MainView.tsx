@@ -45,13 +45,19 @@ const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 const STALE_MS = 6 * 60 * 60 * 1000;
 
-function formatRefreshLabel(lastUpdated: number): string {
+function formatRefreshAge(lastUpdated: number): string {
   if (!lastUpdated) return 'Refresh';
   const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
   if (elapsed < 5) return 'just now';
   if (elapsed < 60) return `${elapsed}s ago`;
   if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m ago`;
   return `${Math.floor(elapsed / 3600)}h ago`;
+}
+
+function formatRefreshLabel(lastUpdated: number, stateFreshness: AppState['stateFreshness']): string {
+  const age = formatRefreshAge(lastUpdated);
+  if (stateFreshness === 'restored' && lastUpdated) return `last run · ${age}`;
+  return age;
 }
 
 function formatWarmupEta(historyWarmupStartsAt: number | null): string {
@@ -189,25 +195,6 @@ function buildHeaderStatus(args: {
   return null;
 }
 
-function buildTrackedH5(usage: AppState['usage'], providerMode: ProviderMode) {
-  if (providerMode === 'codex') return usage.h5Codex;
-  if (providerMode === 'claude') return usage.h5;
-  const cacheTokens = usage.h5.cacheReadTokens + usage.h5.cacheCreationTokens + usage.h5Codex.inputTokens + usage.h5Codex.cacheReadTokens;
-  const cacheRead = usage.h5.cacheReadTokens + usage.h5Codex.cacheReadTokens;
-  return {
-    ...usage.h5,
-    inputTokens: usage.h5.inputTokens + usage.h5Codex.inputTokens,
-    outputTokens: usage.h5.outputTokens + usage.h5Codex.outputTokens,
-    cacheCreationTokens: usage.h5.cacheCreationTokens + usage.h5Codex.cacheCreationTokens,
-    cacheReadTokens: usage.h5.cacheReadTokens + usage.h5Codex.cacheReadTokens,
-    totalTokens: usage.h5.totalTokens + usage.h5Codex.totalTokens,
-    costUSD: usage.h5.costUSD + usage.h5Codex.costUSD,
-    requestCount: usage.h5.requestCount + usage.h5Codex.requestCount,
-    cacheEfficiency: cacheTokens > 0 ? (cacheRead / cacheTokens) * 100 : 0,
-    cacheSavingsUSD: usage.h5.cacheSavingsUSD + usage.h5Codex.cacheSavingsUSD,
-  };
-}
-
 function latestTime(a: string | null, b: string | null): string | null {
   if (!a) return b;
   if (!b) return a;
@@ -288,13 +275,15 @@ const RefreshStatus = React.memo(function RefreshStatus({
   refreshing,
   syncingHistory,
   historyWarmupStartsAt,
+  stateFreshness,
 }: {
   lastUpdated: number;
   refreshing: boolean;
   syncingHistory: boolean;
   historyWarmupStartsAt: number | null;
+  stateFreshness: AppState['stateFreshness'];
 }) {
-  const [label, setLabel] = useState(() => syncingHistory ? formatWarmupEta(historyWarmupStartsAt) : formatRefreshLabel(lastUpdated));
+  const [label, setLabel] = useState(() => syncingHistory ? formatWarmupEta(historyWarmupStartsAt) : formatRefreshLabel(lastUpdated, stateFreshness));
 
   useEffect(() => {
     if (refreshing) {
@@ -306,10 +295,10 @@ const RefreshStatus = React.memo(function RefreshStatus({
       const t = setInterval(() => setLabel(`scan ${formatWarmupEta(historyWarmupStartsAt)}`), 1000);
       return () => clearInterval(t);
     }
-    setLabel(formatRefreshLabel(lastUpdated));
-    const t = setInterval(() => setLabel(formatRefreshLabel(lastUpdated)), 1000);
+    setLabel(formatRefreshLabel(lastUpdated, stateFreshness));
+    const t = setInterval(() => setLabel(formatRefreshLabel(lastUpdated, stateFreshness)), 1000);
     return () => clearInterval(t);
-  }, [historyWarmupStartsAt, lastUpdated, refreshing, syncingHistory]);
+  }, [historyWarmupStartsAt, lastUpdated, refreshing, stateFreshness, syncingHistory]);
 
   return <>{label}</>;
 });
@@ -359,7 +348,6 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const showClaudeUsage = providerMode !== 'codex';
   const showCodexUsage = providerMode !== 'claude';
   const hasClaudeFallback = showClaudeUsage && (state.limits.h5.source === 'statusLine' || state.limits.week.source === 'statusLine');
-  const trackedH5 = useMemo(() => buildTrackedH5(usage, providerMode), [usage, providerMode]);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
   const headerStatus = useMemo(() => buildHeaderStatus({
     showClaudeUsage,
@@ -373,8 +361,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
   const calls = isAll ? usage.allTimeRequestCount : usage.todayRequestCount;
   const sessionCount = isAll ? state.allTimeSessions : sessions.length;
-  const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : trackedH5.cacheEfficiency;
-  const saved = isAll ? usage.allTimeSavedUSD : trackedH5.cacheSavingsUSD;
+  const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : usage.todayCacheEfficiency;
+  const saved = isAll ? usage.allTimeSavedUSD : usage.todayCacheSavingsUSD;
   const cacheColor = cacheMetricColor(cacheEff, C);
   const cacheTitle = cacheMetricTitle(providerMode);
   const planLabel = showClaudeUsage && state.autoLimits ? state.autoLimits.plan : undefined;
@@ -1077,11 +1065,12 @@ const ModelSection = React.memo(function ModelSection({ models, currency, usdToK
   );
 });
 
-const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, syncingHistory, historyWarmupStartsAt, onRefresh, onNav }: {
+const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, syncingHistory, historyWarmupStartsAt, stateFreshness, onRefresh, onNav }: {
   lastUpdated: number;
   refreshing: boolean;
   syncingHistory: boolean;
   historyWarmupStartsAt: number | null;
+  stateFreshness: AppState['stateFreshness'];
   onRefresh: () => void;
   onNav: (view: NavView) => void;
 }) {
@@ -1090,7 +1079,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
     { key: 'settings', icon: '⚙', label: 'Settings' },
     { key: 'notifications', icon: '!', label: 'Alerts' },
     { key: 'help', icon: '?', label: 'Help' },
-    { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} syncingHistory={syncingHistory} historyWarmupStartsAt={historyWarmupStartsAt} /> },
+    { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} syncingHistory={syncingHistory} historyWarmupStartsAt={historyWarmupStartsAt} stateFreshness={stateFreshness} /> },
   ];
   return (
     <div style={{ display: 'flex', borderTop: `1px solid ${C.border}`, flexShrink: 0, background: C.bgCard }}>
@@ -1233,6 +1222,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
           refreshing={refreshing}
           syncingHistory={state.historyWarmupPending}
           historyWarmupStartsAt={state.historyWarmupStartsAt}
+          stateFreshness={state.stateFreshness}
           onRefresh={handleRefresh}
           onNav={onNav}
         />

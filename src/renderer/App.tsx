@@ -32,6 +32,7 @@ const DEFAULT_STATE: AppState = {
     models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
     todayTokens: 0, todayCost: 0, todayRequestCount: 0,
     todayInputTokens: 0, todayOutputTokens: 0, todayCacheTokens: 0,
+    todayCacheSavingsUSD: 0, todayCacheEfficiency: 0,
     allTimeRequestCount: 0, allTimeCost: 0, allTimeCacheTokens: 0,
     allTimeInputTokens: 0, allTimeOutputTokens: 0,
     allTimeSavedUSD: 0, allTimeAvgCacheEfficiency: 0,
@@ -59,6 +60,7 @@ const DEFAULT_STATE: AppState = {
   },
   autoLimits: null,
   codexAccount: { serviceTier: null },
+  stateFreshness: 'empty',
   initialRefreshComplete: false,
   historyWarmupPending: false,
   historyWarmupStartsAt: null,
@@ -116,6 +118,11 @@ function normalizeExtraUsage(extraUsage: AppState['extraUsage'] | null | undefin
   };
 }
 
+function normalizeStateFreshness(value: unknown, initialRefreshComplete: boolean): AppState['stateFreshness'] {
+  if (value === 'empty' || value === 'restored' || value === 'fresh') return value;
+  return initialRefreshComplete ? 'fresh' : 'empty';
+}
+
 function normalizeSession(session: Partial<AppState['sessions'][number]> | null | undefined): AppState['sessions'][number] {
   const state = session?.state;
   const normalizedState = state === 'active' || state === 'waiting' || state === 'idle' || state === 'compacting'
@@ -165,6 +172,7 @@ function normalizeState(next: AppState): AppState {
   return {
     ...DEFAULT_STATE,
     ...next,
+    stateFreshness: normalizeStateFreshness(next.stateFreshness, next.initialRefreshComplete === true),
     sessions: arrayOrEmpty(next.sessions).map(session => normalizeSession(session)),
     usage: {
       ...DEFAULT_STATE.usage,
