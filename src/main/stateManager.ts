@@ -138,6 +138,8 @@ interface LedgerRefreshResult {
   scannedFiles: number;
 }
 
+type LedgerSourceFile = { filePath: string; provider: 'claude' | 'codex'; priority: boolean };
+
 const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
 const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -1138,8 +1140,20 @@ export class StateManager {
     );
   }
 
-  private hasCompletedUsageLedgerImport(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
-    return (snapshot.lastFullImportAt ?? 0) > 0 && !this.usageLedgerNeedsRebuild(settings, snapshot);
+  private hasCompletedUsageLedgerImport(
+    snapshot = this.usageLedgerStore.getSnapshot(),
+    settings = this.getSettings(),
+    sources: LedgerSourceFile[] = [],
+  ): boolean {
+    if ((snapshot.lastFullImportAt ?? 0) <= 0 || this.usageLedgerNeedsRebuild(settings, snapshot)) return false;
+    const providerMode = settings.provider ?? 'both';
+    const requiredProviders = new Set<'claude' | 'codex'>();
+    for (const source of sources) {
+      if (providerMode === 'both' || source.provider === providerMode) requiredProviders.add(source.provider);
+    }
+    if (requiredProviders.size === 0) return true;
+    const completedProviders = new Set(Object.values(snapshot.sourceCheckpoints).map(checkpoint => checkpoint.provider));
+    return [...requiredProviders].every(provider => completedProviders.has(provider));
   }
 
   private buildUsageTrend(settings = this.getSettings()): UsageTrendData {
@@ -2039,8 +2053,8 @@ export class StateManager {
     settings: AppSettings,
     includeFullHistory: boolean,
     priorityFiles?: Iterable<string>,
-  ): { files: Array<{ filePath: string; provider: 'claude' | 'codex'; priority: boolean }>; partial: boolean } {
-    const files: Array<{ filePath: string; provider: 'claude' | 'codex'; priority: boolean }> = [];
+  ): { files: LedgerSourceFile[]; partial: boolean } {
+    const files: LedgerSourceFile[] = [];
     const seen = new Set<string>();
     const priority = new Set<string>();
     for (const filePath of priorityFiles ?? []) priority.add(normalizeFileKey(filePath));
@@ -2099,34 +2113,41 @@ export class StateManager {
 
     let snapshot = this.usageLedgerStore.getSnapshot();
     const sourceList = this.ledgerSourceFiles(settings, includeFullHistory, priorityFiles);
-    const alreadyCompletedFullImport = this.hasCompletedUsageLedgerImport(snapshot, settings);
+    const alreadyCompletedFullImport = this.hasCompletedUsageLedgerImport(snapshot, settings, sourceList.files);
     const startedAt = Date.now();
     let changed = false;
     let scannedFiles = 0;
     let partial = !includeFullHistory && sourceList.partial && !alreadyCompletedFullImport;
+    let stoppedForBudget = false;
+    let importFailed = false;
 
     const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
     for (const source of sourceList.files) {
       if (!source.priority && shouldStopForBudget()) {
-        partial = !alreadyCompletedFullImport;
+        stoppedForBudget = true;
+        partial = true;
         break;
       }
 
       try {
+        if (!fs.statSync(source.filePath).isFile()) throw new Error('Ledger source is not a file');
         const nextSnapshot = await importUsageJsonlIntoSnapshot(snapshot, source.filePath, source.provider);
         scannedFiles += 1;
         if (nextSnapshot !== snapshot) changed = true;
         snapshot = nextSnapshot;
       } catch {
+        importFailed = true;
+        if (includeFullHistory) partial = true;
         // Summary cache remains a fallback for session-local data when an import fails.
       }
     }
 
+    const completedFullImport = includeFullHistory && !stoppedForBudget && !importFailed;
     if (changed) {
-      if (includeFullHistory) snapshot = { ...snapshot, lastFullImportAt: Date.now() };
+      if (completedFullImport) snapshot = { ...snapshot, lastFullImportAt: Date.now() };
       this.usageLedgerStore.replaceSnapshot(snapshot);
       this.usageLedgerStore.compact();
-    } else if (includeFullHistory) {
+    } else if (completedFullImport) {
       this.usageLedgerStore.replaceSnapshot({ ...snapshot, lastFullImportAt: Date.now() });
     }
 
