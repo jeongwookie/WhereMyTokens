@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe"><strong>v1.16.0 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe"><strong>v1.16.1 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -59,11 +59,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 途中で止まった full-history ledger import や失敗した source があっても budgeted warmup を継続し、古い provider completion marker を避けるよう修正 |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 永続 usage ledger、即時起動 snapshot、cost/token 履歴と git net-line output を重ねる Trend カードを追加 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | refresh 処理を scheduler で直列化し、startup / watcher / history / manual refresh 中も tray UI と hotkey popup の応答性を維持 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex アーカイブログと Claude agent ログを all-time 使用量に含め、all-time セッション数を全使用履歴ベースで表示 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | hotkey popup の応答性を保ちながら全セッション履歴を取りこぼさないようにし、トレイ補助ウィンドウを taskbar に出さないよう修正 |
-| **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | compact widget の waiting animation をデフォルトでオフにする Settings トグルを追加し、syncing animation は維持 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-v1.16.0-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-v1.16.1-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -83,7 +83,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.16.0-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.16.1-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 

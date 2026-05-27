@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe"><strong>Download v1.16.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe"><strong>Download v1.16.1</strong></a>
   ·
   <a href="#features">Features</a>
   ·
@@ -59,11 +59,11 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | May 27 | Keep budgeted ledger warmup running after truncated or failed full-history imports and avoid stale provider completion markers |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | May 26 | Add the persistent usage ledger, instant startup snapshots, and the Trend card for cost/token history with git net-line output |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | May 25 | Route refresh work through a scheduler so startup, watcher, history, and manual refreshes stay serialized and the tray UI remains responsive |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | May 21 | Include archived Codex logs and Claude agent logs in all-time usage, and show all-time session counts from full usage history |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | May 21 | Keep hotkey popups responsive without losing full-session history, and keep tray helper windows out of the taskbar |
-| **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | May 14 | Add a Settings toggle that keeps compact-widget waiting animations off by default while preserving syncing animation |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Download
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe)** - just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-v1.16.0-win-x64.zip)** - no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-v1.16.1-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.16.0-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.16.1-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 

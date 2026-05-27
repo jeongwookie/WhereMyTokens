@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe"><strong>v1.16.0 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe"><strong>v1.16.1 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -59,11 +59,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 잘린 full-history ledger import나 실패한 source가 있어도 budgeted warmup을 계속 예약하고 stale provider completion marker를 피하도록 수정 |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 지속 사용량 ledger, 즉시 시작 snapshot, cost/token 히스토리와 git 순 라인 산출을 함께 보는 Trend 카드를 추가 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | Refresh 작업을 scheduler로 직렬화하고 기본 budget을 적용해 startup, watcher, history, manual refresh 중에도 tray UI와 hotkey popup 반응성을 유지 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex 아카이브 로그와 Claude agent 로그를 all-time 사용량에 포함하고, all-time 세션 수를 전체 사용 기록 기준으로 표시 |
 | **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | Hotkey popup은 빠르게 열리면서도 전체 세션 기록을 놓치지 않게 하고, 트레이 보조 창이 taskbar에 나타나지 않도록 수정 |
-| **[v1.15.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.0)** | 5/14 | Compact 위젯의 waiting 애니메이션을 기본 꺼짐으로 유지하는 Settings 토글 추가, syncing 애니메이션은 유지 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.0/WhereMyTokens-v1.16.0-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-v1.16.1-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -83,7 +83,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.16.0-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.16.1-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
