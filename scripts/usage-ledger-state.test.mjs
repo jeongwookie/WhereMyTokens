@@ -67,6 +67,19 @@ class CountingUsageLedgerStore {
   }
 }
 
+function checkpoint(provider, overrides = {}) {
+  return {
+    provider,
+    sourceHash: `${provider}-source`,
+    size: 1,
+    mtimeMs: 1,
+    byteOffset: 1,
+    lastImportedAt: Date.parse('2026-05-25T12:00:00.000Z'),
+    hasUsage: true,
+    ...overrides,
+  };
+}
+
 test('state manager owns usage ledger import and query paths', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
   assert.match(src, /UsageLedgerStore/);
@@ -210,4 +223,69 @@ test('budgeted full-history ledger scans do not mark the import complete when tr
   assert.equal(result.partial, true);
   assert.equal(result.scannedFiles, 0);
   assert.equal(usageLedgerStore.snapshot.lastFullImportAt ?? 0, 0);
+});
+
+test('budgeted full-history ledger scans remain partial with an existing completion marker', async () => {
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    lastFullImportAt: Date.parse('2026-05-25T12:00:00.000Z'),
+    sourceCheckpoints: {
+      'claude-source': checkpoint('claude'),
+    },
+  };
+  const usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+  const manager = new StateManager(makeStore(), () => {});
+  manager.usageLedgerStore = usageLedgerStore;
+  manager.ledgerSourceFiles = () => ({
+    files: [{ filePath: path.join(os.tmpdir(), 'unreached.jsonl'), provider: 'claude', priority: false }],
+    partial: false,
+  });
+
+  const result = await manager.refreshUsageLedgerFromDiscoveredSources(0, undefined, true);
+
+  assert.equal(result.partial, true);
+  assert.equal(result.scannedFiles, 0);
+  assert.equal(usageLedgerStore.snapshot.lastFullImportAt, snapshot.lastFullImportAt);
+});
+
+test('full-history ledger import failures do not mark the import complete', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-ledger-failed-source-'));
+  try {
+    const usageLedgerStore = new CountingUsageLedgerStore(emptyUsageLedgerSnapshot());
+    const manager = new StateManager(makeStore(), () => {});
+    manager.usageLedgerStore = usageLedgerStore;
+    manager.ledgerSourceFiles = () => ({
+      files: [{ filePath: dir, provider: 'claude', priority: false }],
+      partial: false,
+    });
+
+    const result = await manager.refreshUsageLedgerFromDiscoveredSources(10_000, undefined, true);
+
+    assert.equal(result.partial, true);
+    assert.equal(result.scannedFiles, 0);
+    assert.equal(usageLedgerStore.snapshot.lastFullImportAt ?? 0, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('provider-specific stale full-import markers do not suppress warmup', async () => {
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    lastFullImportAt: Date.parse('2026-05-25T12:00:00.000Z'),
+    sourceCheckpoints: {
+      'claude-source': checkpoint('claude'),
+    },
+  };
+  const usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+  const manager = new StateManager(makeStore({ provider: 'both' }), () => {});
+  manager.usageLedgerStore = usageLedgerStore;
+  manager.ledgerSourceFiles = () => ({
+    files: [{ filePath: path.join(os.tmpdir(), 'codex-recent.jsonl'), provider: 'codex', priority: false }],
+    partial: true,
+  });
+
+  const result = await manager.refreshUsageLedgerFromDiscoveredSources(null, undefined, false);
+
+  assert.equal(result.partial, true);
 });
