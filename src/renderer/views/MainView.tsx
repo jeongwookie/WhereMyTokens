@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { PictureInPicture2 } from 'lucide-react';
-import { AppState, SessionInfo } from '../types';
+import { AppState, SessionInfo, WindowStats } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtRelative, modelColor } from '../theme';
 import SessionRow from '../components/SessionRow';
@@ -24,8 +24,9 @@ interface Props {
 }
 
 type NavView = 'settings' | 'notifications' | 'help';
-type ProviderMode = AppState['settings']['provider'];
+type ProviderId = AppState['settings']['enabledProviders'][number];
 type HeaderStatusTone = 'warning' | 'danger';
+type HeaderStatus = { label: string; title: string; tone: HeaderStatusTone };
 type SessionListItem =
   | { type: 'session'; session: SessionInfo }
   | {
@@ -44,6 +45,17 @@ type SessionListItem =
 const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 const STALE_MS = 6 * 60 * 60 * 1000;
+const EMPTY_WINDOW_STATS: WindowStats = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheCreationTokens: 0,
+  cacheReadTokens: 0,
+  totalTokens: 0,
+  costUSD: 0,
+  requestCount: 0,
+  cacheEfficiency: 0,
+  cacheSavingsUSD: 0,
+};
 
 function formatRefreshAge(lastUpdated: number): string {
   if (!lastUpdated) return 'Refresh';
@@ -84,10 +96,35 @@ function cacheMetricColor(value: number, C: ReturnType<typeof useTheme>): string
   return C.barRed;
 }
 
-function cacheMetricTitle(providerMode: ProviderMode): string {
-  if (providerMode === 'claude') return 'Claude: cache read / (cache read + cache creation)';
-  if (providerMode === 'codex') return 'Codex: cached input / input';
+function cacheMetricTitle(showClaudeUsage: boolean, showCodexUsage: boolean): string {
+  if (showClaudeUsage && !showCodexUsage) return 'Claude: cache read / (cache read + cache creation)';
+  if (showCodexUsage && !showClaudeUsage) return 'Codex: cached input / input';
   return 'Combined view: provider-specific cache metrics are aggregated';
+}
+
+function sessionProviderLabel(provider: SessionInfo['provider']): string {
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
+  return 'Claude';
+}
+
+function sessionProviderBadgeColors(provider: SessionInfo['provider'], C: ReturnType<typeof useTheme>): { background: string; color: string } {
+  if (provider === 'codex') return { background: C.output + '16', color: C.output };
+  if (provider === 'antigravity') return { background: C.input + '16', color: C.input };
+  return { background: C.accentDim, color: C.textMuted };
+}
+
+function emptySessionLabel(enabledProviders: readonly ProviderId[]): string {
+  const enabled = new Set(enabledProviders);
+  const labels = [
+    enabled.has('claude') ? 'Claude Code' : null,
+    enabled.has('codex') ? 'Codex' : null,
+    enabled.has('antigravity') ? 'Antigravity' : null,
+  ].filter((label): label is string => !!label);
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} or ${labels[1]}`;
+  if (labels.length > 2) return `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`;
+  return 'enabled provider';
 }
 
 function formatCodexServiceTier(serviceTier: string | null | undefined): string | null {
@@ -141,13 +178,13 @@ function headerIconButtonStyle(
   };
 }
 
-function buildHeaderStatus(args: {
+function buildClaudeHeaderStatus(args: {
   showClaudeUsage: boolean;
   hasClaudeFallback: boolean;
   apiConnected: boolean;
   apiStatusLabel?: string;
   apiError?: string;
-}): { label: string; title: string; tone: HeaderStatusTone } | null {
+}): HeaderStatus | null {
   const { showClaudeUsage, hasClaudeFallback, apiConnected, apiStatusLabel, apiError } = args;
   if (!showClaudeUsage) return null;
 
@@ -193,6 +230,84 @@ function buildHeaderStatus(args: {
   }
 
   return null;
+}
+
+function buildCodexHeaderStatus(args: {
+  showCodexUsage: boolean;
+  hasCodexFallback: boolean;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
+  codexFallbackSource?: AppState['limits']['codexH5']['source'];
+}): HeaderStatus | null {
+  const {
+    showCodexUsage,
+    hasCodexFallback,
+    codexUsageConnected,
+    codexStatusLabel,
+    codexError,
+    codexFallbackSource,
+  } = args;
+  if (!showCodexUsage) return null;
+
+  switch (codexStatusLabel) {
+    case 'rate limited':
+      return { label: 'Codex limited', title: codexError || 'Codex usage endpoint returned HTTP 429.', tone: 'warning' };
+    case 'schema changed':
+      return { label: 'Codex schema', title: codexError || 'Codex usage response changed shape.', tone: 'danger' };
+    case 'local log':
+      return { label: 'Codex local', title: codexError || 'Codex credentials were not found. Showing local log estimates only.', tone: 'warning' };
+    case 'auth failed':
+      return { label: 'Codex auth', title: codexError || 'Codex usage token was rejected or expired.', tone: 'danger' };
+    case 'forbidden':
+      return { label: 'Codex blocked', title: codexError || 'Codex usage access was denied for this account.', tone: 'danger' };
+    case 'api timeout':
+      return { label: 'Codex timeout', title: codexError || 'Codex usage request timed out.', tone: 'warning' };
+    case 'api disconnected':
+      return { label: 'Codex offline', title: codexError || 'Codex usage request failed.', tone: 'danger' };
+    default:
+      break;
+  }
+
+  if (hasCodexFallback) {
+    const label = codexFallbackSource === 'cache' ? 'Codex cache' : 'Codex log';
+    const source = codexFallbackSource === 'cache' ? 'last cached usage snapshot' : 'local log estimates';
+    return {
+      label,
+      title: `Codex live usage is unavailable; using ${source}.`,
+      tone: 'warning',
+    };
+  }
+
+  if (!codexUsageConnected && codexStatusLabel) {
+    return {
+      label: 'Codex offline',
+      title: codexError || 'Codex live usage is unavailable.',
+      tone: 'danger',
+    };
+  }
+
+  return null;
+}
+
+function buildHeaderStatus(args: {
+  showClaudeUsage: boolean;
+  showCodexUsage: boolean;
+  hasClaudeFallback: boolean;
+  hasCodexFallback: boolean;
+  apiConnected: boolean;
+  apiStatusLabel?: string;
+  apiError?: string;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
+  codexFallbackSource?: AppState['limits']['codexH5']['source'];
+}): HeaderStatus | null {
+  const statuses = [
+    buildClaudeHeaderStatus(args),
+    buildCodexHeaderStatus(args),
+  ].filter((status): status is HeaderStatus => !!status);
+  return statuses.find(status => status.tone === 'danger') ?? statuses[0] ?? null;
 }
 
 function latestTime(a: string | null, b: string | null): string | null {
@@ -341,21 +456,46 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   onToggleCompactWidget: () => void;
 }) {
   const C = useTheme();
-  const { sessions, usage, settings, apiConnected, apiError, apiStatusLabel } = state;
+  const {
+    sessions,
+    usage,
+    settings,
+    apiConnected,
+    apiError,
+    apiStatusLabel,
+    codexUsageConnected,
+    codexError,
+    codexStatusLabel,
+  } = state;
   const { currency, usdToKrw } = settings;
   const compactWidgetEnabled = settings.compactWidgetEnabled === true;
-  const providerMode = settings.provider ?? 'both';
-  const showClaudeUsage = providerMode !== 'codex';
-  const showCodexUsage = providerMode !== 'claude';
+  const enabledProviders = new Set(settings.enabledProviders);
+  const showClaudeUsage = enabledProviders.has('claude');
+  const showCodexUsage = enabledProviders.has('codex');
   const hasClaudeFallback = showClaudeUsage && (state.limits.h5.source === 'statusLine' || state.limits.week.source === 'statusLine');
+  const hasCodexFallback = showCodexUsage && (
+    state.limits.codexH5.source === 'localLog'
+    || state.limits.codexWeek.source === 'localLog'
+    || state.limits.codexH5.source === 'cache'
+    || state.limits.codexWeek.source === 'cache'
+  );
+  const codexFallbackSource = state.limits.codexH5.source === 'cache' || state.limits.codexWeek.source === 'cache'
+    ? 'cache'
+    : (state.limits.codexH5.source === 'localLog' || state.limits.codexWeek.source === 'localLog' ? 'localLog' : undefined);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
   const headerStatus = useMemo(() => buildHeaderStatus({
     showClaudeUsage,
+    showCodexUsage,
     hasClaudeFallback,
+    hasCodexFallback,
     apiConnected,
     apiStatusLabel,
     apiError,
-  }), [apiConnected, apiError, apiStatusLabel, hasClaudeFallback, showClaudeUsage]);
+    codexUsageConnected,
+    codexStatusLabel,
+    codexError,
+    codexFallbackSource,
+  }), [apiConnected, apiError, apiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -364,7 +504,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : usage.todayCacheEfficiency;
   const saved = isAll ? usage.allTimeSavedUSD : usage.todayCacheSavingsUSD;
   const cacheColor = cacheMetricColor(cacheEff, C);
-  const cacheTitle = cacheMetricTitle(providerMode);
+  const cacheTitle = cacheMetricTitle(showClaudeUsage, showCodexUsage);
   const planLabel = showClaudeUsage && state.autoLimits ? state.autoLimits.plan : undefined;
   const codexTierLabel = showCodexUsage ? formatCodexServiceTier(state.codexAccount.serviceTier) : null;
   const statusStyles = headerStatus?.tone === 'danger'
@@ -538,19 +678,19 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
 }) {
   const C = useTheme();
   const { currency, usdToKrw } = settings;
-  const providerMode = settings.provider ?? 'both';
-  const showClaudeUsage = providerMode !== 'codex';
-  const showCodexUsage = providerMode !== 'claude';
-  const showSonnet = settings.provider !== 'codex' && (limits.so.pct > 0 || usage.sonnetWeekTokens > 0);
+  const enabledProviders = new Set(settings.enabledProviders);
+  const showClaudeUsage = enabledProviders.has('claude');
+  const showCodexUsage = enabledProviders.has('codex');
+  const claudeProviderUsage = usage.byProvider.claude;
+  const codexProviderUsage = usage.byProvider.codex;
+  const claudeH5 = claudeProviderUsage?.windows.h5 ?? EMPTY_WINDOW_STATS;
+  const claudeWeek = claudeProviderUsage?.windows.week ?? EMPTY_WINDOW_STATS;
+  const claudeSonnetWeek = claudeProviderUsage?.windows.sonnetWeek ?? EMPTY_WINDOW_STATS;
+  const codexH5 = codexProviderUsage?.windows.h5 ?? EMPTY_WINDOW_STATS;
+  const codexWeek = codexProviderUsage?.windows.week ?? EMPTY_WINDOW_STATS;
+  const showSonnet = showClaudeUsage && (limits.so.pct > 0 || claudeSonnetWeek.totalTokens > 0);
   const showExtraUsage = showClaudeUsage && !!extraUsage?.isEnabled;
-  const showCodexPanel = showCodexUsage && (
-    providerMode === 'codex' ||
-    historyWarmupPending ||
-    usage.h5Codex.totalTokens > 0 ||
-    usage.weekCodex.totalTokens > 0 ||
-    limits.codexH5.pct > 0 ||
-    limits.codexWeek.pct > 0
-  );
+  const showCodexPanel = showCodexUsage;
   const codexH5HasLimit = hasLimitData(limits.codexH5);
   const codexWeekHasLimit = hasLimitData(limits.codexWeek);
   const codexH5Pending = historyWarmupPending && (limits.codexH5.source === 'localLog' || !codexH5HasLimit);
@@ -572,11 +712,11 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
 
       {showClaudeUsage && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-          <TokenStatsCard provider="Claude" period="5h" stats={usage.h5} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} resetLabel={limits.h5.resetLabel} apiConnected={apiConnected} burnRate={usage.burnRate}
+          <TokenStatsCard provider="Claude" period="5h" stats={claudeH5} currency={currency} usdToKrw={usdToKrw}
+            limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} resetLabel={limits.h5.resetLabel} apiConnected={apiConnected} burnRate={claudeProviderUsage?.burnRate}
             limitSourceLabel={claudeH5Source.label} limitSourceTitle={claudeH5Source.title} limitSourceTone={claudeH5Source.tone}
             limitDataState={limitDataState(limits.h5)} hero borderRight />
-          <TokenStatsCard provider="Claude" period="1w" stats={usage.week} currency={currency} usdToKrw={usdToKrw}
+          <TokenStatsCard provider="Claude" period="1w" stats={claudeWeek} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.week.pct} resetMs={limits.week.resetMs} resetLabel={limits.week.resetLabel} apiConnected={apiConnected}
             limitSourceLabel={claudeWeekSource.label} limitSourceTitle={claudeWeekSource.title} limitSourceTone={claudeWeekSource.tone}
             limitDataState={limitDataState(limits.week)} hero />
@@ -591,10 +731,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
 
       {showSonnet && (
         <div style={{ borderBottom: `1px solid ${C.border}` }}>
-          <TokenStatsCard provider="Sonnet" period="1w" stats={{
-            inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0,
-            totalTokens: usage.sonnetWeekTokens, costUSD: 0, requestCount: 0, cacheEfficiency: 0, cacheSavingsUSD: 0,
-          }} currency={currency} usdToKrw={usdToKrw}
+          <TokenStatsCard provider="Sonnet" period="1w" stats={claudeSonnetWeek} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.so.pct} resetMs={limits.so.resetMs} resetLabel={limits.so.resetLabel} apiConnected={apiConnected}
             limitSourceLabel={sonnetSource.label} limitSourceTitle={sonnetSource.title} limitSourceTone={sonnetSource.tone}
             limitDataState={limitDataState(limits.so)} hideCost />
@@ -603,12 +740,12 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
 
       {showCodexPanel && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-          <TokenStatsCard provider="Codex" period="5h" stats={usage.h5Codex} currency={currency} usdToKrw={usdToKrw}
+          <TokenStatsCard provider="Codex" period="5h" stats={codexH5} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} resetLabel={limits.codexH5.resetLabel} apiConnected={codexH5HasLimit}
             limitSourceLabel={codexH5Source.label} limitSourceTitle={codexH5Source.title} limitSourceTone={codexH5Source.tone}
             limitDataState={limitDataState(limits.codexH5, codexH5Pending)} pendingLimit={codexH5Pending} pendingLimitLabel="Syncing" pendingLimitTitle={codexWarmupTitle}
             cacheMetricMode="codex" hero borderRight />
-          <TokenStatsCard provider="Codex" period="1w" stats={usage.weekCodex} currency={currency} usdToKrw={usdToKrw}
+          <TokenStatsCard provider="Codex" period="1w" stats={codexWeek} currency={currency} usdToKrw={usdToKrw}
             limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} resetLabel={limits.codexWeek.resetLabel} apiConnected={codexWeekHasLimit}
             limitSourceLabel={codexWeekSource.label} limitSourceTitle={codexWeekSource.title} limitSourceTone={codexWeekSource.tone}
             limitDataState={limitDataState(limits.codexWeek, codexWeekPending)} pendingLimit={codexWeekPending} pendingLimitLabel="Syncing" pendingLimitTitle={codexWarmupTitle}
@@ -670,7 +807,8 @@ const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, on
   onToggle: () => void;
 }) {
   const C = useTheme();
-  const provider = item.provider === 'codex' ? 'Codex' : 'Claude';
+  const provider = sessionProviderLabel(item.provider);
+  const providerBadge = sessionProviderBadgeColors(item.provider, C);
   const chipColor = item.state === 'waiting' ? C.waiting : C.textMuted;
   const modelColorValue = item.modelName ? modelColor(item.modelName, C) : C.textMuted;
   return (
@@ -699,7 +837,7 @@ const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, on
               {item.modelName}
             </span>
           )}
-          <span style={{ fontSize: 9, background: item.provider === 'codex' ? C.output + '16' : C.accentDim, color: item.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+          <span style={{ fontSize: 9, background: providerBadge.background, color: providerBadge.color, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
             {provider}
           </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>
@@ -738,10 +876,9 @@ const SessionItem = React.memo(function SessionItem({ session, expanded, onToggl
   return <SessionRow session={session} expanded={expanded} onToggle={handleToggle} />;
 });
 
-const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, providerMode }: {
+const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: {
   sessions: SessionInfo[];
   settings: AppState['settings'];
-  providerMode: ProviderMode;
 }) {
   const C = useTheme();
   const hiddenProjects = settings.hiddenProjects ?? [];
@@ -1002,7 +1139,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings, pr
           </div>
         ))
         : sessions.length === 0
-          ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active {providerMode === 'codex' ? 'Codex' : providerMode === 'claude' ? 'Claude Code' : 'Claude Code or Codex'} sessions</div>
+          ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active {emptySessionLabel(settings.enabledProviders)} sessions</div>
           : null
       }
 
@@ -1132,7 +1269,6 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
   const C = useTheme();
   const { sessions, usage, settings } = state;
   const { currency, usdToKrw } = settings;
-  const providerMode = settings.provider ?? 'both';
   const allTimeCost = useMemo(() => usage.models.reduce((sum, model) => sum + model.costUSD, 0), [usage.models]);
   const [refreshing, setRefreshing] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -1204,7 +1340,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
       case 'sessions':
         return (
           <RenderErrorBoundary key={sectionId} label="Sessions Panel">
-            <SessionsPanel sessions={sessions} settings={settings} providerMode={providerMode} />
+            <SessionsPanel sessions={sessions} settings={settings} />
           </RenderErrorBoundary>
         );
       case 'activity':
@@ -1222,7 +1358,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
       default:
         return null;
     }
-  }, [allTimeCost, currency, providerMode, sessions, settings, state.apiConnected, state.codeOutputLoading, state.codeOutputStats, state.extraUsage, state.historyWarmupPending, state.historyWarmupStartsAt, state.limits, state.usageTrend, usage, usdToKrw]);
+  }, [allTimeCost, currency, sessions, settings, state.apiConnected, state.codeOutputLoading, state.codeOutputStats, state.extraUsage, state.historyWarmupPending, state.historyWarmupStartsAt, state.limits, state.usageTrend, usage, usdToKrw]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>

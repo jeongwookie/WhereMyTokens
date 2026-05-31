@@ -5,7 +5,7 @@
 import { Notification } from 'electron';
 import { addNotification } from './notificationHistory';
 import { UsageLimits } from './stateManager';
-import type { AppSettings } from './ipc';
+import type { ProviderId } from './providers/types';
 
 interface AlertState {
   lastAlertTime: number;    // ms timestamp
@@ -41,9 +41,9 @@ function smoothedPct(key: string, rawPct: number): number {
   return hist.reduce((a, b) => a + b, 0) / hist.length;
 }
 
-function shouldCheckProvider(key: string, providerMode: AppSettings['provider']): boolean {
-  if (key.startsWith('codex-')) return providerMode === 'codex' || providerMode === 'both';
-  return providerMode === 'claude' || providerMode === 'both';
+function shouldCheckProvider(key: string, enabledProviders: ReadonlySet<ProviderId>): boolean {
+  if (key.startsWith('codex-')) return enabledProviders.has('codex');
+  return enabledProviders.has('claude');
 }
 
 function formatReset(resetMs: number | null | undefined): string {
@@ -72,7 +72,7 @@ export function checkAlerts(
   limits: UsageLimits,
   thresholds: number[],
   enabled: boolean,
-  providerMode: AppSettings['provider'],
+  enabledProviders: ReadonlySet<ProviderId>,
   options: AlertOptions = {},
 ): void {
   if (!enabled) return;
@@ -87,7 +87,7 @@ export function checkAlerts(
 
   const now = Date.now();
 
-  for (const { key, pct, resetMs, label, source } of checks.filter(check => shouldCheckProvider(check.key, providerMode))) {
+  for (const { key, pct, resetMs, label, source } of checks.filter(check => shouldCheckProvider(check.key, enabledProviders))) {
     if (options.deferCodexLocalLog && key.startsWith('codex-') && source === 'localLog') continue;
     if (pct <= 0) continue;
     const state = getState(key);

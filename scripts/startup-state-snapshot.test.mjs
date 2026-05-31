@@ -11,6 +11,49 @@ const {
 } = snapshotModule;
 const { StateManager } = stateManagerModule;
 
+const EMPTY_WINDOW = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheCreationTokens: 0,
+  cacheReadTokens: 0,
+  totalTokens: 0,
+  costUSD: 0,
+  requestCount: 0,
+  cacheEfficiency: 0,
+  cacheSavingsUSD: 0,
+};
+
+const EMPTY_USAGE = {
+  byProvider: {
+    claude: {
+      windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW, sonnetWeek: EMPTY_WINDOW },
+      burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
+    },
+    codex: { windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW } },
+  },
+  models: [],
+  heatmap: [],
+  heatmap30: [],
+  heatmap90: [],
+  weeklyTimeline: [],
+  todayTokens: 0,
+  todayCost: 0,
+  todayRequestCount: 0,
+  todayInputTokens: 0,
+  todayOutputTokens: 0,
+  todayCacheTokens: 0,
+  todayCacheSavingsUSD: 0,
+  todayCacheEfficiency: 0,
+  allTimeRequestCount: 0,
+  allTimeCost: 0,
+  allTimeCacheTokens: 0,
+  allTimeInputTokens: 0,
+  allTimeOutputTokens: 0,
+  allTimeSavedUSD: 0,
+  allTimeAvgCacheEfficiency: 0,
+  todBuckets: [],
+};
+
 const BASE_STATE = {
   sessions: [],
   initialRefreshComplete: false,
@@ -19,7 +62,7 @@ const BASE_STATE = {
   lastUpdated: 0,
   stateFreshness: 'empty',
   codeOutputLoading: false,
-  usage: { todayTokens: 0 },
+  usage: EMPTY_USAGE,
   usageTrend: { daily: [], weekly: [], monthly: [] },
 };
 
@@ -40,6 +83,7 @@ function makeStore(values = {}) {
 
 test('startup snapshot normalizer marks recent snapshots as restored UI state', () => {
   const now = 1_800_000;
+  const usage = { ...EMPTY_USAGE, todayTokens: 123 };
   const snapshot = makeStartupStateSnapshot({
     ...BASE_STATE,
     initialRefreshComplete: true,
@@ -48,7 +92,7 @@ test('startup snapshot normalizer marks recent snapshots as restored UI state', 
     stateFreshness: 'fresh',
     codeOutputLoading: true,
     lastUpdated: now - 10_000,
-    usage: { todayTokens: 123 },
+    usage,
   }, now);
 
   const restored = normalizeStartupStateSnapshot(snapshot, BASE_STATE, now);
@@ -59,7 +103,11 @@ test('startup snapshot normalizer marks recent snapshots as restored UI state', 
   assert.equal(restored.historyWarmupPending, false);
   assert.equal(restored.historyWarmupStartsAt, null);
   assert.equal(restored.codeOutputLoading, false);
-  assert.deepEqual(restored.usage, { todayTokens: 123 });
+  assert.deepEqual(restored.usage, usage);
+});
+
+test('startup snapshot schema version is bumped for provider-keyed usage data', () => {
+  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 3);
 });
 
 test('startup snapshot normalizer rejects stale and mismatched snapshots', () => {
@@ -145,7 +193,7 @@ test('startup snapshot normalizer sanitizes schema-valid persisted sessions', ()
       repoGitStats: {
         repo: { toplevel: 'C:\\Users\\example\\my-project' },
       },
-      settings: { provider: 'codex' },
+      settings: { enabledProviders: ['codex'] },
     },
   };
 
@@ -167,20 +215,24 @@ test('startup snapshot normalizer rejects legacy snapshot schema', () => {
     normalizeStartupStateSnapshot({ ...snapshot, schemaVersion: STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION - 1 }, BASE_STATE, now),
     null,
   );
+  assert.equal(
+    normalizeStartupStateSnapshot({ ...snapshot, schemaVersion: 2 }, BASE_STATE, now),
+    null,
+  );
 });
 
 test('StateManager keeps live settings when restoring a cached startup snapshot', () => {
   const snapshot = makeStartupStateSnapshot({
     ...BASE_STATE,
     settings: {
-      provider: 'both',
+      enabledProviders: ['claude', 'codex'],
       mainSectionOrder: ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'],
       hiddenMainSections: [],
     },
   }, Date.now());
   const store = makeStore({ _startupStateSnapshot: snapshot });
   store.store = {
-    provider: 'both',
+    enabledProviders: ['claude', 'codex'],
     mainSectionOrder: ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'],
     hiddenMainSections: ['codeOutput', 'modelUsage'],
   };

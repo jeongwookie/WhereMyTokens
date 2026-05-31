@@ -1,4 +1,5 @@
-import { CompactRecentEntry, FileUsageSummary } from './jsonlTypes';
+import { CompactRecentEntry, FileUsageSummary, UsageProvider } from './jsonlTypes';
+import type { ProviderId } from './providers/types';
 
 export interface WindowStats {
   inputTokens: number;
@@ -14,7 +15,7 @@ export interface WindowStats {
 
 export interface ModelUsage {
   model: string;
-  provider: 'claude' | 'codex' | 'other';
+  provider: UsageProvider;
   tokens: number;
   costUSD: number;
 }
@@ -46,11 +47,13 @@ export interface TimeOfDayBucket {
   requestCount: number;
 }
 
+export interface ProviderWindowUsage {
+  windows: Record<string, WindowStats>;
+  burnRate?: BurnRate;
+}
+
 export interface UsageData {
-  h5: WindowStats;
-  week: WindowStats;
-  h5Codex: WindowStats;
-  weekCodex: WindowStats;
+  byProvider: Partial<Record<ProviderId, ProviderWindowUsage>>;
   models: ModelUsage[];
   heatmap: HourlyBucket[];
   heatmap30: HourlyBucket[];
@@ -71,8 +74,6 @@ export interface UsageData {
   allTimeOutputTokens: number;
   allTimeSavedUSD: number;
   allTimeAvgCacheEfficiency: number;
-  sonnetWeekTokens: number;
-  burnRate: BurnRate;
   todBuckets: TimeOfDayBucket[];
 }
 
@@ -129,12 +130,12 @@ function addEntry(target: AggregateLike, entry: CompactRecentEntry): void {
   target.cacheSavingsUSD += entry.cacheSavingsUSD;
 }
 
-function finalize(window: WindowStats, provider: 'claude' | 'codex'): void {
+function finalize(window: WindowStats, provider: UsageProvider): void {
   const denominator = cacheEfficiencyDenominator(provider, window);
   window.cacheEfficiency = denominator > 0 ? (window.cacheReadTokens / denominator) * 100 : 0;
 }
 
-function cacheEfficiencyDenominator(provider: 'claude' | 'codex' | 'other', aggregate: CacheMetricLike): number {
+function cacheEfficiencyDenominator(provider: UsageProvider, aggregate: CacheMetricLike): number {
   return provider === 'codex'
     ? aggregate.inputTokens + aggregate.cacheReadTokens
     : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
@@ -157,6 +158,10 @@ function weekLabelFromStart(startMs: number): string {
 
 function modelMapKey(model: string, provider: ModelUsage['provider']): string {
   return `${provider}:${model}`;
+}
+
+function isProviderId(provider: UsageProvider): provider is ProviderId {
+  return provider === 'claude' || provider === 'codex' || provider === 'antigravity';
 }
 
 export function computeUsage(
@@ -190,10 +195,10 @@ export function computeUsage(
   const day90Start = todayMidnight - 149 * dayMs;
   const timelineStart = currentWeekStart - 19 * weekMs;
 
-  const h5 = emptyWindow();
-  const week = emptyWindow();
-  const h5Codex = emptyWindow();
-  const weekCodex = emptyWindow();
+  const providerWindows = new Map<ProviderId, ProviderWindowUsage>([
+    ['claude', { windows: { h5: emptyWindow(), week: emptyWindow(), sonnetWeek: emptyWindow() } }],
+    ['codex', { windows: { h5: emptyWindow(), week: emptyWindow() } }],
+  ]);
   const modelMap = new Map<string, ModelUsage>();
   const heatMap7 = new Map<string, HourlyBucket>();
   const heatMap30 = new Map<string, HourlyBucket>();
@@ -209,7 +214,6 @@ export function computeUsage(
   let todayCacheReadTokens = 0;
   let todayCacheSavingsUSD = 0;
   let todayCacheDenominator = 0;
-  let sonnetWeekTokens = 0;
 
   const todMap: Record<TimeOfDayBucket['period'], TimeOfDayBucket> = {
     night: { period: 'night', label: 'Night (0-6h)', tokens: 0, costUSD: 0, requestCount: 0 },
@@ -264,6 +268,32 @@ export function computeUsage(
     modelMap.set(key, modelUsage);
   };
 
+  const providerWindowStarts = (provider: ProviderId): { h5: number; week: number } => {
+    if (provider === 'claude') return { h5: claudeH5Start, week: claudeWeekStart };
+    if (provider === 'codex') return { h5: codexH5Start, week: codexWeekStart };
+    return { h5: now - h5Ms, week: currentWeekStart };
+  };
+
+  const getProviderWindowUsage = (provider: ProviderId): ProviderWindowUsage => {
+    const existing = providerWindows.get(provider);
+    if (existing) return existing;
+    const next = { windows: { h5: emptyWindow(), week: emptyWindow() } };
+    providerWindows.set(provider, next);
+    return next;
+  };
+
+  const addProviderWindowEntry = (entry: CompactRecentEntry, timestampMs: number) => {
+    if (!isProviderId(entry.provider)) return;
+    const usage = getProviderWindowUsage(entry.provider);
+    const starts = providerWindowStarts(entry.provider);
+    if (timestampMs >= starts.h5) addEntry(usage.windows.h5, entry);
+    if (timestampMs < starts.week) return;
+    addEntry(usage.windows.week, entry);
+    if (entry.provider === 'claude' && entry.model.toLowerCase().includes('sonnet')) {
+      addEntry(usage.windows.sonnetWeek, entry);
+    }
+  };
+
   for (const summary of summaries) {
     addAggregate(allTime, summary.historicalRollup.aggregate);
 
@@ -312,23 +342,13 @@ export function computeUsage(
         todayCacheDenominator += cacheEfficiencyDenominator(entry.provider, entry);
       }
 
-      if (entry.provider === 'claude') {
-        if (ts >= claudeH5Start) addEntry(h5, entry);
-        if (ts >= claudeWeekStart) {
-          addEntry(week, entry);
-          if (entry.model.toLowerCase().includes('sonnet')) sonnetWeekTokens += tokens;
-        }
-      } else if (entry.provider === 'codex') {
-        if (ts >= codexH5Start) addEntry(h5Codex, entry);
-        if (ts >= codexWeekStart) addEntry(weekCodex, entry);
-      }
+      addProviderWindowEntry(entry, ts);
     }
   }
 
-  finalize(h5, 'claude');
-  finalize(week, 'claude');
-  finalize(h5Codex, 'codex');
-  finalize(weekCodex, 'codex');
+  for (const [provider, usage] of providerWindows) {
+    for (const window of Object.values(usage.windows)) finalize(window, provider);
+  }
 
   const models = Array.from(modelMap.values())
     .filter(model => model.tokens > 0)
@@ -338,10 +358,14 @@ export function computeUsage(
     .filter(entry => entry.provider === 'claude' && entry.timestampMs >= now - 5 * 60 * 1000);
   const recent5minOutput = recentClaudeEntries.reduce((sum, entry) => sum + entry.outputTokens, 0);
   const h5OutputPerMin = recent5minOutput / 5;
-  const h5Remaining = userLimits.h5 - h5.totalTokens;
-  const weekRemaining = userLimits.week - week.totalTokens;
+  const claudeWindows = getProviderWindowUsage('claude').windows;
+  const claudeH5 = claudeWindows.h5;
+  const claudeWeek = claudeWindows.week;
+  const h5Remaining = userLimits.h5 - claudeH5.totalTokens;
+  const weekRemaining = userLimits.week - claudeWeek.totalTokens;
   const h5EtaMs = h5OutputPerMin > 0 && h5Remaining > 0 ? (h5Remaining / h5OutputPerMin) * 60_000 : null;
   const weekEtaMs = h5OutputPerMin > 0 && weekRemaining > 0 ? (weekRemaining / h5OutputPerMin) * 60_000 : null;
+  getProviderWindowUsage('claude').burnRate = { h5OutputPerMin, h5EtaMs, weekEtaMs };
 
   const allTimeCacheDenominator = summaries.reduce((sum, summary) => {
     const historical = Object.values(summary.historicalRollup.modelTotals).length > 0 ? summary.historicalRollup.aggregate : null;
@@ -363,10 +387,7 @@ export function computeUsage(
     : 0;
 
   return {
-    h5,
-    week,
-    h5Codex,
-    weekCodex,
+    byProvider: Object.fromEntries(providerWindows),
     models,
     heatmap: Array.from(heatMap7.values()),
     heatmap30: Array.from(heatMap30.values()),
@@ -387,8 +408,6 @@ export function computeUsage(
     allTimeOutputTokens: allTime.outputTokens,
     allTimeSavedUSD: allTime.cacheSavingsUSD,
     allTimeAvgCacheEfficiency,
-    sonnetWeekTokens,
-    burnRate: { h5OutputPerMin, h5EtaMs, weekEtaMs },
     todBuckets: [todMap.night, todMap.morning, todMap.afternoon, todMap.evening],
   };
 }

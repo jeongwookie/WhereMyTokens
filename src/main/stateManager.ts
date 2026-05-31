@@ -1,30 +1,47 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
-import { discoverSessions, DiscoverSessionsOptions, DiscoveredSession, SessionDiscoveryScope, SessionState, CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR, CODEX_SESSIONS_DIR, CODEX_USAGE_DIRS, describeCodexSource, describeRepoContext, projectKeysForCwd } from './sessionDiscovery';
-import { scanCodexRateLimitsOnly, scanJsonlSummaryCached } from './jsonlParser';
+import { projectKeysForCwd } from './providers/shared/repoContext';
+import { scanCodexRateLimitsOnly } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
-import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, fetchAutoLimits, fetchApiUsagePct, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
-import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, fetchCodexUsagePct, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
+import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
+import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGitStatsAsync, GitDailyStats, GitStats } from './gitStatsCollector';
 import { GitOutputLedgerStore, buildCodeOutputFromGitLedger } from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
-import { clearSessionMetadataCache, invalidateSessionMetadataCache, readCodexSessionHeader, readJsonlCwd } from './sessionMetadata';
+import { clearSessionMetadataCache, invalidateSessionMetadataCache } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
 import { ActivityBreakdown, ActivityBreakdownKind, CodexRateLimitWindow, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
-import { importUsageJsonlIntoSnapshot } from './usageLedgerImporter';
 import { UsageLedgerStore } from './usageLedgerStore';
-import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
+import { UsageProviderFilter, UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
+import type { UsageLedgerProvider } from './usageLedgerTypes';
 import { makeStartupStateSnapshot, normalizeStartupStateSnapshot, StateFreshness } from './startupStateSnapshot';
+import { createProviderRegistry, ProviderRegistry } from './providers';
+import type {
+  DiscoveredSession,
+  ExcludedProjectMatcher,
+  ProviderAdapter,
+  ProviderContext,
+  ProviderId,
+  ProviderLedgerSource,
+  ProviderQuotaSnapshot,
+  ProviderSource,
+  SessionDiscoveryScope,
+  SessionState,
+  SourceBackedProviderAdapter,
+} from './providers/types';
+import { isProviderEnabled } from './providers/settings';
+import { isClaudeQuotaSnapshot } from './providers/claude/quota';
+import { isCodexQuotaSnapshot } from './providers/codex/quota';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -100,6 +117,9 @@ export interface AppState {
   apiConnected: boolean;
   apiStatusLabel?: string;
   apiError?: string;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
   bridgeActive: boolean;
   extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;
@@ -138,10 +158,8 @@ interface LedgerRefreshResult {
   scannedFiles: number;
 }
 
-type LedgerSourceFile = { filePath: string; provider: 'claude' | 'codex'; priority: boolean };
+type LedgerSourceFile = ProviderLedgerSource;
 
-const SESSIONS_DIR = CLAUDE_SESSIONS_DIR;
-const PROJECTS_DIR = CLAUDE_PROJECTS_DIR;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
 const CODEX_H5_WINDOW_MS = 5 * 60 * 60 * 1000;
 const CODEX_WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -244,8 +262,11 @@ function currentSessionState(provider: SessionInfo['provider'], pid: number | nu
   return approximateSessionState(lastModified);
 }
 
-function providerMatchesMode(mode: AppSettings['provider'], provider: SessionInfo['provider']): boolean {
-  return mode === 'both' || mode === provider;
+function isSourceBackedProvider(provider: ProviderAdapter): provider is SourceBackedProviderAdapter {
+  return typeof (provider as SourceBackedProviderAdapter).ownsPath === 'function'
+    && typeof (provider as SourceBackedProviderAdapter).listRecentSources === 'function'
+    && typeof (provider as SourceBackedProviderAdapter).listAllSources === 'function'
+    && typeof (provider as SourceBackedProviderAdapter).scanSourceSummary === 'function';
 }
 
 function hasUsageRequests(summary: FileUsageSummary): boolean {
@@ -260,36 +281,21 @@ function normalizeFileKey(filePath: string): string {
   return path.normalize(filePath);
 }
 
-function makeExcludedMatcher(excludedProjects: readonly string[] = []) {
+function makeExcludedMatcher(excludedProjects: readonly string[] = []): ExcludedProjectMatcher {
   const exact = new Set(excludedProjects.filter(Boolean));
   const folded = new Set([...exact].map(name => name.toLowerCase()));
-  return (keys: Array<string | null | undefined>) => keys.some(key => {
+  const matcher = ((keys: Array<string | null | undefined>) => keys.some(key => {
     if (!key) return false;
     return exact.has(key) || folded.has(key.toLowerCase());
-  });
+  })) as { (keys: Array<string | null | undefined>): boolean; hasExclusions: boolean };
+  matcher.hasExclusions = exact.size > 0;
+  return matcher;
 }
 
 function isSameOrChildPath(parentPath: string | null, childPath: string | null): boolean {
   if (!parentPath || !childPath) return false;
   const relative = path.relative(parentPath, childPath);
   return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function isPathInRoot(filePath: string, rootPath: string): boolean {
-  return isSameOrChildPath(normalizeFileKey(rootPath), normalizeFileKey(filePath));
-}
-
-function isCodexUsagePath(filePath: string): boolean {
-  return CODEX_USAGE_DIRS.some(root => isPathInRoot(filePath, root));
-}
-
-function codexUsageRootRank(filePath: string): number | null {
-  if (isPathInRoot(filePath, CODEX_SESSIONS_DIR)) return 0;
-  return CODEX_USAGE_DIRS.some(root => root !== CODEX_SESSIONS_DIR && isPathInRoot(filePath, root)) ? 1 : null;
-}
-
-function isClaudeAgentJsonlPath(filePath: string): boolean {
-  return path.basename(filePath).startsWith('agent-');
 }
 
 export function resolveSessionRepoKeys(
@@ -341,6 +347,8 @@ export class StateManager {
   private codexUsagePct: CodexUsagePct | null = null;
   private codexUsagePctStoredAt = 0;
   private codexUsageConnected = false;
+  private codexStatusLabel = '';
+  private codexError = '';
   private lastCodexUsageCallMs = 0;
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
@@ -349,10 +357,12 @@ export class StateManager {
   private refreshScheduler: RefreshScheduler;
   private liveSession: LiveSessionData | null = null;
   private jsonlCache = new JsonlCache();
+  private readonly providerRegistry: ProviderRegistry;
   private codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private dirtySessionFiles = new Set<string>();
   private usageLedgerStore = new UsageLedgerStore();
+  private usageLedgerImportFailed = false;
   private gitOutputLedgerStore = new GitOutputLedgerStore();
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
@@ -388,9 +398,14 @@ export class StateManager {
   private static readonly SESSION_SCOPE: SessionDiscoveryScope = 'recent-active';
   private static readonly SESSION_SPIKE_MARGIN = 24;
 
-  constructor(store: Store<AppSettings>, onUpdate: (s: AppState) => void) {
+  constructor(
+    store: Store<AppSettings>,
+    onUpdate: (s: AppState) => void,
+    options: { providerRegistry?: ProviderRegistry } = {},
+  ) {
     this.store = store;
     this.onUpdate = onUpdate;
+    this.providerRegistry = options.providerRegistry ?? createProviderRegistry();
     this.state = this.emptyState();
     const restoredState = normalizeStartupStateSnapshot(
       this.getPersistedValue(STARTUP_STATE_SNAPSHOT_KEY, null),
@@ -433,6 +448,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        codexUsageConnected: this.codexUsageConnected,
+        codexStatusLabel: this.codexStatusLabel || undefined,
+        codexError: this.codexError || undefined,
         stateFreshness: this.currentStateFreshness(),
       };
       this.publishState();
@@ -509,14 +527,71 @@ export class StateManager {
     return normalizeSettings(this.store.store);
   }
 
+  private enabledProviders(settings: AppSettings): ProviderAdapter[] {
+    return this.providerRegistry
+      .getAll()
+      .filter(provider => isProviderEnabled(settings, provider.id));
+  }
+
+  private enabledProviderSet(settings: AppSettings): ReadonlySet<ProviderId> {
+    return new Set(settings.enabledProviders);
+  }
+
+  private enabledUsageLedgerProviders(settings: AppSettings): UsageProviderFilter {
+    return new Set(settings.enabledProviders) as ReadonlySet<UsageLedgerProvider>;
+  }
+
+  private providerSelectionChanged(next: AppSettings, previous: AppSettings): boolean {
+    const nextProviders = this.enabledProviderSet(next);
+    const previousProviders = this.enabledProviderSet(previous);
+    if (nextProviders.size !== previousProviders.size) return true;
+    return [...nextProviders].some(provider => !previousProviders.has(provider));
+  }
+
+  private sourceBackedProviders(settings: AppSettings): SourceBackedProviderAdapter[] {
+    return this.enabledProviders(settings).filter(isSourceBackedProvider);
+  }
+
+  private providerContext(overrides: Partial<ProviderContext> & { settings: AppSettings }): ProviderContext {
+    const { settings, ...rest } = overrides;
+    return {
+      nowMs: Date.now(),
+      jsonlCache: this.jsonlCache,
+      scanBudgetMs: null,
+      prioritySourceIds: new Set<string>(),
+      includeFullHistory: false,
+      force: false,
+      ...rest,
+      settings,
+    };
+  }
+
+  private startupLimitForProvider(provider: ProviderId): number {
+    if (provider === 'claude') return StateManager.STARTUP_CLAUDE_FILE_LIMIT;
+    if (provider === 'codex') return StateManager.STARTUP_CODEX_FILE_LIMIT;
+    return StateManager.STARTUP_CODEX_FILE_LIMIT;
+  }
+
+  private sourceForPath(provider: SourceBackedProviderAdapter, filePath: string, priority = false): ProviderSource {
+    return {
+      provider: provider.id,
+      sourceId: normalizeFileKey(filePath),
+      filePath,
+      priority,
+    };
+  }
+
   private emptyState(): AppState {
     return {
       sessions: [],
       usage: {
-        h5: this.emptyWindow(),
-        week: this.emptyWindow(),
-        h5Codex: this.emptyWindow(),
-        weekCodex: this.emptyWindow(),
+        byProvider: {
+          claude: {
+            windows: { h5: this.emptyWindow(), week: this.emptyWindow(), sonnetWeek: this.emptyWindow() },
+            burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
+          },
+          codex: { windows: { h5: this.emptyWindow(), week: this.emptyWindow() } },
+        },
         models: [],
         heatmap: [],
         heatmap30: [],
@@ -537,8 +612,6 @@ export class StateManager {
         allTimeOutputTokens: 0,
         allTimeSavedUSD: 0,
         allTimeAvgCacheEfficiency: 0,
-        sonnetWeekTokens: 0,
-        burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
         todBuckets: [],
       },
       usageTrend: emptyUsageTrendData(),
@@ -560,6 +633,10 @@ export class StateManager {
       lastUpdated: 0,
       apiConnected: false,
       apiStatusLabel: undefined,
+      apiError: undefined,
+      codexUsageConnected: false,
+      codexStatusLabel: undefined,
+      codexError: undefined,
       bridgeActive: false,
       extraUsage: null,
       repoGitStats: {},
@@ -610,7 +687,7 @@ export class StateManager {
     this.startDebugMemTimer();
 
     this.autoLimitTimer = setInterval(() => {
-      void this.refreshAutoLimits();
+      void this.refreshProviderQuotas(this.getSettings(), false).catch(() => {});
     }, 5 * 60 * 1000);
   }
 
@@ -848,17 +925,16 @@ export class StateManager {
     appendDebugMemoryLog('state-manager-snapshot', snapshot as unknown as Record<string, unknown>);
   }
 
-  private async refreshAutoLimits(): Promise<void> {
-    try {
-      const result = await fetchAutoLimits();
-      if (result) this.autoLimits = result;
-    } catch { /* ignore */ }
-  }
-
   private applyApiStatus(status: ClaudeApiStatus): void {
     this.apiConnected = status.connected;
     this.apiStatusLabel = status.label;
     this.apiError = status.detail;
+  }
+
+  private applyCodexStatus(status: CodexUsageStatus): void {
+    this.codexUsageConnected = status.connected;
+    this.codexStatusLabel = status.label;
+    this.codexError = status.detail;
   }
 
   private getAgedApiUsagePct(now = Date.now()): ApiUsagePct | null {
@@ -894,25 +970,43 @@ export class StateManager {
     return changed;
   }
 
-  private async refreshApiUsagePct(force = false): Promise<boolean> {
-    const now = Date.now();
+  private beginClaudeQuotaRequest(force: boolean, now: number): number | null {
     const credentialsChanged = this.consumeOAuthCredentialChange();
     if (credentialsChanged) {
       this.apiBackoffMs = 0;
       this.clearClaudeApiCache();
     }
     const elapsedSinceLastApiCall = now - this.lastApiCallMs;
-    if (!credentialsChanged && this.apiBackoffMs > 0 && elapsedSinceLastApiCall < this.apiBackoffMs) return false;
-    if (!force && !credentialsChanged && elapsedSinceLastApiCall < StateManager.API_MIN_INTERVAL_MS) return false;
+    if (!credentialsChanged && this.apiBackoffMs > 0 && elapsedSinceLastApiCall < this.apiBackoffMs) return null;
+    if (!force && !credentialsChanged && elapsedSinceLastApiCall < StateManager.API_MIN_INTERVAL_MS) return null;
     this.lastApiCallMs = now;
-    const requestSeq = ++this.apiRequestSeq;
-    const result = await fetchApiUsagePct();
-    if (requestSeq !== this.apiRequestSeq) return false;
-    this.applyApiStatus(result.status);
+    return ++this.apiRequestSeq;
+  }
 
-    if (result.usage) {
-      const mergedUsage = this.mergeApiUsageSample(result.usage, result.status, now);
-      const credentialMarker = getOAuthCredentialMarker();
+  private beginCodexQuotaRequest(force: boolean, now: number): number | null {
+    const elapsedSinceLastCall = now - this.lastCodexUsageCallMs;
+    if (this.codexUsageBackoffMs > 0 && elapsedSinceLastCall < this.codexUsageBackoffMs) return null;
+    if (!force && elapsedSinceLastCall < StateManager.CODEX_USAGE_MIN_INTERVAL_MS) return null;
+    this.lastCodexUsageCallMs = now;
+    return ++this.codexUsageRequestSeq;
+  }
+
+  private beginProviderQuotaRequest(provider: ProviderId, force: boolean, now: number): number | null {
+    if (provider === 'claude') return this.beginClaudeQuotaRequest(force, now);
+    if (provider === 'codex') return this.beginCodexQuotaRequest(force, now);
+    return 0;
+  }
+
+  private applyClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, requestStartedAtMs: number): boolean {
+    if (!isClaudeQuotaSnapshot(snapshot)) return false;
+    if (requestSeq !== this.apiRequestSeq) return false;
+    this.applyApiStatus(snapshot.status);
+
+    if (snapshot.autoLimits) this.autoLimits = snapshot.autoLimits;
+
+    if (snapshot.usage) {
+      const mergedUsage = this.mergeApiUsageSample(snapshot.usage, snapshot.status, requestStartedAtMs);
+      const credentialMarker = snapshot.credentialMarker;
       this.lastOAuthCredentialMarker = credentialMarker;
       this.apiUsagePct = mergedUsage;
       this.apiUsagePctStoredAt = Date.now();
@@ -926,16 +1020,16 @@ export class StateManager {
       return true;
     }
 
-    if (result.status.code === 'no-credentials') {
+    if (snapshot.status.code === 'no-credentials') {
       this.clearClaudeApiCache();
     }
 
-    if (result.status.code === 'rate-limited') {
-      this.apiBackoffMs = typeof result.status.retryAfterMs === 'number'
-        ? Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, result.status.retryAfterMs))
+    if (snapshot.status.code === 'rate-limited') {
+      this.apiBackoffMs = typeof snapshot.status.retryAfterMs === 'number'
+        ? Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, snapshot.status.retryAfterMs))
         : Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, CLAUDE_API_MAX_BACKOFF_MS);
-      this.apiError = `${result.status.detail} Retry in ${Math.max(1, Math.ceil(this.apiBackoffMs / 60000))}m.`;
-      this.apiStatusLabel = result.status.label || 'rate limited';
+      this.apiError = `${snapshot.status.detail} Retry in ${Math.max(1, Math.ceil(this.apiBackoffMs / 60000))}m.`;
+      this.apiStatusLabel = snapshot.status.label || 'rate limited';
     } else {
       this.apiBackoffMs = 0;
     }
@@ -957,37 +1051,66 @@ export class StateManager {
     return 0;
   }
 
-  private async refreshCodexUsagePct(force = false): Promise<boolean> {
-    const now = Date.now();
-    const elapsedSinceLastCall = now - this.lastCodexUsageCallMs;
-    if (this.codexUsageBackoffMs > 0 && elapsedSinceLastCall < this.codexUsageBackoffMs) return false;
-    if (!force && elapsedSinceLastCall < StateManager.CODEX_USAGE_MIN_INTERVAL_MS) return false;
-    this.lastCodexUsageCallMs = now;
-    const requestSeq = ++this.codexUsageRequestSeq;
-    const result = await fetchCodexUsagePct();
+  private applyCodexQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number): boolean {
+    if (!isCodexQuotaSnapshot(snapshot)) return false;
     if (requestSeq !== this.codexUsageRequestSeq) return false;
-    this.codexUsageConnected = result.status.connected;
+    this.applyCodexStatus(snapshot.status);
 
-    if (result.usage) {
-      this.codexUsagePct = result.usage;
+    if (snapshot.usage) {
+      this.codexUsagePct = snapshot.usage;
       this.codexUsagePctStoredAt = Date.now();
       this.codexUsageBackoffMs = 0;
       this.setPersistedValue('_cachedCodexUsagePct', {
-        ...result.usage,
-        authMtimeMs: result.authMtimeMs,
+        ...snapshot.usage,
+        authMtimeMs: snapshot.authMtimeMs,
         storedAt: this.codexUsagePctStoredAt,
         schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
       });
       return true;
     }
 
-    if (result.status.code === 'no-credentials') {
+    if (snapshot.status.code === 'no-credentials') {
       this.codexUsagePct = null;
       this.codexUsagePctStoredAt = 0;
       this.deletePersistedValue('_cachedCodexUsagePct');
     }
-    this.codexUsageBackoffMs = this.codexBackoffForStatus(result.status);
+    this.codexUsageBackoffMs = this.codexBackoffForStatus(snapshot.status);
+    if (snapshot.status.code === 'rate-limited' && this.codexUsageBackoffMs > 0) {
+      this.codexError = `${snapshot.status.detail} Retry in ${Math.max(1, Math.ceil(this.codexUsageBackoffMs / 60000))}m.`;
+      this.codexStatusLabel = snapshot.status.label || 'rate limited';
+    }
     return true;
+  }
+
+  private applyProviderQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, requestStartedAtMs: number): boolean {
+    if (snapshot.provider === 'claude') return this.applyClaudeQuotaSnapshot(snapshot, requestSeq, requestStartedAtMs);
+    if (snapshot.provider === 'codex') return this.applyCodexQuotaSnapshot(snapshot, requestSeq);
+    return false;
+  }
+
+  private async refreshProviderQuota(
+    provider: ProviderAdapter,
+    settings: AppSettings,
+    force = false,
+    fetchQuota = provider.fetchQuota,
+  ): Promise<boolean> {
+    if (!fetchQuota || !provider.capabilities.has('quota')) return false;
+    const now = Date.now();
+    const requestSeq = this.beginProviderQuotaRequest(provider.id, force, now);
+    if (requestSeq == null) return false;
+    const snapshot = await fetchQuota(this.providerContext({ settings, force, nowMs: now }));
+    if (!snapshot) return false;
+    return this.applyProviderQuotaSnapshot(snapshot, requestSeq, now);
+  }
+
+  private async refreshProviderQuotas(settings: AppSettings, force = false): Promise<boolean> {
+    const refreshes: Array<Promise<boolean>> = [];
+    for (const provider of this.enabledProviders(settings)) {
+      if (!provider.fetchQuota) continue;
+      refreshes.push(this.refreshProviderQuota(provider, settings, force, provider.fetchQuota));
+    }
+    const results = await Promise.all(refreshes);
+    return results.some(Boolean);
   }
 
   private consumeManualProviderUsageForce(): boolean {
@@ -1015,6 +1138,7 @@ export class StateManager {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
     this.usageLedgerStore.reset();
+    this.usageLedgerImportFailed = false;
     this.state = {
       ...this.state,
       usageTrend: emptyUsageTrendData(),
@@ -1113,7 +1237,7 @@ export class StateManager {
     };
     const ledgerSnapshot = this.usageLedgerStore.getSnapshot();
     const usage = this.canUseUsageLedger(ledgerSnapshot, settings)
-      ? computeUsageFromLedger(ledgerSnapshot, effectiveLimits, resetWindows, now, settings.provider ?? 'both')
+      ? computeUsageFromLedger(ledgerSnapshot, effectiveLimits, resetWindows, now, this.enabledUsageLedgerProviders(settings))
       : computeUsage(this.getVisibleSummaries(settings), effectiveLimits, resetWindows);
     return {
       usage,
@@ -1125,18 +1249,18 @@ export class StateManager {
 
   private canUseUsageLedger(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
     if ((settings.excludedProjects?.length ?? 0) > 0) return false;
-    const provider = settings.provider ?? 'both';
+    if (this.usageLedgerImportFailed) return false;
+    const enabled = this.enabledProviderSet(settings);
     if (this.usageLedgerNeedsRebuild(settings, snapshot)) return false;
     const hasProviderRows = (record: Record<string, unknown>) => Object.keys(record).some(key =>
-      provider === 'both' || key.includes(`|${provider}|`)
+      enabled.has(key.split('|')[1] as ProviderId)
     );
     return hasProviderRows(snapshot.dailyModel) || hasProviderRows(snapshot.monthlyModel);
   }
 
   private usageLedgerNeedsRebuild(settings = this.getSettings(), snapshot = this.usageLedgerStore.getSnapshot()): boolean {
-    const provider = settings.provider ?? 'both';
     return Object.values(snapshot.sourceCheckpoints).some(checkpoint =>
-      checkpoint.needsRebuild && (provider === 'both' || checkpoint.provider === provider)
+      checkpoint.needsRebuild && this.enabledProviderSet(settings).has(checkpoint.provider)
     );
   }
 
@@ -1146,47 +1270,47 @@ export class StateManager {
     sources: LedgerSourceFile[] = [],
   ): boolean {
     if ((snapshot.lastFullImportAt ?? 0) <= 0 || this.usageLedgerNeedsRebuild(settings, snapshot)) return false;
-    const providerMode = settings.provider ?? 'both';
-    const requiredProviders = new Set<'claude' | 'codex'>();
+    const enabled = this.enabledProviderSet(settings);
+    const requiredProviders = new Set<ProviderId>();
     for (const source of sources) {
-      if (providerMode === 'both' || source.provider === providerMode) requiredProviders.add(source.provider);
+      if (enabled.has(source.provider)) requiredProviders.add(source.provider);
     }
     if (requiredProviders.size === 0) return true;
-    const completedProviders = new Set(Object.values(snapshot.sourceCheckpoints).map(checkpoint => checkpoint.provider));
+    const completedProviders = new Set<ProviderId>(
+      Object.values(snapshot.sourceCheckpoints).map(checkpoint => checkpoint.provider as ProviderId),
+    );
     return [...requiredProviders].every(provider => completedProviders.has(provider));
   }
 
   private buildUsageTrend(settings = this.getSettings()): UsageTrendData {
     const snapshot = this.usageLedgerStore.getSnapshot();
     return this.canUseUsageLedger(snapshot, settings)
-      ? buildTrendDataFromLedger(snapshot, Date.now(), settings.provider ?? 'both')
+      ? buildTrendDataFromLedger(snapshot, Date.now(), this.enabledUsageLedgerProviders(settings))
       : emptyUsageTrendData();
   }
 
   private isExcludedSummary(
     filePath: string,
-    provider: 'claude' | 'codex',
+    provider: ProviderId,
     isExcluded: ReturnType<typeof makeExcludedMatcher>,
   ): boolean {
-    const keys: string[] = [];
-    if (provider === 'claude') {
-      const relative = path.relative(PROJECTS_DIR, filePath);
-      const projectDir = relative && !relative.startsWith('..') && !path.isAbsolute(relative)
-        ? relative.split(path.sep)[0]
-        : null;
-      keys.push(projectDir ?? path.basename(path.dirname(filePath)));
+    const adapter = this.providerRegistry.get(provider);
+    if (adapter && isSourceBackedProvider(adapter) && adapter.isExcludedSource) {
+      return adapter.isExcludedSource(this.sourceForPath(adapter, filePath), isExcluded);
     }
-    const cwd = readJsonlCwd(filePath, provider);
-    if (cwd) keys.push(...projectKeysForCwd(cwd));
-    return isExcluded(keys);
+    return isExcluded([path.basename(path.dirname(filePath))]);
   }
 
   private getVisibleSummaries(settings: AppSettings): FileUsageSummary[] {
     const excludedProjects = settings.excludedProjects ?? [];
-    if (excludedProjects.length === 0) return [...this.summaries.values()];
+    const enabled = this.enabledProviderSet(settings);
+    if (excludedProjects.length === 0) {
+      return [...this.summaries.values()].filter(summary => enabled.has(summary.provider));
+    }
     const isExcluded = makeExcludedMatcher(excludedProjects);
     const visible: FileUsageSummary[] = [];
     for (const [filePath, summary] of this.summaries.entries()) {
+      if (!enabled.has(summary.provider)) continue;
       if (this.isExcludedSummary(filePath, summary.provider, isExcluded)) continue;
       visible.push(summary);
     }
@@ -1199,7 +1323,7 @@ export class StateManager {
       return Object.values(snapshot.sourceCheckpoints).filter(checkpoint =>
         checkpoint.hasUsage !== false
         && !checkpoint.needsRebuild
-        && ((settings.provider ?? 'both') === 'both' || checkpoint.provider === settings.provider)
+        && this.enabledProviderSet(settings).has(checkpoint.provider)
       ).length;
     }
     return this.getVisibleSummaries(settings).filter(hasUsageRequests).length;
@@ -1249,44 +1373,44 @@ export class StateManager {
     };
   }
 
-  private createSessionDiscoveryOptions(extraJsonlPaths?: Iterable<string>): DiscoverSessionsOptions {
-    const trackedJsonlPaths = new Set<string>();
-    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) trackedJsonlPaths.add(normalizeFileKey(filePath));
-    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) trackedJsonlPaths.add(normalizeFileKey(filePath));
-    if (extraJsonlPaths) {
-      for (const filePath of extraJsonlPaths) trackedJsonlPaths.add(normalizeFileKey(filePath));
-    }
-    return {
-      scope: StateManager.SESSION_SCOPE,
-      trackedJsonlPaths: [...trackedJsonlPaths],
-      maxClaudeSessions: StateManager.STARTUP_CLAUDE_FILE_LIMIT,
-      maxCodexFiles: StateManager.STARTUP_CODEX_FILE_LIMIT,
-    };
-  }
-
-  private buildScopedSessionInfosDetailed(
+  private async buildScopedSessionInfosDetailed(
     summaries: Map<string, FileUsageSummary> = this.summaries,
     extraJsonlPaths?: Iterable<string>,
-  ): SessionBuildResult {
+  ): Promise<SessionBuildResult> {
     const settings = this.getSettings();
+    const providers = this.enabledProviders(settings);
+    const sourceBackedProviders = providers.filter(isSourceBackedProvider);
+    const ctx = this.providerContext({ settings });
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const previousByKey = new Map(this.state.sessions.map(session => [this.sessionIdentityKey(session), session]));
     const sessionsByKey = new Map<string, SessionInfo>();
-    const summaryPaths = new Set<string>();
+    const summarySources = new Map<string, { provider: SourceBackedProviderAdapter; source: ProviderSource }>();
+    const discoveryPaths = new Set<string>();
     let discoveredCount = 0;
     let reusedCount = 0;
 
-    const pushSummaryPath = (filePath: string): void => {
-      const normalized = normalizeFileKey(filePath);
-      if (summaries.has(normalized)) summaryPaths.add(normalized);
+    const pushSource = (provider: SourceBackedProviderAdapter, source: ProviderSource): void => {
+      const normalized = normalizeFileKey(source.filePath);
+      discoveryPaths.add(normalized);
+      if (summaries.has(normalized) && !summarySources.has(normalized)) {
+        summarySources.set(normalized, { provider, source: { ...source, filePath: normalized } });
+      }
     };
 
-    for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) pushSummaryPath(filePath);
-    for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) pushSummaryPath(filePath);
-    for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT).files) pushSummaryPath(filePath);
-    for (const filePath of this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT).files) pushSummaryPath(filePath);
+    for (const provider of sourceBackedProviders) {
+      const limit = this.startupLimitForProvider(provider.id);
+      for (const filePath of this.collectTrackedSessionFiles(provider.id, limit)) {
+        pushSource(provider, this.sourceForPath(provider, filePath, true));
+      }
+      for (const source of provider.listRecentSources(ctx, limit).sources) {
+        pushSource(provider, source);
+      }
+    }
     if (extraJsonlPaths) {
-      for (const filePath of extraJsonlPaths) pushSummaryPath(filePath);
+      for (const filePath of extraJsonlPaths) {
+        const provider = this.providerForSourcePath(filePath, settings);
+        if (provider) pushSource(provider, this.sourceForPath(provider, filePath, true));
+      }
     }
 
     const addSession = (session: DiscoveredSession, summaryOverride?: FileUsageSummary | null) => {
@@ -1304,19 +1428,25 @@ export class StateManager {
       sessionsByKey.set(key, next);
     };
 
-    const discovered = discoverSessions(settings.provider, this.createSessionDiscoveryOptions(summaryPaths));
-    for (const session of discovered) {
-      const summary = session.jsonlPath ? (summaries.get(normalizeFileKey(session.jsonlPath)) ?? null) : null;
-      if (session.provider === 'codex' && !summary) continue;
-      addSession(session, summary);
+    const discoveryCtx = this.providerContext({
+      settings,
+      prioritySourceIds: discoveryPaths,
+    });
+    for (const provider of providers) {
+      if (!provider.discoverSessions) continue;
+      const discovered = await provider.discoverSessions(discoveryCtx);
+      for (const session of discovered) {
+        const summary = session.jsonlPath ? (summaries.get(normalizeFileKey(session.jsonlPath)) ?? null) : null;
+        if (isSourceBackedProvider(provider) && provider.id === 'codex' && !summary) continue;
+        addSession(session, summary);
+      }
     }
 
-    for (const filePath of summaryPaths) {
+    for (const [filePath, { provider, source }] of summarySources) {
       const summary = summaries.get(filePath);
       if (!summary) continue;
-      const bootstrap = summary.provider === 'claude'
-        ? this.buildStartupClaudeSession(filePath)
-        : this.buildStartupCodexSession(filePath);
+      if (summary.provider !== provider.id) continue;
+      const bootstrap = provider.buildStartupSession?.(ctx, source);
       if (!bootstrap) continue;
       addSession(bootstrap, summary);
     }
@@ -1347,7 +1477,7 @@ export class StateManager {
   }
 
   private collectTrackedSessionFiles(
-    provider: 'claude' | 'codex',
+    provider: ProviderId,
     maxFiles: number,
     sessions: SessionInfo[] = this.state.sessions,
   ): string[] {
@@ -1386,7 +1516,7 @@ export class StateManager {
     });
   }
 
-  private buildRecentWatchTargets(provider: AppSettings['provider']): string[] {
+  private buildRecentWatchTargets(settings: AppSettings): string[] {
     const targets: string[] = [];
     const seen = new Set<string>();
     const pushFile = (filePath: string) => {
@@ -1395,14 +1525,14 @@ export class StateManager {
       seen.add(normalized);
       targets.push(normalized);
     };
+    const ctx = this.providerContext({ settings });
 
-    if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
-      for (const filePath of this.listRecentClaudeJsonlFiles(StateManager.HIDDEN_CLAUDE_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CLAUDE_WATCH_LIMIT)) pushFile(filePath);
-    }
-    if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-      for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
-      for (const filePath of this.listRecentCodexJsonlFiles(StateManager.HIDDEN_CODEX_WATCH_LIMIT).files.slice(0, StateManager.HIDDEN_CODEX_WATCH_LIMIT)) pushFile(filePath);
+    for (const provider of this.sourceBackedProviders(settings)) {
+      const limit = provider.id === 'claude'
+        ? StateManager.HIDDEN_CLAUDE_WATCH_LIMIT
+        : StateManager.HIDDEN_CODEX_WATCH_LIMIT;
+      for (const filePath of this.collectTrackedSessionFiles(provider.id, limit)) pushFile(filePath);
+      for (const source of provider.listRecentSources(ctx, limit).sources.slice(0, limit)) pushFile(source.filePath);
     }
 
     return targets;
@@ -1412,23 +1542,24 @@ export class StateManager {
     this.watcher?.close();
     this.watcher = null;
 
-    const provider = this.getSettings().provider ?? 'both';
+    const settings = this.getSettings();
     const watchTargets: string[] = [];
+    const seenTargets = new Set<string>();
+    const pushTarget = (target: string) => {
+      if (seenTargets.has(target)) return;
+      seenTargets.add(target);
+      watchTargets.push(target);
+    };
     const useWideWatcher = mode === 'wide' || (mode === 'auto' && this.uiVisible);
 
     if (useWideWatcher) {
-      if ((provider === 'claude' || provider === 'both') && fs.existsSync(SESSIONS_DIR)) {
-        watchTargets.push(SESSIONS_DIR);
-      }
-      if ((provider === 'claude' || provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-        watchTargets.push(PROJECTS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
-      }
-      if ((provider === 'codex' || provider === 'both') && fs.existsSync(CODEX_SESSIONS_DIR)) {
-        watchTargets.push(CODEX_SESSIONS_DIR.replace(/\\/g, '/') + '/**/*.jsonl');
+      const ctx = this.providerContext({ settings });
+      for (const provider of this.sourceBackedProviders(settings)) {
+        for (const target of provider.watchTargets?.(ctx, 'wide') ?? []) pushTarget(target);
       }
       this.watcherProfile = 'wide';
     } else {
-      watchTargets.push(...this.buildRecentWatchTargets(provider));
+      for (const target of this.buildRecentWatchTargets(settings)) pushTarget(target);
       this.watcherProfile = watchTargets.length > 0 ? 'recent' : 'off';
     }
     this.watcherTargetCount = watchTargets.length;
@@ -1496,6 +1627,9 @@ export class StateManager {
       bridgeActive: derived.bridgeActive,
       apiStatusLabel: this.apiStatusLabel || undefined,
       apiError: this.apiError || undefined,
+      codexUsageConnected: this.codexUsageConnected,
+      codexStatusLabel: this.codexStatusLabel || undefined,
+      codexError: this.codexError || undefined,
       extraUsage: derived.extraUsage,
       codeOutputStats,
       codeOutputLoading: false,
@@ -1555,11 +1689,7 @@ export class StateManager {
       await this.logMemorySnapshot('heavyRefresh:start');
       const apiSample = this.beginPerfSample();
       const settingsForApi = this.getSettings();
-      await Promise.all([
-        settingsForApi.provider !== 'codex' ? this.refreshAutoLimits() : Promise.resolve(),
-        settingsForApi.provider !== 'codex' ? this.refreshApiUsagePct(force || forceProviderUsage) : Promise.resolve(false),
-        settingsForApi.provider !== 'claude' ? this.refreshCodexUsagePct(force || forceProviderUsage) : Promise.resolve(false),
-      ]);
+      await this.refreshProviderQuotas(settingsForApi, force || forceProviderUsage);
       apiPerf = this.finishPerfSample(apiSample);
       const initialRefreshDone = this.startupFreshComplete;
       const effectiveScanBudgetMs = scanBudgetMs ?? (allowStartupBudget && !initialRefreshDone ? StateManager.STARTUP_SCAN_BUDGET_MS : null);
@@ -1589,6 +1719,9 @@ export class StateManager {
           apiConnected: this.apiConnected,
           apiStatusLabel: this.apiStatusLabel || undefined,
           apiError: this.apiError || undefined,
+          codexUsageConnected: this.codexUsageConnected,
+          codexStatusLabel: this.codexStatusLabel || undefined,
+          codexError: this.codexError || undefined,
           bridgeActive: derived.bridgeActive,
           extraUsage: derived.extraUsage,
           codeOutputStats,
@@ -1598,7 +1731,7 @@ export class StateManager {
           stateFreshness: this.currentStateFreshness(),
         };
         this.publishState();
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: this.state.historyWarmupPending,
         });
         this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
@@ -1623,7 +1756,7 @@ export class StateManager {
       const summaryIncludeFullHistory = includeFullHistory && hasExcludedProjects;
       const loaded = await this.loadProviderSummaries(summaryForce, effectiveScanBudgetMs, priorityFiles, summaryIncludeFullHistory);
       loadPerf = this.finishPerfSample(loadSample);
-      await this.refreshUsageLedgerFromFiles(this.ledgerFilesFromSummaries(loaded.summaries));
+      await this.refreshUsageLedgerSources(this.ledgerSourcesFromSummaries(loaded.summaries, settingsBeforeLoad));
       this.startupFreshComplete = true;
       this.jsonlCache.flushPersisted();
       const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
@@ -1654,7 +1787,7 @@ export class StateManager {
         && (showHistoryWarmupBanner || this.state.historyWarmupPending);
       if (!partialHistoryScan) this.clearHistoryWarmup();
       const sessionBuildSample = this.beginPerfSample();
-      sessionResult = this.buildScopedSessionInfosDetailed(nextSummaries);
+      sessionResult = await this.buildScopedSessionInfosDetailed(nextSummaries);
       let sessions = sessionResult.sessions;
       sessionPerf = this.finishPerfSample(sessionBuildSample);
       const partialCodeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
@@ -1674,6 +1807,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        codexUsageConnected: this.codexUsageConnected,
+        codexStatusLabel: this.codexStatusLabel || undefined,
+        codexError: this.codexError || undefined,
         bridgeActive: derived.bridgeActive,
         extraUsage: derived.extraUsage,
         repoGitStats: this.state.repoGitStats,
@@ -1685,7 +1821,7 @@ export class StateManager {
       this.publishState();
       if (!initialRefreshDone && !force) {
         this.scheduleGitWarmup();
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: partialHistoryScan,
         });
         await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
@@ -1732,6 +1868,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        codexUsageConnected: this.codexUsageConnected,
+        codexStatusLabel: this.codexStatusLabel || undefined,
+        codexError: this.codexError || undefined,
         bridgeActive: derived.bridgeActive,
         extraUsage: derived.extraUsage,
         repoGitStats,
@@ -1742,7 +1881,7 @@ export class StateManager {
       };
       this.publishState();
 
-      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, settings.provider, {
+      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
         deferCodexLocalLog: partialHistoryScan,
       });
       await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
@@ -1765,16 +1904,12 @@ export class StateManager {
       });
   }
 
-  private buildStartupPriorityFiles(provider: AppSettings['provider']): Set<string> {
+  private buildStartupPriorityFiles(providers: readonly ProviderId[]): Set<string> {
     const priority = new Set<string>();
+    const settings = normalizeSettings({ ...this.getSettings(), enabledProviders: providers });
 
-    if (provider === 'claude' || provider === 'both') {
-      for (const filePath of this.collectTrackedSessionFiles('claude', StateManager.STARTUP_CLAUDE_FILE_LIMIT)) {
-        priority.add(normalizeFileKey(filePath));
-      }
-    }
-    if (provider === 'codex' || provider === 'both') {
-      for (const filePath of this.collectTrackedSessionFiles('codex', StateManager.STARTUP_CODEX_FILE_LIMIT)) {
+    for (const sourceProvider of this.sourceBackedProviders(normalizeSettings(settings))) {
+      for (const filePath of this.collectTrackedSessionFiles(sourceProvider.id, this.startupLimitForProvider(sourceProvider.id))) {
         priority.add(normalizeFileKey(filePath));
       }
     }
@@ -1782,74 +1917,8 @@ export class StateManager {
     return priority;
   }
 
-  private buildStartupSessionInfos(summaries: Map<string, FileUsageSummary>): SessionInfo[] {
-    return this.buildScopedSessionInfosDetailed(summaries).sessions;
-  }
-
-  private buildStartupClaudeSession(filePath: string): DiscoveredSession | null {
-    if (isClaudeAgentJsonlPath(filePath)) return null;
-    try {
-      const stat = fs.statSync(filePath);
-      const cwd = readJsonlCwd(filePath, 'claude');
-      if (!cwd || !isSafeLocalCwd(cwd)) return null;
-      const repoContext = describeRepoContext(cwd);
-
-      return {
-        provider: 'claude',
-        pid: null,
-        sessionId: path.basename(filePath, '.jsonl'),
-        cwd,
-        projectName: repoContext.projectName,
-        startedAt: stat.birthtime,
-        entrypoint: 'cli',
-        source: 'Terminal',
-        state: approximateSessionState(stat.mtime),
-        jsonlPath: filePath,
-        lastModified: stat.mtime,
-        isWorktree: repoContext.isWorktree,
-        worktreeBranch: repoContext.worktreeBranch,
-        gitBranch: repoContext.gitBranch,
-        mainRepoName: repoContext.mainRepoName,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  private buildStartupCodexSession(filePath: string): DiscoveredSession | null {
-    try {
-      const stat = fs.statSync(filePath);
-      const header = readCodexSessionHeader(filePath);
-      const payload = header?.payload ?? {};
-      const cwd = readJsonlCwd(filePath, 'codex');
-      if (!cwd || !isSafeLocalCwd(cwd)) return null;
-
-      const startedAtRaw = typeof payload.timestamp === 'string' ? payload.timestamp : header?.timestamp;
-      const sessionId = typeof payload.id === 'string' ? payload.id : path.basename(filePath, '.jsonl');
-      const originator = typeof payload.originator === 'string' ? payload.originator.toLowerCase() : '';
-      const { entrypoint, source } = describeCodexSource(payload.source, originator);
-      const repoContext = describeRepoContext(cwd);
-
-      return {
-        provider: 'codex',
-        pid: null,
-        sessionId,
-        cwd,
-        projectName: repoContext.projectName,
-        startedAt: startedAtRaw ? new Date(startedAtRaw) : stat.birthtime,
-        entrypoint,
-        source,
-        state: approximateSessionState(stat.mtime),
-        jsonlPath: filePath,
-        lastModified: stat.mtime,
-        isWorktree: repoContext.isWorktree,
-        worktreeBranch: repoContext.worktreeBranch,
-        gitBranch: repoContext.gitBranch,
-        mainRepoName: repoContext.mainRepoName,
-      };
-    } catch {
-      return null;
-    }
+  private async buildStartupSessionInfos(summaries: Map<string, FileUsageSummary>): Promise<SessionInfo[]> {
+    return (await this.buildScopedSessionInfosDetailed(summaries)).sessions;
   }
 
   private buildLimits(): UsageLimits {
@@ -2014,90 +2083,138 @@ export class StateManager {
   }
 
   private async refreshRecentCodexRateLimits(settings: AppSettings = this.getSettings()): Promise<void> {
-    const provider = settings.provider ?? 'both';
-    if (provider === 'claude' || !fs.existsSync(CODEX_SESSIONS_DIR)) return;
+    const codexProvider = this.providerRegistry.get('codex');
+    if (!isProviderEnabled(settings, 'codex') || !codexProvider || !isSourceBackedProvider(codexProvider)) return;
     let merged = this.codexRateLimits;
-    const recentFiles = this.listRecentCodexJsonlFiles(StateManager.CODEX_RATE_LIMIT_FAST_FILE_LIMIT).files;
-    for (const filePath of recentFiles) {
+    const ctx = this.providerContext({ settings });
+    const recentSources = codexProvider.listRecentSources(ctx, StateManager.CODEX_RATE_LIMIT_FAST_FILE_LIMIT).sources;
+    for (const source of recentSources) {
       try {
-        merged = this.mergeCodexRateLimits(merged, await scanCodexRateLimitsOnly(filePath));
+        merged = this.mergeCodexRateLimits(merged, await scanCodexRateLimitsOnly(source.filePath));
       } catch { /* skip */ }
     }
     this.codexRateLimits = merged;
   }
 
-  private ledgerFilesFromSummaries(summaries: Map<string, FileUsageSummary>): Array<{ filePath: string; provider: 'claude' | 'codex' }> {
-    return [...summaries.entries()].map(([filePath, summary]) => ({ filePath, provider: summary.provider }));
+  private ledgerSourcesFromSummaries(summaries: Map<string, FileUsageSummary>, settings: AppSettings = this.getSettings()): ProviderLedgerSource[] {
+    const ctx = this.providerContext({ settings });
+    const sources: ProviderLedgerSource[] = [];
+    for (const [filePath, summary] of summaries.entries()) {
+      const provider = this.providerRegistry.get(summary.provider);
+      if (!provider || !isSourceBackedProvider(provider) || !provider.ownsPath(filePath)) continue;
+      const source = this.sourceForPath(provider, filePath, true);
+      const ledgerSource = provider.ledgerSource?.(ctx, source, true);
+      if (ledgerSource) sources.push(ledgerSource);
+    }
+    return sources;
   }
 
-  private async refreshUsageLedgerFromFiles(files: Array<{ filePath: string; provider: 'claude' | 'codex' }>): Promise<void> {
-    if (files.length === 0) return;
+  private async refreshUsageLedgerSources(sources: ProviderLedgerSource[]): Promise<void> {
+    if (sources.length === 0) return;
     if ((this.getSettings().excludedProjects?.length ?? 0) > 0) return;
     let snapshot = this.usageLedgerStore.getSnapshot();
     let changed = false;
-    for (const file of files) {
+    let importFailed = false;
+    for (const source of sources) {
       try {
-        const nextSnapshot = await importUsageJsonlIntoSnapshot(snapshot, file.filePath, file.provider);
+        const nextSnapshot = await source.importIntoSnapshot(snapshot, Date.now());
         if (nextSnapshot !== snapshot) changed = true;
         snapshot = nextSnapshot;
       } catch {
-        // JSONL summary cache remains the fallback if a ledger import for one source fails.
+        importFailed = true;
       }
     }
-    if (!changed) return;
-    this.usageLedgerStore.replaceSnapshot(snapshot);
-    this.usageLedgerStore.compact();
+    this.usageLedgerImportFailed = importFailed;
+    if (changed) {
+      this.usageLedgerStore.replaceSnapshot(snapshot);
+      this.usageLedgerStore.compact();
+    }
   }
 
-  private ledgerSourceFiles(
+  private async scanGenericProviderUsage(
+    settings: AppSettings,
+    ctx: ProviderContext,
+  ): Promise<{
+    summaries: Map<string, FileUsageSummary>;
+    ledgerSources: ProviderLedgerSource[];
+    scannedFiles: number;
+    partial: boolean;
+  }> {
+    const summaries = new Map<string, FileUsageSummary>();
+    const ledgerSources: ProviderLedgerSource[] = [];
+    let scannedFiles = 0;
+    let partial = false;
+
+    for (const provider of this.enabledProviders(settings)) {
+      if (isSourceBackedProvider(provider) || !provider.scanUsage) continue;
+      try {
+        const result = await provider.scanUsage(ctx);
+        for (const [key, summary] of result.summaries.entries()) {
+          summaries.set(key, summary);
+        }
+        ledgerSources.push(...result.ledgerSources);
+        scannedFiles += result.scannedSources;
+        partial = partial || result.partial;
+      } catch {
+        partial = true;
+      }
+    }
+
+    return { summaries, ledgerSources, scannedFiles, partial };
+  }
+
+  private async ledgerSourceFiles(
     settings: AppSettings,
     includeFullHistory: boolean,
     priorityFiles?: Iterable<string>,
-  ): { files: LedgerSourceFile[]; partial: boolean } {
-    const files: LedgerSourceFile[] = [];
+  ): Promise<{ files: LedgerSourceFile[]; partial: boolean }> {
+    const files: ProviderLedgerSource[] = [];
     const seen = new Set<string>();
-    const priority = new Set<string>();
-    for (const filePath of priorityFiles ?? []) priority.add(normalizeFileKey(filePath));
+    const prioritySourceIds = new Set<string>();
+    for (const filePath of priorityFiles ?? []) prioritySourceIds.add(normalizeFileKey(filePath));
+    const ctx = this.providerContext({
+      settings,
+      includeFullHistory,
+      prioritySourceIds,
+    });
 
     let partial = false;
-    const pushFile = (filePath: string, provider: 'claude' | 'codex', isPriority = false) => {
-      if (!providerMatchesMode(settings.provider, provider)) return;
-      const normalized = normalizeFileKey(filePath);
+    const pushSource = (provider: SourceBackedProviderAdapter, source: ProviderSource, isPriority = false) => {
+      const sourcePath = source.filePath;
+      const normalized = normalizeFileKey(sourcePath);
       if (seen.has(normalized)) return;
       seen.add(normalized);
-      files.push({ filePath: normalized, provider, priority: isPriority || priority.has(normalized) });
+      const ledgerSource = provider.ledgerSource?.(
+        ctx,
+        { ...source, filePath: sourcePath },
+        isPriority || source.priority === true || prioritySourceIds.has(normalized),
+      );
+      if (ledgerSource) files.push(ledgerSource);
     };
 
-    for (const filePath of priority) {
-      const provider = this.providerForJsonlPath(filePath);
-      if (provider) pushFile(filePath, provider, true);
+    const providers = this.sourceBackedProviders(settings);
+
+    for (const filePath of prioritySourceIds) {
+      const provider = providers.find(candidate => candidate.ownsPath(filePath));
+      if (provider) pushSource(provider, this.sourceForPath(provider, filePath, true), true);
     }
 
-    if ((settings.provider === 'claude' || settings.provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      if (includeFullHistory) {
-        try {
-          const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-            .filter(d => d.isDirectory())
-            .map(d => d.name);
-          for (const dir of projectDirs) {
-            for (const filePath of this.listJsonlFiles(path.join(PROJECTS_DIR, dir), Number.POSITIVE_INFINITY, false)) {
-              pushFile(filePath, 'claude');
-            }
-          }
-        } catch { /* skip */ }
-      } else {
-        const recentClaude = this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT);
-        partial = partial || recentClaude.truncated;
-        for (const filePath of recentClaude.files) pushFile(filePath, 'claude');
+    for (const provider of this.sourceBackedProviders(settings)) {
+      const sourceList = includeFullHistory
+        ? provider.listAllSources(ctx)
+        : provider.listRecentSources(ctx, this.startupLimitForProvider(provider.id));
+      partial = partial || sourceList.truncated;
+      for (const source of sourceList.sources) {
+        pushSource(provider, source);
       }
     }
 
-    if ((settings.provider === 'codex' || settings.provider === 'both') && CODEX_USAGE_DIRS.some(root => fs.existsSync(root))) {
-      const codexFiles = includeFullHistory
-        ? { files: this.listCodexUsageJsonlFiles(), truncated: false }
-        : this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT);
-      partial = partial || codexFiles.truncated;
-      for (const filePath of codexFiles.files) pushFile(filePath, 'codex');
+    const genericScan = await this.scanGenericProviderUsage(settings, ctx);
+    partial = partial || genericScan.partial;
+    for (const source of genericScan.ledgerSources) {
+      if (seen.has(source.sourceId)) continue;
+      seen.add(source.sourceId);
+      files.push(source);
     }
 
     return { files, partial };
@@ -2112,7 +2229,11 @@ export class StateManager {
     if ((settings.excludedProjects?.length ?? 0) > 0) return { partial: false, scannedFiles: 0 };
 
     let snapshot = this.usageLedgerStore.getSnapshot();
-    const sourceList = this.ledgerSourceFiles(settings, includeFullHistory, priorityFiles);
+    if (includeFullHistory && this.usageLedgerNeedsRebuild(settings, snapshot)) {
+      this.usageLedgerImportFailed = false;
+      return { partial: true, scannedFiles: 0 };
+    }
+    const sourceList = await this.ledgerSourceFiles(settings, includeFullHistory, priorityFiles);
     const alreadyCompletedFullImport = this.hasCompletedUsageLedgerImport(snapshot, settings, sourceList.files);
     const startedAt = Date.now();
     let changed = false;
@@ -2130,8 +2251,8 @@ export class StateManager {
       }
 
       try {
-        if (!fs.statSync(source.filePath).isFile()) throw new Error('Ledger source is not a file');
-        const nextSnapshot = await importUsageJsonlIntoSnapshot(snapshot, source.filePath, source.provider);
+        if (source.sourcePath && !fs.statSync(source.sourcePath).isFile()) throw new Error('Ledger source is not a file');
+        const nextSnapshot = await source.importIntoSnapshot(snapshot, Date.now());
         scannedFiles += 1;
         if (nextSnapshot !== snapshot) changed = true;
         snapshot = nextSnapshot;
@@ -2150,6 +2271,7 @@ export class StateManager {
     } else if (completedFullImport) {
       this.usageLedgerStore.replaceSnapshot({ ...snapshot, lastFullImportAt: Date.now() });
     }
+    this.usageLedgerImportFailed = importFailed;
 
     return { partial, scannedFiles };
   }
@@ -2168,341 +2290,175 @@ export class StateManager {
   }> {
     const settings = this.getSettings();
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const hasExcludedProjects = (settings.excludedProjects?.length ?? 0) > 0;
     const summaries = new Map<string, FileUsageSummary>();
     let sessionCount = 0;
     let codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
     let scannedFiles = 0;
     let partial = false;
     const startedAt = Date.now();
-    const explicitPriority = new Set<string>();
-    for (const filePath of priorityFiles ?? []) explicitPriority.add(normalizeFileKey(filePath));
-    const startupPriority = budgetMs !== null
-      ? this.buildStartupPriorityFiles(settings.provider)
-      : new Set(
-          discoverSessions(settings.provider)
-            .map(session => session.jsonlPath)
-            .filter((filePath): filePath is string => !!filePath)
-            .map(filePath => normalizeFileKey(filePath))
-        );
-    for (const filePath of explicitPriority) startupPriority.add(filePath);
+    const startupPriority = new Set<string>();
+    for (const filePath of priorityFiles ?? []) startupPriority.add(normalizeFileKey(filePath));
+    const providers = this.sourceBackedProviders(settings);
+
+    if (budgetMs !== null) {
+      for (const provider of providers) {
+        if (provider.id !== 'claude' && provider.id !== 'codex') continue;
+        for (const filePath of this.collectTrackedSessionFiles(provider.id, this.startupLimitForProvider(provider.id))) {
+          startupPriority.add(normalizeFileKey(filePath));
+        }
+      }
+    } else {
+      const discoveryCtx = this.providerContext({
+        settings,
+        force,
+        includeFullHistory: false,
+        prioritySourceIds: startupPriority,
+      });
+      for (const provider of providers) {
+        if (!provider.discoverSessions) continue;
+        const discovered = await provider.discoverSessions(discoveryCtx);
+        for (const session of discovered) {
+          if (session.jsonlPath) startupPriority.add(normalizeFileKey(session.jsonlPath));
+        }
+      }
+    }
+
+    const ctx = this.providerContext({
+      settings,
+      force,
+      scanBudgetMs: budgetMs,
+      includeFullHistory,
+      prioritySourceIds: startupPriority,
+    });
 
     const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
-    const shouldPrioritize = (filePath: string) => startupPriority.has(normalizeFileKey(filePath));
-    const priorityClaudeFiles = [...startupPriority].filter(filePath => filePath.startsWith(normalizeFileKey(PROJECTS_DIR)));
-    const priorityCodexFiles = [...startupPriority].filter(filePath => isCodexUsagePath(filePath));
+    const shouldPrioritize = (source: ProviderSource) => source.priority === true || startupPriority.has(normalizeFileKey(source.filePath));
 
-    const scanSummary = async (filePath: string, provider: 'claude' | 'codex'): Promise<FileUsageSummary | null> => {
+    const scanSummary = async (provider: SourceBackedProviderAdapter, source: ProviderSource): Promise<FileUsageSummary | null> => {
       try {
-        const normalizedPath = normalizeFileKey(filePath);
-        const stat = fs.statSync(filePath);
-        const allowPersistedReuse = (budgetMs === null || includeFullHistory) && !shouldPrioritize(filePath);
+        const normalizedPath = normalizeFileKey(source.filePath);
+        const stat = fs.statSync(source.filePath);
+        const priority = shouldPrioritize(source);
+        const allowPersistedReuse = (budgetMs === null || includeFullHistory) && !priority;
         if (!force && budgetMs !== null) {
           const cached = this.summaries.get(normalizedPath);
           if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached;
-          const persisted = allowPersistedReuse ? this.jsonlCache.getFresh(filePath, stat.mtimeMs, stat.size) : null;
+          const persisted = allowPersistedReuse ? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size) : null;
           if (persisted) return persisted;
-          const cachedLoose = allowPersistedReuse ? this.jsonlCache.get(filePath) : null;
+          const cachedLoose = allowPersistedReuse ? this.jsonlCache.get(source.filePath) : null;
           if (cachedLoose && cachedLoose.mtimeMs === stat.mtimeMs && cachedLoose.size === stat.size) return cachedLoose;
-          if (!shouldPrioritize(filePath) && shouldStopForBudget()) {
+          if (!priority && shouldStopForBudget()) {
             partial = true;
             return null;
           }
         }
         if (!force) {
-          const fresh = allowPersistedReuse ? this.jsonlCache.getFresh(filePath, stat.mtimeMs, stat.size) : null;
+          const fresh = allowPersistedReuse ? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size) : null;
           if (fresh) return fresh;
           const existing = this.summaries.get(normalizedPath);
           if (existing && existing.mtimeMs === stat.mtimeMs && existing.size === stat.size) return existing;
         }
 
-        if (!shouldPrioritize(filePath) && shouldStopForBudget()) {
+        if (!priority && shouldStopForBudget()) {
           partial = true;
-          const fallback = this.summaries.get(normalizedPath) ?? this.jsonlCache.getFresh(filePath, stat.mtimeMs, stat.size);
+          const fallback = this.summaries.get(normalizedPath) ?? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size);
           return fallback;
         }
 
         scannedFiles += 1;
-        return await scanJsonlSummaryCached(filePath, provider, this.jsonlCache, force);
+        return await provider.scanSourceSummary(ctx, source);
       } catch {
         return null;
       }
     };
 
-    if ((settings.provider === 'claude' || settings.provider === 'both') && fs.existsSync(PROJECTS_DIR)) {
-      if (budgetMs !== null && !includeFullHistory) {
-        const recentClaude = this.listRecentClaudeJsonlFiles(StateManager.STARTUP_CLAUDE_FILE_LIMIT);
-        const recentClaudeFiles = recentClaude.files;
-        const startupClaudeFiles = priorityClaudeFiles.length > 0
-          ? priorityClaudeFiles
-          : recentClaudeFiles.slice(0, StateManager.STARTUP_CLAUDE_FILE_LIMIT);
-        if (priorityClaudeFiles.length > 0 || recentClaude.truncated || recentClaudeFiles.length > startupClaudeFiles.length) partial = true;
-        for (const filePath of startupClaudeFiles) {
-          if (this.isExcludedSummary(filePath, 'claude', isExcluded)) continue;
-          const summary = await scanSummary(filePath, 'claude');
-          if (!summary) continue;
-          sessionCount += 1;
-          summaries.set(normalizeFileKey(filePath), summary);
-        }
-      } else {
-        try {
-          const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-            .filter(d => d.isDirectory())
-            .map(d => d.name);
-
-          for (const dir of projectDirs) {
-            if (budgetMs !== null && shouldStopForBudget()) {
-              partial = true;
-              break;
-            }
-            const dirPath = path.join(PROJECTS_DIR, dir);
-            try {
-              const files = this.listJsonlFiles(dirPath, Number.POSITIVE_INFINITY, false)
-                .sort((a, b) => Number(shouldPrioritize(b)) - Number(shouldPrioritize(a)));
-              if (budgetMs !== null && shouldStopForBudget() && !files.some(filePath => shouldPrioritize(filePath))) {
-                partial = true;
-                break;
-              }
-              const cwd = hasExcludedProjects && files.length > 0
-                ? readJsonlCwd(files[0], 'claude')
-                : null;
-              if (isExcluded([dir, ...(cwd ? projectKeysForCwd(cwd) : [])])) continue;
-              sessionCount += files.length;
-              for (const filePath of files) {
-                if (budgetMs !== null && shouldStopForBudget() && !shouldPrioritize(filePath)) {
-                  partial = true;
-                  break;
-                }
-                const summary = await scanSummary(filePath, 'claude');
-                if (summary) summaries.set(normalizeFileKey(filePath), summary);
-              }
-            } catch { /* skip */ }
-          }
-        } catch { /* skip */ }
+    for (const provider of this.sourceBackedProviders(settings)) {
+      const sourcesByPath = new Map<string, ProviderSource>();
+      for (const filePath of startupPriority) {
+        if (!provider.ownsPath(filePath)) continue;
+        const source = this.sourceForPath(provider, filePath, true);
+        sourcesByPath.set(normalizeFileKey(source.filePath), source);
       }
-    }
 
-    if ((settings.provider === 'codex' || settings.provider === 'both') && CODEX_USAGE_DIRS.some(root => fs.existsSync(root))) {
-      const recentCodex = budgetMs !== null
-        ? this.listRecentCodexJsonlFiles(StateManager.STARTUP_CODEX_FILE_LIMIT)
-        : { files: [], truncated: false };
-      const codexFiles = (budgetMs !== null && !includeFullHistory
-        ? (priorityCodexFiles.length > 0
-            ? priorityCodexFiles
-            : recentCodex.files)
-        : this.listCodexUsageJsonlFiles())
+      const sourceList = includeFullHistory
+        ? provider.listAllSources(ctx)
+        : provider.listRecentSources(ctx, this.startupLimitForProvider(provider.id));
+      partial = partial || sourceList.truncated;
+      for (const source of sourceList.sources) {
+        const key = normalizeFileKey(source.filePath);
+        if (!sourcesByPath.has(key)) sourcesByPath.set(key, source);
+      }
+
+      const sources = [...sourcesByPath.values()]
         .sort((a, b) => Number(shouldPrioritize(b)) - Number(shouldPrioritize(a)));
-      if (budgetMs !== null && !includeFullHistory && (priorityCodexFiles.length > 0 || recentCodex.truncated)) partial = true;
-      for (const filePath of codexFiles) {
-        if (budgetMs !== null && shouldStopForBudget() && !shouldPrioritize(filePath)) {
+
+      for (const source of sources) {
+        const priority = shouldPrioritize(source);
+        if (!priority && shouldStopForBudget()) {
           partial = true;
           break;
         }
-        const excludedForUsage = this.isExcludedSummary(filePath, 'codex', isExcluded);
-        if (excludedForUsage) {
-          try {
-            scannedFiles += 1;
-            codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, await scanCodexRateLimitsOnly(filePath));
-          } catch { /* skip */ }
+        if (provider.isExcludedSource?.(source, isExcluded)) {
+          if (provider.id === 'codex') {
+            try {
+              scannedFiles += 1;
+              codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, await scanCodexRateLimitsOnly(source.filePath));
+            } catch { /* skip */ }
+          }
           continue;
         }
-        const cwd = hasExcludedProjects ? readJsonlCwd(filePath, 'codex') : null;
-        if (cwd && isExcluded(projectKeysForCwd(cwd))) continue;
-        const summary = await scanSummary(filePath, 'codex');
+        const summary = await scanSummary(provider, source);
         if (!summary) continue;
-        if (summary.recentEntries.length === 0
+        if (provider.id === 'codex'
+          && summary.recentEntries.length === 0
           && summary.historicalRollup.aggregate.requestCount === 0
           && !summary.sessionSnapshot.codexRateLimits) {
           continue;
         }
         sessionCount += 1;
-        codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, summary.sessionSnapshot.codexRateLimits);
-        summaries.set(normalizeFileKey(filePath), summary);
+        if (provider.id === 'codex') {
+          codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, summary.sessionSnapshot.codexRateLimits);
+        }
+        summaries.set(normalizeFileKey(source.filePath), summary);
       }
     }
+
+    const genericUsage = await this.scanGenericProviderUsage(settings, ctx);
+    for (const [key, summary] of genericUsage.summaries.entries()) {
+      summaries.set(key, summary);
+    }
+    scannedFiles += genericUsage.scannedFiles;
+    partial = partial || genericUsage.partial;
 
     return { summaries, sessionCount, codexRateLimits, scannedFiles, partial };
   }
 
   private async refreshChangedSummaries(changedFiles: Set<string>): Promise<void> {
-    const providerMode = this.getSettings().provider ?? 'both';
-    const ledgerFiles: Array<{ filePath: string; provider: 'claude' | 'codex' }> = [];
+    const settings = this.getSettings();
+    const ctx = this.providerContext({ settings, force: true });
+    const ledgerSources: ProviderLedgerSource[] = [];
     for (const file of changedFiles) {
-      const provider = this.providerForJsonlPath(file);
+      const provider = this.providerForSourcePath(file, settings);
       if (!provider) continue;
-      if (providerMode !== 'both' && providerMode !== provider) continue;
       if (!fs.existsSync(file)) {
         this.summaries.delete(normalizeFileKey(file));
         this.jsonlCache.invalidate(file);
         continue;
       }
-      const summary = await scanJsonlSummaryCached(file, provider, this.jsonlCache);
+      const summary = await provider.scanSourceSummary(ctx, this.sourceForPath(provider, file, true));
+      if (!summary) continue;
       this.summaries.set(normalizeFileKey(file), summary);
-      ledgerFiles.push({ filePath: file, provider });
+      const ledgerSource = provider.ledgerSource?.(ctx, this.sourceForPath(provider, file, true), true);
+      if (ledgerSource) ledgerSources.push(ledgerSource);
     }
-    await this.refreshUsageLedgerFromFiles(ledgerFiles);
+    await this.refreshUsageLedgerSources(ledgerSources);
     this.jsonlCache.flushPersisted();
     this.codexRateLimits = this.collectCodexRateLimits();
   }
 
-  private providerForJsonlPath(filePath: string): 'claude' | 'codex' | null {
+  private providerForSourcePath(filePath: string, settings: AppSettings = this.getSettings()): SourceBackedProviderAdapter | null {
     const normalized = normalizeFileKey(filePath);
-    if (normalized.startsWith(normalizeFileKey(PROJECTS_DIR))) return 'claude';
-    if (isCodexUsagePath(normalized)) return 'codex';
-    return null;
-  }
-
-  private listRecentClaudeJsonlFiles(maxFiles: number): { files: string[]; truncated: boolean } {
-    const recentFiles: Array<{ filePath: string; mtimeMs: number }> = [];
-    const projectDirLimit = Math.max(maxFiles, 12);
-    let truncated = false;
-
-    try {
-      const projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
-        .filter(entry => entry.isDirectory())
-        .map(entry => {
-          const dirPath = path.join(PROJECTS_DIR, entry.name);
-          let mtimeMs = 0;
-          try { mtimeMs = fs.statSync(dirPath).mtimeMs; } catch { /* skip */ }
-          return { dirPath, mtimeMs };
-        })
-        .sort((a, b) => b.mtimeMs - a.mtimeMs);
-
-      truncated = projectDirs.length > projectDirLimit;
-
-      for (const projectDir of projectDirs.slice(0, projectDirLimit)) {
-        try {
-          const files = fs.readdirSync(projectDir.dirPath)
-            .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'));
-          for (const file of files) {
-            const filePath = path.join(projectDir.dirPath, file);
-            let mtimeMs = 0;
-            try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch { /* skip */ }
-            recentFiles.push({ filePath, mtimeMs });
-          }
-        } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
-
-    const files = recentFiles
-      .sort((a, b) => b.mtimeMs - a.mtimeMs)
-      .map(entry => entry.filePath);
-    return {
-      files,
-      truncated: truncated || files.length > maxFiles,
-    };
-  }
-
-  private codexSessionDedupeKey(filePath: string): string {
-    const header = readCodexSessionHeader(filePath);
-    const sessionId = typeof header?.payload.id === 'string' && header.payload.id.trim()
-      ? header.payload.id.trim()
-      : path.basename(filePath, '.jsonl');
-    return sessionId.toLowerCase();
-  }
-
-  private listCodexUsageJsonlFiles(): string[] {
-    const deduped = new Map<string, { filePath: string; rank: number; mtimeMs: number }>();
-
-    for (const root of CODEX_USAGE_DIRS) {
-      if (!fs.existsSync(root)) continue;
-      for (const filePath of this.listJsonlFiles(root, Number.POSITIVE_INFINITY, false)) {
-        let mtimeMs = 0;
-        try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch { continue; }
-        const rank = codexUsageRootRank(filePath);
-        if (rank == null) continue;
-
-        const key = this.codexSessionDedupeKey(filePath);
-        const current = deduped.get(key);
-        if (!current
-          || rank < current.rank
-          || (rank === current.rank && mtimeMs > current.mtimeMs)
-          || (rank === current.rank && mtimeMs === current.mtimeMs && filePath.localeCompare(current.filePath) < 0)) {
-          deduped.set(key, { filePath, rank, mtimeMs });
-        }
-      }
-    }
-
-    return [...deduped.values()]
-      .sort((a, b) => a.rank - b.rank || a.filePath.localeCompare(b.filePath))
-      .map(entry => entry.filePath);
-  }
-
-  private listRecentCodexJsonlFiles(maxFiles: number): { files: string[]; truncated: boolean } {
-    const files: string[] = [];
-    let truncated = false;
-    const targetCount = maxFiles + 1;
-
-    const readSubdirs = (dir: string): string[] => {
-      try {
-        return fs.readdirSync(dir, { withFileTypes: true })
-          .filter(entry => entry.isDirectory())
-          .map(entry => entry.name);
-      } catch {
-        return [];
-      }
-    };
-
-    const dayDirs: Array<{ dir: string; mtimeMs: number }> = [];
-
-    for (const year of readSubdirs(CODEX_SESSIONS_DIR)) {
-      const yearDir = path.join(CODEX_SESSIONS_DIR, year);
-      for (const month of readSubdirs(yearDir)) {
-        const monthDir = path.join(yearDir, month);
-        for (const day of readSubdirs(monthDir)) {
-          const dayDir = path.join(monthDir, day);
-          let mtimeMs = 0;
-          try { mtimeMs = fs.statSync(dayDir).mtimeMs; } catch { /* skip */ }
-          dayDirs.push({ dir: dayDir, mtimeMs });
-        }
-      }
-    }
-
-    dayDirs.sort((a, b) => b.mtimeMs - a.mtimeMs);
-
-    for (const dayDir of dayDirs) {
-      if (files.length >= targetCount) break;
-      const remaining = targetCount - files.length;
-      const recentFiles: Array<{ filePath: string; mtimeMs: number }> = [];
-      for (const filePath of this.listJsonlFiles(dayDir.dir, remaining, true)) {
-        let mtimeMs = 0;
-        try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch { /* skip */ }
-        recentFiles.push({ filePath, mtimeMs });
-      }
-      recentFiles.sort((a, b) => b.mtimeMs - a.mtimeMs);
-      files.push(...recentFiles.map(entry => entry.filePath));
-    }
-
-    if (files.length > maxFiles) {
-      truncated = true;
-      files.length = maxFiles;
-    }
-
-    return { files, truncated };
-  }
-
-  private listJsonlFiles(dir: string, maxFiles = Number.POSITIVE_INFINITY, descending = false): string[] {
-    const files: string[] = [];
-
-    const walk = (currentDir: string): void => {
-      if (files.length >= maxFiles) return;
-      try {
-        const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-          .sort((a, b) => descending ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name));
-        for (const entry of entries) {
-          if (files.length >= maxFiles) break;
-          const fullPath = path.join(currentDir, entry.name);
-          if (entry.isDirectory()) {
-            walk(fullPath);
-            continue;
-          }
-          if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fullPath);
-        }
-      } catch { /* skip */ }
-    };
-
-    walk(dir);
-    return files;
+    return this.sourceBackedProviders(settings).find(candidate => candidate.ownsPath(normalized)) ?? null;
   }
 
   private getSummary(filePath: string): FileUsageSummary | null {
@@ -2679,10 +2635,14 @@ export class StateManager {
     const normalized = normalizeFileKey(filePath);
     const summary = summaries.get(normalized);
     if (!summary) return null;
+    const settings = this.getSettings();
+    const provider = this.providerForSourcePath(normalized, settings);
+    if (!provider || summary.provider !== provider.id) return null;
 
-    const bootstrap = summary.provider === 'claude'
-      ? this.buildStartupClaudeSession(normalized)
-      : this.buildStartupCodexSession(normalized);
+    const bootstrap = provider.buildStartupSession?.(
+      this.providerContext({ settings }),
+      this.sourceForPath(provider, normalized, true),
+    );
     if (!bootstrap) return null;
 
     const isExcluded = makeExcludedMatcher(this.getSettings().excludedProjects ?? []);
@@ -2784,8 +2744,8 @@ export class StateManager {
     };
   }
 
-  private buildSessionInfos(): SessionInfo[] {
-    return this.buildScopedSessionInfosDetailed().sessions;
+  private async buildSessionInfos(): Promise<SessionInfo[]> {
+    return (await this.buildScopedSessionInfosDetailed()).sessions;
   }
 
   getState(): AppState {
@@ -2794,15 +2754,16 @@ export class StateManager {
 
   applySettingsChange() {
     const settings = this.getSettings();
-    const providerChanged = settings.provider !== this.state.settings.provider;
+    const providerChanged = this.providerSelectionChanged(settings, this.state.settings);
     if (providerChanged) {
       this.summaries.clear();
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
       const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
+      const enabled = this.enabledProviderSet(settings);
       const sessions = this.state.sessions.filter(session =>
-        providerMatchesMode(settings.provider, session.provider)
+        enabled.has(session.provider)
         && !isExcluded(this.sessionProjectKeys(session)),
       );
       const derived = this.computeDerivedUsage(settings);

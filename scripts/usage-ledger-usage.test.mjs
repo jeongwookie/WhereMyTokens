@@ -67,7 +67,7 @@ test('ledger all-time totals keep full monthly aggregates at daily retention bou
   assert.equal(usage.models[0].tokens, 400);
 });
 
-test('ledger usage query filters aggregates by provider mode', () => {
+test('ledger usage query filters aggregates by enabled provider set', () => {
   const now = Date.parse('2026-05-25T12:30:00.000Z');
   const snapshot = emptyUsageLedgerSnapshot();
   snapshot.minuteRecent[minuteKey(now - 60_000, 'claude', 'Sonnet')] = agg(100, 1.0);
@@ -77,12 +77,12 @@ test('ledger usage query filters aggregates by provider mode', () => {
   snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = agg(100, 1.0);
   snapshot.dailyModel[dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX')] = agg(200, 2.0);
 
-  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now, 'claude');
+  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now, new Set(['claude']));
 
   assert.equal(usage.todayTokens, 100);
   assert.equal(usage.todayCost, 1.0);
-  assert.equal(usage.h5.totalTokens, 100);
-  assert.equal(usage.h5Codex.totalTokens, 0);
+  assert.equal(usage.byProvider.claude.windows.h5.totalTokens, 100);
+  assert.equal(usage.byProvider.codex.windows.h5.totalTokens, 0);
   assert.deepEqual(usage.models.map(model => model.provider), ['claude']);
   assert.equal(usage.heatmap.reduce((sum, bucket) => sum + bucket.tokens, 0), 100);
 });
@@ -109,7 +109,7 @@ test('ledger usage query exposes today cache efficiency and savings from daily a
   assert.equal(usage.todayCacheEfficiency, 75);
 });
 
-test('ledger trend query filters rows by provider mode', () => {
+test('ledger trend query filters rows by enabled provider set', () => {
   const now = Date.parse('2026-05-25T12:30:00.000Z');
   const snapshot = emptyUsageLedgerSnapshot();
   snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = agg(100, 1.0);
@@ -117,7 +117,7 @@ test('ledger trend query filters rows by provider mode', () => {
   snapshot.monthlyModel['2026-05|claude|Sonnet'] = agg(100, 1.0);
   snapshot.monthlyModel['2026-05|codex|GPT-5-CODEX'] = agg(200, 2.0);
 
-  const trend = buildTrendDataFromLedger(snapshot, now, 'codex');
+  const trend = buildTrendDataFromLedger(snapshot, now, new Set(['codex']));
 
   assert.deepEqual(trend.daily.map(row => row.tokens), [200]);
   assert.deepEqual(trend.monthly.map(row => row.costUSD), [2.0]);

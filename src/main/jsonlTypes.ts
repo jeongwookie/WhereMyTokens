@@ -1,4 +1,6 @@
-export type UsageProvider = 'claude' | 'codex' | 'other';
+import type { ProviderId } from './providers/types';
+
+export type UsageProvider = ProviderId | 'other';
 
 export interface CompactRecentEntry {
   requestId: string;
@@ -83,7 +85,7 @@ export interface RequestIndexEntry extends CompactRecentEntry {
 }
 
 export interface FileUsageSummary {
-  provider: 'claude' | 'codex';
+  provider: ProviderId;
   sessionSnapshot: SessionSnapshot;
   recentEntries: CompactRecentEntry[];
   historicalRollup: HistoricalRollup;

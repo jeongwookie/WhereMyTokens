@@ -1,4 +1,5 @@
-import { UsageProvider } from './jsonlTypes';
+import type { UsageProvider } from './jsonlTypes';
+import type { ProviderId } from './providers/types';
 
 export const USAGE_LEDGER_SCHEMA_VERSION = 2;
 export const MINUTE_RECENT_RETENTION_MS = 8 * 24 * 60 * 60 * 1000;
@@ -25,11 +26,13 @@ export interface RecentRequestIndexEntry {
 }
 
 export interface SourceCheckpoint {
-  provider: 'claude' | 'codex';
+  provider: ProviderId;
   sourceHash: string;
-  size: number;
-  mtimeMs: number;
-  byteOffset: number;
+  sourceKey?: string;
+  size?: number;
+  mtimeMs?: number;
+  byteOffset?: number;
+  cursor?: string;
   lastImportedAt: number;
   hasUsage?: boolean;
   needsRebuild?: boolean;
@@ -54,4 +57,8 @@ export interface UsageLedgerStoreShape {
   ledger: UsageLedgerSnapshot;
 }
 
-export type UsageLedgerProvider = UsageProvider;
+export type UsageLedgerProvider = ProviderId | Extract<UsageProvider, 'other'>;
+
+export function isUsageLedgerProvider(value: string): value is UsageLedgerProvider {
+  return value === 'claude' || value === 'codex' || value === 'antigravity' || value === 'other';
+}

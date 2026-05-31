@@ -92,7 +92,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ## Features
 
 ### Session Tracking
-- **Claude + Codex provider modes** — track Claude only, Codex only, or both together in one dashboard
+- **Claude + Codex provider checkboxes** — track Claude only, Codex only, or both together in one dashboard
 - **Live session detection** — Terminal, VS Code, Cursor, Windsurf, and more with real-time status: `active` / `waiting` / `idle` / `compacting`
 - **Recent + active popup scope** — keep the tray popup focused on active sessions and recently touched work instead of reopening the full local archive on every refresh
 - **Compact grouping** — sessions grouped by git project → branch, with repeated Claude/Codex sessions stacked by provider, source, model, and state
@@ -147,7 +147,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 **Settings → Claude Code Integration → Setup** — enables live rate limit data without API polling.
 
 ### 3. Configure
-- **Tracking Provider** — Claude / Codex / Both
+- **Tracking providers** — enable Claude Code and/or Codex checkboxes
 - **Currency** — USD or KRW
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
@@ -203,7 +203,7 @@ WhereMyTokens reads local files and, when enabled, makes direct provider usage r
 
 Credential handling is intentionally narrow: WhereMyTokens reads provider credentials from the official local CLI files, does not ask you to paste API keys, does not store a separate credential backup, and redacts credential details from status output. If Claude's local access token expires, the app may refresh it through Anthropic and atomically write the updated credentials back to `~/.claude/.credentials.json`.
 
-Network access is limited to provider usage endpoints for enabled provider modes. Claude usage polling runs at most every 5 minutes with 429 backoff. Codex live usage uses HTTPS-only requests with timeout, response-size cap, cache, and backoff. Local JSONL parsing and the `statusLine` bridge do not send session contents anywhere.
+Network access is limited to provider usage endpoints for enabled providers. Disabled providers are not scanned locally and do not make live usage requests. Claude usage polling runs at most every 5 minutes with 429 backoff. Codex live usage uses HTTPS-only requests with timeout, response-size cap, cache, and backoff. Local JSONL parsing and the `statusLine` bridge do not send session contents anywhere.
 
 To disable the Claude Code bridge, open **Settings -> Claude Code Integration -> Disable**. The app removes the `statusLine` entry only when it owns the WhereMyTokens bridge command; it will not overwrite or delete another custom `statusLine`. Manual removal is also possible by deleting the WhereMyTokens `statusLine` entry from `~/.claude/settings.json`, then restarting Claude Code.
 
@@ -336,7 +336,7 @@ src/
     stateManager.ts       Polling, state assembly, bridge integration
     jsonlParser.ts        Parses conversation JSONL files (with incremental cache)
     jsonlCache.ts         mtime-based JSONL parse cache
-    sessionDiscovery.ts   Reads ~/.claude/sessions/*.json
+    providers/            Claude/Codex provider adapters for discovery, quota, and usage sources
     usageWindows.ts       5h/1w window aggregation + heatmaps
     rateLimitFetcher.ts   Anthropic API usage fetch (with backoff)
     codexUsageFetcher.ts  Codex usage fetch (safe headers, backoff, cache)

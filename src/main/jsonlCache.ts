@@ -7,6 +7,8 @@ import * as path from 'path';
 import { createHash } from 'crypto';
 import Store from 'electron-store';
 import { FileUsageSummary, emptySessionSnapshot } from './jsonlTypes';
+import type { ProviderId } from './providers/types';
+import { isUsageLedgerProvider } from './usageLedgerTypes';
 
 const PERSISTED_SCHEMA_VERSION = 2;
 
@@ -17,6 +19,11 @@ interface PersistedSummaryEntry {
 
 interface PersistedSummaryStore {
   cache: Record<string, PersistedSummaryEntry>;
+}
+
+interface PersistedSummaryStoreApi {
+  get(key: 'cache'): PersistedSummaryStore['cache'];
+  set(key: 'cache', value: PersistedSummaryStore['cache']): void;
 }
 
 export interface JsonlCacheDebugStats {
@@ -33,13 +40,20 @@ export class JsonlCache {
   private readonly MEMORY_TTL_MS = 30 * 60 * 1000;
   private cache = new Map<string, FileUsageSummary>();
   private pendingPersisted = new Map<string, PersistedSummaryEntry | null>();
-  private persistedStore: Store<PersistedSummaryStore>;
+  private persistedStore: PersistedSummaryStoreApi | null;
 
-  constructor() {
-    this.persistedStore = new Store<PersistedSummaryStore>({
-      name: 'jsonl-summary-cache',
-      defaults: { cache: {} },
-    });
+  constructor(persistedStore: PersistedSummaryStoreApi | null = null) {
+    this.persistedStore = persistedStore;
+  }
+
+  private getPersistedStore(): PersistedSummaryStoreApi {
+    if (!this.persistedStore) {
+      this.persistedStore = new Store<PersistedSummaryStore>({
+        name: 'jsonl-summary-cache',
+        defaults: { cache: {} },
+      });
+    }
+    return this.persistedStore;
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,7 +104,8 @@ export class JsonlCache {
       && typeof value.timestampMs === 'number'
       && Number.isFinite(value.timestampMs)
       && typeof value.model === 'string'
-      && (value.provider === 'claude' || value.provider === 'codex' || value.provider === 'other')
+      && typeof value.provider === 'string'
+      && isUsageLedgerProvider(value.provider)
       && typeof value.inputTokens === 'number'
       && Number.isFinite(value.inputTokens)
       && typeof value.outputTokens === 'number'
@@ -114,7 +129,8 @@ export class JsonlCache {
   private isHistoricalModelTotal(value: unknown): boolean {
     return this.isRecord(value)
       && typeof value.model === 'string'
-      && (value.provider === 'claude' || value.provider === 'codex' || value.provider === 'other')
+      && typeof value.provider === 'string'
+      && isUsageLedgerProvider(value.provider)
       && typeof value.tokens === 'number'
       && Number.isFinite(value.tokens)
       && typeof value.costUSD === 'number'
@@ -150,7 +166,7 @@ export class JsonlCache {
     if (value.version !== PERSISTED_SCHEMA_VERSION) return null;
     const summary = value.summary;
     if (!this.isRecord(summary)) return null;
-    if (summary.provider !== 'claude' && summary.provider !== 'codex') return null;
+    if (!isProviderId(summary.provider)) return null;
     if (!this.isSessionSnapshot(summary.sessionSnapshot)) return null;
     if (!Array.isArray(summary.recentEntries) || !summary.recentEntries.every(entry => this.isRecentEntry(entry))) return null;
     if (!this.isHistoricalRollup(summary.historicalRollup)) return null;
@@ -169,7 +185,7 @@ export class JsonlCache {
   }
 
   private getPersistedCache(): Record<string, PersistedSummaryEntry> {
-    const cache = this.persistedStore.get('cache') as unknown;
+    const cache = this.getPersistedStore().get('cache') as unknown;
     return this.isRecord(cache) ? cache as Record<string, PersistedSummaryEntry> : {};
   }
 
@@ -222,7 +238,7 @@ export class JsonlCache {
       else delete current[key];
     }
     this.pendingPersisted.clear();
-    this.persistedStore.set('cache', this.prunePersisted(current));
+    this.getPersistedStore().set('cache', this.prunePersisted(current));
   }
 
   private normalizePath(filePath: string): string {
@@ -270,7 +286,7 @@ export class JsonlCache {
     if (!persisted) {
       if (persistKey in persistedCache) {
         delete persistedCache[persistKey];
-        this.persistedStore.set('cache', persistedCache);
+        this.getPersistedStore().set('cache', persistedCache);
       }
       return null;
     }
@@ -307,7 +323,7 @@ export class JsonlCache {
   clearAll(): void {
     this.cache.clear();
     this.pendingPersisted.clear();
-    this.persistedStore.set('cache', {});
+    this.getPersistedStore().set('cache', {});
   }
 
   get size(): number {
@@ -325,4 +341,8 @@ export class JsonlCache {
       persistedLimit: this.MAX_PERSISTED_SIZE,
     };
   }
+}
+
+function isProviderId(value: unknown): value is ProviderId {
+  return value === 'claude' || value === 'codex' || value === 'antigravity';
 }
