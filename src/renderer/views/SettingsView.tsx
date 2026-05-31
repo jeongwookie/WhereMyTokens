@@ -63,10 +63,10 @@ function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string
 type EditableSettingKey = Exclude<keyof AppSettings, 'compactWidgetBounds'>;
 type ProviderId = AppSettings['enabledProviders'][number];
 
-const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string; experimental?: boolean; disabled?: boolean }> = [
+const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string; experimental?: boolean; disabled?: boolean; note?: string }> = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
-  { id: 'antigravity', label: 'Antigravity', experimental: true, disabled: true },
+  { id: 'antigravity', label: 'Antigravity', experimental: true, disabled: true, note: 'Coming soon, not tracked yet' },
 ];
 const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(option => !option.disabled);
 
@@ -112,9 +112,11 @@ function enabledProvidersFromSettings(settings: AppSettings): ProviderId[] {
 function toggleProvider(settings: AppSettings, id: ProviderId): AppSettings {
   if (!ACTIVE_PROVIDER_OPTIONS.some(option => option.id === id)) return settings;
   const current = new Set(enabledProvidersFromSettings(settings));
-  if (current.has(id)) current.delete(id);
+  if (current.has(id)) {
+    if (current.size <= 1) return settings;
+    current.delete(id);
+  }
   else current.add(id);
-  if (current.size === 0) current.add('claude');
   const enabledProviders = ACTIVE_PROVIDER_OPTIONS
     .map(option => option.id)
     .filter(providerId => current.has(providerId));
@@ -408,10 +410,15 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
         <div style={{ padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'grid', gap: 6 }}>
             {PROVIDER_OPTIONS.map(option => {
-              const checked = enabledProvidersFromSettings(s).includes(option.id);
+              const enabledProviders = enabledProvidersFromSettings(s);
+              const checked = enabledProviders.includes(option.id);
+              const lockedLastProvider = checked && enabledProviders.length <= 1 && option.disabled !== true;
+              const disabled = option.disabled === true || lockedLastProvider;
+              const title = option.note ?? (lockedLastProvider ? 'At least one provider must stay enabled.' : undefined);
               return (
                 <label
                   key={option.id}
+                  title={title}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -423,12 +430,14 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
                   <span style={labelStyle}>
                     {option.label}
                     {option.experimental && <span style={{ color: C.textMuted }}> · experimental</span>}
+                    {option.note && <span style={{ color: C.textMuted }}> · {option.note}</span>}
                   </span>
                   <input
                     type="checkbox"
                     style={chk}
                     checked={checked}
-                    disabled={option.disabled === true}
+                    disabled={disabled}
+                    title={title}
                     onChange={() => setS(toggleProvider(s, option.id))}
                   />
                 </label>

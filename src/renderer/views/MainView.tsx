@@ -115,9 +115,14 @@ function sessionProviderBadgeColors(provider: SessionInfo['provider'], C: Return
 
 function emptySessionLabel(enabledProviders: readonly ProviderId[]): string {
   const enabled = new Set(enabledProviders);
-  if (enabled.size === 1 && enabled.has('codex')) return 'Codex';
-  if (enabled.size === 1 && enabled.has('claude')) return 'Claude Code';
-  if (enabled.size === 1 && enabled.has('antigravity')) return 'Antigravity';
+  const labels = [
+    enabled.has('claude') ? 'Claude Code' : null,
+    enabled.has('codex') ? 'Codex' : null,
+    enabled.has('antigravity') ? 'Antigravity' : null,
+  ].filter((label): label is string => !!label);
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} or ${labels[1]}`;
+  if (labels.length > 2) return `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`;
   return 'enabled provider';
 }
 

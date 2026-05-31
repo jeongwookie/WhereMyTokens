@@ -17,6 +17,10 @@ function sourceFromFile(filePath: string): ProviderSource {
   };
 }
 
+function isClaudeAgentJsonlPath(filePath: string): boolean {
+  return path.basename(filePath).startsWith('agent-');
+}
+
 export function ownsClaudePath(filePath: string): boolean {
   return normalizeSourcePath(filePath).startsWith(normalizeSourcePath(CLAUDE_PROJECTS_DIR));
 }
@@ -102,6 +106,7 @@ export function claudeWatchTargets(_ctx: ProviderContext, mode: 'recent' | 'wide
 }
 
 export function buildStartupClaudeSession(_ctx: ProviderContext, source: ProviderSource): DiscoveredSession | null {
+  if (isClaudeAgentJsonlPath(source.filePath)) return null;
   const cwd = readClaudeSourceCwd(source);
   if (!cwd || !isSafeLocalCwd(cwd)) return null;
 

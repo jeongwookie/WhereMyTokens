@@ -13,11 +13,18 @@ test('settings use implemented enabledProviders as the canonical provider select
   assert.equal('provider' in settings, false);
 });
 
-test('removed provider mode does not drive normalized settings', () => {
-  const settings = normalizeSettings({ provider: 'codex' });
-
-  assert.deepEqual(settings.enabledProviders, ['claude', 'codex']);
+test('legacy provider mode migrates to enabledProviders', () => {
+  assert.deepEqual(normalizeSettings({ provider: 'claude' }).enabledProviders, ['claude']);
+  assert.deepEqual(normalizeSettings({ provider: 'codex' }).enabledProviders, ['codex']);
+  assert.deepEqual(normalizeSettings({ provider: 'both' }).enabledProviders, ['claude', 'codex']);
   assert.equal('provider' in DEFAULT_SETTINGS, false);
+  assert.equal('provider' in normalizeSettings({ provider: 'codex' }), false);
+});
+
+test('enabledProviders takes precedence over legacy provider mode', () => {
+  const settings = normalizeSettings({ provider: 'codex', enabledProviders: ['claude'] });
+
+  assert.deepEqual(settings.enabledProviders, ['claude']);
   assert.equal('provider' in settings, false);
 });
 
@@ -44,7 +51,9 @@ test('renderer tracking settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /function toggleProvider/);
   assert.match(settingsView, /enabledProviders/);
   assert.match(settingsView, /type="checkbox"/);
-  assert.match(settingsView, /disabled=\{option\.disabled/);
+  assert.match(settingsView, /lockedLastProvider/);
+  assert.match(settingsView, /disabled=\{disabled\}/);
+  assert.match(settingsView, /Coming soon, not tracked yet/);
   assert.match(settingsView, /ACTIVE_PROVIDER_OPTIONS/);
   assert.doesNotMatch(settingsView, /legacyProviderFromEnabled/);
   assert.doesNotMatch(settingsView, /Claude \+ Codex/);
@@ -74,6 +83,25 @@ test('provider selection production code has no legacy provider-mode helpers', (
     assert.doesNotMatch(source, /settings\.provider/);
     assert.doesNotMatch(source, /providerChanged = settings\.provider/);
   }
+});
+
+test('Claude provider keeps agent JSONL files out of visible startup sessions', () => {
+  const source = fs.readFileSync('src/main/providers/claude/sources.ts', 'utf8');
+
+  assert.match(source, /function isClaudeAgentJsonlPath/);
+  assert.match(source, /path\.basename\(filePath\)\.startsWith\('agent-'\)/);
+  assert.match(source, /if \(isClaudeAgentJsonlPath\(source\.filePath\)\) return null/);
+});
+
+test('help and notification copy match provider checkbox and Codex live fallback model', () => {
+  const helpView = fs.readFileSync('src/renderer/views/HelpView.tsx', 'utf8');
+  const notificationsView = fs.readFileSync('src/renderer/views/NotificationsView.tsx', 'utf8');
+
+  assert.doesNotMatch(helpView, /Tracking Provider: Claude \/ Codex \/ Both/);
+  assert.doesNotMatch(helpView, /provider mode/);
+  assert.match(helpView, /provider checkboxes/);
+  assert.match(notificationsView, /Codex live usage, cache, or local log 5-hour window/);
+  assert.match(notificationsView, /Codex live usage, cache, or local log weekly window/);
 });
 
 test('renderer provider labels explicitly handle Antigravity instead of non-Codex-as-Claude', () => {

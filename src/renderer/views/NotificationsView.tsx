@@ -124,8 +124,8 @@ export default function NotificationsView({ onBack }: Props) {
           )}
           {showCodexTargets && (
             <>
-              <TargetLine label="Codex 5h limit" detail="Codex local JSONL rate-limit window" />
-              <TargetLine label="Codex weekly limit" detail="Codex local JSONL weekly rate-limit window" />
+              <TargetLine label="Codex 5h limit" detail="Codex live usage, cache, or local log 5-hour window" />
+              <TargetLine label="Codex weekly limit" detail="Codex live usage, cache, or local log weekly window" />
             </>
           )}
           <div style={{ marginTop: 8, color: C.textMuted }}>

@@ -119,6 +119,13 @@ function normalizeCompactWidgetBounds(value: unknown): CompactWidgetBounds | nul
   return x == null || y == null ? undefined : { x, y };
 }
 
+function legacyProviderToEnabledProviders(value: unknown): ProviderId[] | null {
+  if (value === 'claude') return ['claude'];
+  if (value === 'codex') return ['codex'];
+  if (value === 'both') return ['claude', 'codex'];
+  return null;
+}
+
 function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   const record = asRecord(partial);
   if (!record) return {};
@@ -128,6 +135,9 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (usageLimits) next.usageLimits = usageLimits;
   if (Array.isArray(record.enabledProviders)) {
     next.enabledProviders = normalizeEnabledProviders(record.enabledProviders);
+  } else {
+    const migratedProviders = legacyProviderToEnabledProviders(record.provider);
+    if (migratedProviders) next.enabledProviders = migratedProviders;
   }
   const alertThresholds = normalizeAlertThresholds(record.alertThresholds);
   if (alertThresholds) next.alertThresholds = alertThresholds;
