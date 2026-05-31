@@ -1,4 +1,5 @@
 import Store from 'electron-store';
+import type { ProviderId } from './providers/types';
 import { compactUsageLedgerSnapshot, emptyUsageLedgerSnapshot } from './usageLedgerAggregates';
 import { SourceCheckpoint, UsageAggregate, USAGE_LEDGER_SCHEMA_VERSION, UsageLedgerSnapshot, UsageLedgerStoreShape } from './usageLedgerTypes';
 
@@ -15,6 +16,10 @@ function objectRecord<T>(value: unknown): Record<string, T> {
 
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function isProviderId(value: unknown): value is ProviderId {
+  return value === 'claude' || value === 'codex' || value === 'antigravity';
 }
 
 function normalizeAggregate(value: unknown): UsageAggregate | null {
@@ -59,20 +64,22 @@ function normalizeSourceCheckpointRecord(value: unknown): Record<string, SourceC
   const normalized: Record<string, SourceCheckpoint> = {};
   for (const [key, checkpoint] of Object.entries(objectRecord<unknown>(value))) {
     const raw = objectRecord<unknown>(checkpoint);
-    if (raw.provider !== 'claude' && raw.provider !== 'codex') continue;
+    if (!isProviderId(raw.provider)) continue;
     if (typeof raw.sourceHash !== 'string') continue;
     const size = finiteNumber(raw.size);
     const mtimeMs = finiteNumber(raw.mtimeMs);
     const byteOffset = finiteNumber(raw.byteOffset);
     const lastImportedAt = finiteNumber(raw.lastImportedAt);
-    if (size == null || mtimeMs == null || byteOffset == null || lastImportedAt == null) continue;
+    if (lastImportedAt == null) continue;
     normalized[key] = {
       provider: raw.provider,
       sourceHash: raw.sourceHash,
-      size,
-      mtimeMs,
-      byteOffset,
       lastImportedAt,
+      ...(typeof raw.sourceKey === 'string' ? { sourceKey: raw.sourceKey } : {}),
+      ...(size == null ? {} : { size }),
+      ...(mtimeMs == null ? {} : { mtimeMs }),
+      ...(byteOffset == null ? {} : { byteOffset }),
+      ...(typeof raw.cursor === 'string' ? { cursor: raw.cursor } : {}),
       ...(typeof raw.hasUsage === 'boolean' ? { hasUsage: raw.hasUsage } : {}),
       ...(typeof raw.needsRebuild === 'boolean' ? { needsRebuild: raw.needsRebuild } : {}),
       ...(typeof raw.rebuildReason === 'string' ? { rebuildReason: raw.rebuildReason } : {}),

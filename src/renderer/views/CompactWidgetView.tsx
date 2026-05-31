@@ -406,7 +406,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
   }, [state.lastUpdated, state.stateFreshness]);
 
   const agents = useMemo<WidgetAgent[]>(() => {
-    const provider = state.settings.provider ?? 'both';
+    const enabledProviders = new Set(state.settings.enabledProviders);
     const next: WidgetAgent[] = [];
     const bootPending = !state.initialRefreshComplete;
     const codexH5HasLimit = hasLimitData(state.limits.codexH5);
@@ -416,7 +416,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     const codexPendingTitle = 'Full Codex history is still scanning; local-log limits may update.';
     const claudeUnavailableTitle = 'Claude limit data is unavailable until API or statusLine data is connected.';
     const codexUnavailableTitle = 'Codex limit data has not arrived from API, cache, or local logs yet.';
-    if (provider !== 'codex') {
+    if (enabledProviders.has('claude')) {
       next.push({
         key: 'claude',
         label: 'Claude',
@@ -427,7 +427,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         ],
       });
     }
-    if (provider !== 'claude') {
+    if (enabledProviders.has('codex')) {
       next.push({
         key: 'codex',
         label: 'Codex',
@@ -441,12 +441,12 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
       });
     }
     return next;
-  }, [C.active, C.sonnet, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5.pct, state.limits.codexH5.resetLabel, state.limits.codexH5.resetMs, state.limits.codexH5.source, state.limits.codexWeek.pct, state.limits.codexWeek.resetLabel, state.limits.codexWeek.resetMs, state.limits.codexWeek.source, state.limits.h5.pct, state.limits.h5.resetLabel, state.limits.h5.resetMs, state.limits.h5.source, state.limits.week.pct, state.limits.week.resetLabel, state.limits.week.resetMs, state.limits.week.source, state.settings.provider]);
+  }, [C.active, C.sonnet, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5.pct, state.limits.codexH5.resetLabel, state.limits.codexH5.resetMs, state.limits.codexH5.source, state.limits.codexWeek.pct, state.limits.codexWeek.resetLabel, state.limits.codexWeek.resetMs, state.limits.codexWeek.source, state.limits.h5.pct, state.limits.h5.resetLabel, state.limits.h5.resetMs, state.limits.h5.source, state.limits.week.pct, state.limits.week.resetLabel, state.limits.week.resetMs, state.limits.week.source, state.settings.enabledProviders]);
 
   const healthItems = useMemo<HealthItem[]>(() => {
-    const provider = state.settings.provider ?? 'both';
+    const enabledProviders = new Set(state.settings.enabledProviders);
     const items: HealthItem[] = [];
-    if (provider !== 'codex') {
+    if (enabledProviders.has('claude')) {
       const claudeHealth = providerHealth(
         'Claude',
         state.limits.h5,
@@ -457,13 +457,13 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
       );
       items.push(claudeHealth);
     }
-    if (provider !== 'claude') {
+    if (enabledProviders.has('codex')) {
       const codexSyncing = state.historyWarmupPending && (!hasLimitData(state.limits.codexH5) || !hasLimitData(state.limits.codexWeek));
       const codexHealth = providerHealth('Codex', state.limits.codexH5, state.limits.codexWeek, codexSyncing);
       items.push(codexHealth);
     }
     return items;
-  }, [state.apiConnected, state.apiStatusLabel, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5, state.limits.codexWeek, state.limits.h5, state.limits.week, state.settings.provider]);
+  }, [state.apiConnected, state.apiStatusLabel, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5, state.limits.codexWeek, state.limits.h5, state.limits.week, state.settings.enabledProviders]);
 
   const healthToneStyle = useCallback((tone: HealthTone): React.CSSProperties => {
     if (tone === 'claudeGood') return { color: C.sonnet, background: `${C.sonnet}14`, border: `1px solid ${C.sonnet}33` };

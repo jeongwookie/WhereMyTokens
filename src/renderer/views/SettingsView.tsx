@@ -61,10 +61,18 @@ function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string
 }
 
 type EditableSettingKey = Exclude<keyof AppSettings, 'compactWidgetBounds'>;
+type ProviderId = AppSettings['enabledProviders'][number];
+
+const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string; experimental?: boolean; disabled?: boolean }> = [
+  { id: 'claude', label: 'Claude Code' },
+  { id: 'codex', label: 'Codex' },
+  { id: 'antigravity', label: 'Antigravity', experimental: true, disabled: true },
+];
+const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(option => !option.disabled);
 
 const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'usageLimits',
-  'provider',
+  'enabledProviders',
   'alertThresholds',
   'currency',
   'usdToKrw',
@@ -89,6 +97,30 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     ...settings,
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
+  };
+}
+
+function enabledProvidersFromSettings(settings: AppSettings): ProviderId[] {
+  if (Array.isArray(settings.enabledProviders) && settings.enabledProviders.length > 0) {
+    return ACTIVE_PROVIDER_OPTIONS
+      .map(option => option.id)
+      .filter(id => settings.enabledProviders.includes(id));
+  }
+  return ['claude', 'codex'];
+}
+
+function toggleProvider(settings: AppSettings, id: ProviderId): AppSettings {
+  if (!ACTIVE_PROVIDER_OPTIONS.some(option => option.id === id)) return settings;
+  const current = new Set(enabledProvidersFromSettings(settings));
+  if (current.has(id)) current.delete(id);
+  else current.add(id);
+  if (current.size === 0) current.add('claude');
+  const enabledProviders = ACTIVE_PROVIDER_OPTIONS
+    .map(option => option.id)
+    .filter(providerId => current.has(providerId));
+  return {
+    ...settings,
+    enabledProviders,
   };
 }
 
@@ -373,23 +405,35 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
         </div>
 
         <SectionHeader label="Tracking" />
-        <div style={row}>
-          <span style={labelStyle}>Provider</span>
-          <div style={{ display: 'flex', gap: 2 }}>
-            {([
-              ['both', 'Claude + Codex'],
-              ['claude', 'Claude'],
-              ['codex', 'Codex'],
-            ] as Array<[AppSettings['provider'], string]>).map(([value, label]) => (
-              <button key={value} onClick={() => setS({ ...s, provider: value })} style={{
-                padding: '3px 8px', fontSize: 11, border: `1px solid ${(s.provider ?? 'both') === value ? C.accent + '88' : C.border}`,
-                borderRadius: 4, cursor: 'pointer', fontWeight: (s.provider ?? 'both') === value ? 700 : 400,
-                background: (s.provider ?? 'both') === value ? C.accent + '22' : 'transparent',
-                color: (s.provider ?? 'both') === value ? C.accent : C.textDim,
-              }}>
-                {label}
-              </button>
-            ))}
+        <div style={{ padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {PROVIDER_OPTIONS.map(option => {
+              const checked = enabledProvidersFromSettings(s).includes(option.id);
+              return (
+                <label
+                  key={option.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    opacity: option.disabled ? 0.55 : 1,
+                  }}
+                >
+                  <span style={labelStyle}>
+                    {option.label}
+                    {option.experimental && <span style={{ color: C.textMuted }}> · experimental</span>}
+                  </span>
+                  <input
+                    type="checkbox"
+                    style={chk}
+                    checked={checked}
+                    disabled={option.disabled === true}
+                    onChange={() => setS(toggleProvider(s, option.id))}
+                  />
+                </label>
+              );
+            })}
           </div>
         </div>
 

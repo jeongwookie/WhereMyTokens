@@ -28,8 +28,9 @@ export default function NotificationsView({ onBack }: Props) {
   if (!settings) return null;
 
   const thresholds = settings.alertThresholds ?? [50, 80, 90];
-  const showClaudeTargets = settings.provider === 'claude' || settings.provider === 'both';
-  const showCodexTargets = settings.provider === 'codex' || settings.provider === 'both';
+  const enabledProviders = new Set(settings.enabledProviders);
+  const showClaudeTargets = enabledProviders.has('claude');
+  const showCodexTargets = enabledProviders.has('codex');
 
   function toggleThreshold(v: number) {
     if (!settings) return;
@@ -128,7 +129,7 @@ export default function NotificationsView({ onBack }: Props) {
             </>
           )}
           <div style={{ marginTop: 8, color: C.textMuted }}>
-            Alerts follow the current tracking mode. Auto-refreshed every 60s, 1-hour cooldown per alert.
+            Alerts follow the enabled providers. Auto-refreshed every 60s, 1-hour cooldown per alert.
           </div>
         </div>
       </div>

@@ -106,8 +106,8 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(stateSource, /MANUAL_PROVIDER_USAGE_FORCE_MIN_INTERVAL_MS = 60_000/);
   assert.match(stateSource, /consumeManualProviderUsageForce/);
   assert.match(stateSource, /forceProviderUsage: this\.consumeManualProviderUsageForce\(\)/);
-  assert.match(stateSource, /settingsForApi\.provider !== 'codex' \? this\.refreshApiUsagePct\(force \|\| forceProviderUsage\) : Promise\.resolve\(false\)/);
-  assert.match(stateSource, /settingsForApi\.provider !== 'claude' \? this\.refreshCodexUsagePct\(force \|\| forceProviderUsage\) : Promise\.resolve\(false\)/);
+  assert.match(stateSource, /refreshProviderQuotas\(settingsForApi, force \|\| forceProviderUsage\)/);
+  assert.match(stateSource, /provider\.fetchQuota/);
   assert.match(mainSource, /historyWarmupPending \|\|/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);
@@ -166,7 +166,7 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(mainViewSource, /Show floating Quota Pace widget/);
   const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   assert.match(stateManagerSource, /return normalizeSettings\(this\.store\.store\)/);
-  assert.match(stateManagerSource, /providerMatchesMode\(settings\.provider, session\.provider\)/);
+  assert.match(stateManagerSource, /enabled\.has\(session\.provider\)/);
   assert.match(stateManagerSource, /usage: derived\.usage/);
   assert.match(stateManagerSource, /limits: derived\.limits/);
   assert.match(widgetSource, /dragSeqRef/);
@@ -238,8 +238,8 @@ test('Codex account limit collection is separated from visible usage filters', (
   const fastBody = source.slice(fastStart, fastEnd);
 
   assert.match(source, /scanCodexRateLimitsOnly/);
-  assert.match(source, /const excludedForUsage = this\.isExcludedSummary\(filePath, 'codex', isExcluded\)/);
-  assert.match(source, /codexRateLimits = this\.mergeCodexRateLimits\(codexRateLimits, await scanCodexRateLimitsOnly\(filePath\)\)/);
+  assert.match(source, /provider\.isExcludedSource\?\.\(source, isExcluded\)/);
+  assert.match(source, /codexRateLimits = this\.mergeCodexRateLimits\(codexRateLimits, await scanCodexRateLimitsOnly\(source\.filePath\)\)/);
   assert.doesNotMatch(collectBody, /getVisibleSummaries/);
   assert.match(source, /private async refreshRecentCodexRateLimits/);
   assert.match(fastBody, /await this\.refreshRecentCodexRateLimits\(settings\)/);

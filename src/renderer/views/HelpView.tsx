@@ -218,7 +218,7 @@ function ContentEN() {
 
       <Section icon={<Signal size={15} />} title="Startup & Status">
         <div style={{ marginBottom: 5 }}><B>Partial History</B> — on startup the dashboard shows current sessions and recent usage first. Older history syncs in budgeted background slices so the tray app and hotkey popup stay responsive.</div>
-        <div style={{ marginBottom: 5 }}><B>Header metadata</B> — Claude and Codex details in the top bar are read-only labels, not action buttons. Provider mode decides whether Claude, Codex, or both appear.</div>
+        <div style={{ marginBottom: 5 }}><B>Header metadata</B> — Claude and Codex details in the top bar are read-only labels, not action buttons. Enabled providers decide which details appear.</div>
         <div style={{ marginBottom: 5 }}><B>Header widget toggle</B> — the small PiP button in the top bar shows or hides the floating Quota Pace widget without opening Settings.</div>
         <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important provider health state and names the affected provider. Claude may show refresh/login/failed states while OAuth usage data recovers. Quota Pace Health shows separate chips such as <B>Claude OK</B> and <B>Codex OK</B>.</div>
         <div style={{ marginBottom: 5 }}><B>Source chips</B> — <B>API</B> means provider account usage, <B>Bridge</B> means Claude statusLine fallback, <B>Cache</B> means the last trusted snapshot, and <B>Log</B> means a local session-log estimate.</div>

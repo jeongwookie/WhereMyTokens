@@ -22,6 +22,12 @@ function compactToolLabel(name: string): string {
   return map[name] ?? name.replace(/^functions\./, '').replace(/^multi_tool_use\./, '');
 }
 
+function providerLabel(provider: SessionInfo['provider']): string {
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
+  return 'Claude';
+}
+
 function SessionRow({ session, expanded, onToggle }: {
   session: SessionInfo;
   expanded?: boolean;
@@ -30,6 +36,16 @@ function SessionRow({ session, expanded, onToggle }: {
   const C = useTheme();
   const TOOL_COLORS = [C.input, C.output, C.cacheW, C.cacheR, C.sonnet, C.idle];
   const mc = modelColor(session.modelName, C);
+  const providerBadgeBackground = session.provider === 'codex'
+    ? C.output + '16'
+    : session.provider === 'antigravity'
+      ? C.input + '16'
+      : C.accentDim;
+  const providerBadgeColor = session.provider === 'codex'
+    ? C.output
+    : session.provider === 'antigravity'
+      ? C.input
+      : C.textMuted;
 
   const toolEntries = useMemo(() => (
     Object.entries(session.toolCounts).sort((a, b) => b[1] - a[1])
@@ -77,8 +93,8 @@ function SessionRow({ session, expanded, onToggle }: {
               {session.modelName}
             </span>
           )}
-          <span style={{ fontSize: 9, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
-            {session.provider === 'codex' ? 'Codex' : 'Claude'}
+          <span style={{ fontSize: 9, background: providerBadgeBackground, color: providerBadgeColor, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+            {providerLabel(session.provider)}
           </span>
           <span title={session.source} style={{ fontSize: 11, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
         </div>
@@ -117,8 +133,8 @@ function SessionRow({ session, expanded, onToggle }: {
                 {session.modelName}
               </span>
             )}
-            <span style={{ fontSize: 9, background: session.provider === 'codex' ? C.output + '16' : C.accentDim, color: session.provider === 'codex' ? C.output : C.textMuted, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
-              {session.provider === 'codex' ? 'Codex' : 'Claude'}
+            <span style={{ fontSize: 9, background: providerBadgeBackground, color: providerBadgeColor, border: `1px solid ${C.border}`, borderRadius: 3, padding: '1px 5px', fontWeight: 700 }}>
+              {providerLabel(session.provider)}
             </span>
             <span title={session.source} style={{ fontSize: 11, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.source}</span>
           </div>

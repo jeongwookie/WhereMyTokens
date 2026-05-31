@@ -10,6 +10,8 @@ import {
   getIntegrationStatus,
   setupIntegration,
 } from './integration';
+import type { ProviderId } from './providers/types';
+import { normalizeEnabledProviders } from './providers/settings';
 
 const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'];
 const MAIN_SECTION_IDS = new Set(DEFAULT_MAIN_SECTION_ORDER);
@@ -20,9 +22,8 @@ export interface CompactWidgetBounds {
 }
 
 export interface AppSettings {
-  // 내부용 (UI 미노출, fallback 용도)
   usageLimits: { h5: number; week: number; sonnetWeek: number };
-  provider: 'claude' | 'codex' | 'both';
+  enabledProviders: ProviderId[];
 
   // 사용자 설정
   alertThresholds: number[]; // [50, 80, 90]
@@ -125,7 +126,9 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
 
   const usageLimits = normalizeUsageLimits(record.usageLimits);
   if (usageLimits) next.usageLimits = usageLimits;
-  if (record.provider === 'claude' || record.provider === 'codex' || record.provider === 'both') next.provider = record.provider;
+  if (Array.isArray(record.enabledProviders)) {
+    next.enabledProviders = normalizeEnabledProviders(record.enabledProviders);
+  }
   const alertThresholds = normalizeAlertThresholds(record.alertThresholds);
   if (alertThresholds) next.alertThresholds = alertThresholds;
   if (typeof record.openAtLogin === 'boolean') next.openAtLogin = record.openAtLogin;
@@ -157,9 +160,11 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
 
 export function normalizeSettings(value: unknown): AppSettings {
   const sanitized = normalizedSettingsPartial(value);
+  const enabledProviders = normalizeEnabledProviders(sanitized.enabledProviders);
   return {
     ...DEFAULT_SETTINGS,
     ...sanitized,
+    enabledProviders,
     mainSectionOrder: sanitized.mainSectionOrder ?? DEFAULT_SETTINGS.mainSectionOrder,
     hiddenMainSections: sanitized.hiddenMainSections ?? DEFAULT_SETTINGS.hiddenMainSections,
     hiddenProjects: sanitized.hiddenProjects ?? DEFAULT_SETTINGS.hiddenProjects,
@@ -169,7 +174,7 @@ export function normalizeSettings(value: unknown): AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   usageLimits: { h5: 100, week: 2000, sonnetWeek: 100_000_000 },
-  provider: 'both',
+  enabledProviders: ['claude', 'codex'],
   alertThresholds: [50, 80, 90],
   openAtLogin: false,
   alwaysOnTop: true,

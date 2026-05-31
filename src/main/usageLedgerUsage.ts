@@ -1,5 +1,6 @@
 import { UsageData, WindowStats, ModelUsage, HourlyBucket, WeeklyTotal, TimeOfDayBucket } from './usageWindows';
-import { UsageAggregate, UsageLedgerProvider, UsageLedgerSnapshot } from './usageLedgerTypes';
+import { UsageAggregate, UsageLedgerProvider, UsageLedgerSnapshot, isUsageLedgerProvider } from './usageLedgerTypes';
+import type { ProviderId } from './providers/types';
 
 export interface UsageTrendPoint {
   date?: string;
@@ -16,7 +17,7 @@ export interface UsageTrendData {
   monthly: UsageTrendPoint[];
 }
 
-export type UsageProviderMode = 'claude' | 'codex' | 'both';
+export type UsageProviderFilter = ReadonlySet<UsageLedgerProvider>;
 
 interface KeyedAggregate {
   key: string;
@@ -57,7 +58,7 @@ function addAggregate(target: UsageAggregate, aggregate: UsageAggregate): void {
   target.cacheSavingsUSD += aggregate.cacheSavingsUSD;
 }
 
-function finalize(window: WindowStats, provider: 'claude' | 'codex'): void {
+function finalize(window: WindowStats, provider: UsageLedgerProvider): void {
   const denominator = cacheEfficiencyDenominator(provider, window);
   window.cacheEfficiency = denominator > 0 ? (window.cacheReadTokens / denominator) * 100 : 0;
 }
@@ -99,7 +100,7 @@ function weekLabelFromStart(startMs: number): string {
 function parseModelKey(key: string, aggregate: UsageAggregate, kind: 'daily' | 'monthly'): KeyedAggregate | null {
   const [period, provider, ...modelParts] = key.split('|');
   const model = modelParts.join('|');
-  if (!period || (provider !== 'claude' && provider !== 'codex' && provider !== 'other') || !model) return null;
+  if (!period || !isUsageLedgerProvider(provider) || !model) return null;
   const timestampMs = kind === 'daily' ? parseDateMs(period) : parseDateMs(`${period}-01`);
   if (!Number.isFinite(timestampMs)) return null;
   return {
@@ -116,19 +117,23 @@ function parseMinuteKey(key: string, aggregate: UsageAggregate): KeyedAggregate 
   const [timestamp, provider, ...modelParts] = key.split('|');
   const model = modelParts.join('|');
   const timestampMs = Number(timestamp);
-  if (!Number.isFinite(timestampMs) || (provider !== 'claude' && provider !== 'codex' && provider !== 'other') || !model) return null;
+  if (!Number.isFinite(timestampMs) || !isUsageLedgerProvider(provider) || !model) return null;
   return { key, provider, model, timestampMs, aggregate };
 }
 
 function parseHourKey(key: string, aggregate: UsageAggregate): { timestampMs: number; provider: UsageLedgerProvider; aggregate: UsageAggregate } | null {
   const [timestamp, provider] = key.split('|');
   const timestampMs = Number(timestamp);
-  if (!Number.isFinite(timestampMs) || (provider !== 'claude' && provider !== 'codex' && provider !== 'other')) return null;
+  if (!Number.isFinite(timestampMs) || !isUsageLedgerProvider(provider)) return null;
   return { timestampMs, provider, aggregate };
 }
 
-function providerMatchesMode(provider: UsageLedgerProvider, mode: UsageProviderMode): boolean {
-  return mode === 'both' || provider === mode;
+function providerMatchesFilter(provider: UsageLedgerProvider, filter?: UsageProviderFilter): boolean {
+  return !filter || filter.has(provider);
+}
+
+function isProviderId(provider: UsageLedgerProvider): provider is ProviderId {
+  return provider === 'claude' || provider === 'codex' || provider === 'antigravity';
 }
 
 function addModelTotal(modelMap: Map<string, ModelUsage>, model: string, provider: ModelUsage['provider'], tokens: number, costUSD: number): void {
@@ -156,7 +161,7 @@ export function emptyUsageTrendData(): UsageTrendData {
   return { daily: [], weekly: [], monthly: [] };
 }
 
-export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = Date.now(), providerMode: UsageProviderMode = 'both'): UsageTrendData {
+export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = Date.now(), providerFilter?: UsageProviderFilter): UsageTrendData {
   const daily = new Map<string, UsageTrendPoint>();
   const weekly = new Map<string, UsageTrendPoint>();
   const monthly = new Map<string, UsageTrendPoint>();
@@ -164,7 +169,7 @@ export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = 
   for (const [key, aggregate] of Object.entries(snapshot.dailyModel)) {
     const row = parseModelKey(key, aggregate, 'daily');
     if (!row?.date) continue;
-    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    if (!providerMatchesFilter(row.provider, providerFilter)) continue;
     addTrendPoint(daily, row.date, aggregate, 'date');
     addTrendPoint(weekly, weekStartForDateMs(row.timestampMs), aggregate, 'weekStart');
   }
@@ -172,7 +177,7 @@ export function buildTrendDataFromLedger(snapshot: UsageLedgerSnapshot, nowMs = 
   for (const [key, aggregate] of Object.entries(snapshot.monthlyModel)) {
     const row = parseModelKey(key, aggregate, 'monthly');
     if (!row?.month) continue;
-    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    if (!providerMatchesFilter(row.provider, providerFilter)) continue;
     addTrendPoint(monthly, row.month, aggregate, 'month');
   }
 
@@ -191,7 +196,7 @@ export function computeUsageFromLedger(
     codex?: { weekResetMs?: number | null; h5ResetMs?: number | null };
   } = {},
   nowMs = Date.now(),
-  providerMode: UsageProviderMode = 'both',
+  providerFilter?: UsageProviderFilter,
 ): UsageData {
   const weekStart = getWeekStartMs(nowMs);
   const claudeH5Start = windowStart(H5_MS, resets.claude?.h5ResetMs, nowMs - H5_MS, nowMs);
@@ -206,10 +211,10 @@ export function computeUsageFromLedger(
   const currentWeekStart = getWeekStartMs(nowMs);
   const timelineStart = currentWeekStart - 19 * WEEK_MS;
 
-  const h5 = emptyWindow();
-  const week = emptyWindow();
-  const h5Codex = emptyWindow();
-  const weekCodex = emptyWindow();
+  const providerWindows = new Map<ProviderId, NonNullable<UsageData['byProvider'][ProviderId]>>([
+    ['claude', { windows: { h5: emptyWindow(), week: emptyWindow(), sonnetWeek: emptyWindow() } }],
+    ['codex', { windows: { h5: emptyWindow(), week: emptyWindow() } }],
+  ]);
   const allTime = emptyWindow();
   const modelMap = new Map<string, ModelUsage>();
   const heatMap7 = new Map<string, HourlyBucket>();
@@ -225,7 +230,6 @@ export function computeUsageFromLedger(
   let todayCacheReadTokens = 0;
   let todayCacheSavingsUSD = 0;
   let todayCacheDenominator = 0;
-  let sonnetWeekTokens = 0;
   let allTimeCacheDenominator = 0;
 
   const todMap: Record<TimeOfDayBucket['period'], TimeOfDayBucket> = {
@@ -278,11 +282,37 @@ export function computeUsageFromLedger(
     allTimeCacheDenominator += cacheEfficiencyDenominator(provider, aggregate);
   };
 
+  const providerWindowStarts = (provider: ProviderId): { h5: number; week: number } => {
+    if (provider === 'claude') return { h5: claudeH5Start, week: claudeWeekStart };
+    if (provider === 'codex') return { h5: codexH5Start, week: codexWeekStart };
+    return { h5: nowMs - H5_MS, week: weekStart };
+  };
+
+  const getProviderWindowUsage = (provider: ProviderId): NonNullable<UsageData['byProvider'][ProviderId]> => {
+    const existing = providerWindows.get(provider);
+    if (existing) return existing;
+    const next = { windows: { h5: emptyWindow(), week: emptyWindow() } };
+    providerWindows.set(provider, next);
+    return next;
+  };
+
+  const addProviderWindowAggregate = (row: KeyedAggregate, aggregate: UsageAggregate): void => {
+    if (!isProviderId(row.provider)) return;
+    const usage = getProviderWindowUsage(row.provider);
+    const starts = providerWindowStarts(row.provider);
+    if (row.timestampMs >= starts.h5) addAggregate(usage.windows.h5, aggregate);
+    if (row.timestampMs < starts.week) return;
+    addAggregate(usage.windows.week, aggregate);
+    if (row.provider === 'claude' && row.model.toLowerCase().includes('sonnet')) {
+      addAggregate(usage.windows.sonnetWeek, aggregate);
+    }
+  };
+
   const monthlyModelKeys = new Set<string>();
   for (const [key, aggregate] of Object.entries(snapshot.monthlyModel)) {
     const row = parseModelKey(key, aggregate, 'monthly');
     if (!row?.month) continue;
-    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    if (!providerMatchesFilter(row.provider, providerFilter)) continue;
     monthlyModelKeys.add(`${row.month}|${row.provider}|${row.model}`);
     addAllTime(row.provider, aggregate);
     addModelTotal(modelMap, row.model, row.provider, aggregate.totalTokens, aggregate.costUSD);
@@ -291,7 +321,7 @@ export function computeUsageFromLedger(
   for (const [key, aggregate] of Object.entries(snapshot.dailyModel)) {
     const row = parseModelKey(key, aggregate, 'daily');
     if (!row?.date) continue;
-    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    if (!providerMatchesFilter(row.provider, providerFilter)) continue;
     if (!monthlyModelKeys.has(`${row.date.slice(0, 7)}|${row.provider}|${row.model}`)) {
       addAllTime(row.provider, aggregate);
       addModelTotal(modelMap, row.model, row.provider, aggregate.totalTokens, aggregate.costUSD);
@@ -313,47 +343,41 @@ export function computeUsageFromLedger(
   for (const [key, aggregate] of Object.entries(snapshot.minuteRecent)) {
     const row = parseMinuteKey(key, aggregate);
     if (!row) continue;
-    if (!providerMatchesMode(row.provider, providerMode)) continue;
-    if (row.provider === 'claude') {
-      if (row.timestampMs >= claudeH5Start) addAggregate(h5, aggregate);
-      if (row.timestampMs >= claudeWeekStart) {
-        addAggregate(week, aggregate);
-        if (row.model.toLowerCase().includes('sonnet')) sonnetWeekTokens += aggregate.totalTokens;
-      }
-    } else if (row.provider === 'codex') {
-      if (row.timestampMs >= codexH5Start) addAggregate(h5Codex, aggregate);
-      if (row.timestampMs >= codexWeekStart) addAggregate(weekCodex, aggregate);
-    }
+    if (!providerMatchesFilter(row.provider, providerFilter)) continue;
+    addProviderWindowAggregate(row, aggregate);
   }
 
   for (const [key, aggregate] of Object.entries(snapshot.hourlyActivity)) {
     const row = parseHourKey(key, aggregate);
     if (!row) continue;
-    if (!providerMatchesMode(row.provider, providerMode)) continue;
+    if (!providerMatchesFilter(row.provider, providerFilter)) continue;
     addToHeatmap(heatMap7, day7Start, row.timestampMs, aggregate.totalTokens);
     addToHeatmap(heatMap30, day30Start, row.timestampMs, aggregate.totalTokens);
     addToHeatmap(heatMap150, day150Start, row.timestampMs, aggregate.totalTokens);
     addToTod(row.timestampMs, aggregate);
   }
 
-  finalize(h5, 'claude');
-  finalize(week, 'claude');
-  finalize(h5Codex, 'codex');
-  finalize(weekCodex, 'codex');
+  for (const [provider, usage] of providerWindows) {
+    for (const window of Object.values(usage.windows)) finalize(window, provider);
+  }
 
   const recentClaudeOutput = Object.entries(snapshot.minuteRecent).reduce((sum, [key, aggregate]) => {
     const row = parseMinuteKey(key, aggregate);
     return row?.provider === 'claude'
-      && providerMatchesMode(row.provider, providerMode)
+      && providerMatchesFilter(row.provider, providerFilter)
       && row.timestampMs >= nowMs - 5 * 60 * 1000
       ? sum + aggregate.outputTokens
       : sum;
   }, 0);
   const h5OutputPerMin = recentClaudeOutput / 5;
-  const h5Remaining = userLimits.h5 - h5.totalTokens;
-  const weekRemaining = userLimits.week - week.totalTokens;
+  const claudeWindows = getProviderWindowUsage('claude').windows;
+  const claudeH5 = claudeWindows.h5;
+  const claudeWeek = claudeWindows.week;
+  const h5Remaining = userLimits.h5 - claudeH5.totalTokens;
+  const weekRemaining = userLimits.week - claudeWeek.totalTokens;
   const h5EtaMs = h5OutputPerMin > 0 && h5Remaining > 0 ? (h5Remaining / h5OutputPerMin) * 60_000 : null;
   const weekEtaMs = h5OutputPerMin > 0 && weekRemaining > 0 ? (weekRemaining / h5OutputPerMin) * 60_000 : null;
+  getProviderWindowUsage('claude').burnRate = { h5OutputPerMin, h5EtaMs, weekEtaMs };
 
   const allTimeAvgCacheEfficiency = allTimeCacheDenominator > 0
     ? (allTime.cacheReadTokens / allTimeCacheDenominator) * 100
@@ -363,10 +387,7 @@ export function computeUsageFromLedger(
     : 0;
 
   return {
-    h5,
-    week,
-    h5Codex,
-    weekCodex,
+    byProvider: Object.fromEntries(providerWindows),
     models: [...modelMap.values()].filter(model => model.tokens > 0).sort((a, b) => b.tokens - a.tokens),
     heatmap: [...heatMap7.values()],
     heatmap30: [...heatMap30.values()],
@@ -387,8 +408,6 @@ export function computeUsageFromLedger(
     allTimeOutputTokens: allTime.outputTokens,
     allTimeSavedUSD: allTime.cacheSavingsUSD,
     allTimeAvgCacheEfficiency,
-    sonnetWeekTokens,
-    burnRate: { h5OutputPerMin, h5EtaMs, weekEtaMs },
     todBuckets: [todMap.night, todMap.morning, todMap.afternoon, todMap.evening],
   };
 }

@@ -1,17 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { TrackingProvider } from './sessionDiscovery';
 import { isSafeLocalCwd } from './pathSafety';
 import { readJsonlCwd } from './sessionMetadata';
+import type { ProviderId } from './providers/types';
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
 
-export function discoverAllProjectCwds(provider: TrackingProvider = 'both'): string[] {
+export function discoverAllProjectCwds(providers: readonly ProviderId[] = ['claude', 'codex']): string[] {
   const cwds = new Set<string>();
-  if (provider === 'claude' || provider === 'both') addClaudeProjectCwds(cwds);
-  if (provider === 'codex' || provider === 'both') addCodexProjectCwds(cwds);
+  const enabled = new Set(providers);
+  if (enabled.has('claude')) addClaudeProjectCwds(cwds);
+  if (enabled.has('codex')) addCodexProjectCwds(cwds);
 
   return [...cwds].filter(cwd => {
     if (!isSafeLocalCwd(cwd)) return false;

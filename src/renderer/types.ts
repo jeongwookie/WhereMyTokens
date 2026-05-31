@@ -39,7 +39,7 @@ export interface CodeOutputStats {
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 
 export interface SessionInfo {
-  provider: 'claude' | 'codex';
+  provider: 'claude' | 'codex' | 'antigravity';
   pid: number | null;
   sessionId: string;
   cwd: string;
@@ -81,7 +81,7 @@ export interface WindowStats {
 
 export interface ModelUsage {
   model: string;
-  provider: 'claude' | 'codex' | 'other';
+  provider: 'claude' | 'codex' | 'antigravity' | 'other';
   tokens: number;
   costUSD: number;
 }
@@ -114,11 +114,13 @@ export interface TimeOfDayBucket {
   requestCount: number;
 }
 
+export interface ProviderWindowUsage {
+  windows: Record<string, WindowStats>;
+  burnRate?: BurnRate;
+}
+
 export interface UsageData {
-  h5: WindowStats;
-  week: WindowStats;
-  h5Codex: WindowStats;
-  weekCodex: WindowStats;
+  byProvider: Partial<Record<'claude' | 'codex' | 'antigravity', ProviderWindowUsage>>;
   models: ModelUsage[];
   heatmap: HourlyBucket[];       // 7 days × 24 hours
   heatmap30: HourlyBucket[];     // 30 days × 24 hours
@@ -139,8 +141,6 @@ export interface UsageData {
   allTimeOutputTokens: number;
   allTimeSavedUSD: number;
   allTimeAvgCacheEfficiency: number;
-  sonnetWeekTokens: number;
-  burnRate: BurnRate;
   todBuckets: TimeOfDayBucket[];
 }
 
@@ -171,7 +171,7 @@ export interface UsageLimits {
 
 export interface AppSettings {
   usageLimits: { h5: number; week: number; sonnetWeek: number };
-  provider: 'claude' | 'codex' | 'both';
+  enabledProviders: Array<'claude' | 'codex' | 'antigravity'>;
   alertThresholds: number[];
   openAtLogin: boolean;
   alwaysOnTop: boolean;

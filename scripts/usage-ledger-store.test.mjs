@@ -86,3 +86,27 @@ test('usage ledger store drops path-bearing checkpoint fields', () => {
   assert.equal('sourceIdentity' in checkpoint, false);
   assert.equal('normalizedPath' in checkpoint, false);
 });
+
+test('usage ledger store preserves generic provider checkpoints without file offsets', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    sourceCheckpoints: {
+      source: {
+        provider: 'antigravity',
+        sourceHash: 'source',
+        sourceKey: 'antigravity:cascade:cascade-1',
+        cursor: 'step-12',
+        lastImportedAt: 30,
+        hasUsage: true,
+      },
+    },
+  };
+
+  const checkpoint = new UsageLedgerStore(fake).getSnapshot().sourceCheckpoints.source;
+  assert.ok(checkpoint);
+  assert.equal(checkpoint.provider, 'antigravity');
+  assert.equal(checkpoint.sourceKey, 'antigravity:cascade:cascade-1');
+  assert.equal(checkpoint.cursor, 'step-12');
+  assert.equal('byteOffset' in checkpoint, false);
+});

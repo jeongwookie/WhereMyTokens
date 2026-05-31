@@ -18,6 +18,7 @@ function displayModelName(model: string): string {
 function providerLabel(provider: ModelUsage['provider']): string {
   if (provider === 'claude') return 'Claude';
   if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
   return 'Other';
 }
 

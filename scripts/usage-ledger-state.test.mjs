@@ -80,10 +80,22 @@ function checkpoint(provider, overrides = {}) {
   };
 }
 
+function ledgerSource(filePath, provider = 'claude', priority = false) {
+  return {
+    provider,
+    sourceId: filePath,
+    sourcePath: filePath,
+    priority,
+    importIntoSnapshot: (snapshot, nowMs) =>
+      importUsageJsonlIntoSnapshot(snapshot, filePath, provider, nowMs),
+  };
+}
+
 test('state manager owns usage ledger import and query paths', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
   assert.match(src, /UsageLedgerStore/);
-  assert.match(src, /importUsageJsonlIntoSnapshot/);
+  assert.match(src, /ProviderLedgerSource/);
+  assert.match(src, /refreshUsageLedgerSources/);
   assert.match(src, /computeUsageFromLedger/);
   assert.match(src, /buildTrendDataFromLedger/);
 });
@@ -123,7 +135,7 @@ test('usage ledger is disabled for a provider with a checkpoint that needs rebui
   const rebuildMatch = src.match(/private usageLedgerNeedsRebuild\([\s\S]*?\): boolean \{([\s\S]*?)\n  \}/);
   assert.ok(rebuildMatch);
   assert.match(rebuildMatch[1], /checkpoint\.needsRebuild/);
-  assert.match(rebuildMatch[1], /provider === 'both' \|\| checkpoint\.provider === provider/);
+  assert.match(rebuildMatch[1], /enabledProviderSet\(settings\)\.has\(checkpoint\.provider\)/);
 });
 
 test('usage ledger rebuild state is surfaced and completed imports suppress repeated startup warmup', () => {
@@ -147,19 +159,19 @@ test('trend falls back when excluded projects disable the ledger', () => {
   assert.match(trendMatch[1], /emptyUsageTrendData/);
 });
 
-test('usage ledger queries receive the selected provider mode', () => {
+test('usage ledger queries receive the enabled provider set', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
   const derivedMatch = src.match(/private computeDerivedUsage\([\s\S]*?\): Pick<AppState, 'usage' \| 'limits' \| 'bridgeActive' \| 'extraUsage'> \{([\s\S]*?)\n  \}/);
   assert.ok(derivedMatch);
-  assert.match(derivedMatch[1], /computeUsageFromLedger\([\s\S]*settings\.provider/);
+  assert.match(derivedMatch[1], /computeUsageFromLedger\([\s\S]*this\.enabledUsageLedgerProviders\(settings\)/);
 
   const trendMatch = src.match(/private buildUsageTrend\([\s\S]*?\): UsageTrendData \{([\s\S]*?)\n  \}/);
   assert.ok(trendMatch);
-  assert.match(trendMatch[1], /buildTrendDataFromLedger\([\s\S]*settings\.provider/);
+  assert.match(trendMatch[1], /buildTrendDataFromLedger\([\s\S]*this\.enabledUsageLedgerProviders\(settings\)/);
 
   const countMatch = src.match(/private countAllTimeUsageSessions\(settings: AppSettings\): number \{([\s\S]*?)\n  \}/);
   assert.ok(countMatch);
-  assert.match(countMatch[1], /checkpoint\.provider === settings\.provider/);
+  assert.match(countMatch[1], /this\.enabledProviderSet\(settings\)\.has\(checkpoint\.provider\)/);
 });
 
 test('provider changes refresh recent summaries without clearing the JSONL cache or forcing full history', () => {
@@ -200,7 +212,7 @@ test('state manager skips persisted usage ledger writes when sources are unchang
     const manager = new StateManager(makeStore(), () => {});
     manager.usageLedgerStore = usageLedgerStore;
 
-    await manager.refreshUsageLedgerFromFiles([{ filePath, provider: 'claude' }]);
+    await manager.refreshUsageLedgerSources([ledgerSource(filePath, 'claude')]);
 
     assert.equal(usageLedgerStore.replaceCount, 0);
     assert.equal(usageLedgerStore.compactCount, 0);
@@ -214,7 +226,7 @@ test('budgeted full-history ledger scans do not mark the import complete when tr
   const manager = new StateManager(makeStore(), () => {});
   manager.usageLedgerStore = usageLedgerStore;
   manager.ledgerSourceFiles = () => ({
-    files: [{ filePath: path.join(os.tmpdir(), 'unreached.jsonl'), provider: 'claude', priority: false }],
+    files: [ledgerSource(path.join(os.tmpdir(), 'unreached.jsonl'))],
     partial: false,
   });
 
@@ -237,7 +249,7 @@ test('budgeted full-history ledger scans remain partial with an existing complet
   const manager = new StateManager(makeStore(), () => {});
   manager.usageLedgerStore = usageLedgerStore;
   manager.ledgerSourceFiles = () => ({
-    files: [{ filePath: path.join(os.tmpdir(), 'unreached.jsonl'), provider: 'claude', priority: false }],
+    files: [ledgerSource(path.join(os.tmpdir(), 'unreached.jsonl'))],
     partial: false,
   });
 
@@ -255,7 +267,7 @@ test('full-history ledger import failures do not mark the import complete', asyn
     const manager = new StateManager(makeStore(), () => {});
     manager.usageLedgerStore = usageLedgerStore;
     manager.ledgerSourceFiles = () => ({
-      files: [{ filePath: dir, provider: 'claude', priority: false }],
+      files: [ledgerSource(dir)],
       partial: false,
     });
 
@@ -278,10 +290,10 @@ test('provider-specific stale full-import markers do not suppress warmup', async
     },
   };
   const usageLedgerStore = new CountingUsageLedgerStore(snapshot);
-  const manager = new StateManager(makeStore({ provider: 'both' }), () => {});
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude', 'codex'] }), () => {});
   manager.usageLedgerStore = usageLedgerStore;
   manager.ledgerSourceFiles = () => ({
-    files: [{ filePath: path.join(os.tmpdir(), 'codex-recent.jsonl'), provider: 'codex', priority: false }],
+    files: [ledgerSource(path.join(os.tmpdir(), 'codex-recent.jsonl'), 'codex')],
     partial: true,
   });
 

@@ -37,6 +37,10 @@ function makeStore(overrides = {}) {
   return store;
 }
 
+function refreshClaudeQuota(manager, force = true) {
+  return manager.refreshProviderQuotas({ ...manager.getState().settings, enabledProviders: ['claude'] }, force);
+}
+
 function withTempClaudeCredentials(oauthOverrides = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-test-'));
   tempClaudeDirs.push(dir);
@@ -550,7 +554,7 @@ test('offline live fallback also drives Claude usage windows', () => {
   const derived = manager.computeDerivedUsage(manager.getState().settings);
 
   assert.equal(derived.limits.h5.source, 'statusLine');
-  assert.equal(derived.usage.h5.requestCount, 0);
+  assert.equal(derived.usage.byProvider.claude.windows.h5.requestCount, 0);
 });
 
 test('Sonnet stays on the last valid sample when the new API payload only loses the optional Sonnet block', () => {
@@ -694,7 +698,7 @@ test('rate-limited Claude refresh keeps the last trusted API sample without rewr
     },
   });
 
-  await manager.refreshApiUsagePct(true);
+  await refreshClaudeQuota(manager, true);
 
   assert.equal(manager.apiUsagePct.h5Pct, 5);
   assert.equal(manager.apiUsagePct.weekPct, 17);
@@ -717,7 +721,7 @@ test('rate-limited Claude refresh honors Retry-After before exponential backoff'
     },
   });
 
-  await manager.refreshApiUsagePct(true);
+  await refreshClaudeQuota(manager, true);
 
   assert.equal(manager.apiBackoffMs, 240_000);
   assert.match(manager.apiError, /Retry in 4m/);
@@ -737,7 +741,7 @@ test('rate-limited Claude refresh caps excessive Retry-After backoff', async () 
     },
   });
 
-  await manager.refreshApiUsagePct(true);
+  await refreshClaudeQuota(manager, true);
 
   assert.equal(manager.apiBackoffMs, CLAUDE_API_MAX_BACKOFF_MS);
   assert.match(manager.apiError, /Retry in 10m/);
@@ -761,8 +765,8 @@ test('forced Claude refresh does not bypass active Retry-After backoff', async (
     };
   };
 
-  const firstRefresh = await manager.refreshApiUsagePct(true);
-  const secondRefresh = await manager.refreshApiUsagePct(true);
+  const firstRefresh = await refreshClaudeQuota(manager, true);
+  const secondRefresh = await refreshClaudeQuota(manager, true);
 
   assert.equal(firstRefresh, true);
   assert.equal(secondRefresh, false);
@@ -806,7 +810,7 @@ test('updated Claude credentials bypass refresh-limited API backoff', async () =
       subscriptionType: 'max',
     },
   }));
-  const refreshed = await manager.refreshApiUsagePct(false);
+  const refreshed = await refreshClaudeQuota(manager, false);
 
   assert.equal(refreshed, true);
   assert.equal(calls, 1);
@@ -847,8 +851,8 @@ test('non-rate-limited Claude failure clears stale Retry-After backoff', async (
         };
   };
 
-  const failedRefresh = await manager.refreshApiUsagePct(true);
-  const recoveredRefresh = await manager.refreshApiUsagePct(true);
+  const failedRefresh = await refreshClaudeQuota(manager, true);
+  const recoveredRefresh = await refreshClaudeQuota(manager, true);
 
   assert.equal(failedRefresh, true);
   assert.equal(recoveredRefresh, true);
@@ -885,7 +889,7 @@ test('unauthorized Claude refresh keeps the last trusted API sample as cache', a
     },
   });
 
-  await manager.refreshApiUsagePct(true);
+  await refreshClaudeQuota(manager, true);
   const limits = manager.buildLimits();
 
   assert.equal(manager.apiStatusLabel, 'auth failed');
@@ -911,8 +915,8 @@ test('late Claude API refresh results do not overwrite a newer generation', asyn
     return calls === 1 ? first : second;
   };
 
-  const firstRefresh = manager.refreshApiUsagePct(true);
-  const secondRefresh = manager.refreshApiUsagePct(true);
+  const firstRefresh = refreshClaudeQuota(manager, true);
+  const secondRefresh = refreshClaudeQuota(manager, true);
 
   resolveSecond({
     usage: {
@@ -992,7 +996,6 @@ test('persisted summary cache rejects malformed nested rollups', () => {
     },
   });
 
-  cache.clearAll();
   assert.equal(malformed, null);
 });
 
@@ -1017,43 +1020,55 @@ test('startup recovery and persisted summary cache guards remain in source', () 
 });
 
 test('session discovery keeps recent-active scope and tracked session hints in source', () => {
-  const discoverySource = fs.readFileSync(path.resolve('src', 'main', 'sessionDiscovery.ts'), 'utf8');
+  const typesSource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'types.ts'), 'utf8');
+  const codexPathsSource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'codex', 'paths.ts'), 'utf8');
+  const codexDiscoverySource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'codex', 'discovery.ts'), 'utf8');
+  const claudeDiscoverySource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'claude', 'discovery.ts'), 'utf8');
   const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
-  assert.match(discoverySource, /SessionDiscoveryScope = 'recent-active' \| 'all'/);
-  assert.match(discoverySource, /trackedJsonlPaths\?: string\[\]/);
-  assert.match(discoverySource, /discoverSessions\(provider: TrackingProvider = 'both', options: DiscoverSessionsOptions = \{\}\)/);
-  assert.match(discoverySource, /dedupeDiscoveredSessions/);
-  assert.match(discoverySource, /CODEX_ARCHIVED_SESSIONS_DIR/);
-  assert.match(discoverySource, /CODEX_SESSION_CLEANUP_ARCHIVE_DIR/);
-  assert.match(discoverySource, /CODEX_USAGE_DIRS/);
+  assert.match(typesSource, /SessionDiscoveryScope = 'recent-active' \| 'all'/);
+  assert.match(typesSource, /trackedJsonlPaths\?: string\[\]/);
+  assert.doesNotMatch(codexDiscoverySource, /TrackingProvider|provider: TrackingProvider/);
+  assert.doesNotMatch(claudeDiscoverySource, /TrackingProvider|provider: TrackingProvider/);
+  assert.match(codexDiscoverySource, /scope === 'all'/);
+  assert.match(claudeDiscoverySource, /'recent-active'/);
+  assert.match(codexPathsSource, /CODEX_ARCHIVED_SESSIONS_DIR/);
+  assert.match(codexPathsSource, /CODEX_SESSION_CLEANUP_ARCHIVE_DIR/);
+  assert.match(codexPathsSource, /CODEX_USAGE_DIRS/);
   assert.match(stateSource, /private collectTrackedSessionFiles\(/);
-  assert.match(stateSource, /collectTrackedSessionFiles\('codex', StateManager\.STARTUP_CODEX_FILE_LIMIT\)/);
-  assert.match(stateSource, /collectTrackedSessionFiles\('claude', StateManager\.STARTUP_CLAUDE_FILE_LIMIT\)/);
+  assert.match(stateSource, /for \(const provider of providers\)/);
+  assert.match(stateSource, /this\.collectTrackedSessionFiles\(provider\.id, this\.startupLimitForProvider\(provider\.id\)\)/);
+  assert.match(stateSource, /provider\.discoverSessions\(discoveryCtx\)/);
 });
 
 test('all-time usage scan includes archived Codex files and Claude agent logs without expanding recent sessions', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+  const codexSource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'codex', 'sources.ts'), 'utf8');
+  const claudeSource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'claude', 'sources.ts'), 'utf8');
   const loadStart = source.indexOf('private async loadProviderSummaries');
   const loadEnd = source.indexOf('private async refreshChangedSummaries', loadStart);
   const loadBody = source.slice(loadStart, loadEnd);
-  const codexStart = loadBody.indexOf("if ((settings.provider === 'codex'");
-  const claudeLoadBody = codexStart >= 0 ? loadBody.slice(0, codexStart) : loadBody;
-  const scopedStart = source.indexOf('private buildScopedSessionInfosDetailed');
+  const claudeAllStart = claudeSource.indexOf('export function listAllClaudeSources');
+  const claudeAllEnd = claudeSource.indexOf('export async function scanClaudeSourceSummary', claudeAllStart);
+  const claudeAllBody = claudeSource.slice(claudeAllStart, claudeAllEnd);
+  const scopedStart = source.indexOf('private async buildScopedSessionInfosDetailed');
   const scopedEnd = source.indexOf('private collectTrackedSessionFiles', scopedStart);
   const scopedBody = source.slice(scopedStart, scopedEnd);
 
-  assert.match(source, /CODEX_USAGE_DIRS/);
-  assert.match(source, /private codexSessionDedupeKey/);
-  assert.match(source, /private listCodexUsageJsonlFiles/);
-  assert.match(source, /codexUsageRootRank/);
-  assert.match(source, /function isClaudeAgentJsonlPath/);
-  assert.match(source, /if \(isClaudeAgentJsonlPath\(filePath\)\) return null/);
-  assert.match(loadBody, /this\.listCodexUsageJsonlFiles\(\)/);
-  assert.match(loadBody, /const priorityCodexFiles = \[\.\.\.startupPriority\]\.filter\(filePath => isCodexUsagePath\(filePath\)\)/);
-  assert.match(claudeLoadBody, /this\.listJsonlFiles\(dirPath, Number\.POSITIVE_INFINITY, false\)/);
-  assert.doesNotMatch(claudeLoadBody, /!\w+\.startsWith\('agent-'\)/);
-  assert.match(scopedBody, /this\.listRecentCodexJsonlFiles\(StateManager\.STARTUP_CODEX_FILE_LIMIT\)/);
+  assert.match(codexSource, /CODEX_USAGE_DIRS/);
+  assert.match(source, /private sourceBackedProviders\(settings: AppSettings\)/);
+  assert.match(source, /provider\.listAllSources\(ctx\)/);
+  assert.match(source, /provider\.listRecentSources\(ctx, this\.startupLimitForProvider\(provider\.id\)\)/);
+  assert.match(source, /provider\.scanSourceSummary\(ctx, source\)/);
+  assert.match(codexSource, /function codexSessionDedupeKey/);
+  assert.match(codexSource, /function codexUsageRootRank/);
+  assert.match(codexSource, /CODEX_USAGE_DIRS/);
+  assert.match(claudeSource, /listAllClaudeSources/);
+  assert.match(claudeSource, /!file\.startsWith\('agent-'\)/);
+  assert.doesNotMatch(loadBody, /settings\.provider === 'claude'/);
+  assert.doesNotMatch(loadBody, /settings\.provider === 'codex'/);
+  assert.doesNotMatch(claudeAllBody, /!\w+\.startsWith\('agent-'\)/);
+  assert.match(scopedBody, /provider\.listRecentSources\(ctx, limit\)/);
   assert.doesNotMatch(scopedBody, /listCodexUsageJsonlFiles/);
 });
 

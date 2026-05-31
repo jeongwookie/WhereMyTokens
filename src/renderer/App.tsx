@@ -13,6 +13,13 @@ import { DEFAULT_MAIN_SECTION_ORDER, normalizeHiddenMainSections, normalizeMainS
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
 const EMPTY_WINDOW = { inputTokens:0, outputTokens:0, cacheCreationTokens:0, cacheReadTokens:0, totalTokens:0, costUSD:0, requestCount:0, cacheEfficiency:0, cacheSavingsUSD:0 };
+const EMPTY_BY_PROVIDER = {
+  claude: {
+    windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW, sonnetWeek: EMPTY_WINDOW },
+    burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
+  },
+  codex: { windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW } },
+};
 const EMPTY_CODE_OUTPUT = {
   today: { commits: 0, added: 0, removed: 0 },
   all: { commits: 0, added: 0, removed: 0 },
@@ -27,8 +34,7 @@ const BOOT_FALLBACK_DELAY_MS = 12_000;
 const DEFAULT_STATE: AppState = {
   sessions: [],
   usage: {
-    h5: EMPTY_WINDOW, week: EMPTY_WINDOW,
-    h5Codex: EMPTY_WINDOW, weekCodex: EMPTY_WINDOW,
+    byProvider: EMPTY_BY_PROVIDER,
     models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
     todayTokens: 0, todayCost: 0, todayRequestCount: 0,
     todayInputTokens: 0, todayOutputTokens: 0, todayCacheTokens: 0,
@@ -36,8 +42,6 @@ const DEFAULT_STATE: AppState = {
     allTimeRequestCount: 0, allTimeCost: 0, allTimeCacheTokens: 0,
     allTimeInputTokens: 0, allTimeOutputTokens: 0,
     allTimeSavedUSD: 0, allTimeAvgCacheEfficiency: 0,
-    sonnetWeekTokens: 0,
-    burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
     todBuckets: [],
   },
   usageTrend: EMPTY_USAGE_TREND,
@@ -47,7 +51,7 @@ const DEFAULT_STATE: AppState = {
   },
   settings: {
     usageLimits: { h5:100, week:2000, sonnetWeek:100_000_000 },
-    provider: 'both',
+    enabledProviders: ['claude', 'codex'],
     alertThresholds: [50,80,90], openAtLogin: false,
     alwaysOnTop: true,
     currency: 'USD', usdToKrw: 1380,
@@ -141,7 +145,9 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
       : null;
 
   return {
-    provider: session?.provider === 'codex' ? 'codex' : 'claude',
+    provider: session?.provider === 'codex' || session?.provider === 'antigravity'
+      ? session.provider
+      : 'claude',
     pid: typeof session?.pid === 'number' ? session.pid : null,
     sessionId: typeof session?.sessionId === 'string' ? session.sessionId : '',
     cwd: typeof session?.cwd === 'string' ? session.cwd : '',
@@ -170,6 +176,7 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
 
 function normalizeState(next: AppState): AppState {
   const mainSectionOrder = normalizeMainSectionOrder(next.settings?.mainSectionOrder);
+  const nextByProvider = next.usage?.byProvider ?? {};
   return {
     ...DEFAULT_STATE,
     ...next,
@@ -178,17 +185,36 @@ function normalizeState(next: AppState): AppState {
     usage: {
       ...DEFAULT_STATE.usage,
       ...next.usage,
-      h5: { ...EMPTY_WINDOW, ...next.usage?.h5 },
-      week: { ...EMPTY_WINDOW, ...next.usage?.week },
-      h5Codex: { ...EMPTY_WINDOW, ...next.usage?.h5Codex },
-      weekCodex: { ...EMPTY_WINDOW, ...next.usage?.weekCodex },
+      byProvider: {
+        claude: {
+          windows: {
+            h5: { ...EMPTY_WINDOW, ...nextByProvider.claude?.windows?.h5 },
+            week: { ...EMPTY_WINDOW, ...nextByProvider.claude?.windows?.week },
+            sonnetWeek: { ...EMPTY_WINDOW, ...nextByProvider.claude?.windows?.sonnetWeek },
+          },
+          burnRate: { ...EMPTY_BY_PROVIDER.claude.burnRate, ...nextByProvider.claude?.burnRate },
+        },
+        codex: {
+          windows: {
+            h5: { ...EMPTY_WINDOW, ...nextByProvider.codex?.windows?.h5 },
+            week: { ...EMPTY_WINDOW, ...nextByProvider.codex?.windows?.week },
+          },
+        },
+        ...(nextByProvider.antigravity ? {
+          antigravity: {
+            windows: {
+              h5: { ...EMPTY_WINDOW, ...nextByProvider.antigravity.windows?.h5 },
+              week: { ...EMPTY_WINDOW, ...nextByProvider.antigravity.windows?.week },
+            },
+          },
+        } : {}),
+      },
       models: arrayOrEmpty(next.usage?.models),
       heatmap: arrayOrEmpty(next.usage?.heatmap),
       heatmap30: arrayOrEmpty(next.usage?.heatmap30),
       heatmap90: arrayOrEmpty(next.usage?.heatmap90),
       weeklyTimeline: arrayOrEmpty(next.usage?.weeklyTimeline),
       todBuckets: arrayOrEmpty(next.usage?.todBuckets),
-      burnRate: { ...DEFAULT_STATE.usage.burnRate, ...next.usage?.burnRate },
     },
     usageTrend: {
       daily: arrayOrEmpty(next.usageTrend?.daily),

@@ -14,6 +14,18 @@ function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-jsonl-summary-'));
 }
 
+function makeCache() {
+  const values = { cache: {} };
+  return new JsonlCache({
+    get(key) {
+      return values[key];
+    },
+    set(key, value) {
+      values[key] = value;
+    },
+  });
+}
+
 function recentIso(offsetMs = 0) {
   return new Date(Date.now() - 60_000 + offsetMs).toISOString();
 }
@@ -39,8 +51,7 @@ function claudeAssistantLine({ id, timestamp = recentIso(), model = 'claude-sonn
 }
 
 test('streaming summary scan does not use full readFileSync for JSONL bodies', async () => {
-  const cache = new JsonlCache();
-  cache.clearAll();
+  const cache = makeCache();
   const dir = tempDir();
   const filePath = path.join(dir, 'claude.jsonl');
   fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'a' })}\n`, 'utf8');
@@ -59,13 +70,11 @@ test('streaming summary scan does not use full readFileSync for JSONL bodies', a
     assert.equal(summary.sessionSnapshot.modelName, 'Sonnet');
   } finally {
     fs.readFileSync = originalReadFileSync;
-    cache.clearAll();
   }
 });
 
 test('unchanged file reuses cached summary without reopening the stream', async () => {
-  const cache = new JsonlCache();
-  cache.clearAll();
+  const cache = makeCache();
   const dir = tempDir();
   const filePath = path.join(dir, 'cached.jsonl');
   fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'cache-hit' })}\n`, 'utf8');
@@ -85,13 +94,11 @@ test('unchanged file reuses cached summary without reopening the stream', async 
     assert.equal(summary.recentEntries.length, 1);
   } finally {
     fs.createReadStream = originalCreateReadStream;
-    cache.clearAll();
   }
 });
 
 test('Claude duplicate request updates output delta without double counting', async () => {
-  const cache = new JsonlCache();
-  cache.clearAll();
+  const cache = makeCache();
   const dir = tempDir();
   const filePath = path.join(dir, 'duplicate.jsonl');
   fs.writeFileSync(filePath, `${claudeAssistantLine({ id: 'dup-1', output: 10 })}\n`, 'utf8');
@@ -187,8 +194,7 @@ test('Codex rate-limit-only scan keeps millisecond event ordering', async () => 
 });
 
 test('malformed trailing JSONL text is recovered on append', async () => {
-  const cache = new JsonlCache();
-  cache.clearAll();
+  const cache = makeCache();
   const dir = tempDir();
   const filePath = path.join(dir, 'trailing.jsonl');
 

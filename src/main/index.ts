@@ -6,6 +6,7 @@ import { registerIpcHandlers, AppSettings, DEFAULT_SETTINGS, normalizeSettings }
 import { Notification } from 'electron';
 import { appendCrashLog, buildErrorPayload, buildQuitTrace, collectRuntimeMemorySnapshot, getCrashLogPath, getDebugMemLogPath, isDebugInstrumentationEnabled, setListenerTargetsProvider } from './debugInstrumentation';
 import { initOAuthRefresh } from './oauthRefresh';
+import type { WindowStats } from './usageWindows';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -171,10 +172,17 @@ function isCompactWidgetVisible() {
   return !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
 }
 
+function compactWidgetActivePlanProviders(settings: AppSettings): Array<'claude' | 'codex'> {
+  return settings.enabledProviders.filter((provider): provider is 'claude' | 'codex' =>
+    provider === 'claude' || provider === 'codex'
+  );
+}
+
 function compactWidgetSize(settings: AppSettings): { width: number; height: number } {
+  const activePlanProviders = compactWidgetActivePlanProviders(settings);
   return {
     width: WIDGET_WIDTH,
-    height: (settings.provider ?? 'both') === 'both' ? WIDGET_HEIGHT_BOTH : WIDGET_HEIGHT_SINGLE,
+    height: activePlanProviders.length > 1 ? WIDGET_HEIGHT_BOTH : WIDGET_HEIGHT_SINGLE,
   };
 }
 
@@ -516,25 +524,28 @@ function isCodexLimitProvisional(state: AppState, limit: AppState['limits']['cod
   return state.historyWarmupPending && limit.source === 'localLog';
 }
 
+function usageWindow(state: AppState, provider: 'claude' | 'codex', window: 'h5' | 'week'): WindowStats | null {
+  return state.usage.byProvider[provider]?.windows[window] ?? null;
+}
+
 function buildTrayTitle(state: AppState): string {
   const settings = state.settings ?? DEFAULT_SETTINGS;
   const display = settings.trayDisplay ?? 'h5pct';
-  const provider = settings.provider ?? 'both';
-  const h5Tokens = (provider === 'codex')
-    ? state.usage.h5Codex.totalTokens
-    : (provider === 'both' ? state.usage.h5.totalTokens + state.usage.h5Codex.totalTokens : state.usage.h5.totalTokens);
-  const h5Cost = (provider === 'codex')
-    ? state.usage.h5Codex.costUSD
-    : (provider === 'both' ? state.usage.h5.costUSD + state.usage.h5Codex.costUSD : state.usage.h5.costUSD);
+  const enabledProviders = new Set(settings.enabledProviders);
+  const showClaude = enabledProviders.has('claude');
+  const showCodex = enabledProviders.has('codex');
+  const claudeH5 = usageWindow(state, 'claude', 'h5');
+  const codexH5 = usageWindow(state, 'codex', 'h5');
+  const h5Tokens = (showClaude ? claudeH5?.totalTokens ?? 0 : 0)
+    + (showCodex ? codexH5?.totalTokens ?? 0 : 0);
+  const h5Cost = (showClaude ? claudeH5?.costUSD ?? 0 : 0)
+    + (showCodex ? codexH5?.costUSD ?? 0 : 0);
   const codexH5Provisional = isCodexLimitProvisional(state, state.limits.codexH5);
   const stableCodexH5Pct = codexH5Provisional ? 0 : state.limits.codexH5.pct;
-  const h5Pct = provider === 'codex'
-    ? stableCodexH5Pct
-    : (provider === 'both' ? Math.max(state.limits.h5.pct, stableCodexH5Pct) : state.limits.h5.pct);
+  const h5Pct = Math.max(showClaude ? state.limits.h5.pct : 0, showCodex ? stableCodexH5Pct : 0);
   switch (display) {
     case 'h5pct':
-      if (codexH5Provisional && provider === 'codex') return 'scan';
-      if (codexH5Provisional && provider === 'both' && state.limits.h5.pct <= 0) return 'scan';
+      if (codexH5Provisional && showCodex && (!showClaude || state.limits.h5.pct <= 0)) return 'scan';
       return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;

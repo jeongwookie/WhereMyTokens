@@ -199,8 +199,8 @@ test('usage importer marks shrunken sources for rebuild instead of partially sub
 });
 
 test('usage importer yields during large source aggregation', () => {
-  const source = fs.readFileSync('src/main/usageLedgerImporter.ts', 'utf8');
-  assert.match(source, /const LEDGER_IMPORT_YIELD_EVERY = 250/);
+  const source = fs.readFileSync('src/main/usageLedgerIngest.ts', 'utf8');
+  assert.match(source, /export const LEDGER_IMPORT_YIELD_EVERY = 250/);
   assert.match(source, /function cooperativeYield\(\): Promise<void>/);
   assert.match(source, /setImmediate\(resolve\)/);
   assert.match(source, /await cooperativeYield\(\)/);
