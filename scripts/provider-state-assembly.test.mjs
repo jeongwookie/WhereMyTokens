@@ -55,6 +55,14 @@ test('StateManager refreshes quota through provider capabilities instead of hard
   assert.doesNotMatch(stateManagerSource, /private async refreshCodexUsagePct/);
 });
 
+test('provider adapter context does not expose the mutable Electron store', () => {
+  const providerTypes = fs.readFileSync('src/main/providers/types.ts', 'utf8');
+
+  assert.doesNotMatch(providerTypes, /store: Store<AppSettings>/);
+  assert.doesNotMatch(stateManagerSource, /store: this\.store/);
+  assert.match(providerTypes, /settings: AppSettings/);
+});
+
 test('StateManager ledger source discovery uses provider ledger sources', () => {
   const body = methodBody('ledgerSourceFiles');
 

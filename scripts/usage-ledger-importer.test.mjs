@@ -84,6 +84,32 @@ test('usage importer does not double count unchanged source', async () => {
   assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
 });
 
+test('usage importer marks built-in JSONL checkpoints without byte offsets for rebuild', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'missing-offset.jsonl');
+  fs.writeFileSync(filePath, `${claudeLine({ id: 'one', timestamp: '2026-05-25T10:15:00.000Z' })}\n`, 'utf8');
+  const first = await importUsageJsonlIntoSnapshot(emptyUsageLedgerSnapshot(), filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'));
+  const sourceHash = sourceHashForPath(filePath);
+  const brokenCheckpoint = { ...first.sourceCheckpoints[sourceHash] };
+  delete brokenCheckpoint.byteOffset;
+  const broken = {
+    ...first,
+    sourceCheckpoints: {
+      ...first.sourceCheckpoints,
+      [sourceHash]: brokenCheckpoint,
+    },
+  };
+
+  const second = await importUsageJsonlIntoSnapshot(broken, filePath, 'claude', Date.parse('2026-05-25T12:01:00.000Z'));
+
+  assert.equal(second.sourceCheckpoints[sourceHash].needsRebuild, true);
+  assert.equal(second.sourceCheckpoints[sourceHash].rebuildReason, 'jsonl checkpoint missing byte offset');
+  assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'claude', MODEL)].requestCount, 1);
+
+  const third = await importUsageJsonlIntoSnapshot(second, filePath, 'claude', Date.parse('2026-05-25T12:02:00.000Z'));
+  assert.equal(third, second);
+});
+
 test('usage importer marks checkpoints without usage entries', async () => {
   const dir = tempDir();
   const filePath = path.join(dir, 'empty.jsonl');

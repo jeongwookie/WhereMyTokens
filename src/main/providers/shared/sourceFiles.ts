@@ -7,6 +7,13 @@ export function normalizeSourcePath(filePath: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
+export function isSourcePathInside(parentPath: string, childPath: string): boolean {
+  const parent = normalizeSourcePath(parentPath);
+  const child = normalizeSourcePath(childPath);
+  const relative = path.relative(parent, child);
+  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
 export function listJsonlFiles(dir: string, maxFiles = Number.POSITIVE_INFINITY, descending = false): string[] {
   const files: string[] = [];
 
@@ -32,10 +39,14 @@ export function listJsonlFiles(dir: string, maxFiles = Number.POSITIVE_INFINITY,
 }
 
 export function statMtimeMs(filePath: string): number {
+  return statMtimeMsOrNull(filePath) ?? 0;
+}
+
+export function statMtimeMsOrNull(filePath: string): number | null {
   try {
     return fs.statSync(filePath).mtimeMs;
   } catch {
-    return 0;
+    return null;
   }
 }
 

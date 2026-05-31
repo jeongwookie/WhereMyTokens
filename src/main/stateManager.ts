@@ -117,6 +117,9 @@ export interface AppState {
   apiConnected: boolean;
   apiStatusLabel?: string;
   apiError?: string;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
   bridgeActive: boolean;
   extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;
@@ -344,6 +347,8 @@ export class StateManager {
   private codexUsagePct: CodexUsagePct | null = null;
   private codexUsagePctStoredAt = 0;
   private codexUsageConnected = false;
+  private codexStatusLabel = '';
+  private codexError = '';
   private lastCodexUsageCallMs = 0;
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
@@ -357,6 +362,7 @@ export class StateManager {
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private dirtySessionFiles = new Set<string>();
   private usageLedgerStore = new UsageLedgerStore();
+  private usageLedgerImportFailed = false;
   private gitOutputLedgerStore = new GitOutputLedgerStore();
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
@@ -442,6 +448,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        codexUsageConnected: this.codexUsageConnected,
+        codexStatusLabel: this.codexStatusLabel || undefined,
+        codexError: this.codexError || undefined,
         stateFreshness: this.currentStateFreshness(),
       };
       this.publishState();
@@ -546,7 +555,6 @@ export class StateManager {
   private providerContext(overrides: Partial<ProviderContext> & { settings: AppSettings }): ProviderContext {
     const { settings, ...rest } = overrides;
     return {
-      store: this.store,
       nowMs: Date.now(),
       jsonlCache: this.jsonlCache,
       scanBudgetMs: null,
@@ -625,6 +633,10 @@ export class StateManager {
       lastUpdated: 0,
       apiConnected: false,
       apiStatusLabel: undefined,
+      apiError: undefined,
+      codexUsageConnected: false,
+      codexStatusLabel: undefined,
+      codexError: undefined,
       bridgeActive: false,
       extraUsage: null,
       repoGitStats: {},
@@ -919,6 +931,12 @@ export class StateManager {
     this.apiError = status.detail;
   }
 
+  private applyCodexStatus(status: CodexUsageStatus): void {
+    this.codexUsageConnected = status.connected;
+    this.codexStatusLabel = status.label;
+    this.codexError = status.detail;
+  }
+
   private getAgedApiUsagePct(now = Date.now()): ApiUsagePct | null {
     if (!this.apiUsagePct) return null;
     if (!this.apiUsagePctStoredAt) return this.apiUsagePct;
@@ -1036,7 +1054,7 @@ export class StateManager {
   private applyCodexQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number): boolean {
     if (!isCodexQuotaSnapshot(snapshot)) return false;
     if (requestSeq !== this.codexUsageRequestSeq) return false;
-    this.codexUsageConnected = snapshot.status.connected;
+    this.applyCodexStatus(snapshot.status);
 
     if (snapshot.usage) {
       this.codexUsagePct = snapshot.usage;
@@ -1057,6 +1075,10 @@ export class StateManager {
       this.deletePersistedValue('_cachedCodexUsagePct');
     }
     this.codexUsageBackoffMs = this.codexBackoffForStatus(snapshot.status);
+    if (snapshot.status.code === 'rate-limited' && this.codexUsageBackoffMs > 0) {
+      this.codexError = `${snapshot.status.detail} Retry in ${Math.max(1, Math.ceil(this.codexUsageBackoffMs / 60000))}m.`;
+      this.codexStatusLabel = snapshot.status.label || 'rate limited';
+    }
     return true;
   }
 
@@ -1116,6 +1138,7 @@ export class StateManager {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
     this.usageLedgerStore.reset();
+    this.usageLedgerImportFailed = false;
     this.state = {
       ...this.state,
       usageTrend: emptyUsageTrendData(),
@@ -1226,6 +1249,7 @@ export class StateManager {
 
   private canUseUsageLedger(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
     if ((settings.excludedProjects?.length ?? 0) > 0) return false;
+    if (this.usageLedgerImportFailed) return false;
     const enabled = this.enabledProviderSet(settings);
     if (this.usageLedgerNeedsRebuild(settings, snapshot)) return false;
     const hasProviderRows = (record: Record<string, unknown>) => Object.keys(record).some(key =>
@@ -1603,6 +1627,9 @@ export class StateManager {
       bridgeActive: derived.bridgeActive,
       apiStatusLabel: this.apiStatusLabel || undefined,
       apiError: this.apiError || undefined,
+      codexUsageConnected: this.codexUsageConnected,
+      codexStatusLabel: this.codexStatusLabel || undefined,
+      codexError: this.codexError || undefined,
       extraUsage: derived.extraUsage,
       codeOutputStats,
       codeOutputLoading: false,
@@ -1692,6 +1719,9 @@ export class StateManager {
           apiConnected: this.apiConnected,
           apiStatusLabel: this.apiStatusLabel || undefined,
           apiError: this.apiError || undefined,
+          codexUsageConnected: this.codexUsageConnected,
+          codexStatusLabel: this.codexStatusLabel || undefined,
+          codexError: this.codexError || undefined,
           bridgeActive: derived.bridgeActive,
           extraUsage: derived.extraUsage,
           codeOutputStats,
@@ -1777,6 +1807,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        codexUsageConnected: this.codexUsageConnected,
+        codexStatusLabel: this.codexStatusLabel || undefined,
+        codexError: this.codexError || undefined,
         bridgeActive: derived.bridgeActive,
         extraUsage: derived.extraUsage,
         repoGitStats: this.state.repoGitStats,
@@ -1835,6 +1868,9 @@ export class StateManager {
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
         apiError: this.apiError || undefined,
+        codexUsageConnected: this.codexUsageConnected,
+        codexStatusLabel: this.codexStatusLabel || undefined,
+        codexError: this.codexError || undefined,
         bridgeActive: derived.bridgeActive,
         extraUsage: derived.extraUsage,
         repoGitStats,
@@ -2078,18 +2114,21 @@ export class StateManager {
     if ((this.getSettings().excludedProjects?.length ?? 0) > 0) return;
     let snapshot = this.usageLedgerStore.getSnapshot();
     let changed = false;
+    let importFailed = false;
     for (const source of sources) {
       try {
         const nextSnapshot = await source.importIntoSnapshot(snapshot, Date.now());
         if (nextSnapshot !== snapshot) changed = true;
         snapshot = nextSnapshot;
       } catch {
-        // Summary cache remains the fallback if a ledger import for one source fails.
+        importFailed = true;
       }
     }
-    if (!changed) return;
-    this.usageLedgerStore.replaceSnapshot(snapshot);
-    this.usageLedgerStore.compact();
+    this.usageLedgerImportFailed = importFailed;
+    if (changed) {
+      this.usageLedgerStore.replaceSnapshot(snapshot);
+      this.usageLedgerStore.compact();
+    }
   }
 
   private async scanGenericProviderUsage(
@@ -2190,6 +2229,10 @@ export class StateManager {
     if ((settings.excludedProjects?.length ?? 0) > 0) return { partial: false, scannedFiles: 0 };
 
     let snapshot = this.usageLedgerStore.getSnapshot();
+    if (includeFullHistory && this.usageLedgerNeedsRebuild(settings, snapshot)) {
+      this.usageLedgerImportFailed = false;
+      return { partial: true, scannedFiles: 0 };
+    }
     const sourceList = await this.ledgerSourceFiles(settings, includeFullHistory, priorityFiles);
     const alreadyCompletedFullImport = this.hasCompletedUsageLedgerImport(snapshot, settings, sourceList.files);
     const startedAt = Date.now();
@@ -2228,6 +2271,7 @@ export class StateManager {
     } else if (completedFullImport) {
       this.usageLedgerStore.replaceSnapshot({ ...snapshot, lastFullImportAt: Date.now() });
     }
+    this.usageLedgerImportFailed = importFailed;
 
     return { partial, scannedFiles };
   }

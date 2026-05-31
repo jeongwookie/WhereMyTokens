@@ -170,27 +170,47 @@ function providerHealth(
   h5: LimitWindow,
   week: LimitWindow,
   syncing: boolean,
-  claudeStatusLabel?: string,
-  claudeApiConnected = true,
+  statusLabel?: string,
+  connected = true,
+  statusError?: string,
 ): HealthItem {
   if (provider === 'Claude') {
-    switch (claudeStatusLabel) {
+    switch (statusLabel) {
       case 'rate limited':
-        return { key: 'claude', label: 'Claude limited', tone: 'warning', title: 'Claude API is rate limited; cached or bridge data may be used.' };
+        return { key: 'claude', label: 'Claude limited', tone: 'warning', title: statusError || 'Claude API is rate limited; cached or bridge data may be used.' };
       case 'refresh limited':
-        return { key: 'claude', label: 'Claude refresh', tone: 'warning', title: 'Claude OAuth refresh is rate limited; cached or bridge data may be used.' };
+        return { key: 'claude', label: 'Claude refresh', tone: 'warning', title: statusError || 'Claude OAuth refresh is rate limited; cached or bridge data may be used.' };
       case 'refresh failed':
-        return { key: 'claude', label: 'Claude refresh', tone: 'danger', title: 'Claude OAuth refresh failed; cached or bridge data may be used.' };
+        return { key: 'claude', label: 'Claude refresh', tone: 'danger', title: statusError || 'Claude OAuth refresh failed; cached or bridge data may be used.' };
       case 'reset partial':
-        return { key: 'claude', label: 'Claude partial', tone: 'warning', title: 'Claude usage loaded, but reset timing is unavailable.' };
+        return { key: 'claude', label: 'Claude partial', tone: 'warning', title: statusError || 'Claude usage loaded, but reset timing is unavailable.' };
       case 'local only':
-        return { key: 'claude', label: 'Claude local', tone: 'warning', title: 'Claude credentials are unavailable, so local data is being used.' };
+        return { key: 'claude', label: 'Claude local', tone: 'warning', title: statusError || 'Claude credentials are unavailable, so local data is being used.' };
       case 'login required':
-        return { key: 'claude', label: 'Claude login', tone: 'danger', title: 'Run claude /login to re-authenticate Claude usage.' };
+        return { key: 'claude', label: 'Claude login', tone: 'danger', title: statusError || 'Run claude /login to re-authenticate Claude usage.' };
       case 'auth failed':
       case 'forbidden':
       case 'api disconnected':
-        return { key: 'claude', label: 'Claude offline', tone: 'danger', title: 'Claude API is unavailable.' };
+        return { key: 'claude', label: 'Claude offline', tone: 'danger', title: statusError || 'Claude API is unavailable.' };
+      default:
+        break;
+    }
+  } else {
+    switch (statusLabel) {
+      case 'rate limited':
+        return { key: 'codex', label: 'Codex limited', tone: 'warning', title: statusError || 'Codex usage endpoint is rate limited; cache or local logs may be used.' };
+      case 'schema changed':
+        return { key: 'codex', label: 'Codex schema', tone: 'danger', title: statusError || 'Codex usage response shape changed.' };
+      case 'local log':
+        return { key: 'codex', label: 'Codex local', tone: 'warning', title: statusError || 'Codex credentials were not found; local log estimates are used.' };
+      case 'auth failed':
+        return { key: 'codex', label: 'Codex auth', tone: 'danger', title: statusError || 'Codex usage token was rejected or expired.' };
+      case 'forbidden':
+        return { key: 'codex', label: 'Codex blocked', tone: 'danger', title: statusError || 'Codex usage access was denied for this account.' };
+      case 'api timeout':
+        return { key: 'codex', label: 'Codex timeout', tone: 'warning', title: statusError || 'Codex usage request timed out.' };
+      case 'api disconnected':
+        return { key: 'codex', label: 'Codex offline', tone: 'danger', title: statusError || 'Codex usage request failed.' };
       default:
         break;
     }
@@ -204,8 +224,8 @@ function providerHealth(
     return { key: provider.toLowerCase(), label: `${provider} waiting`, tone: 'neutral', title: `${provider} limit data has not arrived yet.` };
   }
 
-  if (provider === 'Claude' && !claudeApiConnected) {
-    return { key: 'claude', label: 'Claude offline', tone: 'danger', title: 'Claude API is unavailable.' };
+  if (provider === 'Claude' && !connected) {
+    return { key: 'claude', label: 'Claude offline', tone: 'danger', title: statusError || 'Claude API is unavailable.' };
   }
 
   const sources = [healthLabelForSource(h5), healthLabelForSource(week)].filter((label): label is string => !!label);
@@ -217,6 +237,9 @@ function providerHealth(
   }
   if (sources.includes('Bridge')) {
     return { key: provider.toLowerCase(), label: `${provider} Bridge`, tone: 'neutral', title: `${provider} is using the local status-line bridge.` };
+  }
+  if (provider === 'Codex' && !connected && statusLabel) {
+    return { key: 'codex', label: 'Codex offline', tone: 'danger', title: statusError || 'Codex live usage is unavailable.' };
   }
   return {
     key: provider.toLowerCase(),
@@ -454,16 +477,25 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         !state.initialRefreshComplete,
         state.apiStatusLabel,
         state.apiConnected,
+        state.apiError,
       );
       items.push(claudeHealth);
     }
     if (enabledProviders.has('codex')) {
       const codexSyncing = state.historyWarmupPending && (!hasLimitData(state.limits.codexH5) || !hasLimitData(state.limits.codexWeek));
-      const codexHealth = providerHealth('Codex', state.limits.codexH5, state.limits.codexWeek, codexSyncing);
+      const codexHealth = providerHealth(
+        'Codex',
+        state.limits.codexH5,
+        state.limits.codexWeek,
+        codexSyncing,
+        state.codexStatusLabel,
+        state.codexUsageConnected,
+        state.codexError,
+      );
       items.push(codexHealth);
     }
     return items;
-  }, [state.apiConnected, state.apiStatusLabel, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5, state.limits.codexWeek, state.limits.h5, state.limits.week, state.settings.enabledProviders]);
+  }, [state.apiConnected, state.apiError, state.apiStatusLabel, state.codexError, state.codexStatusLabel, state.codexUsageConnected, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5, state.limits.codexWeek, state.limits.h5, state.limits.week, state.settings.enabledProviders]);
 
   const healthToneStyle = useCallback((tone: HealthTone): React.CSSProperties => {
     if (tone === 'claudeGood') return { color: C.sonnet, background: `${C.sonnet}14`, border: `1px solid ${C.sonnet}33` };

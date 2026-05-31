@@ -63,12 +63,11 @@ function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string
 type EditableSettingKey = Exclude<keyof AppSettings, 'compactWidgetBounds'>;
 type ProviderId = AppSettings['enabledProviders'][number];
 
-const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string; experimental?: boolean; disabled?: boolean; note?: string }> = [
+const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
-  { id: 'antigravity', label: 'Antigravity', experimental: true, disabled: true, note: 'Coming soon, not tracked yet' },
 ];
-const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(option => !option.disabled);
+const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS;
 
 const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'usageLimits',
@@ -412,9 +411,9 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
             {PROVIDER_OPTIONS.map(option => {
               const enabledProviders = enabledProvidersFromSettings(s);
               const checked = enabledProviders.includes(option.id);
-              const lockedLastProvider = checked && enabledProviders.length <= 1 && option.disabled !== true;
-              const disabled = option.disabled === true || lockedLastProvider;
-              const title = option.note ?? (lockedLastProvider ? 'At least one provider must stay enabled.' : undefined);
+              const lockedLastProvider = checked && enabledProviders.length <= 1;
+              const disabled = lockedLastProvider;
+              const title = lockedLastProvider ? 'At least one provider must stay enabled.' : undefined;
               return (
                 <label
                   key={option.id}
@@ -424,13 +423,15 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 12,
-                    opacity: option.disabled ? 0.55 : 1,
                   }}
                 >
-                  <span style={labelStyle}>
-                    {option.label}
-                    {option.experimental && <span style={{ color: C.textMuted }}> · experimental</span>}
-                    {option.note && <span style={{ color: C.textMuted }}> · {option.note}</span>}
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <span style={labelStyle}>{option.label}</span>
+                    {lockedLastProvider && (
+                      <span style={{ fontSize: 10, color: C.textMuted }}>
+                        At least one provider must stay enabled.
+                      </span>
+                    )}
                   </span>
                   <input
                     type="checkbox"

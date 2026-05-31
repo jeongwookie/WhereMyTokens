@@ -10,7 +10,7 @@ import aggregates from '../dist/main/usageLedgerAggregates.js';
 
 const { StateManager } = stateManagerModule;
 const { importUsageJsonlIntoSnapshot } = importerModule;
-const { emptyUsageLedgerSnapshot } = aggregates;
+const { emptyUsageAggregate, emptyUsageLedgerSnapshot, dayModelKey } = aggregates;
 
 function makeStore(overrides = {}) {
   return {
@@ -219,6 +219,80 @@ test('state manager skips persisted usage ledger writes when sources are unchang
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('state manager disables stale ledger usage after source import failures', async () => {
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyModel: {
+      [dayModelKey('2026-05-25', 'claude', 'Sonnet')]: {
+        ...emptyUsageAggregate(),
+        requestCount: 1,
+        totalTokens: 30,
+      },
+    },
+    sourceCheckpoints: {
+      'claude-source': checkpoint('claude'),
+    },
+  };
+  const usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+  const manager = new StateManager(makeStore(), () => {});
+  manager.usageLedgerStore = usageLedgerStore;
+
+  assert.equal(manager.canUseUsageLedger(snapshot, manager.getState().settings), true);
+  await manager.refreshUsageLedgerSources([{
+    provider: 'claude',
+    sourceId: 'broken-source',
+    sourcePath: path.join(os.tmpdir(), 'broken-source.jsonl'),
+    priority: true,
+    importIntoSnapshot: async () => {
+      throw new Error('boom');
+    },
+  }]);
+
+  assert.equal(manager.usageLedgerImportFailed, true);
+  assert.equal(manager.canUseUsageLedger(snapshot, manager.getState().settings), false);
+
+  await manager.refreshUsageLedgerSources([{
+    provider: 'claude',
+    sourceId: 'stable-source',
+    sourcePath: path.join(os.tmpdir(), 'stable-source.jsonl'),
+    priority: true,
+    importIntoSnapshot: async (current) => current,
+  }]);
+
+  assert.equal(manager.usageLedgerImportFailed, false);
+  assert.equal(manager.canUseUsageLedger(snapshot, manager.getState().settings), true);
+});
+
+test('full-history warmup skips source discovery when the enabled ledger needs rebuild', async () => {
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    sourceCheckpoints: {
+      'claude-source': checkpoint('claude', {
+        needsRebuild: true,
+        rebuildReason: 'jsonl checkpoint missing byte offset',
+      }),
+    },
+  };
+  const usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude', 'codex'] }), () => {});
+  let listedSources = false;
+  manager.usageLedgerStore = usageLedgerStore;
+  manager.ledgerSourceFiles = () => {
+    listedSources = true;
+    return {
+      files: [ledgerSource(path.join(os.tmpdir(), 'should-not-scan.jsonl'))],
+      partial: false,
+    };
+  };
+
+  const result = await manager.refreshUsageLedgerFromDiscoveredSources(null, undefined, true);
+
+  assert.equal(result.partial, true);
+  assert.equal(result.scannedFiles, 0);
+  assert.equal(listedSources, false);
+  assert.equal(usageLedgerStore.replaceCount, 0);
 });
 
 test('budgeted full-history ledger scans do not mark the import complete when truncated', async () => {

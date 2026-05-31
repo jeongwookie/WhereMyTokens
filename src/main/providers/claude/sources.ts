@@ -6,7 +6,7 @@ import { readJsonlCwd } from '../../sessionMetadata';
 import { scanJsonlSummaryCached } from '../../jsonlParser';
 import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderLedgerSource, ProviderSource, ProviderSourceList } from '../types';
 import { describeRepoContext, projectKeysForCwd } from '../shared/repoContext';
-import { listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs } from '../shared/sourceFiles';
+import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs } from '../shared/sourceFiles';
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR } from './paths';
 
 function sourceFromFile(filePath: string): ProviderSource {
@@ -22,7 +22,7 @@ function isClaudeAgentJsonlPath(filePath: string): boolean {
 }
 
 export function ownsClaudePath(filePath: string): boolean {
-  return normalizeSourcePath(filePath).startsWith(normalizeSourcePath(CLAUDE_PROJECTS_DIR));
+  return isSourcePathInside(CLAUDE_PROJECTS_DIR, filePath);
 }
 
 export function listRecentClaudeSources(_ctx: ProviderContext, limit: number): ProviderSourceList {

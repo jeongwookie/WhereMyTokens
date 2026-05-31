@@ -53,8 +53,10 @@ test('renderer tracking settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /type="checkbox"/);
   assert.match(settingsView, /lockedLastProvider/);
   assert.match(settingsView, /disabled=\{disabled\}/);
-  assert.match(settingsView, /Coming soon, not tracked yet/);
   assert.match(settingsView, /ACTIVE_PROVIDER_OPTIONS/);
+  assert.match(settingsView, /At least one provider must stay enabled\./);
+  assert.doesNotMatch(settingsView, /Coming soon, not tracked yet/);
+  assert.doesNotMatch(settingsView, /Antigravity', label: 'Antigravity/);
   assert.doesNotMatch(settingsView, /legacyProviderFromEnabled/);
   assert.doesNotMatch(settingsView, /Claude \+ Codex/);
 });
@@ -93,6 +95,18 @@ test('Claude provider keeps agent JSONL files out of visible startup sessions', 
   assert.match(source, /if \(isClaudeAgentJsonlPath\(source\.filePath\)\) return null/);
 });
 
+test('provider source ownership uses directory-boundary containment', () => {
+  const sharedSource = fs.readFileSync('src/main/providers/shared/sourceFiles.ts', 'utf8');
+  const claudeSource = fs.readFileSync('src/main/providers/claude/sources.ts', 'utf8');
+  const codexSource = fs.readFileSync('src/main/providers/codex/sources.ts', 'utf8');
+
+  assert.match(sharedSource, /function isSourcePathInside/);
+  assert.match(sharedSource, /path\.relative\(parent, child\)/);
+  assert.match(claudeSource, /isSourcePathInside\(CLAUDE_PROJECTS_DIR, filePath\)/);
+  assert.match(codexSource, /CODEX_USAGE_DIRS\.some\(root => isSourcePathInside\(root, filePath\)\)/);
+  assert.doesNotMatch(codexSource, /normalized\.startsWith/);
+});
+
 test('help and notification copy match provider checkbox and Codex live fallback model', () => {
   const helpView = fs.readFileSync('src/renderer/views/HelpView.tsx', 'utf8');
   const notificationsView = fs.readFileSync('src/renderer/views/NotificationsView.tsx', 'utf8');
@@ -100,8 +114,28 @@ test('help and notification copy match provider checkbox and Codex live fallback
   assert.doesNotMatch(helpView, /Tracking Provider: Claude \/ Codex \/ Both/);
   assert.doesNotMatch(helpView, /provider mode/);
   assert.match(helpView, /provider checkboxes/);
+  assert.match(helpView, /Disabled providers are not scanned locally/);
   assert.match(notificationsView, /Codex live usage, cache, or local log 5-hour window/);
   assert.match(notificationsView, /Codex live usage, cache, or local log weekly window/);
+});
+
+test('public README copy matches provider checkbox settings', () => {
+  for (const filePath of [
+    'README.md',
+    'README.ko.md',
+    'README.ja.md',
+    'README.zh-CN.md',
+    'README.es.md',
+  ]) {
+    const source = fs.readFileSync(filePath, 'utf8');
+    assert.doesNotMatch(source, /Tracking Provider/);
+    assert.doesNotMatch(source, /Claude \/ Codex \/ Both/);
+  }
+
+  const readme = fs.readFileSync('README.md', 'utf8');
+  assert.match(readme, /provider checkboxes/);
+  assert.match(readme, /providers\//);
+  assert.doesNotMatch(readme, /sessionDiscovery\.ts/);
 });
 
 test('renderer provider labels explicitly handle Antigravity instead of non-Codex-as-Claude', () => {

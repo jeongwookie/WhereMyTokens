@@ -108,7 +108,11 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(stateSource, /forceProviderUsage: this\.consumeManualProviderUsageForce\(\)/);
   assert.match(stateSource, /refreshProviderQuotas\(settingsForApi, force \|\| forceProviderUsage\)/);
   assert.match(stateSource, /provider\.fetchQuota/);
-  assert.match(mainSource, /historyWarmupPending \|\|/);
+  assert.match(mainSource, /const showCodexPanel = showCodexUsage/);
+  assert.match(mainSource, /codexStatusLabel/);
+  assert.match(mainSource, /Codex limited/);
+  assert.match(widgetSource, /state\.codexStatusLabel/);
+  assert.match(widgetSource, /Codex limited/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);
   assert.match(stateSource, /deferCodexLocalLog: partialHistoryScan/);

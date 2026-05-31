@@ -7,7 +7,7 @@ import { scanJsonlSummaryCached } from '../../jsonlParser';
 import { describeCodexSource } from './discovery';
 import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderLedgerSource, ProviderSource, ProviderSourceList } from '../types';
 import { describeRepoContext, projectKeysForCwd } from '../shared/repoContext';
-import { listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs } from '../shared/sourceFiles';
+import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs, statMtimeMsOrNull } from '../shared/sourceFiles';
 import { CODEX_SESSIONS_DIR, CODEX_USAGE_DIRS } from './paths';
 
 function sourceFromFile(filePath: string): ProviderSource {
@@ -19,8 +19,7 @@ function sourceFromFile(filePath: string): ProviderSource {
 }
 
 export function ownsCodexPath(filePath: string): boolean {
-  const normalized = normalizeSourcePath(filePath);
-  return CODEX_USAGE_DIRS.some(root => normalized.startsWith(normalizeSourcePath(root)));
+  return CODEX_USAGE_DIRS.some(root => isSourcePathInside(root, filePath));
 }
 
 function readSubdirs(dir: string): string[] {
@@ -74,8 +73,7 @@ function codexSessionDedupeKey(filePath: string): string {
 }
 
 function codexUsageRootRank(filePath: string): number | null {
-  const normalized = normalizeSourcePath(filePath);
-  const index = CODEX_USAGE_DIRS.findIndex(root => normalized.startsWith(normalizeSourcePath(root)));
+  const index = CODEX_USAGE_DIRS.findIndex(root => isSourcePathInside(root, filePath));
   return index >= 0 ? index : null;
 }
 
@@ -87,7 +85,8 @@ export function listAllCodexSources(): ProviderSourceList {
     for (const filePath of listJsonlFiles(root, Number.POSITIVE_INFINITY, false)) {
       const rank = codexUsageRootRank(filePath);
       if (rank == null) continue;
-      const mtimeMs = statMtimeMs(filePath);
+      const mtimeMs = statMtimeMsOrNull(filePath);
+      if (mtimeMs == null) continue;
       const key = codexSessionDedupeKey(filePath);
       const current = deduped.get(key);
       if (!current

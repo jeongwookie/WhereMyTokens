@@ -145,7 +145,7 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 **Settings → Claude Code Integration → Setup** — habilita datos de límite de uso en tiempo real sin sondeo de API.
 
 ### 3. Configurar
-- **Tracking Provider** — Claude / Codex / Both
+- **Tracking providers** — activa Claude Code y/o Codex con casillas
 - **Moneda** — USD o KRW
 - **Alertas** — establece umbrales de uso (50% / 80% / 90%)
 - **Tema** — Auto (sigue el sistema) / Claro / Oscuro

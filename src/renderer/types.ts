@@ -239,6 +239,9 @@ export interface AppState {
   apiConnected: boolean;
   apiStatusLabel?: string;
   apiError?: string;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
   bridgeActive: boolean;
   extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)

@@ -146,7 +146,7 @@
 **Settings → Claude Code Integration → Setup** — 无需 API 轮询即可获取实时速率限制数据。
 
 ### 3. 配置
-- **Tracking Provider** — Claude / Codex / Both
+- **Tracking providers** — 勾选启用 Claude Code 和/或 Codex
 - **货币** — USD 或 KRW
 - **提醒** — 设置使用阈值（50% / 80% / 90%）
 - **主题** — Auto（跟随系统）/ Light / Dark

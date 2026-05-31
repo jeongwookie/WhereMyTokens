@@ -145,7 +145,7 @@
 **Settings → Claude Code Integration → Setup** — API ポーリングなしでリアルタイムデータ受信。
 
 ### 3. 設定
-- **Tracking Provider** — Claude / Codex / Both
+- **Tracking providers** — Claude Code と Codex のチェックボックスを切り替え
 - **通貨** — USD または KRW
 - **アラート** — 使用量しきい値の設定（50% / 80% / 90%）
 - **テーマ** — Auto（システム設定に従う）/ Light / Dark

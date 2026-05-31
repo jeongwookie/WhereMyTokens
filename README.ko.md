@@ -145,7 +145,7 @@
 **Settings → Claude Code Integration → Setup** — API 폴링 없이 실시간 속도 제한 데이터 수신.
 
 ### 3. 설정
-- **Tracking Provider** — Claude / Codex / Both
+- **Tracking providers** — Claude Code와 Codex 체크박스를 켜고 끕니다
 - **통화** — USD 또는 KRW
 - **알림** — 사용량 임계값 설정 (50% / 80% / 90%)
 - **테마** — Auto (시스템 설정 따름) / Light / Dark

@@ -1,4 +1,3 @@
-import type Store from 'electron-store';
 import type { AppSettings } from '../ipc';
 import type { JsonlCache } from '../jsonlCache';
 import type { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary } from '../jsonlTypes';
@@ -43,7 +42,6 @@ export type ProviderCapability =
 
 export interface ProviderContext {
   settings: AppSettings;
-  store: Store<AppSettings>;
   nowMs: number;
   jsonlCache: JsonlCache;
   scanBudgetMs: number | null;

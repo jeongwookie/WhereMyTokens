@@ -161,7 +161,11 @@ function markNeedsRebuild(checkpoint: SourceCheckpoint, nowMs: number, reason: s
 }
 
 function unchangedCheckpoint(checkpoint: SourceCheckpoint | undefined, stat: fs.Stats): boolean {
-  return !!checkpoint && checkpoint.size === stat.size && checkpoint.mtimeMs === stat.mtimeMs;
+  return !!checkpoint
+    && typeof checkpoint.byteOffset === 'number'
+    && Number.isFinite(checkpoint.byteOffset)
+    && checkpoint.size === stat.size
+    && checkpoint.mtimeMs === stat.mtimeMs;
 }
 
 export async function importUsageJsonlIntoSnapshot(
@@ -180,11 +184,18 @@ export async function importUsageJsonlIntoSnapshot(
   const sourceIdentity = sourceIdentityForPath(filePath, provider);
   const sourceHash = sourceHashForIdentity(sourceIdentity);
   const currentCheckpoint = snapshot.sourceCheckpoints[sourceHash];
+  if (currentCheckpoint && (typeof currentCheckpoint.byteOffset !== 'number' || !Number.isFinite(currentCheckpoint.byteOffset))) {
+    if (currentCheckpoint.needsRebuild) return snapshot;
+    const next = cloneUsageLedgerSnapshot(snapshot);
+    next.sourceCheckpoints[sourceHash] = markNeedsRebuild(currentCheckpoint, nowMs, 'jsonl checkpoint missing byte offset');
+    return next;
+  }
   if (unchangedCheckpoint(currentCheckpoint, stat)) return snapshot;
 
-  if (currentCheckpoint?.needsRebuild) return cloneUsageLedgerSnapshot(snapshot);
+  if (currentCheckpoint?.needsRebuild) return snapshot;
   const startOffset = currentCheckpoint?.byteOffset ?? 0;
   if (currentCheckpoint && stat.size < startOffset) {
+    if (currentCheckpoint.needsRebuild) return snapshot;
     const next = cloneUsageLedgerSnapshot(snapshot);
     next.sourceCheckpoints[sourceHash] = markNeedsRebuild(currentCheckpoint, nowMs, 'source shrank before checkpoint offset');
     return next;

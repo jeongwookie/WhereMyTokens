@@ -5,7 +5,7 @@ import { readCodexSessionHeader } from '../../sessionMetadata';
 import type { DiscoveredSession, DiscoverSessionsOptions, ProviderContext } from '../types';
 import { calcState, entrypointToSource, sessionSortTime, trackedJsonlSet } from '../shared/session';
 import { describeRepoContext } from '../shared/repoContext';
-import { normalizeSourcePath } from '../shared/sourceFiles';
+import { isSourcePathInside, normalizeSourcePath } from '../shared/sourceFiles';
 import { CODEX_SESSIONS_DIR } from './paths';
 
 const DEFAULT_RECENT_CODEX_FILE_LIMIT = 96;
@@ -63,7 +63,7 @@ function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>):
   };
 
   for (const trackedPath of trackedPaths) {
-    if (!trackedPath.startsWith(normalizeSourcePath(CODEX_SESSIONS_DIR))) continue;
+    if (!isSourcePathInside(CODEX_SESSIONS_DIR, trackedPath)) continue;
     pushFile(trackedPath);
   }
 

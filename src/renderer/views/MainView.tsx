@@ -26,6 +26,7 @@ interface Props {
 type NavView = 'settings' | 'notifications' | 'help';
 type ProviderId = AppState['settings']['enabledProviders'][number];
 type HeaderStatusTone = 'warning' | 'danger';
+type HeaderStatus = { label: string; title: string; tone: HeaderStatusTone };
 type SessionListItem =
   | { type: 'session'; session: SessionInfo }
   | {
@@ -177,13 +178,13 @@ function headerIconButtonStyle(
   };
 }
 
-function buildHeaderStatus(args: {
+function buildClaudeHeaderStatus(args: {
   showClaudeUsage: boolean;
   hasClaudeFallback: boolean;
   apiConnected: boolean;
   apiStatusLabel?: string;
   apiError?: string;
-}): { label: string; title: string; tone: HeaderStatusTone } | null {
+}): HeaderStatus | null {
   const { showClaudeUsage, hasClaudeFallback, apiConnected, apiStatusLabel, apiError } = args;
   if (!showClaudeUsage) return null;
 
@@ -229,6 +230,84 @@ function buildHeaderStatus(args: {
   }
 
   return null;
+}
+
+function buildCodexHeaderStatus(args: {
+  showCodexUsage: boolean;
+  hasCodexFallback: boolean;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
+  codexFallbackSource?: AppState['limits']['codexH5']['source'];
+}): HeaderStatus | null {
+  const {
+    showCodexUsage,
+    hasCodexFallback,
+    codexUsageConnected,
+    codexStatusLabel,
+    codexError,
+    codexFallbackSource,
+  } = args;
+  if (!showCodexUsage) return null;
+
+  switch (codexStatusLabel) {
+    case 'rate limited':
+      return { label: 'Codex limited', title: codexError || 'Codex usage endpoint returned HTTP 429.', tone: 'warning' };
+    case 'schema changed':
+      return { label: 'Codex schema', title: codexError || 'Codex usage response changed shape.', tone: 'danger' };
+    case 'local log':
+      return { label: 'Codex local', title: codexError || 'Codex credentials were not found. Showing local log estimates only.', tone: 'warning' };
+    case 'auth failed':
+      return { label: 'Codex auth', title: codexError || 'Codex usage token was rejected or expired.', tone: 'danger' };
+    case 'forbidden':
+      return { label: 'Codex blocked', title: codexError || 'Codex usage access was denied for this account.', tone: 'danger' };
+    case 'api timeout':
+      return { label: 'Codex timeout', title: codexError || 'Codex usage request timed out.', tone: 'warning' };
+    case 'api disconnected':
+      return { label: 'Codex offline', title: codexError || 'Codex usage request failed.', tone: 'danger' };
+    default:
+      break;
+  }
+
+  if (hasCodexFallback) {
+    const label = codexFallbackSource === 'cache' ? 'Codex cache' : 'Codex log';
+    const source = codexFallbackSource === 'cache' ? 'last cached usage snapshot' : 'local log estimates';
+    return {
+      label,
+      title: `Codex live usage is unavailable; using ${source}.`,
+      tone: 'warning',
+    };
+  }
+
+  if (!codexUsageConnected && codexStatusLabel) {
+    return {
+      label: 'Codex offline',
+      title: codexError || 'Codex live usage is unavailable.',
+      tone: 'danger',
+    };
+  }
+
+  return null;
+}
+
+function buildHeaderStatus(args: {
+  showClaudeUsage: boolean;
+  showCodexUsage: boolean;
+  hasClaudeFallback: boolean;
+  hasCodexFallback: boolean;
+  apiConnected: boolean;
+  apiStatusLabel?: string;
+  apiError?: string;
+  codexUsageConnected: boolean;
+  codexStatusLabel?: string;
+  codexError?: string;
+  codexFallbackSource?: AppState['limits']['codexH5']['source'];
+}): HeaderStatus | null {
+  const statuses = [
+    buildClaudeHeaderStatus(args),
+    buildCodexHeaderStatus(args),
+  ].filter((status): status is HeaderStatus => !!status);
+  return statuses.find(status => status.tone === 'danger') ?? statuses[0] ?? null;
 }
 
 function latestTime(a: string | null, b: string | null): string | null {
@@ -377,21 +456,46 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   onToggleCompactWidget: () => void;
 }) {
   const C = useTheme();
-  const { sessions, usage, settings, apiConnected, apiError, apiStatusLabel } = state;
+  const {
+    sessions,
+    usage,
+    settings,
+    apiConnected,
+    apiError,
+    apiStatusLabel,
+    codexUsageConnected,
+    codexError,
+    codexStatusLabel,
+  } = state;
   const { currency, usdToKrw } = settings;
   const compactWidgetEnabled = settings.compactWidgetEnabled === true;
   const enabledProviders = new Set(settings.enabledProviders);
   const showClaudeUsage = enabledProviders.has('claude');
   const showCodexUsage = enabledProviders.has('codex');
   const hasClaudeFallback = showClaudeUsage && (state.limits.h5.source === 'statusLine' || state.limits.week.source === 'statusLine');
+  const hasCodexFallback = showCodexUsage && (
+    state.limits.codexH5.source === 'localLog'
+    || state.limits.codexWeek.source === 'localLog'
+    || state.limits.codexH5.source === 'cache'
+    || state.limits.codexWeek.source === 'cache'
+  );
+  const codexFallbackSource = state.limits.codexH5.source === 'cache' || state.limits.codexWeek.source === 'cache'
+    ? 'cache'
+    : (state.limits.codexH5.source === 'localLog' || state.limits.codexWeek.source === 'localLog' ? 'localLog' : undefined);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
   const headerStatus = useMemo(() => buildHeaderStatus({
     showClaudeUsage,
+    showCodexUsage,
     hasClaudeFallback,
+    hasCodexFallback,
     apiConnected,
     apiStatusLabel,
     apiError,
-  }), [apiConnected, apiError, apiStatusLabel, hasClaudeFallback, showClaudeUsage]);
+    codexUsageConnected,
+    codexStatusLabel,
+    codexError,
+    codexFallbackSource,
+  }), [apiConnected, apiError, apiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -586,14 +690,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
   const codexWeek = codexProviderUsage?.windows.week ?? EMPTY_WINDOW_STATS;
   const showSonnet = showClaudeUsage && (limits.so.pct > 0 || claudeSonnetWeek.totalTokens > 0);
   const showExtraUsage = showClaudeUsage && !!extraUsage?.isEnabled;
-  const showCodexPanel = showCodexUsage && (
-    !showClaudeUsage ||
-    historyWarmupPending ||
-    codexH5.totalTokens > 0 ||
-    codexWeek.totalTokens > 0 ||
-    limits.codexH5.pct > 0 ||
-    limits.codexWeek.pct > 0
-  );
+  const showCodexPanel = showCodexUsage;
   const codexH5HasLimit = hasLimitData(limits.codexH5);
   const codexWeekHasLimit = hasLimitData(limits.codexWeek);
   const codexH5Pending = historyWarmupPending && (limits.codexH5.source === 'localLog' || !codexH5HasLimit);
