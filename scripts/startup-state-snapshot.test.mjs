@@ -27,7 +27,6 @@ const EMPTY_USAGE = {
   byProvider: {
     claude: {
       windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW, sonnetWeek: EMPTY_WINDOW },
-      burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
     },
     codex: { windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW } },
   },
@@ -107,7 +106,7 @@ test('startup snapshot normalizer marks recent snapshots as restored UI state', 
 });
 
 test('startup snapshot schema version is bumped for provider-keyed usage data', () => {
-  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 3);
+  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 4);
 });
 
 test('startup snapshot normalizer rejects stale and mismatched snapshots', () => {

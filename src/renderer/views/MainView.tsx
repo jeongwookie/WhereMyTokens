@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { PictureInPicture2 } from 'lucide-react';
-import { AppState, SessionInfo, WindowStats } from '../types';
+import { AppState, ProviderQuotaSource, SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
-import { fmtTokens, fmtCost, fmtRelative, modelColor } from '../theme';
+import { fmtTokens, fmtCost, fmtRelative, modelColor, quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
@@ -12,7 +12,8 @@ import CodeOutputCard from '../components/CodeOutputCard';
 import TrendCard from '../components/TrendCard';
 import RenderErrorBoundary from '../components/RenderErrorBoundary';
 import { MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
-import { hasLimitData, limitDataState, limitSourceDisplay } from '../limitDisplay';
+import { limitDataState, limitSourceDisplay } from '../limitDisplay';
+import { buildQuotaDisplayModels, QuotaDisplayGroupViewModel, QuotaDisplayRowViewModel } from '../quotaDisplayModels';
 
 interface Props {
   state: AppState;
@@ -45,18 +46,6 @@ type SessionListItem =
 const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 const STALE_MS = 6 * 60 * 60 * 1000;
-const EMPTY_WINDOW_STATS: WindowStats = {
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheCreationTokens: 0,
-  cacheReadTokens: 0,
-  totalTokens: 0,
-  costUSD: 0,
-  requestCount: 0,
-  cacheEfficiency: 0,
-  cacheSavingsUSD: 0,
-};
-
 function formatRefreshAge(lastUpdated: number): string {
   if (!lastUpdated) return 'Refresh';
   const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
@@ -238,7 +227,7 @@ function buildCodexHeaderStatus(args: {
   codexUsageConnected: boolean;
   codexStatusLabel?: string;
   codexError?: string;
-  codexFallbackSource?: AppState['limits']['codexH5']['source'];
+  codexFallbackSource?: ProviderQuotaSource;
 }): HeaderStatus | null {
   const {
     showCodexUsage,
@@ -301,7 +290,7 @@ function buildHeaderStatus(args: {
   codexUsageConnected: boolean;
   codexStatusLabel?: string;
   codexError?: string;
-  codexFallbackSource?: AppState['limits']['codexH5']['source'];
+  codexFallbackSource?: ProviderQuotaSource;
 }): HeaderStatus | null {
   const statuses = [
     buildClaudeHeaderStatus(args),
@@ -472,30 +461,30 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const enabledProviders = new Set(settings.enabledProviders);
   const showClaudeUsage = enabledProviders.has('claude');
   const showCodexUsage = enabledProviders.has('codex');
-  const hasClaudeFallback = showClaudeUsage && (state.limits.h5.source === 'statusLine' || state.limits.week.source === 'statusLine');
-  const hasCodexFallback = showCodexUsage && (
-    state.limits.codexH5.source === 'localLog'
-    || state.limits.codexWeek.source === 'localLog'
-    || state.limits.codexH5.source === 'cache'
-    || state.limits.codexWeek.source === 'cache'
-  );
-  const codexFallbackSource = state.limits.codexH5.source === 'cache' || state.limits.codexWeek.source === 'cache'
-    ? 'cache'
-    : (state.limits.codexH5.source === 'localLog' || state.limits.codexWeek.source === 'localLog' ? 'localLog' : undefined);
+  const claudeQuota = state.providerQuotas.claude;
+  const codexQuota = state.providerQuotas.codex;
+  const claudeStatus = claudeQuota?.status;
+  const resolvedApiConnected = claudeStatus?.connected ?? apiConnected;
+  const resolvedApiStatusLabel = claudeStatus?.label ?? apiStatusLabel;
+  const resolvedApiError = claudeStatus?.detail ?? apiError;
+  const hasClaudeFallback = showClaudeUsage && Object.values(claudeQuota?.windows ?? {}).some(window => window.source === 'statusLine');
+  const codexFallbackWindows = Object.values(codexQuota?.windows ?? {}).filter(window => window.source === 'localLog' || window.source === 'cache');
+  const hasCodexFallback = showCodexUsage && codexFallbackWindows.length > 0;
+  const codexFallbackSource = codexFallbackWindows.some(window => window.source === 'cache') ? 'cache' : (codexFallbackWindows[0]?.source as ProviderQuotaSource | undefined);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
   const headerStatus = useMemo(() => buildHeaderStatus({
     showClaudeUsage,
     showCodexUsage,
     hasClaudeFallback,
     hasCodexFallback,
-    apiConnected,
-    apiStatusLabel,
-    apiError,
+    apiConnected: resolvedApiConnected,
+    apiStatusLabel: resolvedApiStatusLabel,
+    apiError: resolvedApiError,
     codexUsageConnected,
     codexStatusLabel,
     codexError,
     codexFallbackSource,
-  }), [apiConnected, apiError, apiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage]);
+  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -505,7 +494,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const saved = isAll ? usage.allTimeSavedUSD : usage.todayCacheSavingsUSD;
   const cacheColor = cacheMetricColor(cacheEff, C);
   const cacheTitle = cacheMetricTitle(showClaudeUsage, showCodexUsage);
-  const planLabel = showClaudeUsage && state.autoLimits ? state.autoLimits.plan : undefined;
+  const planLabel = showClaudeUsage ? (claudeQuota?.planName || claudeQuota?.accountLabel) : undefined;
   const codexTierLabel = showCodexUsage ? formatCodexServiceTier(state.codexAccount.serviceTier) : null;
   const statusStyles = headerStatus?.tone === 'danger'
     ? {
@@ -659,50 +648,195 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   );
 });
 
+function formatSimplePct(pct: number | null): string {
+  if (pct == null) return '--';
+  if (!Number.isFinite(pct) || pct <= 0) return '0%';
+  if (pct < 1) return '<1%';
+  if (pct < 10) return `${Math.round(pct * 10) / 10}%`;
+  return `${Math.round(pct)}%`;
+}
+
+function clampSimplePct(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function simpleTimeElapsedPct(durationMs: number | null | undefined, resetMs: number | null): number | null {
+  if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
+  return clampSimplePct(((durationMs - resetMs) / durationMs) * 100);
+}
+
+function formatSimpleReset(resetMs: number | null, resetLabel?: string): string {
+  if (resetLabel) return resetLabel;
+  if (resetMs == null || resetMs <= 0) return 'waiting';
+  const totalMinutes = Math.max(1, Math.round(resetMs / 60000));
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours >= 24) return `${Math.round(hours / 24)}d`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
+  const C = useTheme();
+  const source = limitSourceDisplay(row.quota);
+  const dataState = limitDataState(row.quota, row.pending);
+  const percentOnly = row.visualKind === 'percentOnly';
+  const quota = clampSimplePct(row.quotaPct);
+  const elapsed = !row.pending && dataState === 'ready' && !percentOnly
+    ? simpleTimeElapsedPct(row.durationMs, row.resetMs)
+    : null;
+  const quotaColor = row.pending
+    ? C.accent
+    : dataState === 'waiting'
+      ? C.textMuted
+      : quotaPctBarColor(quota, C);
+  const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
+    ? (quota / elapsed > 1.5 ? C.barRed : quota / elapsed > 1.0 ? C.barYellow : quotaColor)
+    : quotaColor;
+  const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
+  const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
+  return (
+    <div
+      title={row.pending ? row.pendingTitle : source.title}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: percentOnly
+          ? '24px minmax(0, 1fr) 64px'
+          : '24px minmax(0, 1fr) 38px 64px',
+        alignItems: 'center',
+        gap: 6,
+        padding: '3px 0',
+      }}
+    >
+      <span style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {row.label}
+      </span>
+      <div style={{ position: 'relative', height: 8, background: trackColor, borderRadius: 4, overflow: 'hidden' }}>
+        {!percentOnly && elapsed != null && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: '0 auto 0 0',
+              width: `${elapsed}%`,
+              background: elapsedColor,
+              borderRadius: 4,
+            }}
+          />
+        )}
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 2,
+            width: `${row.pending ? 0 : quota}%`,
+            height: 4,
+            background: quotaColor,
+            borderRadius: 3,
+            opacity: row.pending ? 0.35 : 0.9,
+            boxShadow: `0 0 4px ${quotaColor}44`,
+          }}
+        />
+      </div>
+      {!percentOnly && (
+        <span style={{ color: C.textMuted, fontSize: 9, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
+          {row.pending ? 'syncing' : formatSimpleReset(row.resetMs, row.resetLabel)}
+        </span>
+      )}
+      <span
+        title={percentOnly ? 'Used' : 'Used / Time elapsed'}
+        style={{ color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap', textAlign: 'right', minWidth: 42 }}
+      >
+        {row.pending ? (
+          <span style={{ color: C.textMuted }}>...</span>
+        ) : percentOnly ? (
+          <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{formatSimplePct(quota)}</span>
+        ) : (
+          <>
+            <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{formatSimplePct(quota)}</span>
+            <span style={{ color: C.textMuted }}> / </span>
+            <span>{formatSimplePct(elapsed)}</span>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel }) {
+  const C = useTheme();
+  return (
+    <div style={{ padding: '6px 12px', borderTop: `1px solid ${C.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, minWidth: 0 }}>
+        <span
+          style={{
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            fontSize: 10,
+            color: C.textMuted,
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: 1,
+          }}
+        >
+          {group.label}
+        </span>
+        {group.badges.length > 0 && (
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
+            {group.badges.map(badge => (
+              <span
+                key={badge.key}
+                title={badge.title}
+                style={{
+                  ...quotaSourceBadgeToneStyle(badge.tone, C),
+                  borderRadius: 3,
+                  padding: '1px 4px',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  fontFamily: C.fontMono,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'grid', gap: 0 }}>
+        {group.rows.map(row => <SimpleQuotaRow key={row.key} row={row} />)}
+      </div>
+    </div>
+  );
+}
+
 const PlanUsagePanel = React.memo(function PlanUsagePanel({
   usage,
-  limits,
+  providerQuotas,
   settings,
-  apiConnected,
-  extraUsage,
   historyWarmupPending,
   historyWarmupStartsAt,
 }: {
   usage: AppState['usage'];
-  limits: AppState['limits'];
+  providerQuotas: AppState['providerQuotas'];
   settings: AppState['settings'];
-  apiConnected: boolean;
-  extraUsage: AppState['extraUsage'];
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
 }) {
   const C = useTheme();
   const { currency, usdToKrw } = settings;
-  const enabledProviders = new Set(settings.enabledProviders);
-  const showClaudeUsage = enabledProviders.has('claude');
-  const showCodexUsage = enabledProviders.has('codex');
-  const claudeProviderUsage = usage.byProvider.claude;
-  const codexProviderUsage = usage.byProvider.codex;
-  const claudeH5 = claudeProviderUsage?.windows.h5 ?? EMPTY_WINDOW_STATS;
-  const claudeWeek = claudeProviderUsage?.windows.week ?? EMPTY_WINDOW_STATS;
-  const claudeSonnetWeek = claudeProviderUsage?.windows.sonnetWeek ?? EMPTY_WINDOW_STATS;
-  const codexH5 = codexProviderUsage?.windows.h5 ?? EMPTY_WINDOW_STATS;
-  const codexWeek = codexProviderUsage?.windows.week ?? EMPTY_WINDOW_STATS;
-  const showSonnet = showClaudeUsage && (limits.so.pct > 0 || claudeSonnetWeek.totalTokens > 0);
-  const showExtraUsage = showClaudeUsage && !!extraUsage?.isEnabled;
-  const showCodexPanel = showCodexUsage;
-  const codexH5HasLimit = hasLimitData(limits.codexH5);
-  const codexWeekHasLimit = hasLimitData(limits.codexWeek);
-  const codexH5Pending = historyWarmupPending && (limits.codexH5.source === 'localLog' || !codexH5HasLimit);
-  const codexWeekPending = historyWarmupPending && (limits.codexWeek.source === 'localLog' || !codexWeekHasLimit);
-  const codexWarmupTitle = historyWarmupPending
-    ? `Full Codex history is still scanning (${formatWarmupEta(historyWarmupStartsAt)}); local-log limits may update.`
-    : undefined;
-  const claudeH5Source = limitSourceDisplay(limits.h5);
-  const claudeWeekSource = limitSourceDisplay(limits.week);
-  const sonnetSource = limitSourceDisplay(limits.so);
-  const codexH5Source = limitSourceDisplay(limits.codexH5);
-  const codexWeekSource = limitSourceDisplay(limits.codexWeek);
+  const { richGroups, simpleGroups, extraUsage } = buildQuotaDisplayModels({
+    usage,
+    providerQuotas,
+    settings,
+    historyWarmupPending,
+    historyWarmupStartsAt,
+    formatWarmupEta,
+  });
+  const showExtraUsage = !!extraUsage?.isEnabled;
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -710,16 +844,45 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
         <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
       </div>
 
-      {showClaudeUsage && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-          <TokenStatsCard provider="Claude" period="5h" stats={claudeH5} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.h5.pct} resetMs={limits.h5.resetMs} resetLabel={limits.h5.resetLabel} apiConnected={apiConnected} burnRate={claudeProviderUsage?.burnRate}
-            limitSourceLabel={claudeH5Source.label} limitSourceTitle={claudeH5Source.title} limitSourceTone={claudeH5Source.tone}
-            limitDataState={limitDataState(limits.h5)} hero borderRight />
-          <TokenStatsCard provider="Claude" period="1w" stats={claudeWeek} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.week.pct} resetMs={limits.week.resetMs} resetLabel={limits.week.resetLabel} apiConnected={apiConnected}
-            limitSourceLabel={claudeWeekSource.label} limitSourceTitle={claudeWeekSource.title} limitSourceTone={claudeWeekSource.tone}
-            limitDataState={limitDataState(limits.week)} hero />
+      {richGroups.map(group => (
+        <div key={`quota-rich-${group.id}`} style={{ display: 'grid', gridTemplateColumns: group.rows.length === 1 ? '1fr' : '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+          {group.rows.map((card, cardIndex) => {
+            const source = limitSourceDisplay(card.quota);
+            return (
+              <TokenStatsCard
+                key={card.key}
+                provider={group.label}
+                period={card.label}
+                stats={card.stats}
+                currency={currency}
+                usdToKrw={usdToKrw}
+                limitPct={card.quota.pct}
+                resetMs={card.visualKind === 'percentOnly' ? null : card.quota.resetMs}
+                resetLabel={card.visualKind === 'percentOnly' ? undefined : card.quota.resetLabel}
+                apiConnected={card.apiConnected}
+                limitSourceLabel={source.label}
+                limitSourceTitle={source.title}
+                limitSourceTone={source.tone}
+                limitDataState={limitDataState(card.quota, card.pending)}
+                pendingLimit={card.pending}
+                pendingLimitLabel="Syncing"
+                pendingLimitTitle={card.pendingTitle}
+                cacheMetricTitle={card.cacheMetricTitle}
+                durationMs={card.durationMs}
+                hideCost={card.hideCost}
+                hero
+                borderRight={group.rows.length > 1 && cardIndex === 0}
+              />
+            );
+          })}
+        </div>
+      ))}
+
+      {simpleGroups.length > 0 && (
+        <div style={{ display: 'grid', gap: 0, borderBottom: `1px solid ${C.border}` }}>
+          {simpleGroups.map(group => (
+            <SimpleQuotaGroupBlock key={group.id} group={group} />
+          ))}
         </div>
       )}
 
@@ -729,29 +892,6 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
         </div>
       )}
 
-      {showSonnet && (
-        <div style={{ borderBottom: `1px solid ${C.border}` }}>
-          <TokenStatsCard provider="Sonnet" period="1w" stats={claudeSonnetWeek} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.so.pct} resetMs={limits.so.resetMs} resetLabel={limits.so.resetLabel} apiConnected={apiConnected}
-            limitSourceLabel={sonnetSource.label} limitSourceTitle={sonnetSource.title} limitSourceTone={sonnetSource.tone}
-            limitDataState={limitDataState(limits.so)} hideCost />
-        </div>
-      )}
-
-      {showCodexPanel && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-          <TokenStatsCard provider="Codex" period="5h" stats={codexH5} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.codexH5.pct} resetMs={limits.codexH5.resetMs} resetLabel={limits.codexH5.resetLabel} apiConnected={codexH5HasLimit}
-            limitSourceLabel={codexH5Source.label} limitSourceTitle={codexH5Source.title} limitSourceTone={codexH5Source.tone}
-            limitDataState={limitDataState(limits.codexH5, codexH5Pending)} pendingLimit={codexH5Pending} pendingLimitLabel="Syncing" pendingLimitTitle={codexWarmupTitle}
-            cacheMetricMode="codex" hero borderRight />
-          <TokenStatsCard provider="Codex" period="1w" stats={codexWeek} currency={currency} usdToKrw={usdToKrw}
-            limitPct={limits.codexWeek.pct} resetMs={limits.codexWeek.resetMs} resetLabel={limits.codexWeek.resetLabel} apiConnected={codexWeekHasLimit}
-            limitSourceLabel={codexWeekSource.label} limitSourceTitle={codexWeekSource.title} limitSourceTone={codexWeekSource.tone}
-            limitDataState={limitDataState(limits.codexWeek, codexWeekPending)} pendingLimit={codexWeekPending} pendingLimitLabel="Syncing" pendingLimitTitle={codexWarmupTitle}
-            cacheMetricMode="codex" hero />
-        </div>
-      )}
     </div>
   );
 });
@@ -1316,10 +1456,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
           <RenderErrorBoundary key={sectionId} label="Plan Usage Panel">
             <PlanUsagePanel
               usage={usage}
-              limits={state.limits}
+              providerQuotas={state.providerQuotas}
               settings={settings}
-              apiConnected={state.apiConnected}
-              extraUsage={state.extraUsage}
               historyWarmupPending={state.historyWarmupPending}
               historyWarmupStartsAt={state.historyWarmupStartsAt}
             />
@@ -1358,7 +1496,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
       default:
         return null;
     }
-  }, [allTimeCost, currency, sessions, settings, state.apiConnected, state.codeOutputLoading, state.codeOutputStats, state.extraUsage, state.historyWarmupPending, state.historyWarmupStartsAt, state.limits, state.usageTrend, usage, usdToKrw]);
+  }, [allTimeCost, currency, sessions, settings, state.codeOutputLoading, state.codeOutputStats, state.historyWarmupPending, state.historyWarmupStartsAt, state.providerQuotas, state.usageTrend, usage, usdToKrw]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>

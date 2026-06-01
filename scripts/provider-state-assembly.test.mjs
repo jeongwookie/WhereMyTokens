@@ -63,6 +63,35 @@ test('provider adapter context does not expose the mutable Electron store', () =
   assert.match(providerTypes, /settings: AppSettings/);
 });
 
+test('provider quota refresh guards every provider with request generations', () => {
+  const beginBody = methodBody('beginProviderQuotaRequest');
+  const applyBody = methodBody('applyProviderQuotaSnapshot');
+
+  assert.match(stateManagerSource, /providerQuotaRequestSeqs = new Map<ProviderId, number>/);
+  assert.doesNotMatch(beginBody, /return 0;/);
+  assert.match(beginBody, /providerQuotaRequestSeqs\.set\(provider,/);
+  assert.match(applyBody, /providerQuotaRequestSeqs\.get\(snapshot\.provider\)/);
+});
+
+test('Plan Usage no longer carries usageLimits or token burn-rate ETA state', () => {
+  for (const filePath of [
+    'src/main/ipc.ts',
+    'src/main/stateManager.ts',
+    'src/main/usageWindows.ts',
+    'src/main/usageLedgerUsage.ts',
+    'src/main/providers/claude/quota.ts',
+    'src/main/rateLimitFetcher.ts',
+    'src/renderer/App.tsx',
+    'src/renderer/types.ts',
+    'src/renderer/views/MainView.tsx',
+    'src/renderer/components/TokenStatsCard.tsx',
+  ]) {
+    const source = fs.readFileSync(filePath, 'utf8');
+    assert.doesNotMatch(source, /usageLimits|AutoLimits|autoLimits|fetchAutoLimits|limitsFromTier/);
+    assert.doesNotMatch(source, /burnRate|h5OutputPerMin|h5EtaMs|weekEtaMs/);
+  }
+});
+
 test('StateManager ledger source discovery uses provider ledger sources', () => {
   const body = methodBody('ledgerSourceFiles');
 

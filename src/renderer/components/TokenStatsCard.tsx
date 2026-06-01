@@ -1,7 +1,7 @@
 import React from 'react';
-import { WindowStats, BurnRate } from '../types';
+import { WindowStats } from '../types';
 import { useTheme } from '../ThemeContext';
-import { fmtTokens, fmtCost, fmtDuration, Theme } from '../theme';
+import { fmtTokens, fmtCost, fmtDuration, quotaPctBarColor, quotaSourceBadgeToneStyle, Theme } from '../theme';
 import type { LimitDataState, LimitSourceTone } from '../limitDisplay';
 
 function cacheBadge(eff: number, C: Theme) {
@@ -13,16 +13,8 @@ function cacheBadge(eff: number, C: Theme) {
   return { label, bg: C.gradePoorBg, color: C.gradePoorColor };
 }
 
-function cacheBadgeTitle(mode: 'claude' | 'codex'): string {
-  if (mode === 'codex') return 'Codex: cached input / input';
-  return 'Claude: cache read / (cache read + cache creation)';
-}
-
-function pctBarColor(pct: number, C: Theme): string {
-  if (pct >= 90) return C.barRed;
-  if (pct >= 75) return C.barOrange;
-  if (pct >= 50) return C.barYellow;
-  return C.accent;
+function cacheBadgeTitle(title: string | undefined): string {
+  return title || 'Provider cache metric';
 }
 
 function formatUsagePct(pct: number): string {
@@ -32,15 +24,7 @@ function formatUsagePct(pct: number): string {
   return `${Math.round(pct)}%`;
 }
 
-function windowDurationMs(period: string): number | null {
-  const normalized = period.trim().toLowerCase();
-  if (normalized === '5h') return 5 * 60 * 60 * 1000;
-  if (normalized === '1w') return 7 * 24 * 60 * 60 * 1000;
-  return null;
-}
-
-function timeElapsedPct(period: string, resetMs: number | null | undefined): number | null {
-  const durationMs = windowDurationMs(period);
+function timeElapsedPct(durationMs: number | null | undefined, resetMs: number | null | undefined): number | null {
   if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
   return Math.max(0, Math.min(100, ((durationMs - resetMs) / durationMs) * 100));
 }
@@ -56,7 +40,6 @@ interface Props {
   resetLabel?: string;
   apiConnected?: boolean;
   hideCost?: boolean;
-  burnRate?: BurnRate;
   hero?: boolean;
   borderRight?: boolean;
   limitSourceLabel?: string;
@@ -66,7 +49,8 @@ interface Props {
   pendingLimit?: boolean;
   pendingLimitLabel?: string;
   pendingLimitTitle?: string;
-  cacheMetricMode?: 'claude' | 'codex';
+  cacheMetricTitle?: string;
+  durationMs?: number;
 }
 
 function TokenDotRow({ label, value, color }: { label: string; value: number; color: string }) {
@@ -191,7 +175,6 @@ function TokenStatsCard({
   resetLabel,
   apiConnected,
   hideCost,
-  burnRate,
   hero,
   borderRight,
   limitSourceLabel,
@@ -201,7 +184,8 @@ function TokenStatsCard({
   pendingLimit = false,
   pendingLimitLabel,
   pendingLimitTitle,
-  cacheMetricMode = 'claude',
+  cacheMetricTitle,
+  durationMs,
 }: Props) {
   const C = useTheme();
 
@@ -211,8 +195,8 @@ function TokenStatsCard({
   const costColor = stats.costUSD > 5 ? C.barRed : stats.costUSD > 2 ? C.barYellow : C.textDim;
   const showLimitBar = limitPct != null;
   const barPct = Math.max(0, Math.min(100, limitPct ?? 0));
-  const barColor = pendingLimit ? C.accent : pctBarColor(barPct, C);
-  const timeElapsed = pendingLimit ? null : timeElapsedPct(period, resetMs);
+  const barColor = pendingLimit ? C.accent : quotaPctBarColor(barPct, C);
+  const timeElapsed = pendingLimit ? null : timeElapsedPct(durationMs, resetMs);
   const resolvedLimitState: LimitDataState = pendingLimit
     ? 'syncing'
     : (limitDataState ?? (apiConnected === false && barPct === 0 && !limitSourceLabel ? 'waiting' : 'ready'));
@@ -233,19 +217,14 @@ function TokenStatsCard({
   }
 
   const cache = cacheBadge(stats.cacheEfficiency, C);
-  const cacheTitle = cacheBadgeTitle(cacheMetricMode);
+  const cacheTitle = cacheBadgeTitle(cacheMetricTitle);
   const showSavings = stats.cacheSavingsUSD > 0.005;
-  const showEta = burnRate && burnRate.h5EtaMs !== null && resetMs != null && burnRate.h5EtaMs < resetMs;
   const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'Syncing') : limitSourceLabel;
   const displayLimitSourceTitle = pendingLimitTitle ?? limitSourceTitle ?? displayLimitSourceLabel ?? '';
   const cachedDisconnected = apiConnected === false && limitSourceLabel === 'Cache';
   const limitValueColor = pendingLimit ? C.textMuted : barColor;
   const quotaBarColor = pendingLimit ? C.textMuted : barColor;
-  const sourceToneStyle = limitSourceTone === 'good'
-    ? { background: `${C.accent}18`, color: C.accent, border: `1px solid ${C.accent}3d` }
-    : limitSourceTone === 'warning'
-      ? { background: `${C.waiting}18`, color: C.waiting, border: `1px solid ${C.waiting}45` }
-      : { background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}` };
+  const sourceToneStyle = quotaSourceBadgeToneStyle(limitSourceTone, C);
   const sourceChip = displayLimitSourceLabel ? (
     <span
       title={displayLimitSourceTitle}
@@ -327,12 +306,6 @@ function TokenStatsCard({
           <TokenDotRow label="Cache" value={stats.cacheReadTokens + stats.cacheCreationTokens} color={C.cacheR} />
         </div>
 
-        {showEta && (
-          <div style={{ fontSize: 10, color: C.etaWarning, marginTop: 3 }}>
-            ~{fmtDuration(burnRate!.h5EtaMs!)} to limit
-          </div>
-        )}
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
           {!noData && resetStr ? (
             <span style={{ fontSize: 10, color: C.textMuted }}>{resetStr}</span>
@@ -394,11 +367,6 @@ function TokenStatsCard({
         );
       })()}
 
-      {showEta && (
-        <div style={{ fontSize: 10, color: C.etaWarning, marginTop: 3 }}>
-          ~{fmtDuration(burnRate!.h5EtaMs!)} to limit at current rate
-        </div>
-      )}
     </div>
   );
 }

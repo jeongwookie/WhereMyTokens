@@ -4,8 +4,7 @@
  */
 import { Notification } from 'electron';
 import { addNotification } from './notificationHistory';
-import { UsageLimits } from './stateManager';
-import type { ProviderId } from './providers/types';
+import type { ProviderId, ProviderQuotaSnapshot } from './providers/types';
 
 interface AlertState {
   lastAlertTime: number;    // ms timestamp
@@ -41,11 +40,6 @@ function smoothedPct(key: string, rawPct: number): number {
   return hist.reduce((a, b) => a + b, 0) / hist.length;
 }
 
-function shouldCheckProvider(key: string, enabledProviders: ReadonlySet<ProviderId>): boolean {
-  if (key.startsWith('codex-')) return enabledProviders.has('codex');
-  return enabledProviders.has('claude');
-}
-
 function formatReset(resetMs: number | null | undefined): string {
   if (!resetMs || resetMs <= 0) return '';
   const minutes = Math.max(1, Math.round(resetMs / 60000));
@@ -60,16 +54,52 @@ function formatSource(source: string | undefined): string {
   if (!source) return '';
   const labels: Record<string, string> = {
     api: 'API',
-    codexApi: 'API',
     statusLine: 'Bridge',
     cache: 'Cache',
     localLog: 'Log',
+    localRpc: 'RPC',
   };
   return ` · source: ${labels[source] ?? source}`;
 }
 
+function providerLabel(provider: ProviderId): string {
+  if (provider === 'claude') return 'Claude';
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
+  return provider;
+}
+
+function windowLabel(windowKey: string): string {
+  if (windowKey === 'h5') return '5h usage';
+  if (windowKey === 'week') return 'weekly usage';
+  if (windowKey === 'sonnetWeek') return 'Sonnet weekly';
+  return `${windowKey} usage`;
+}
+
+function quotaChecks(
+  providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>,
+  enabledProviders: ReadonlySet<ProviderId>,
+): Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> {
+  const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> = [];
+  for (const provider of enabledProviders) {
+    const windows = providerQuotas[provider]?.windows;
+    if (!windows) continue;
+    for (const [windowKey, window] of Object.entries(windows)) {
+      checks.push({
+        key: `${provider}-${windowKey}`,
+        pct: window.pct,
+        resetMs: window.resetMs,
+        label: `${providerLabel(provider)} ${windowLabel(windowKey)}`,
+        source: window.source,
+        provider,
+      });
+    }
+  }
+  return checks;
+}
+
 export function checkAlerts(
-  limits: UsageLimits,
+  providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>,
   thresholds: number[],
   enabled: boolean,
   enabledProviders: ReadonlySet<ProviderId>,
@@ -77,18 +107,10 @@ export function checkAlerts(
 ): void {
   if (!enabled) return;
 
-  const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string }> = [
-    { key: 'h5',   pct: limits.h5.pct,   resetMs: limits.h5.resetMs,   label: 'Claude 5h usage', source: limits.h5.source },
-    { key: 'week', pct: limits.week.pct, resetMs: limits.week.resetMs, label: 'Claude weekly usage', source: limits.week.source },
-    { key: 'so',   pct: limits.so.pct,   resetMs: limits.so.resetMs,   label: 'Claude Sonnet weekly', source: limits.so.source },
-    { key: 'codex-h5',   pct: limits.codexH5.pct,   resetMs: limits.codexH5.resetMs,   label: 'Codex 5h usage', source: limits.codexH5.source },
-    { key: 'codex-week', pct: limits.codexWeek.pct, resetMs: limits.codexWeek.resetMs, label: 'Codex weekly usage', source: limits.codexWeek.source },
-  ];
-
   const now = Date.now();
 
-  for (const { key, pct, resetMs, label, source } of checks.filter(check => shouldCheckProvider(check.key, enabledProviders))) {
-    if (options.deferCodexLocalLog && key.startsWith('codex-') && source === 'localLog') continue;
+  for (const { key, pct, resetMs, label, source, provider } of quotaChecks(providerQuotas, enabledProviders)) {
+    if (options.deferCodexLocalLog && provider === 'codex' && source === 'localLog') continue;
     if (pct <= 0) continue;
     const state = getState(key);
 

@@ -101,8 +101,9 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …)
 
 ### Rate Limits & Alerts
-- **Rate limit bars** — Claude 5h/1w limits from Anthropic API/statusLine fallback, with passive OAuth refresh recovery when the local access token expires; Codex 5h/1w limits from live Codex usage, cache, then local rate-limit log events
-- **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means your burn rate is ahead of the reset window
+- **Provider quota bars** — Claude, Codex, and future providers publish effective quota snapshots through `providerQuotas`; Claude uses Anthropic API/statusLine/cache precedence, and Codex uses live usage/cache/local-log precedence
+- **Per-target quota display** — each provider window or model target can be shown as Rich, Simple, or hidden in Settings; this affects Plan Usage and the floating widget only
+- **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means usage pace is ahead of the reset window
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
 - **Windows toast notifications** — at configurable usage thresholds (50% / 80% / 90%)
 - **Claude Extra Usage budget** — Claude monthly credits used / limit / utilization %
@@ -173,13 +174,13 @@ WhereMyTokens is a local-first Electron tray app. The renderer never reads local
 |-----------|--------|-------------|---------|
 | Claude sessions | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | Main-process parser/cache, then renderer state | No |
 | Claude bridge | Claude Code `statusLine` stdin | `%APPDATA%\WhereMyTokens\live-session.json` | No |
-| Claude usage limits | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | Yes, direct to Anthropic |
+| Claude quota snapshot | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | Yes, direct to Anthropic |
 | Codex sessions | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Main-process parser/cache, then renderer state | No |
-| Codex usage limits | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint | Yes, direct to OpenAI/ChatGPT |
+| Codex quota snapshot | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint | Yes, direct to OpenAI/ChatGPT |
 | Aggregate usage ledger | Local JSONL usage summaries | `%APPDATA%\WhereMyTokens\usage-ledger.json` | No |
 | Git output ledger | Local git scans | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | No |
 
-Rate-limit precedence is provider-specific: Claude uses the Anthropic API first, then the `statusLine` bridge as fallback; Codex uses live usage first, then local `rate_limits` events from JSONL logs; both providers keep the last known value only until it becomes stale.
+Rate-limit precedence is provider-specific and is assembled into `AppState.providerQuotas`: Claude uses the Anthropic API first, then the `statusLine` bridge and cache; Codex uses live usage first, then cache and local `rate_limits` events from JSONL logs. API/Bridge/Cache/Log chips are renderer labels derived from the snapshot `source`, not separate state fields. Settings store provider enablement separately from quota display preferences. The `Providers` setting controls scanning, quota fetching, sessions, statistics, and alerts. `Quota display` stores only `Rich`, `Simple`, or `None` per target and affects Plan Usage and the floating widget only.
 
 ---
 
@@ -225,7 +226,7 @@ WhereMyTokens can receive live context, model, cost, and fallback rate-limit dat
 
 ### Codex tracking
 
-WhereMyTokens can also read Codex's local JSONL logs from `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, and `~/.codex/session-cleanup-archive/**/*.jsonl`. In Settings, choose **Claude**, **Codex**, or **Both**.
+WhereMyTokens can also read Codex's local JSONL logs from `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, and `~/.codex/session-cleanup-archive/**/*.jsonl`. In Settings, enable the provider checkboxes you want to track.
 
 **What Codex tracking includes:**
 - Session status, project/branch grouping, source labels such as VS Code or Codex Exec
@@ -256,8 +257,7 @@ Claude reports input, output, cache creation, and cache reads. Codex reports raw
 |---------|-------|----------------|
 | Header (today) | Since midnight | In/Out/Cache + calls, sessions, cache savings |
 | Header (all) | All time | In/Out/Cache + calls, sessions, cache savings |
-| Plan Usage (Claude 5h / 1w) | Claude reset window | Claude token types + API/statusLine limits |
-| Plan Usage (Codex 5h / 1w) | Codex reset window | Codex token types + live/cache/log limit source |
+| Plan Usage (provider quotas) | Provider reset windows | Provider token types + `providerQuotas[provider]` windows, status, source, credits, and per-target Rich/Simple/None display modes |
 | Model Usage | All time, top 4 models by provider | All token types |
 
 > **Note:** `$` values are estimates — not your actual bill. Claude Max/Pro subscriptions are flat monthly fees. The cost display shows how much usage value you are getting.

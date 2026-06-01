@@ -1,18 +1,18 @@
 import {
   ApiUsagePct,
-  AutoLimits,
   ClaudeApiStatus,
   fetchApiUsagePct,
-  fetchAutoLimits,
 } from '../../rateLimitFetcher';
 import { getOAuthCredentialMarker } from '../../oauthRefresh';
 import type { ProviderContext, ProviderCreditBalance, ProviderQuotaSnapshot } from '../types';
+
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface ClaudeProviderQuotaSnapshot extends ProviderQuotaSnapshot {
   provider: 'claude';
   status: ClaudeApiStatus;
   usage: ApiUsagePct | null;
-  autoLimits: AutoLimits | null;
   credentialMarker: string | null;
 }
 
@@ -34,9 +34,49 @@ function extraUsageCredits(usage: ApiUsagePct | null): Record<string, ProviderCr
   };
 }
 
+export function buildClaudeQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'groups' | 'windowDisplay'> {
+  return {
+    groups: [
+      {
+        key: 'account',
+        label: 'Claude',
+        defaultMode: 'rich',
+        windowKeys: ['h5', 'week'],
+        sortOrder: 0,
+      },
+      {
+        key: 'sonnet',
+        label: 'Sonnet',
+        defaultMode: 'simple',
+        windowKeys: ['sonnetWeek'],
+        sortOrder: 10,
+      },
+    ],
+    windowDisplay: {
+      h5: {
+        label: '5h',
+        visualKind: 'pace',
+        cacheMetricTitle: 'Cache read / (cache read + cache creation)',
+        durationMs: FIVE_HOURS_MS,
+      },
+      week: {
+        label: '1w',
+        visualKind: 'pace',
+        cacheMetricTitle: 'Cache read / (cache read + cache creation)',
+        durationMs: SEVEN_DAYS_MS,
+      },
+      sonnetWeek: {
+        label: '1w',
+        visualKind: 'percentOnly',
+        durationMs: SEVEN_DAYS_MS,
+        hideCost: true,
+      },
+    },
+  };
+}
+
 export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ClaudeProviderQuotaSnapshot> {
   const result = await fetchApiUsagePct();
-  const autoLimits = await fetchAutoLimits();
   const source = quotaSource(result.status);
   const usage = result.usage;
 
@@ -44,8 +84,9 @@ export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ClaudeProv
     provider: 'claude',
     source,
     capturedAt: ctx.nowMs,
-    accountLabel: usage?.plan || autoLimits?.plan || undefined,
-    planName: usage?.plan || autoLimits?.plan || undefined,
+    accountLabel: usage?.plan || undefined,
+    planName: usage?.plan || undefined,
+    ...buildClaudeQuotaDisplayMetadata(),
     windows: usage
       ? {
           h5: {
@@ -71,7 +112,6 @@ export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ClaudeProv
     credits: extraUsageCredits(usage),
     status: result.status,
     usage,
-    autoLimits,
     credentialMarker: getOAuthCredentialMarker(),
   };
 }

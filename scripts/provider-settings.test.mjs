@@ -13,15 +13,15 @@ test('settings use implemented enabledProviders as the canonical provider select
   assert.equal('provider' in settings, false);
 });
 
-test('legacy provider mode migrates to enabledProviders', () => {
-  assert.deepEqual(normalizeSettings({ provider: 'claude' }).enabledProviders, ['claude']);
-  assert.deepEqual(normalizeSettings({ provider: 'codex' }).enabledProviders, ['codex']);
+test('removed provider mode is ignored instead of migrated', () => {
+  assert.deepEqual(normalizeSettings({ provider: 'claude' }).enabledProviders, ['claude', 'codex']);
+  assert.deepEqual(normalizeSettings({ provider: 'codex' }).enabledProviders, ['claude', 'codex']);
   assert.deepEqual(normalizeSettings({ provider: 'both' }).enabledProviders, ['claude', 'codex']);
   assert.equal('provider' in DEFAULT_SETTINGS, false);
   assert.equal('provider' in normalizeSettings({ provider: 'codex' }), false);
 });
 
-test('enabledProviders takes precedence over legacy provider mode', () => {
+test('enabledProviders is the only accepted provider selection setting', () => {
   const settings = normalizeSettings({ provider: 'codex', enabledProviders: ['claude'] });
 
   assert.deepEqual(settings.enabledProviders, ['claude']);
@@ -34,20 +34,80 @@ test('invalid enabledProviders returns the builtin default providers', () => {
   assert.deepEqual(normalizeSettings({ enabledProviders: ['antigravity'] }).enabledProviders, ['claude', 'codex']);
 });
 
+test('settings normalize quota target display modes by target id', () => {
+  const settings = normalizeSettings({
+    quotaTargetModes: {
+      'claude.group.account': 'rich',
+      'claude.group.percent-family': 'simple',
+      'codex.group.model.gpt-5.1': 'none',
+      'antigravity.group.model.gemini-3-pro': 'simple',
+      'claude.h5': 'rich',
+      'codex.week': 'none',
+      'bogus.week': 'rich',
+      'claude.week': 'full',
+      'claude.bad key': 'none',
+    },
+    quotaTargetOrder: [
+      'codex.group.model.gpt-5.1',
+      'claude.group.account',
+      'codex.group.model.gpt-5.1',
+      'claude.week',
+      'bogus.group.account',
+      'antigravity.group.model.gemini-3-pro',
+      'claude.group.bad key',
+    ],
+  });
+
+  assert.deepEqual(settings.quotaTargetModes, {
+    'claude.group.account': 'rich',
+    'claude.group.percent-family': 'simple',
+    'codex.group.model.gpt-5.1': 'none',
+    'antigravity.group.model.gemini-3-pro': 'simple',
+  });
+  assert.deepEqual(settings.quotaTargetOrder, [
+    'codex.group.model.gpt-5.1',
+    'claude.group.account',
+    'antigravity.group.model.gemini-3-pro',
+  ]);
+  assert.deepEqual(DEFAULT_SETTINGS.quotaTargetModes, {});
+  assert.deepEqual(DEFAULT_SETTINGS.quotaTargetOrder, []);
+});
+
 test('renderer settings model exposes enabledProviders as editable state', () => {
   const types = fs.readFileSync('src/renderer/types.ts', 'utf8');
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
 
   assert.match(types, /enabledProviders: Array<'claude' \| 'codex' \| 'antigravity'>/);
+  assert.match(types, /quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>/);
+  assert.match(types, /quotaTargetOrder: string\[\]/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
   assert.match(settingsView, /'enabledProviders'/);
+  assert.match(settingsView, /'quotaTargetModes'/);
+  assert.match(settingsView, /'quotaTargetOrder'/);
+  assert.doesNotMatch(settingsView, /'plan'/);
   assert.doesNotMatch(settingsView, /'provider'/);
 });
 
-test('renderer tracking settings use provider checkboxes backed by enabledProviders', () => {
+test('renderer provider settings use provider checkboxes backed by enabledProviders', () => {
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
 
   assert.match(settingsView, /const PROVIDER_OPTIONS/);
+  assert.match(settingsView, /<SectionHeader label="Providers" \/>/);
+  assert.doesNotMatch(settingsView, /<SectionHeader label="Tracking" \/>/);
+  assert.match(settingsView, /Quota display/);
+  assert.match(settingsView, /Rich/);
+  assert.match(settingsView, /Simple/);
+  assert.match(settingsView, /None/);
+  assert.match(settingsView, /setQuotaTargetMode/);
+  assert.match(settingsView, /target\.period/);
+  assert.match(settingsView, /target\.badges/);
+  assert.match(settingsView, /target\.rowCount/);
+  assert.match(settingsView, /moveQuotaTarget/);
+  assert.match(settingsView, /quotaTargetOrder/);
+  assert.match(settingsView, /Move up/);
+  assert.match(settingsView, /Move down/);
+  assert.match(settingsView, /Reset order/);
+  assert.match(settingsView, /quotaSourceBadgeToneStyle/);
   assert.match(settingsView, /function toggleProvider/);
   assert.match(settingsView, /enabledProviders/);
   assert.match(settingsView, /type="checkbox"/);
@@ -61,11 +121,30 @@ test('renderer tracking settings use provider checkboxes backed by enabledProvid
   assert.doesNotMatch(settingsView, /Claude \+ Codex/);
 });
 
-test('compact widget height uses enabled plan provider count', () => {
-  const mainIndex = fs.readFileSync('src/main/index.ts', 'utf8');
+test('quota display target ordering controls are placed after display mode controls', () => {
+  const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
+  const targetStart = settingsView.indexOf('{quotaTargetOptions.map((target, index)');
+  const targetEnd = settingsView.indexOf('Reset order', targetStart);
+  const targetBody = settingsView.slice(targetStart, targetEnd);
 
-  assert.match(mainIndex, /activePlanProviders/);
-  assert.match(mainIndex, /settings\.enabledProviders/);
+  assert.notEqual(targetStart, -1);
+  assert.notEqual(targetEnd, -1);
+  assert.ok(targetBody.indexOf("(['rich', 'simple', 'none'] as const).map") < targetBody.indexOf('title="Move up"'));
+  assert.ok(targetBody.indexOf('title="Move up"') < targetBody.indexOf('title="Move down"'));
+});
+
+test('compact widget height uses visible quota target count', () => {
+  const mainIndex = fs.readFileSync('src/main/index.ts', 'utf8');
+  const sizing = fs.readFileSync('src/main/compactWidgetSizing.ts', 'utf8');
+
+  assert.match(mainIndex, /compactWidgetSize\(settings, stateManager\?\.getState\(\)\)/);
+  assert.match(sizing, /compactWidgetTargetSummary/);
+  assert.match(sizing, /settings\.quotaTargetModes/);
+  assert.match(sizing, /state\?\.providerQuotas/);
+  assert.match(sizing, /quotaGroupId/);
+  assert.match(sizing, /group\.windowKeys/);
+  assert.doesNotMatch(sizing, /provider === 'claude'/);
+  assert.doesNotMatch(sizing, /provider === 'codex'/);
   assert.doesNotMatch(mainIndex, /settings\.provider/);
 });
 

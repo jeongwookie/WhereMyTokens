@@ -1,5 +1,13 @@
 import { CompactRecentEntry, FileUsageSummary, UsageProvider } from './jsonlTypes';
-import type { ProviderId } from './providers/types';
+import type { ProviderId, ProviderQuotaSnapshot } from './providers/types';
+import {
+  usageProviderVisible,
+  type UsageVisibilityFilter,
+} from './usageVisibilityFilter';
+import {
+  buildProviderWindowTargets,
+  type ProviderWindowResetHintMap,
+} from './usageWindowTargets';
 
 export interface WindowStats {
   inputTokens: number;
@@ -33,12 +41,6 @@ export interface WeeklyTotal {
   costUSD: number;
 }
 
-export interface BurnRate {
-  h5OutputPerMin: number;
-  h5EtaMs: number | null;
-  weekEtaMs: number | null;
-}
-
 export interface TimeOfDayBucket {
   period: 'morning' | 'afternoon' | 'evening' | 'night';
   label: string;
@@ -49,7 +51,6 @@ export interface TimeOfDayBucket {
 
 export interface ProviderWindowUsage {
   windows: Record<string, WindowStats>;
-  burnRate?: BurnRate;
 }
 
 export interface UsageData {
@@ -76,6 +77,8 @@ export interface UsageData {
   allTimeAvgCacheEfficiency: number;
   todBuckets: TimeOfDayBucket[];
 }
+
+export type UsageWindowResetHints = ProviderWindowResetHintMap;
 
 interface AggregateLike {
   requestCount: number;
@@ -166,27 +169,15 @@ function isProviderId(provider: UsageProvider): provider is ProviderId {
 
 export function computeUsage(
   summaries: FileUsageSummary[],
-  userLimits: { h5: number; week: number; sonnetWeek: number },
-  resets: {
-    claude?: { weekResetMs?: number | null; h5ResetMs?: number | null };
-    codex?: { weekResetMs?: number | null; h5ResetMs?: number | null };
-  } = {},
+  resets: UsageWindowResetHints = {},
+  visibilityFilter?: UsageVisibilityFilter,
+  providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>> = {},
 ): UsageData {
   const now = Date.now();
   const dayMs = 24 * 3600 * 1000;
   const weekMs = 7 * dayMs;
-  const h5Ms = 5 * 3600 * 1000;
 
-  const windowStart = (durationMs: number, resetMs: number | null | undefined, fallbackStart: number) => {
-    if (resetMs && resetMs > 0 && resetMs <= durationMs) return now - (durationMs - resetMs);
-    return fallbackStart;
-  };
-
-  const claudeH5Start = windowStart(h5Ms, resets.claude?.h5ResetMs, now - h5Ms);
   const currentWeekStart = getWeekStart(now).getTime();
-  const claudeWeekStart = windowStart(weekMs, resets.claude?.weekResetMs, currentWeekStart);
-  const codexH5Start = windowStart(h5Ms, resets.codex?.h5ResetMs, now - h5Ms);
-  const codexWeekStart = windowStart(weekMs, resets.codex?.weekResetMs, currentWeekStart);
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayMidnight = todayStart.getTime();
@@ -195,10 +186,9 @@ export function computeUsage(
   const day90Start = todayMidnight - 149 * dayMs;
   const timelineStart = currentWeekStart - 19 * weekMs;
 
-  const providerWindows = new Map<ProviderId, ProviderWindowUsage>([
-    ['claude', { windows: { h5: emptyWindow(), week: emptyWindow(), sonnetWeek: emptyWindow() } }],
-    ['codex', { windows: { h5: emptyWindow(), week: emptyWindow() } }],
-  ]);
+  const providerIds = new Set<ProviderId>(summaries.map(summary => summary.provider).filter(isProviderId));
+  const providerWindowTargets = buildProviderWindowTargets(providerIds, providerQuotas, resets, now, currentWeekStart);
+  const providerWindows = new Map<ProviderId, ProviderWindowUsage>();
   const modelMap = new Map<string, ModelUsage>();
   const heatMap7 = new Map<string, HourlyBucket>();
   const heatMap30 = new Map<string, HourlyBucket>();
@@ -214,6 +204,7 @@ export function computeUsage(
   let todayCacheReadTokens = 0;
   let todayCacheSavingsUSD = 0;
   let todayCacheDenominator = 0;
+  let allTimeCacheDenominator = 0;
 
   const todMap: Record<TimeOfDayBucket['period'], TimeOfDayBucket> = {
     night: { period: 'night', label: 'Night (0-6h)', tokens: 0, costUSD: 0, requestCount: 0 },
@@ -268,47 +259,62 @@ export function computeUsage(
     modelMap.set(key, modelUsage);
   };
 
-  const providerWindowStarts = (provider: ProviderId): { h5: number; week: number } => {
-    if (provider === 'claude') return { h5: claudeH5Start, week: claudeWeekStart };
-    if (provider === 'codex') return { h5: codexH5Start, week: codexWeekStart };
-    return { h5: now - h5Ms, week: currentWeekStart };
-  };
-
   const getProviderWindowUsage = (provider: ProviderId): ProviderWindowUsage => {
     const existing = providerWindows.get(provider);
     if (existing) return existing;
-    const next = { windows: { h5: emptyWindow(), week: emptyWindow() } };
+    const next = { windows: {} };
     providerWindows.set(provider, next);
     return next;
   };
 
+  for (const [provider, targets] of providerWindowTargets) {
+    const usage = getProviderWindowUsage(provider);
+    for (const target of targets) {
+      usage.windows[target.windowKey] ??= emptyWindow();
+    }
+  }
+
   const addProviderWindowEntry = (entry: CompactRecentEntry, timestampMs: number) => {
     if (!isProviderId(entry.provider)) return;
     const usage = getProviderWindowUsage(entry.provider);
-    const starts = providerWindowStarts(entry.provider);
-    if (timestampMs >= starts.h5) addEntry(usage.windows.h5, entry);
-    if (timestampMs < starts.week) return;
-    addEntry(usage.windows.week, entry);
-    if (entry.provider === 'claude' && entry.model.toLowerCase().includes('sonnet')) {
-      addEntry(usage.windows.sonnetWeek, entry);
+    for (const target of providerWindowTargets.get(entry.provider) ?? []) {
+      if (timestampMs < target.startMs) continue;
+      usage.windows[target.windowKey] ??= emptyWindow();
+      addEntry(usage.windows[target.windowKey], entry);
     }
   };
 
+  const summaryProviderVisible = (summary: FileUsageSummary): boolean =>
+    isProviderId(summary.provider) && usageProviderVisible(visibilityFilter, summary.provider);
+
+  const entryVisible = (entry: CompactRecentEntry): boolean =>
+    isProviderId(entry.provider) && usageProviderVisible(visibilityFilter, entry.provider);
+
   for (const summary of summaries) {
-    addAggregate(allTime, summary.historicalRollup.aggregate);
+    const providerVisible = summaryProviderVisible(summary);
+    if (providerVisible) {
+      addAggregate(allTime, summary.historicalRollup.aggregate);
+      if (Object.values(summary.historicalRollup.modelTotals).length > 0) {
+        allTimeCacheDenominator += cacheEfficiencyDenominator(summary.provider, summary.historicalRollup.aggregate);
+      }
+    }
 
     for (const modelTotal of Object.values(summary.historicalRollup.modelTotals)) {
+      if (!isProviderId(modelTotal.provider) || !usageProviderVisible(visibilityFilter, modelTotal.provider)) continue;
       addModelTotal(modelTotal.model, modelTotal.provider, modelTotal.tokens, modelTotal.costUSD);
     }
 
-    for (const bucket of Object.values(summary.historicalRollup.hourlyBuckets)) {
-      addToHeatmap(heatMap30, day30Start, bucket.timestampMs, bucket.totalTokens);
-      addToHeatmap(heatMap90, day90Start, bucket.timestampMs, bucket.totalTokens);
-      addToTimeline(bucket.timestampMs, bucket.totalTokens, bucket.costUSD);
-      addToTod(bucket.timestampMs, bucket.totalTokens, bucket.costUSD, bucket.requestCount);
+    if (providerVisible) {
+      for (const bucket of Object.values(summary.historicalRollup.hourlyBuckets)) {
+        addToHeatmap(heatMap30, day30Start, bucket.timestampMs, bucket.totalTokens);
+        addToHeatmap(heatMap90, day90Start, bucket.timestampMs, bucket.totalTokens);
+        addToTimeline(bucket.timestampMs, bucket.totalTokens, bucket.costUSD);
+        addToTod(bucket.timestampMs, bucket.totalTokens, bucket.costUSD, bucket.requestCount);
+      }
     }
 
     for (const entry of summary.recentEntries) {
+      if (!entryVisible(entry)) continue;
       const ts = entry.timestampMs;
       const tokens = entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens;
 
@@ -322,6 +328,7 @@ export function computeUsage(
         costUSD: entry.costUSD,
         cacheSavingsUSD: entry.cacheSavingsUSD,
       });
+      allTimeCacheDenominator += cacheEfficiencyDenominator(entry.provider, entry);
 
       addModelTotal(entry.model, entry.provider, tokens, entry.costUSD);
       addToHeatmap(heatMap7, day7Start, ts, tokens);
@@ -353,31 +360,6 @@ export function computeUsage(
   const models = Array.from(modelMap.values())
     .filter(model => model.tokens > 0)
     .sort((a, b) => b.tokens - a.tokens);
-
-  const recentClaudeEntries = summaries.flatMap(summary => summary.recentEntries)
-    .filter(entry => entry.provider === 'claude' && entry.timestampMs >= now - 5 * 60 * 1000);
-  const recent5minOutput = recentClaudeEntries.reduce((sum, entry) => sum + entry.outputTokens, 0);
-  const h5OutputPerMin = recent5minOutput / 5;
-  const claudeWindows = getProviderWindowUsage('claude').windows;
-  const claudeH5 = claudeWindows.h5;
-  const claudeWeek = claudeWindows.week;
-  const h5Remaining = userLimits.h5 - claudeH5.totalTokens;
-  const weekRemaining = userLimits.week - claudeWeek.totalTokens;
-  const h5EtaMs = h5OutputPerMin > 0 && h5Remaining > 0 ? (h5Remaining / h5OutputPerMin) * 60_000 : null;
-  const weekEtaMs = h5OutputPerMin > 0 && weekRemaining > 0 ? (weekRemaining / h5OutputPerMin) * 60_000 : null;
-  getProviderWindowUsage('claude').burnRate = { h5OutputPerMin, h5EtaMs, weekEtaMs };
-
-  const allTimeCacheDenominator = summaries.reduce((sum, summary) => {
-    const historical = Object.values(summary.historicalRollup.modelTotals).length > 0 ? summary.historicalRollup.aggregate : null;
-    let total = sum;
-    if (historical) {
-      total += cacheEfficiencyDenominator(summary.provider, historical);
-    }
-    for (const entry of summary.recentEntries) {
-      total += cacheEfficiencyDenominator(entry.provider, entry);
-    }
-    return total;
-  }, 0);
 
   const allTimeAvgCacheEfficiency = allTimeCacheDenominator > 0
     ? (allTime.cacheReadTokens / allTimeCacheDenominator) * 100

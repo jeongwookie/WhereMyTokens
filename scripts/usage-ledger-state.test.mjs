@@ -121,10 +121,10 @@ test('manual refresh stays budgeted and does not force old full-summary scans', 
 
 test('all-time session count ignores ledger checkpoints without usage', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
-  const countMatch = src.match(/private countAllTimeUsageSessions\(settings: AppSettings\): number \{([\s\S]*?)\n  \}/);
-  assert.ok(countMatch);
-  const countBody = countMatch[1];
-  assert.match(countBody, /checkpoint\.hasUsage !== false/);
+  const checkpointMatch = src.match(/private checkpointHasVisibleUsage\([\s\S]*?\): boolean \{([\s\S]*?)\n  \}/);
+  assert.ok(checkpointMatch);
+  assert.match(checkpointMatch[1], /checkpoint\.hasUsage === false/);
+  assert.doesNotMatch(checkpointMatch[1], /rawModel/);
 });
 
 test('usage ledger is disabled for a provider with a checkpoint that needs rebuild', () => {
@@ -159,19 +159,70 @@ test('trend falls back when excluded projects disable the ledger', () => {
   assert.match(trendMatch[1], /emptyUsageTrendData/);
 });
 
-test('usage ledger queries receive the enabled provider set', () => {
+test('usage ledger and summary queries receive the enabled-provider usage visibility filter', () => {
   const src = fs.readFileSync('src/main/stateManager.ts', 'utf8');
-  const derivedMatch = src.match(/private computeDerivedUsage\([\s\S]*?\): Pick<AppState, 'usage' \| 'limits' \| 'bridgeActive' \| 'extraUsage'> \{([\s\S]*?)\n  \}/);
+  const derivedMatch = src.match(/private computeDerivedUsage\([\s\S]*?\): Pick<AppState, 'usage' \| 'providerQuotas' \| 'bridgeActive'> \{([\s\S]*?)\n  \}/);
   assert.ok(derivedMatch);
-  assert.match(derivedMatch[1], /computeUsageFromLedger\([\s\S]*this\.enabledUsageLedgerProviders\(settings\)/);
+  assert.match(derivedMatch[1], /for \(const provider of this\.enabledProviderSet\(settings\)\)/);
+  assert.match(derivedMatch[1], /resetWindows\[provider\]/);
+  assert.match(derivedMatch[1], /buildUsageVisibilityFilter\(settings\)/);
+  assert.doesNotMatch(derivedMatch[1], /buildUsageVisibilityFilter\(settings, providerQuotas\)/);
+  assert.doesNotMatch(derivedMatch[1], /providerQuotas\.claude|providerQuotas\.codex/);
+  assert.match(derivedMatch[1], /computeUsageFromLedger\([\s\S]*usageVisibilityFilter/);
+  assert.match(derivedMatch[1], /computeUsage\([\s\S]*usageVisibilityFilter/);
 
   const trendMatch = src.match(/private buildUsageTrend\([\s\S]*?\): UsageTrendData \{([\s\S]*?)\n  \}/);
   assert.ok(trendMatch);
-  assert.match(trendMatch[1], /buildTrendDataFromLedger\([\s\S]*this\.enabledUsageLedgerProviders\(settings\)/);
+  assert.match(trendMatch[1], /buildUsageVisibilityFilter\(settings\)/);
+  assert.match(trendMatch[1], /buildTrendDataFromLedger\([\s\S]*usageVisibilityFilter/);
 
   const countMatch = src.match(/private countAllTimeUsageSessions\(settings: AppSettings\): number \{([\s\S]*?)\n  \}/);
   assert.ok(countMatch);
-  assert.match(countMatch[1], /this\.enabledProviderSet\(settings\)\.has\(checkpoint\.provider\)/);
+  assert.match(countMatch[1], /buildUsageVisibilityFilter\(settings\)/);
+  assert.match(countMatch[1], /checkpointHasVisibleUsage\(checkpoint, usageVisibilityFilter\)/);
+  assert.match(countMatch[1], /summaryHasVisibleUsage\(summary, usageVisibilityFilter\)/);
+});
+
+test('all-time session count follows enabled providers for ledger checkpoints', () => {
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyModel: {
+      [dayModelKey('2026-05-25', 'claude', 'claude-3-5-sonnet')]: {
+        ...emptyUsageAggregate(),
+        requestCount: 1,
+        totalTokens: 30,
+      },
+    },
+    sourceCheckpoints: {
+      sonnet: checkpoint('claude', {
+        sourceHash: 'sonnet-source',
+        rawModel: 'claude-3-5-sonnet',
+      }),
+      opus: checkpoint('claude', {
+        sourceHash: 'opus-source',
+        rawModel: 'claude-3-opus',
+      }),
+      codex: checkpoint('codex', {
+        sourceHash: 'codex-source',
+        rawModel: 'gpt-5-codex',
+      }),
+      unknownModel: checkpoint('claude', {
+        sourceHash: 'unknown-model-source',
+      }),
+    },
+  };
+  const manager = new StateManager(makeStore({
+    enabledProviders: ['claude'],
+    quotaTargetModes: {
+      'claude.group.account': 'none',
+      'claude.group.sonnet': 'none',
+      'codex.group.account': 'rich',
+    },
+  }), () => {});
+  manager.usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+
+  assert.equal(manager.canUseUsageLedger(snapshot, manager.getState().settings), true);
+  assert.equal(manager.countAllTimeUsageSessions(manager.getState().settings), 3);
 });
 
 test('provider changes refresh recent summaries without clearing the JSONL cache or forcing full history', () => {

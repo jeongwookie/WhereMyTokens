@@ -140,7 +140,10 @@ export interface ProviderQuotaSnapshot {
   planName?: string;
   windows?: Record<string, ProviderQuotaWindow>;
   models?: ProviderModelQuota[];
+  groups?: ProviderQuotaGroupSpec[];
+  windowDisplay?: Record<string, ProviderQuotaWindowDisplay>;
   credits?: Record<string, ProviderCreditBalance>;
+  status?: ProviderQuotaStatus;
 }
 
 export interface ProviderQuotaWindow {
@@ -150,11 +153,56 @@ export interface ProviderQuotaWindow {
   source?: ProviderQuotaSnapshot['source'];
 }
 
+export interface ProviderQuotaStatus {
+  connected: boolean;
+  code: string;
+  label?: string;
+  detail?: string;
+  severity?: 'ok' | 'warning' | 'danger';
+}
+
 export interface ProviderModelQuota {
   model: string;
   label: string;
   remainingPct: number;
   resetMs?: number | null;
+  groupKey?: string;
+  defaultMode?: QuotaDisplayMode;
+  visualKind?: ProviderQuotaRowVisualKind;
+  cacheMetricTitle?: string;
+  durationMs?: number;
+  hideCost?: boolean;
+  accentColor?: string;
+  badges?: ProviderQuotaDisplayBadge[];
+}
+
+export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
+export type ProviderQuotaRowVisualKind = 'pace' | 'percentOnly';
+
+export interface ProviderQuotaDisplayBadge {
+  key: string;
+  label: string;
+  title?: string;
+  tone?: 'good' | 'neutral' | 'warning';
+}
+
+export interface ProviderQuotaWindowDisplay {
+  label: string;
+  visualKind?: ProviderQuotaRowVisualKind;
+  cacheMetricTitle?: string;
+  durationMs?: number;
+  hideCost?: boolean;
+  badges?: ProviderQuotaDisplayBadge[];
+}
+
+export interface ProviderQuotaGroupSpec {
+  key: string;
+  label: string;
+  windowKeys: string[];
+  defaultMode: QuotaDisplayMode;
+  accentColor?: string;
+  badges?: ProviderQuotaDisplayBadge[];
+  sortOrder?: number;
 }
 
 export interface ProviderCreditBalance {

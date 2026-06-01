@@ -64,6 +64,9 @@ test('renderer splash and session stabilization use initial readiness and daily 
   assert.match(source, /normalizeState\(next\)/);
   assert.match(source, /stateFreshness: 'empty'/);
   assert.match(source, /normalizeStateFreshness/);
+  assert.match(source, /normalizeProviderWindowUsage/);
+  assert.match(source, /Object\.entries\(rawWindows\)/);
+  assert.doesNotMatch(source, /nextByProvider\.antigravity\.windows\?\.h5/);
 });
 
 test('renderer mutes cached usage text and shows soft loading states', () => {
@@ -78,28 +81,28 @@ test('renderer mutes cached usage text and shows soft loading states', () => {
 
 test('warmup mode marks Codex local-log limits as provisional and defers alerts', () => {
   const mainSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  const modelSource = fs.readFileSync(path.resolve('src', 'renderer', 'quotaDisplayModels.ts'), 'utf8');
   const cardSource = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
   const widgetSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'CompactWidgetView.tsx'), 'utf8');
   const alertSource = fs.readFileSync(path.resolve('src', 'main', 'usageAlertManager.ts'), 'utf8');
   const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
   assert.match(mainSource, /historyWarmupPending=\{state\.historyWarmupPending\}/);
-  assert.match(mainSource, /pendingLimit=\{codexWeekPending\}/);
-  assert.match(mainSource, /limits\.codexWeek\.source === 'localLog' \|\| !codexWeekHasLimit/);
+  assert.match(mainSource, /pendingLimit=\{card\.pending\}/);
+  assert.match(modelSource, /quotaWindow\.source === 'localLog'/);
   assert.match(cardSource, /pendingLimitLabel/);
   assert.match(cardSource, /displayLimitSourceLabel = pendingLimit/);
-  assert.match(widgetSource, /const codexWeekPending = state\.historyWarmupPending/);
+  assert.match(modelSource, /isPendingQuotaWindow/);
   assert.match(widgetSource, /unknownLabel: 'waiting'/);
   assert.match(widgetSource, /No 5h reset data yet/);
-  assert.match(widgetSource, /5h limits appear after first usage event/);
+  assert.match(widgetSource, /It will appear after local usage or provider data is detected/);
   assert.match(widgetSource, /target instanceof Element && !!target\.closest\('\[data-no-drag="true"\]'\)/);
-  assert.match(widgetSource, /scanning: codexH5Pending \|\| codexWeekPending/);
+  assert.match(widgetSource, /const scanning = rows\.some\(row => row\.pending\)/);
   assert.match(widgetSource, /agent\.scanning \? \(/);
   assert.match(widgetSource, /MiniLimitStatus/);
   assert.match(widgetSource, /Provider limit-data health/);
-  assert.match(widgetSource, /\`\$\{provider\} OK\`/);
-  assert.match(widgetSource, /claudeGood/);
-  assert.match(widgetSource, /codexGood/);
+  assert.match(widgetSource, /\`\$\{providerLabel\} OK\`/);
+  assert.match(widgetSource, /tone: 'good'/);
   assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
   assert.match(stateSource, /API_MIN_INTERVAL_MS = 300_000/);
@@ -108,14 +111,53 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(stateSource, /forceProviderUsage: this\.consumeManualProviderUsageForce\(\)/);
   assert.match(stateSource, /refreshProviderQuotas\(settingsForApi, force \|\| forceProviderUsage\)/);
   assert.match(stateSource, /provider\.fetchQuota/);
-  assert.match(mainSource, /const showCodexPanel = showCodexUsage/);
   assert.match(mainSource, /codexStatusLabel/);
   assert.match(mainSource, /Codex limited/);
-  assert.match(widgetSource, /state\.codexStatusLabel/);
-  assert.match(widgetSource, /Codex limited/);
+  assert.match(mainSource, /historyWarmupPending/);
   assert.match(alertSource, /deferCodexLocalLog/);
-  assert.match(alertSource, /key\.startsWith\('codex-'\) && source === 'localLog'/);
+  assert.match(alertSource, /provider === 'codex' && source === 'localLog'/);
   assert.match(stateSource, /deferCodexLocalLog: partialHistoryScan/);
+});
+
+test('Plan Usage and floating widget render providerQuotas through generic provider selectors', () => {
+  const mainSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  const widgetSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'CompactWidgetView.tsx'), 'utf8');
+  const modelSource = fs.readFileSync(path.resolve('src', 'renderer', 'quotaDisplayModels.ts'), 'utf8');
+  const tokenStatsSource = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
+  const panelStart = mainSource.indexOf('const PlanUsagePanel');
+  const panelEnd = mainSource.indexOf('const HistoryWarmupBanner', panelStart);
+  const panelBody = mainSource.slice(panelStart, panelEnd);
+  const agentsStart = widgetSource.indexOf('function buildWidgetAgents');
+  const agentsEnd = widgetSource.indexOf('function buildHealthItems', agentsStart);
+  const agentsBody = widgetSource.slice(agentsStart, agentsEnd);
+  const healthStart = widgetSource.indexOf('function providerHealth');
+  const healthEnd = widgetSource.indexOf('function buildWidgetAgents', healthStart);
+  const healthBody = widgetSource.slice(healthStart, healthEnd);
+
+  assert.match(modelSource, /export interface QuotaDisplayGroupViewModel/);
+  assert.match(modelSource, /export interface QuotaDisplayRowViewModel/);
+  assert.match(modelSource, /ProviderQuotaRowVisualKind/);
+  assert.match(modelSource, /buildQuotaDisplayModels/);
+  assert.match(modelSource, /buildQuotaDisplayGroups/);
+  assert.match(modelSource, /quotaGroupId/);
+  assert.match(modelSource, /group\.windowKeys/);
+  assert.match(modelSource, /rowHasDisplaySignal/);
+  assert.match(panelBody, /buildQuotaDisplayModels/);
+  assert.match(panelBody, /simpleGroups/);
+  assert.match(panelBody, /richGroups/);
+  assert.match(panelBody, /SimpleQuotaGroupBlock/);
+  assert.match(panelBody, /durationMs=\{card\.durationMs\}/);
+  assert.match(agentsBody, /buildQuotaDisplayModels/);
+  assert.match(agentsBody, /widgetGroups/);
+  assert.match(agentsBody, /row\.visualKind/);
+  assert.match(agentsBody, /durationMs: row\.durationMs/);
+  assert.doesNotMatch(agentsBody, /rowFor\('week'/);
+  assert.doesNotMatch(agentsBody, /enabledProviders\.has\('claude'\)/);
+  assert.doesNotMatch(agentsBody, /enabledProviders\.has\('codex'\)/);
+  assert.doesNotMatch(tokenStatsSource, /normalized === '5h'|normalized === '1w'/);
+  assert.doesNotMatch(widgetSource, /function windowDurationMs/);
+  assert.match(widgetSource, /function quotaStatusTone/);
+  assert.ok(healthBody.indexOf("sources.includes('Log')") < healthBody.indexOf('if (statusLabel && !connected)'));
 });
 
 test('settings and widget integration guard malformed persisted values', () => {
@@ -135,6 +177,7 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(ipcSource, /compactWidgetWaitingAnimationEnabled: false/);
   assert.match(ipcSource, /return \[\.\.\.new Set\(thresholds\)\]\.sort/);
   assert.match(ipcSource, /hasOwnProperty\.call\(record, 'compactWidgetBounds'\)/);
+  assert.match(ipcSource, /normalizeQuotaTargetOrder/);
   assert.match(ipcSource, /normalizeSettings\(store\.store\)/);
   assert.match(mainSource, /installNavigationGuards\(win\)/);
   assert.match(mainSource, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
@@ -165,25 +208,31 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(appSource, /handleToggleCompactWidget/);
   assert.match(appSource, /compactWidgetEnabled: !state\.settings\.compactWidgetEnabled/);
   assert.match(appSource, /compactWidgetWaitingAnimationEnabled: next\.settings\?\.compactWidgetWaitingAnimationEnabled === true/);
+  assert.match(appSource, /normalizeQuotaTargetOrder/);
   assert.match(mainViewSource, /PictureInPicture2/);
   assert.match(mainViewSource, /aria-pressed=\{compactWidgetEnabled\}/);
   assert.match(mainViewSource, /Show floating Quota Pace widget/);
+  assert.match(mainViewSource, /quotaSourceBadgeToneStyle/);
   const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   assert.match(stateManagerSource, /return normalizeSettings\(this\.store\.store\)/);
   assert.match(stateManagerSource, /enabled\.has\(session\.provider\)/);
   assert.match(stateManagerSource, /usage: derived\.usage/);
-  assert.match(stateManagerSource, /limits: derived\.limits/);
+  assert.match(stateManagerSource, /providerQuotas: derived\.providerQuotas/);
   assert.match(widgetSource, /dragSeqRef/);
   assert.match(widgetSource, /dragSeq !== dragSeqRef\.current/);
   assert.match(widgetSource, /const toolbarButtonStyle: React\.CSSProperties/);
   assert.match(widgetSource, /animateWaiting=\{state\.settings\.compactWidgetWaitingAnimationEnabled === true\}/);
   assert.match(widgetSource, /visualState === 'waiting' && !animateWaiting/);
+  assert.match(widgetSource, /quotaPctBarColor/);
+  assert.match(widgetSource, /quotaSourceBadgeToneStyle/);
   assert.match(widgetSource, /return `\$\{hours\}h \$\{minutes\}m`/);
-  assert.match(widgetSource, /gridTemplateColumns: '24px minmax\(0, 1fr\) 38px 64px'/);
+  assert.match(widgetSource, /percentOnly \? '24px minmax\(0, 1fr\) 64px' : '24px minmax\(0, 1fr\) 38px 64px'/);
   assert.match(sectionsSource, /Array\.isArray\(value\) \? value : \[\]/);
   assert.match(settingsSource, /buildSettingsPatch\(s, baseSettings, latestSettings\)/);
   assert.match(settingsSource, /compactWidgetWaitingAnimationEnabled/);
   assert.match(settingsSource, /Waiting animation/);
+  assert.match(settingsSource, /moveQuotaTarget/);
+  assert.match(settingsSource, /quotaTargetOrder/);
   assert.match(settingsSource, /if \(sameSettingValue\(currentValue, settingValue\(latest, key\)\)\) continue/);
   assert.match(settingsSource, /Use Ctrl\+Shift or Ctrl\+Alt/);
 });
@@ -275,7 +324,7 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   assert.match(mainSource, /historyWarmupStartsAt/);
   assert.match(rendererSource, /apiStatusLabel/);
   assert.match(rendererSource, /formatWarmupStatus/);
-  assert.match(rendererSource, /resetLabel=\{limits\.so\.resetLabel\}/);
+  assert.match(rendererSource, /resetLabel=\{card\.visualKind === 'percentOnly' \? undefined : card\.quota\.resetLabel\}/);
 });
 
 test('README release blocks stay compact and screenshots are full width', () => {
