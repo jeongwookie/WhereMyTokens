@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe"><strong>v1.17.0 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.0/WhereMyTokens-Setup.exe"><strong>v1.18.0 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <em>Antigravity 지원은 다음 패키지 릴리스용 소스에 포함되어 있으며, v1.17.0 다운로드에는 아직 포함되지 않습니다.</em>
+  <em>v1.18.0에는 loopback RPC 기반 local-only Antigravity provider 지원이 포함됩니다.</em>
 </p>
 
 <p align="center">
@@ -64,11 +64,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | 6/2 | local-only Antigravity provider 지원을 추가하고, 프로세스 발견, local RPC quota/session 스캔, 지속 usage cache, provider ledger import를 포함 |
 | **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 6/2 | Plan Usage를 provider quota snapshot 기반으로 재구성하고, target별 Rich/Simple/None 표시 그룹과 안전한 quota 상태 복원/마이그레이션을 추가 |
 | **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 잘린 full-history ledger import나 실패한 source가 있어도 budgeted warmup을 계속 예약하고 stale provider completion marker를 피하도록 수정 |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 지속 사용량 ledger, 즉시 시작 snapshot, cost/token 히스토리와 git 순 라인 산출을 함께 보는 Trend 카드를 추가 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | Refresh 작업을 scheduler로 직렬화하고 기본 budget을 적용해 startup, watcher, history, manual refresh 중에도 tray UI와 hotkey popup 반응성을 유지 |
-| **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex 아카이브 로그와 Claude agent 로그를 all-time 사용량에 포함하고, all-time 세션 수를 전체 사용 기록 기준으로 표시 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -76,9 +76,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-v1.17.0-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.0/WhereMyTokens-v1.18.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -88,7 +88,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.17.0-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.18.0-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 

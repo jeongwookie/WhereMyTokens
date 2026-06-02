@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.18.0 | 2026-06-02 | Add local-only Antigravity provider support with process discovery, local RPC quota/session scanning, persisted usage cache, cache-savings estimates, provider ledger import, privacy documentation, and quota alert coverage |
 | v1.17.0 | 2026-06-02 | Refactor Plan Usage around provider quota snapshots, add generic quota target display groups, restore legacy provider-setting migration, and harden provider quota state sanitization/fallback UI |
 | v1.16.1 | 2026-05-27 | Fix budgeted usage ledger completion markers so truncated or failed full-history imports keep background warmup running and stale provider-specific markers do not freeze historical totals |
 | v1.16.0 | 2026-05-26 | Add the persistent usage ledger, instant startup snapshots, Trend history card, hardened ledger privacy/migration behavior, and rebuild warnings for repairable ledger states |
