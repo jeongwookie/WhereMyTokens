@@ -156,6 +156,13 @@ function normalizeQuotaTargetOrder(value: unknown): string[] | null {
   return normalized;
 }
 
+function legacyProviderToEnabledProviders(value: unknown): ProviderId[] | null {
+  if (value === 'claude') return ['claude'];
+  if (value === 'codex') return ['codex'];
+  if (value === 'both') return ['claude', 'codex'];
+  return null;
+}
+
 function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   const record = asRecord(partial);
   if (!record) return {};
@@ -163,6 +170,9 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
 
   if (Array.isArray(record.enabledProviders)) {
     next.enabledProviders = normalizeEnabledProviders(record.enabledProviders);
+  } else {
+    const migratedProviders = legacyProviderToEnabledProviders(record.provider);
+    if (migratedProviders) next.enabledProviders = migratedProviders;
   }
   const alertThresholds = normalizeAlertThresholds(record.alertThresholds);
   if (alertThresholds) next.alertThresholds = alertThresholds;

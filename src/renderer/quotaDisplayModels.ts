@@ -120,7 +120,7 @@ export function hasQuotaInput(window: ProviderQuotaWindow): boolean {
 }
 
 function rowHasDisplaySignal(row: QuotaDisplayRowViewModel): boolean {
-  return row.pending || hasQuotaInput(row.quota) || row.stats.totalTokens > 0;
+  return row.pending || row.apiConnected === false || hasQuotaInput(row.quota) || row.stats.totalTokens > 0;
 }
 
 export function extraUsageFromCredit(credit: ProviderCreditBalance | undefined): ExtraUsage | null {

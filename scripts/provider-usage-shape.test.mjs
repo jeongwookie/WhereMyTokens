@@ -68,7 +68,7 @@ function quotaMetadata(now = Date.now()) {
       windowDisplay: {
         h5: { label: '5h', durationMs: 5 * 60 * 60 * 1000 },
         week: { label: '1w', durationMs: 7 * 24 * 60 * 60 * 1000 },
-        sonnetWeek: { label: '1w', durationMs: 7 * 24 * 60 * 60 * 1000 },
+        sonnetWeek: { label: '1w', durationMs: 7 * 24 * 60 * 60 * 1000, modelIncludes: ['sonnet'] },
       },
     },
     codex: {
@@ -172,6 +172,25 @@ test('summary usage exposes provider-keyed windows without legacy top-level prov
   }
 });
 
+test('summary usage applies generic model filters for model-scoped quota windows', () => {
+  const now = Date.parse('2026-05-25T12:00:00.000Z');
+  const originalNow = Date.now;
+  Date.now = () => now;
+  try {
+    const usage = computeUsage([
+      summary('claude', [
+        usageEntry('claude', 'claude-3-5-sonnet', 100, now - 60_000),
+        usageEntry('claude', 'claude-3-opus', 200, now - 60_000),
+      ]),
+    ], {}, undefined, quotaMetadata(now));
+
+    assert.equal(usage.byProvider.claude.windows.week.totalTokens, 300);
+    assert.equal(usage.byProvider.claude.windows.sonnetWeek.totalTokens, 100);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('summary usage computes custom windows as provider-wide stats from provider quota metadata', () => {
   const now = Date.parse('2026-05-25T12:00:00.000Z');
   const originalNow = Date.now;
@@ -261,6 +280,18 @@ test('ledger usage exposes provider-keyed windows without legacy top-level provi
   assert.equal('weekCodex' in usage, false);
   assert.equal('sonnetWeekTokens' in usage, false);
   assert.equal('burnRate' in usage, false);
+});
+
+test('ledger usage applies generic model filters for model-scoped quota windows', () => {
+  const now = Date.parse('2026-05-25T12:00:00.000Z');
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'claude', 'claude-3-5-sonnet')] = agg(100);
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'claude', 'claude-3-opus')] = agg(200);
+
+  const usage = computeUsageFromLedger(snapshot, {}, now, undefined, quotaMetadata(now));
+
+  assert.equal(usage.byProvider.claude.windows.week.totalTokens, 300);
+  assert.equal(usage.byProvider.claude.windows.sonnetWeek.totalTokens, 100);
 });
 
 test('ledger usage computes custom windows as provider-wide stats from provider quota metadata', () => {

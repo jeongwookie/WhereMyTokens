@@ -197,6 +197,19 @@ function providerHealth(
     return { key: provider, label: `${providerLabel} syncing`, tone: 'good', title: `${providerLabel} limit data is syncing in the background.` };
   }
 
+  if (statusLabel && !connected) {
+    return {
+      key: provider,
+      label: `${providerLabel} ${statusLabel}`,
+      tone: statusTone === 'neutral' ? 'danger' : statusTone,
+      title: `${providerLabel} provider quota status: ${statusLabel}.`,
+    };
+  }
+
+  if (!connected) {
+    return { key: provider, label: `${providerLabel} offline`, tone: 'danger', title: `${providerLabel} provider quota is unavailable.` };
+  }
+
   const sources = [healthLabelForSource(primary), healthLabelForSource(secondary)].filter((label): label is string => !!label);
   if (sources.includes('Log')) {
     return { key: provider, label: `${providerLabel} Log`, tone: 'warning', title: `${providerLabel} is using local log estimates for at least one limit window.` };
@@ -210,19 +223,6 @@ function providerHealth(
 
   if (!hasLimitData(primary) && !hasLimitData(secondary)) {
     return { key: provider, label: `${providerLabel} waiting`, tone: 'neutral', title: `${providerLabel} limit data has not arrived yet.` };
-  }
-
-  if (statusLabel && !connected) {
-    return {
-      key: provider,
-      label: `${providerLabel} ${statusLabel}`,
-      tone: statusTone === 'neutral' ? 'danger' : statusTone,
-      title: `${providerLabel} provider quota status: ${statusLabel}.`,
-    };
-  }
-
-  if (!connected) {
-    return { key: provider, label: `${providerLabel} offline`, tone: 'danger', title: `${providerLabel} provider quota is unavailable.` };
   }
 
   return {

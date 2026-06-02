@@ -157,7 +157,7 @@ test('Plan Usage and floating widget render providerQuotas through generic provi
   assert.doesNotMatch(tokenStatsSource, /normalized === '5h'|normalized === '1w'/);
   assert.doesNotMatch(widgetSource, /function windowDurationMs/);
   assert.match(widgetSource, /function quotaStatusTone/);
-  assert.ok(healthBody.indexOf("sources.includes('Log')") < healthBody.indexOf('if (statusLabel && !connected)'));
+  assert.ok(healthBody.indexOf('if (statusLabel && !connected)') < healthBody.indexOf("sources.includes('Log')"));
 });
 
 test('settings and widget integration guard malformed persisted values', () => {

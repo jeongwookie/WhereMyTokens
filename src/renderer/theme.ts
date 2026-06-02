@@ -209,7 +209,7 @@ export type QuotaSourceBadgeTone = 'good' | 'neutral' | 'warning' | undefined;
 export function quotaPctBarColor(pct: number, C: Theme): string {
   if (pct >= 90) return C.barRed;
   if (pct >= 75) return C.barOrange;
-  if (pct >= 50) return C.barYellow;
+  if (pct >= 50) return C.bgCard === '#ffffff' ? C.barOrange : C.barYellow;
   return C.accent;
 }
 

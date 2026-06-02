@@ -76,20 +76,31 @@ function windowLabel(windowKey: string): string {
   return `${windowKey} usage`;
 }
 
+function quotaGroupLabel(snapshot: ProviderQuotaSnapshot | undefined, provider: ProviderId, windowKey: string): string {
+  return snapshot?.groups?.find(group => group.windowKeys.includes(windowKey))?.label
+    ?? providerLabel(provider);
+}
+
+function quotaWindowLabel(snapshot: ProviderQuotaSnapshot | undefined, windowKey: string): string {
+  return snapshot?.windowDisplay?.[windowKey]?.label
+    ?? windowLabel(windowKey);
+}
+
 function quotaChecks(
   providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>,
   enabledProviders: ReadonlySet<ProviderId>,
 ): Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> {
   const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> = [];
   for (const provider of enabledProviders) {
-    const windows = providerQuotas[provider]?.windows;
+    const snapshot = providerQuotas[provider];
+    const windows = snapshot?.windows;
     if (!windows) continue;
     for (const [windowKey, window] of Object.entries(windows)) {
       checks.push({
         key: `${provider}-${windowKey}`,
         pct: window.pct,
         resetMs: window.resetMs,
-        label: `${providerLabel(provider)} ${windowLabel(windowKey)}`,
+        label: `${quotaGroupLabel(snapshot, provider, windowKey)} ${quotaWindowLabel(snapshot, windowKey)}`,
         source: window.source,
         provider,
       });

@@ -92,7 +92,7 @@
 ## 주요 기능
 
 ### 세션 추적
-- **Claude + Codex provider 모드** — Claude만, Codex만, 또는 둘 다 하나의 대시보드에서 추적
+- **Claude + Codex provider 체크박스** — Claude만, Codex만, 또는 둘 다 하나의 대시보드에서 추적
 - **실시간 세션 감지** — Terminal, VS Code, Cursor, Windsurf 등, 실시간 상태: `active` / `waiting` / `idle` / `compacting`
 - **Compact 그루핑** — git 프로젝트 → 브랜치별 그루핑, 반복 Claude/Codex 세션은 provider/source/model/state 기준으로 stack 처리
 - **브랜치 row 제한** — 각 브랜치는 기본 3개 행만 표시하고 나머지는 "Show N more"로 펼침
@@ -217,7 +217,7 @@ WhereMyTokens는 Claude Code의 공식 `statusLine` 플러그인 메커니즘을
 
 ### Codex 추적
 
-WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl`)도 읽을 수 있습니다. Settings에서 **Claude**, **Codex**, **Both** 중 하나를 선택합니다.
+WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl`)도 읽을 수 있습니다. Settings에서 추적할 provider 체크박스를 켭니다.
 
 **Codex 추적에 포함되는 내용:**
 - 세션 상태, 프로젝트/브랜치 그루핑, VS Code 또는 Codex Exec 같은 source 표시

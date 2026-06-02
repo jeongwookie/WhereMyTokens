@@ -6,6 +6,7 @@ import {
 } from './usageVisibilityFilter';
 import {
   buildProviderWindowTargets,
+  targetAcceptsModel,
   type ProviderWindowResetHintMap,
 } from './usageWindowTargets';
 
@@ -279,6 +280,7 @@ export function computeUsage(
     const usage = getProviderWindowUsage(entry.provider);
     for (const target of providerWindowTargets.get(entry.provider) ?? []) {
       if (timestampMs < target.startMs) continue;
+      if (!targetAcceptsModel(target, entry.model)) continue;
       usage.windows[target.windowKey] ??= emptyWindow();
       addEntry(usage.windows[target.windowKey], entry);
     }

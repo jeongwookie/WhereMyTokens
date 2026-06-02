@@ -92,7 +92,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 ## Características
 
 ### Seguimiento de Sesiones
-- **Modos Claude + Codex** — monitorea Claude, Codex o ambos en un solo panel
+- **Casillas de provider Claude + Codex** — monitorea Claude, Codex o ambos en un solo panel
 - **Detección en tiempo real** — Terminal, VS Code, Cursor, Windsurf y más con estado en tiempo real: `active` / `waiting` / `idle` / `compacting`
 - **Agrupación compacta** — por proyecto git → rama; sesiones Claude/Codex repetidas se apilan por provider/source/model/state
 - **Límite por rama** — cada rama muestra las primeras 3 filas por defecto; el resto se abre con "Show N more"
@@ -217,7 +217,7 @@ WhereMyTokens puede recibir contexto, modelo, costo y datos de límite de uso co
 
 ### Seguimiento de Codex
 
-WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl` y `~/.codex/session-cleanup-archive/**/*.jsonl`. En Settings, elige **Claude**, **Codex** o **Both**.
+WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl` y `~/.codex/session-cleanup-archive/**/*.jsonl`. En Settings, activa las casillas de los providers que quieras monitorear.
 
 **El seguimiento de Codex incluye:**
 - Estado de sesión, agrupación por proyecto/rama y etiquetas de origen como VS Code o Codex Exec

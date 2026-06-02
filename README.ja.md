@@ -92,7 +92,7 @@
 ## 主な機能
 
 ### セッション追跡
-- **Claude + Codex provider モード** — Claude のみ、Codex のみ、または両方を 1 つのダッシュボードで追跡
+- **Claude + Codex provider チェックボックス** — Claude のみ、Codex のみ、または両方を 1 つのダッシュボードで追跡
 - **リアルタイムセッション検出** — ターミナル、VS Code、Cursor、Windsurf など、リアルタイム状態：`active` / `waiting` / `idle` / `compacting`
 - **Compact グループ化** — git プロジェクト → ブランチ別、繰り返し Claude/Codex セッションは provider/source/model/state で stack 表示
 - **ブランチ row 制限** — 各ブランチは最初の 3 行だけ表示し、残りは "Show N more" で展開
@@ -217,7 +217,7 @@ WhereMyTokens は Claude Code の公式 `statusLine` プラグインメカニズ
 
 ### Codex 追跡
 
-WhereMyTokens は Codex のローカル JSONL ログ（`~/.codex/sessions/**/*.jsonl`、`~/.codex/archived_sessions/**/*.jsonl`、`~/.codex/session-cleanup-archive/**/*.jsonl`）も読み取れます。Settings で **Claude**、**Codex**、**Both** のいずれかを選択します。
+WhereMyTokens は Codex のローカル JSONL ログ（`~/.codex/sessions/**/*.jsonl`、`~/.codex/archived_sessions/**/*.jsonl`、`~/.codex/session-cleanup-archive/**/*.jsonl`）も読み取れます。Settings で追跡したい provider チェックボックスを有効にします。
 
 **Codex 追跡に含まれるもの：**
 - セッション状態、プロジェクト/ブランチのグループ化、VS Code や Codex Exec などの source 表示

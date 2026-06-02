@@ -6,6 +6,7 @@ import {
   type UsageVisibilityFilter,
 } from './usageVisibilityFilter';
 import { buildProviderWindowTargets } from './usageWindowTargets';
+import { targetAcceptsModel } from './usageWindowTargets';
 
 export interface UsageTrendPoint {
   date?: string;
@@ -310,6 +311,7 @@ export function computeUsageFromLedger(
     const usage = getProviderWindowUsage(row.provider);
     for (const target of providerWindowTargets.get(row.provider) ?? []) {
       if (row.timestampMs < target.startMs) continue;
+      if (!targetAcceptsModel(target, row.model)) continue;
       usage.windows[target.windowKey] ??= emptyWindow();
       addAggregate(usage.windows[target.windowKey], aggregate);
     }
