@@ -49,6 +49,7 @@ export interface SessionInfo {
   source: string;
   state: SessionState;
   jsonlPath: string | null;
+  summaryKey?: string | null;
   lastModified: string | null;
   modelName: string;
   contextUsed: number;
@@ -112,8 +113,13 @@ export interface ProviderWindowUsage {
   windows: Record<string, WindowStats>;
 }
 
+export interface ProviderModelWindowUsage {
+  windows: Record<string, Record<string, WindowStats>>;
+}
+
 export interface UsageData {
   byProvider: Partial<Record<'claude' | 'codex' | 'antigravity', ProviderWindowUsage>>;
+  modelWindows: Partial<Record<'claude' | 'codex' | 'antigravity', ProviderModelWindowUsage>>;
   models: ModelUsage[];
   heatmap: HourlyBucket[];       // 7 days × 24 hours
   heatmap30: HourlyBucket[];     // 30 days × 24 hours
@@ -185,6 +191,8 @@ export interface ProviderCreditBalance {
 export interface ProviderModelQuota {
   model: string;
   label: string;
+  usageModel?: string;
+  statsWindowKey?: string;
   remainingPct: number;
   resetMs?: number | null;
   groupKey?: string;

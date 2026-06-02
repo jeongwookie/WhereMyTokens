@@ -70,9 +70,14 @@ function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string
 type EditableSettingKey = Exclude<keyof AppSettings, 'compactWidgetBounds'>;
 type ProviderId = AppSettings['enabledProviders'][number];
 
-const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
+const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string; detail?: string }> = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
+  {
+    id: 'antigravity',
+    label: 'Antigravity',
+    detail: 'Requires Antigravity IDE running and signed in. Uses local RPC only.',
+  },
 ];
 const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS;
 
@@ -457,6 +462,11 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                 >
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                     <span style={labelStyle}>{option.label}</span>
+                    {option.detail && (
+                      <span style={{ fontSize: 10, color: C.textMuted }}>
+                        {option.detail}
+                      </span>
+                    )}
                     {lockedLastProvider && (
                       <span style={{ fontSize: 10, color: C.textMuted }}>
                         At least one provider must stay enabled.
@@ -600,7 +610,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
           <div>
             <div style={labelStyle}>Usage ledger</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Rebuilds local-only aggregates from Claude/Codex history; totals may change during sync
+              Rebuilds local-only aggregates from enabled provider history; totals may change during sync
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0, justifyContent: 'flex-end' }}>

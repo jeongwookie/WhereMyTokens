@@ -6,6 +6,7 @@ import {
   type UsageVisibilityFilter,
 } from './usageVisibilityFilter';
 import { buildProviderWindowTargets } from './usageWindowTargets';
+import { cacheEfficiencyDenominator, cacheEfficiencyPct } from './cacheMetrics';
 
 export interface UsageTrendPoint {
   date?: string;
@@ -64,14 +65,7 @@ function addAggregate(target: UsageAggregate, aggregate: UsageAggregate): void {
 }
 
 function finalize(window: WindowStats, provider: UsageLedgerProvider): void {
-  const denominator = cacheEfficiencyDenominator(provider, window);
-  window.cacheEfficiency = denominator > 0 ? (window.cacheReadTokens / denominator) * 100 : 0;
-}
-
-function cacheEfficiencyDenominator(provider: UsageLedgerProvider, aggregate: Pick<UsageAggregate, 'inputTokens' | 'cacheCreationTokens' | 'cacheReadTokens'>): number {
-  return provider === 'codex'
-    ? aggregate.inputTokens + aggregate.cacheReadTokens
-    : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
+  window.cacheEfficiency = cacheEfficiencyPct(provider, window);
 }
 
 function localDateKey(timestampMs: number): string {
@@ -223,6 +217,7 @@ export function computeUsageFromLedger(
   }
   const providerWindowTargets = buildProviderWindowTargets(windowProviders, providerQuotas, resets, nowMs, weekStart);
   const providerWindows = new Map<ProviderId, NonNullable<UsageData['byProvider'][ProviderId]>>();
+  const providerModelWindows = new Map<ProviderId, NonNullable<UsageData['modelWindows'][ProviderId]>>();
   const allTime = emptyWindow();
   const modelMap = new Map<string, ModelUsage>();
   const heatMap7 = new Map<string, HourlyBucket>();
@@ -298,6 +293,21 @@ export function computeUsageFromLedger(
     return next;
   };
 
+  const getProviderModelWindowUsage = (provider: ProviderId): NonNullable<UsageData['modelWindows'][ProviderId]> => {
+    const existing = providerModelWindows.get(provider);
+    if (existing) return existing;
+    const next = { windows: {} };
+    providerModelWindows.set(provider, next);
+    return next;
+  };
+
+  const getProviderModelWindow = (provider: ProviderId, windowKey: string, model: string): WindowStats => {
+    const usage = getProviderModelWindowUsage(provider);
+    usage.windows[windowKey] ??= {};
+    usage.windows[windowKey][model] ??= emptyWindow();
+    return usage.windows[windowKey][model];
+  };
+
   for (const [provider, targets] of providerWindowTargets) {
     const usage = getProviderWindowUsage(provider);
     for (const target of targets) {
@@ -312,6 +322,7 @@ export function computeUsageFromLedger(
       if (row.timestampMs < target.startMs) continue;
       usage.windows[target.windowKey] ??= emptyWindow();
       addAggregate(usage.windows[target.windowKey], aggregate);
+      addAggregate(getProviderModelWindow(row.provider, target.windowKey, row.model), aggregate);
     }
   };
 
@@ -367,6 +378,11 @@ export function computeUsageFromLedger(
   for (const [provider, usage] of providerWindows) {
     for (const window of Object.values(usage.windows)) finalize(window, provider);
   }
+  for (const [provider, usage] of providerModelWindows) {
+    for (const models of Object.values(usage.windows)) {
+      for (const window of Object.values(models)) finalize(window, provider);
+    }
+  }
 
   const allTimeAvgCacheEfficiency = allTimeCacheDenominator > 0
     ? (allTime.cacheReadTokens / allTimeCacheDenominator) * 100
@@ -377,6 +393,7 @@ export function computeUsageFromLedger(
 
   return {
     byProvider: Object.fromEntries(providerWindows),
+    modelWindows: Object.fromEntries(providerModelWindows),
     models: [...modelMap.values()].filter(model => model.tokens > 0).sort((a, b) => b.tokens - a.tokens),
     heatmap: [...heatMap7.values()],
     heatmap30: [...heatMap30.values()],

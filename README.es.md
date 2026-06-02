@@ -5,11 +5,12 @@
 <h1 align="center">WhereMyTokens</h1>
 
 <p align="center">
-  <strong>Ahora también rastrea Codex.</strong>
+  <strong>Ahora también rastrea Codex y Antigravity.</strong>
 </p>
 
 <p align="center">
   <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-new-4f46e5?style=for-the-badge">
+  <img alt="Antigravity local RPC" src="https://img.shields.io/badge/Antigravity-local_RPC-0f766e?style=for-the-badge">
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
   <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
 </p>
@@ -33,7 +34,7 @@
 </p>
 
 <p align="center">
-  Una app local-first para la bandeja de Windows que muestra tokens, costos, sesiones, caché, uso por modelo y límites de Claude Code y Codex de un vistazo.
+  Una app local-first para la bandeja de Windows que muestra tokens, costos, sesiones, caché, uso por modelo y quota de Claude Code, Codex y Antigravity de un vistazo.
 </p>
 
 <a id="screenshots"></a>
@@ -92,22 +93,22 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 ## Características
 
 ### Seguimiento de Sesiones
-- **Modos Claude + Codex** — monitorea Claude, Codex o ambos en un solo panel
+- **Selección de providers** — activa Claude Code, Codex y Antigravity en un solo panel
 - **Detección en tiempo real** — Terminal, VS Code, Cursor, Windsurf y más con estado en tiempo real: `active` / `waiting` / `idle` / `compacting`
-- **Agrupación compacta** — por proyecto git → rama; sesiones Claude/Codex repetidas se apilan por provider/source/model/state
+- **Agrupación compacta** — por proyecto git → rama; sesiones repetidas de cualquier provider se apilan por provider/source/model/state
 - **Límite por rama** — cada rama muestra las primeras 3 filas por defecto; el resto se abre con "Show N more"
 - **Advertencias de ventana de contexto** — barra por sesión; ámbar al 70%, naranja al 85%, rojo al 95%+
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine como respaldo, con recuperación passive OAuth refresh si el access token local expira; Codex 5h/1sem desde live Codex usage, caché y luego eventos locales de rate-limit
+- **Barras de quota** — Claude 5h/1sem desde Anthropic API/statusLine como respaldo, con recuperación passive OAuth refresh si el access token local expira; Codex 5h/1sem desde live Codex usage, caché y luego eventos locales de rate-limit; Antigravity lee quota por modelo desde 127.0.0.1 local RPC cuando el IDE está en ejecución
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
 - **Presupuesto Claude Extra Usage** — créditos mensuales de Claude usados / límite / utilización %
 
 ### Análisis y Actividad
-- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de Claude/Codex y estado health/fallback por provider. En `all`, el conteo de sesiones viene del historial completo
+- **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de provider y estado health/fallback por provider. En `all`, el conteo de sesiones viene del historial completo
 - **Snapshots de inicio instantáneo** — restaura al instante el último estado válido de la UI mientras los nuevos escaneos continúan en segundo plano
 - **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue por un budgeted refresh scheduler para mantener responsive el hotkey popup y la UI
 - **Ledger persistente de uso** — agrega el uso local de JSONL en un ledger local para que los totales antiguos dependan menos de la caché JSONL y puedan reconstruirse desde Settings
@@ -123,7 +124,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Gráfico de crecimiento de Output** — muestra el crecimiento acumulado de líneas netas en los últimos 7 días locales
 - **Ámbito de repos de la sesión actual** — Code Output ahora etiqueta que los totales git se calculan sobre los repos vinculados a las sesiones que estás rastreando
 - **Histórico por ramas** — Code Output histórico cuenta commits y cambios de líneas en todas las ramas locales, usando tu email local de git
-- **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` incluyendo logs agent, y sesiones Codex desde `~/.codex/sessions/`, `~/.codex/archived_sessions/`, `~/.codex/session-cleanup-archive/`
+- **Descubrimiento automático** — proyectos Claude desde `~/.claude/projects/` incluyendo logs agent, sesiones Codex desde `~/.codex/sessions/`, `~/.codex/archived_sessions/`, `~/.codex/session-cleanup-archive/`, y cascades de Antigravity desde el language server local vía local RPC
 - **Solo tus commits** — filtrado por `git config user.email`
 
 ### Personalización
@@ -145,7 +146,7 @@ Haz clic en el icono de la bandeja (o presiona el atajo global `Ctrl+Shift+D`).
 **Settings → Claude Code Integration → Setup** — habilita datos de límite de uso en tiempo real sin sondeo de API.
 
 ### 3. Configurar
-- **Tracking providers** — activa Claude Code y/o Codex con casillas
+- **Tracking providers** — activa Claude Code, Codex y Antigravity con casillas
 - **Moneda** — USD o KRW
 - **Alertas** — establece umbrales de uso (50% / 80% / 90%)
 - **Tema** — Auto (sigue el sistema) / Claro / Oscuro
@@ -160,7 +161,7 @@ WhereMyTokens es una app de bandeja Electron local-first. El renderer no lee arc
 
 | Capa | Responsabilidad |
 |------|-----------------|
-| Electron main | Descubre sesiones Claude/Codex, parsea logs JSONL, obtiene uso del provider, gestiona bandeja/ventanas y persiste ajustes. |
+| Electron main | Descubre sesiones de providers, parsea JSONL/local RPC, obtiene uso del provider, gestiona bandeja/ventanas y persiste ajustes. |
 | Preload bridge | Expone la superficie IPC typed `window.wmt` mientras mantiene los límites de `contextIsolation`. |
 | React renderer | Muestra el panel de bandeja, ajustes, notificaciones, gráficos de actividad y widget compacto de cuota. |
 | `statusLine` bridge | `src/bridge/bridge.ts` recibe JSON de Claude Code por stdin y escribe un snapshot local que observa el proceso main. |
@@ -172,8 +173,9 @@ WhereMyTokens es una app de bandeja Electron local-first. El renderer no lee arc
 | Límites de uso Claude | OAuth token en `~/.claude/.credentials.json` | Anthropic `/api/oauth/usage` | Sí, directo a Anthropic |
 | Sesiones Codex | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
 | Límites de uso Codex | OAuth token en `~/.codex/auth.json` | ChatGPT/Codex usage endpoint | Sí, directo a OpenAI/ChatGPT |
+| Sesiones/quota Antigravity | Language server de Antigravity en ejecución | 127.0.0.1 local RPC, luego renderer state | No |
 
-La prioridad de límites depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; Codex usa primero live usage y luego eventos locales `rate_limits` de los logs JSONL; ambos conservan el último valor conocido solo hasta que queda stale.
+La prioridad de quota depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; Codex usa primero live usage y luego eventos locales `rate_limits` de los logs JSONL; Antigravity usa solo 127.0.0.1 local RPC del IDE en ejecución. El último valor correcto se conserva solo hasta quedar stale.
 
 ---
 
@@ -190,12 +192,13 @@ WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicit
 | `~/.codex/archived_sessions/**/*.jsonl` | Logs archivados de Codex incluidos en el uso all-time. |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | Logs de cleanup archive de Codex incluidos en el uso all-time. |
 | `~/.codex/auth.json` | Material OAuth de ChatGPT usado solo para snapshots de uso de Codex; no se copia al storage de la app ni se registra en logs. |
+| Antigravity local RPC | Lee sesiones, quota por modelo y generator metadata desde el language server del IDE Antigravity en ejecución. No usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Snapshot local escrito por el bridge `statusLine` de Claude Code. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | Ajustes de la app, cachés locales, historial de notificaciones y estado del bridge. |
 
 El manejo de credenciales es deliberadamente estrecho: WhereMyTokens lee los archivos locales oficiales de la CLI, no pide pegar API keys, no guarda una copia de respaldo de credenciales y oculta detalles de credenciales en la salida de estado. Si el access token de Claude expira, la app puede refrescarlo con Anthropic y escribir las credentials actualizadas de forma atómica en `~/.claude/.credentials.json`.
 
-El acceso de red se limita a los usage endpoints de los providers habilitados. El polling de Claude usage corre como máximo cada 5 minutos y aplica backoff para 429. Codex live usage usa solicitudes HTTPS-only con timeout, límite de tamaño de respuesta, caché y backoff. El parseo local de JSONL y el bridge `statusLine` no envían contenido de sesiones fuera del equipo.
+El acceso de red se limita a los usage endpoints de los providers habilitados y al loopback local. El polling de Claude usage corre como máximo cada 5 minutos y aplica backoff para 429. Codex live usage usa solicitudes HTTPS-only con timeout, límite de tamaño de respuesta, caché y backoff. Antigravity usa solo 127.0.0.1 local RPC y no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. El parseo local de JSONL y el bridge `statusLine` no envían contenido de sesiones fuera del equipo.
 
 Para desactivar el bridge de Claude Code, abre **Settings -> Claude Code Integration -> Disable**. La app elimina la entrada `statusLine` solo cuando pertenece al comando bridge de WhereMyTokens; no sobrescribe ni borra otro `statusLine` custom. También puedes quitar manualmente la entrada `statusLine` de WhereMyTokens en `~/.claude/settings.json` y reiniciar Claude Code.
 
@@ -205,7 +208,7 @@ Para desactivar el bridge de Claude Code, abre **Settings -> Claude Code Integra
 
 Al iniciar, el panel muestra primero las sesiones actuales y el uso reciente. Si aparece `Partial History`, el historial antiguo sigue sincronizándose en budgeted background slices para que la app de bandeja y el hotkey popup sigan respondiendo.
 
-El pequeño botón PiP del encabezado activa o desactiva el widget flotante Quota Pace. La píldora de estado del encabezado resume el estado más importante de provider/API. Las etiquetas comunes incluyen `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline` y `refresh failed`. El widget Quota Pace muestra chips de health por provider, como `Claude OK` y `Codex OK`; pasa el cursor por cualquier píldora o chip para ver el detalle más reciente.
+El pequeño botón PiP del encabezado activa o desactiva el widget flotante Quota Pace. La píldora de estado del encabezado resume el estado más importante de provider/API. Las etiquetas comunes incluyen `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline` y `refresh failed`. El widget Quota Pace muestra chips de health por provider, como `Claude OK`, `Codex OK` y `Antigravity OK`; pasa el cursor por cualquier píldora o chip para ver el detalle más reciente.
 
 ---
 
@@ -217,7 +220,7 @@ WhereMyTokens puede recibir contexto, modelo, costo y datos de límite de uso co
 
 ### Seguimiento de Codex
 
-WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl` y `~/.codex/session-cleanup-archive/**/*.jsonl`. En Settings, elige **Claude**, **Codex** o **Both**.
+WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl` y `~/.codex/session-cleanup-archive/**/*.jsonl`. En Settings, elige los providers que quieres rastrear con casillas.
 
 **El seguimiento de Codex incluye:**
 - Estado de sesión, agrupación por proyecto/rama y etiquetas de origen como VS Code o Codex Exec
@@ -226,13 +229,17 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 - Porcentajes y tiempos de reset de Codex 5h/1sem desde live Codex usage cuando está disponible, con fallback a caché/eventos locales `rate_limits`
 - Activity Breakdown basado en tool events, porque los logs de Codex exponen llamadas a herramientas, no output tokens por herramienta
 
-**Cálculo de caché de Codex:** los logs de Codex reportan `input_tokens` y `cached_input_tokens`. WhereMyTokens guarda el input no cacheado como `input_tokens - cached_input_tokens`, guarda el cached input como cache-read tokens y muestra la eficiencia de caché como:
+### Seguimiento de Antigravity
+
+El seguimiento de Antigravity se conecta únicamente al language server del IDE Antigravity en ejecución mediante 127.0.0.1 local RPC. Lee cascades de sesión, quota por modelo y generator metadata para alimentar providerQuotas y el usage ledger; no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline.
+
+**Cálculo de caché de prompt:** los logs de Codex reportan `input_tokens` y `cached_input_tokens`. WhereMyTokens guarda el input no cacheado como `input_tokens - cached_input_tokens` y el cached input como cache-read tokens. Codex y Antigravity muestran la eficiencia como cache reads sobre prompt tokens:
 
 ```text
-cached_input_tokens / input_tokens
+cache_read_tokens / (uncached_input_tokens + cache_creation_tokens + cache_read_tokens)
 ```
 
-Claude usa esta fórmula:
+En Codex esto equivale a `cached_input_tokens / input_tokens`. Claude usa eficiencia de cache write/read:
 
 ```text
 cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)

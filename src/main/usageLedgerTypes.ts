@@ -1,7 +1,7 @@
 import type { UsageProvider } from './jsonlTypes';
 import type { ProviderId } from './providers/types';
 
-export const USAGE_LEDGER_SCHEMA_VERSION = 2;
+export const USAGE_LEDGER_SCHEMA_VERSION = 3;
 export const MINUTE_RECENT_RETENTION_MS = 8 * 24 * 60 * 60 * 1000;
 export const RECENT_REQUEST_INDEX_RETENTION_MS = MINUTE_RECENT_RETENTION_MS;
 export const HOURLY_ACTIVITY_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;

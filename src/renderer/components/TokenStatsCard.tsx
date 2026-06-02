@@ -24,6 +24,11 @@ function formatUsagePct(pct: number): string {
   return `${Math.round(pct)}%`;
 }
 
+function truncateTitle(title: string, maxChars = 14): string {
+  const chars = Array.from(title);
+  return chars.length > maxChars ? chars.slice(0, maxChars).join('') : title;
+}
+
 function timeElapsedPct(durationMs: number | null | undefined, resetMs: number | null | undefined): number | null {
   if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
   return Math.max(0, Math.min(100, ((durationMs - resetMs) / durationMs) * 100));
@@ -219,6 +224,9 @@ function TokenStatsCard({
   const cache = cacheBadge(stats.cacheEfficiency, C);
   const cacheTitle = cacheBadgeTitle(cacheMetricTitle);
   const showSavings = stats.cacheSavingsUSD > 0.005;
+  const breakdownTokens = stats.inputTokens + stats.outputTokens + stats.cacheCreationTokens + stats.cacheReadTokens;
+  const displayTitle = `${provider} ${period}`;
+  const visibleTitle = truncateTitle(displayTitle);
   const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'Syncing') : limitSourceLabel;
   const displayLimitSourceTitle = pendingLimitTitle ?? limitSourceTitle ?? displayLimitSourceLabel ?? '';
   const cachedDisconnected = apiConnected === false && limitSourceLabel === 'Cache';
@@ -234,6 +242,7 @@ function TokenStatsCard({
         padding: '1px 4px',
         borderRadius: 4,
         ...(pendingLimit ? { background: C.accentDim, color: C.accent, border: `1px solid ${C.accent}45` } : sourceToneStyle),
+        flexShrink: 0,
         maxWidth: 92,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -252,16 +261,16 @@ function TokenStatsCard({
         background: C.bgCard,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0 }}>
-            {provider} {period}
+          <span title={displayTitle} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {visibleTitle}
             {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
             )}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 1 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 0 }}>
             {sourceChip}
             {cache && (
-              <span title={cacheTitle} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span title={cacheTitle} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color, flexShrink: 0, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {cache.label}
               </span>
             )}
@@ -304,6 +313,9 @@ function TokenStatsCard({
           <TokenDotRow label="In" value={stats.inputTokens} color={C.input} />
           <TokenDotRow label="Out" value={stats.outputTokens} color={C.output} />
           <TokenDotRow label="Cache" value={stats.cacheReadTokens + stats.cacheCreationTokens} color={C.cacheR} />
+          {breakdownTokens === 0 && stats.totalTokens > 0 && (
+            <TokenDotRow label="Tok" value={stats.totalTokens} color={C.textMuted} />
+          )}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>

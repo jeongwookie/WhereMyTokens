@@ -5,6 +5,7 @@ import {
   ProviderCreditBalance,
   ProviderId,
   ProviderModelQuota,
+  ProviderModelWindowUsage,
   ProviderQuotaDisplayBadge,
   ProviderQuotaGroupSpec,
   ProviderQuotaRowVisualKind,
@@ -49,6 +50,7 @@ const DEFAULT_STATE: AppState = {
   sessions: [],
   usage: {
     byProvider: EMPTY_BY_PROVIDER,
+    modelWindows: {},
     models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
     todayTokens: 0, todayCost: 0, todayRequestCount: 0,
     todayInputTokens: 0, todayOutputTokens: 0, todayCacheTokens: 0,
@@ -274,6 +276,8 @@ function normalizeModelQuota(value: unknown): ProviderModelQuota | null {
   return {
     model: record.model,
     label: record.label,
+    usageModel: typeof record.usageModel === 'string' && record.usageModel ? record.usageModel : undefined,
+    statsWindowKey: typeof record.statsWindowKey === 'string' && record.statsWindowKey ? record.statsWindowKey : undefined,
     remainingPct: typeof record.remainingPct === 'number' && Number.isFinite(record.remainingPct)
       ? Math.max(0, Math.min(100, record.remainingPct))
       : 0,
@@ -410,6 +414,33 @@ function normalizeProviderWindowUsages(value: AppState['usage']['byProvider'] | 
   return normalized;
 }
 
+function normalizeProviderModelWindowUsage(value: unknown): ProviderModelWindowUsage {
+  const windows: Record<string, Record<string, WindowStats>> = {};
+  const rawWindows = recordOrNull((value as ProviderModelWindowUsage | undefined)?.windows);
+  if (!rawWindows) return { windows };
+  for (const [windowKey, models] of Object.entries(rawWindows)) {
+    const modelRecord = recordOrNull(models);
+    if (!modelRecord) continue;
+    const normalizedModels: Record<string, WindowStats> = {};
+    for (const [model, stats] of Object.entries(modelRecord)) {
+      normalizedModels[model] = normalizeWindowStats(stats);
+    }
+    if (Object.keys(normalizedModels).length > 0) windows[windowKey] = normalizedModels;
+  }
+  return { windows };
+}
+
+function normalizeProviderModelWindowUsages(value: AppState['usage']['modelWindows'] | undefined): AppState['usage']['modelWindows'] {
+  const normalized: AppState['usage']['modelWindows'] = {};
+  for (const provider of PROVIDER_IDS) {
+    const providerUsage = value?.[provider];
+    if (!providerUsage) continue;
+    const usage = normalizeProviderModelWindowUsage(providerUsage);
+    if (Object.keys(usage.windows).length > 0) normalized[provider] = usage;
+  }
+  return normalized;
+}
+
 function normalizeSession(session: Partial<AppState['sessions'][number]> | null | undefined): AppState['sessions'][number] {
   const state = session?.state;
   const normalizedState = state === 'active' || state === 'waiting' || state === 'idle' || state === 'compacting'
@@ -439,6 +470,7 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
     source: typeof session?.source === 'string' ? session.source : '',
     state: normalizedState,
     jsonlPath: typeof session?.jsonlPath === 'string' ? session.jsonlPath : null,
+    summaryKey: typeof session?.summaryKey === 'string' ? session.summaryKey : null,
     lastModified,
     modelName: typeof session?.modelName === 'string' ? session.modelName : '',
     contextUsed: typeof session?.contextUsed === 'number' ? session.contextUsed : 0,
@@ -468,6 +500,7 @@ function normalizeState(next: AppState): AppState {
       ...DEFAULT_STATE.usage,
       ...next.usage,
       byProvider: normalizeProviderWindowUsages(nextByProvider),
+      modelWindows: normalizeProviderModelWindowUsages(next.usage?.modelWindows),
       models: arrayOrEmpty(next.usage?.models),
       heatmap: arrayOrEmpty(next.usage?.heatmap),
       heatmap30: arrayOrEmpty(next.usage?.heatmap30),

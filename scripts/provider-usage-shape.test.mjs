@@ -10,18 +10,18 @@ const { computeUsage } = usageWindows;
 const { computeUsageFromLedger } = ledgerUsage;
 const { emptyUsageAggregate, emptyUsageLedgerSnapshot, dayModelKey, hourProviderKey, minuteKey, monthModelKey } = aggregates;
 
-function usageEntry(provider, model, tokens, timestampMs, costUSD = 0) {
+function usageEntry(provider, model, tokens, timestampMs, costUSD = 0, overrides = {}) {
   return {
     provider,
     requestId: `${provider}-${model}-${timestampMs}`,
     timestampMs,
     model,
-    inputTokens: tokens,
-    outputTokens: 0,
-    cacheCreationTokens: 0,
-    cacheReadTokens: 0,
+    inputTokens: overrides.inputTokens ?? tokens,
+    outputTokens: overrides.outputTokens ?? 0,
+    cacheCreationTokens: overrides.cacheCreationTokens ?? 0,
+    cacheReadTokens: overrides.cacheReadTokens ?? 0,
     costUSD,
-    cacheSavingsUSD: 0,
+    cacheSavingsUSD: overrides.cacheSavingsUSD ?? 0,
   };
 }
 
@@ -42,16 +42,16 @@ function summary(provider, entries) {
   };
 }
 
-function agg(tokens, costUSD = 0, requestCount = 1) {
+function agg(tokens, costUSD = 0, requestCount = 1, overrides = {}) {
   return {
     requestCount,
-    inputTokens: tokens,
-    outputTokens: 0,
-    cacheCreationTokens: 0,
-    cacheReadTokens: 0,
-    totalTokens: tokens,
+    inputTokens: overrides.inputTokens ?? tokens,
+    outputTokens: overrides.outputTokens ?? 0,
+    cacheCreationTokens: overrides.cacheCreationTokens ?? 0,
+    cacheReadTokens: overrides.cacheReadTokens ?? 0,
+    totalTokens: overrides.totalTokens ?? tokens,
     costUSD,
-    cacheSavingsUSD: 0,
+    cacheSavingsUSD: overrides.cacheSavingsUSD ?? 0,
   };
 }
 
@@ -117,6 +117,11 @@ function antigravityQuotaMetadataWithWindowReset(now = Date.now()) {
       },
     },
   };
+}
+
+function localDateKey(timestampMs) {
+  const date = new Date(timestampMs);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 test('provider quota metadata carries display groups without usage scopes', () => {
@@ -321,6 +326,35 @@ test('provider reset hints apply to generic provider windows', () => {
 
   assert.equal(ledger.byProvider.antigravity.windows.h5.totalTokens, 0);
   assert.equal(ledger.byProvider.antigravity.windows.week.totalTokens, 300);
+});
+
+test('Antigravity cache efficiency includes uncached prompt tokens instead of reporting all cache reads as 100%', () => {
+  const now = Date.now();
+  const promptStats = {
+    inputTokens: 8_500,
+    outputTokens: 5_900,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 167_200,
+    totalTokens: 181_600,
+  };
+  const expectedEfficiency = (promptStats.cacheReadTokens / (promptStats.inputTokens + promptStats.cacheCreationTokens + promptStats.cacheReadTokens)) * 100;
+  const summaryUsage = computeUsage([
+    summary('antigravity', [
+      usageEntry('antigravity', 'Gemini 3.1 Pro', promptStats.totalTokens, now - 60_000, 0.1211, promptStats),
+    ]),
+  ], {}, undefined, antigravityQuotaMetadata(now));
+
+  assert.equal(Math.round(summaryUsage.todayCacheEfficiency), Math.round(expectedEfficiency));
+  assert.equal(Math.round(summaryUsage.byProvider.antigravity.windows.geminiWeek.cacheEfficiency), Math.round(expectedEfficiency));
+
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.dailyModel[dayModelKey(localDateKey(now), 'antigravity', 'Gemini 3.1 Pro')] = agg(promptStats.totalTokens, 0.1211, 1, promptStats);
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'antigravity', 'Gemini 3.1 Pro')] = agg(promptStats.totalTokens, 0.1211, 1, promptStats);
+
+  const ledger = computeUsageFromLedger(snapshot, {}, now, undefined, antigravityQuotaMetadata(now));
+
+  assert.equal(Math.round(ledger.todayCacheEfficiency), Math.round(expectedEfficiency));
+  assert.equal(Math.round(ledger.byProvider.antigravity.windows.geminiWeek.cacheEfficiency), Math.round(expectedEfficiency));
 });
 
 test('ledger usage reads Antigravity aggregates written by generic ingest', () => {

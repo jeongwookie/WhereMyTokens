@@ -582,6 +582,7 @@ export class StateManager {
           claude: { windows: { h5: this.emptyWindow(), week: this.emptyWindow(), sonnetWeek: this.emptyWindow() } },
           codex: { windows: { h5: this.emptyWindow(), week: this.emptyWindow() } },
         },
+        modelWindows: {},
         models: [],
         heatmap: [],
         heatmap30: [],
@@ -1326,7 +1327,8 @@ export class StateManager {
     ).length;
   }
 
-  private sessionIdentityKey(session: Pick<DiscoveredSession, 'provider' | 'jsonlPath' | 'cwd' | 'sessionId'>): string {
+  private sessionIdentityKey(session: Pick<DiscoveredSession, 'provider' | 'jsonlPath' | 'summaryKey' | 'cwd' | 'sessionId'>): string {
+    if (session.summaryKey) return `${session.provider}:${session.summaryKey}`;
     return session.jsonlPath
       ? `${session.provider}:${normalizeFileKey(session.jsonlPath)}`
       : `${session.provider}:${session.cwd}:${session.sessionId}`;
@@ -1433,7 +1435,11 @@ export class StateManager {
       if (!provider.discoverSessions) continue;
       const discovered = await provider.discoverSessions(discoveryCtx);
       for (const session of discovered) {
-        const summary = session.jsonlPath ? (summaries.get(normalizeFileKey(session.jsonlPath)) ?? null) : null;
+        const summary = session.summaryKey
+          ? summaries.get(session.summaryKey) ?? null
+          : session.jsonlPath
+            ? summaries.get(normalizeFileKey(session.jsonlPath)) ?? null
+            : null;
         if (isSourceBackedProvider(provider) && provider.id === 'codex' && !summary) continue;
         addSession(session, summary);
       }
@@ -1508,6 +1514,11 @@ export class StateManager {
     }
 
     return sessions.filter(session => {
+      if (session.summaryKey) {
+        return this.summaries.has(session.summaryKey)
+          || session.state === 'active'
+          || session.state === 'waiting';
+      }
       if (!session.jsonlPath) return session.state === 'active' || session.state === 'waiting';
       return retainedPaths.has(normalizeFileKey(session.jsonlPath));
     });
@@ -1727,6 +1738,7 @@ export class StateManager {
         this.publishState();
         checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: this.state.historyWarmupPending,
+          quotaTargetModes: settings.quotaTargetModes,
         });
         this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
           uiVisible: false,
@@ -1750,7 +1762,10 @@ export class StateManager {
       const summaryIncludeFullHistory = includeFullHistory && hasExcludedProjects;
       const loaded = await this.loadProviderSummaries(summaryForce, effectiveScanBudgetMs, priorityFiles, summaryIncludeFullHistory);
       loadPerf = this.finishPerfSample(loadSample);
-      await this.refreshUsageLedgerSources(this.ledgerSourcesFromSummaries(loaded.summaries, settingsBeforeLoad));
+      await this.refreshUsageLedgerSources([
+        ...this.ledgerSourcesFromSummaries(loaded.summaries, settingsBeforeLoad),
+        ...loaded.ledgerSources,
+      ]);
       this.startupFreshComplete = true;
       this.jsonlCache.flushPersisted();
       const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
@@ -1815,6 +1830,7 @@ export class StateManager {
         this.scheduleGitWarmup();
         checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: partialHistoryScan,
+          quotaTargetModes: settings.quotaTargetModes,
         });
         await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
         if (!this.uiVisible) this.startWatcher('heavyRefresh:startupsync');
@@ -1873,6 +1889,7 @@ export class StateManager {
 
       checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
         deferCodexLocalLog: partialHistoryScan,
+        quotaTargetModes: settings.quotaTargetModes,
       });
       await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
       if (!this.uiVisible) this.startWatcher('heavyRefresh:hidden');
@@ -2269,14 +2286,6 @@ export class StateManager {
       }
     }
 
-    const genericScan = await this.scanGenericProviderUsage(settings, ctx);
-    partial = partial || genericScan.partial;
-    for (const source of genericScan.ledgerSources) {
-      if (seen.has(source.sourceId)) continue;
-      seen.add(source.sourceId);
-      files.push(source);
-    }
-
     return { files, partial };
   }
 
@@ -2343,6 +2352,7 @@ export class StateManager {
     includeFullHistory = false,
   ): Promise<{
     summaries: Map<string, FileUsageSummary>;
+    ledgerSources: ProviderLedgerSource[];
     sessionCount: number;
     codexRateLimits: SessionSnapshot['codexRateLimits'] | null;
     scannedFiles: number;
@@ -2351,6 +2361,7 @@ export class StateManager {
     const settings = this.getSettings();
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const summaries = new Map<string, FileUsageSummary>();
+    let ledgerSources: ProviderLedgerSource[] = [];
     let sessionCount = 0;
     let codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
     let scannedFiles = 0;
@@ -2483,14 +2494,30 @@ export class StateManager {
       }
     }
 
-    const genericUsage = await this.scanGenericProviderUsage(settings, ctx);
-    for (const [key, summary] of genericUsage.summaries.entries()) {
-      summaries.set(key, summary);
+    const elapsedMs = Date.now() - startedAt;
+    const remainingBudgetMs = budgetMs === null ? null : Math.max(0, budgetMs - elapsedMs);
+    if (remainingBudgetMs === 0) {
+      partial = true;
+    } else {
+      const genericCtx = budgetMs === null
+        ? ctx
+        : this.providerContext({
+          settings,
+          force,
+          scanBudgetMs: remainingBudgetMs,
+          includeFullHistory,
+          prioritySourceIds: startupPriority,
+        });
+      const genericUsage = await this.scanGenericProviderUsage(settings, genericCtx);
+      for (const [key, summary] of genericUsage.summaries.entries()) {
+        summaries.set(key, summary);
+      }
+      scannedFiles += genericUsage.scannedFiles;
+      partial = partial || genericUsage.partial;
+      ledgerSources = genericUsage.ledgerSources;
     }
-    scannedFiles += genericUsage.scannedFiles;
-    partial = partial || genericUsage.partial;
 
-    return { summaries, sessionCount, codexRateLimits, scannedFiles, partial };
+    return { summaries, ledgerSources, sessionCount, codexRateLimits, scannedFiles, partial };
   }
 
   private async refreshChangedSummaries(changedFiles: Set<string>): Promise<void> {
@@ -2670,7 +2697,9 @@ export class StateManager {
 
     const summary = summaryOverride !== undefined
       ? summaryOverride
-      : (s.jsonlPath ? this.getSummary(s.jsonlPath) : null);
+      : s.summaryKey
+        ? this.summaries.get(s.summaryKey) ?? null
+        : (s.jsonlPath ? this.getSummary(s.jsonlPath) : null);
     if (summary) {
       const snapshot = summary.sessionSnapshot;
       modelName = snapshot.modelName;

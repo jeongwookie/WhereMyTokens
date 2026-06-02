@@ -27,6 +27,7 @@ export interface DiscoveredSession {
   source: string;
   state: SessionState;
   jsonlPath: string | null;
+  summaryKey?: string | null;
   lastModified: Date | null;
   isWorktree: boolean;
   worktreeBranch: string | null;
@@ -164,6 +165,8 @@ export interface ProviderQuotaStatus {
 export interface ProviderModelQuota {
   model: string;
   label: string;
+  usageModel?: string;
+  statsWindowKey?: string;
   remainingPct: number;
   resetMs?: number | null;
   groupKey?: string;
