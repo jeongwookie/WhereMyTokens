@@ -27,7 +27,6 @@ const EMPTY_USAGE = {
   byProvider: {
     claude: {
       windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW, sonnetWeek: EMPTY_WINDOW },
-      burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
     },
     codex: { windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW } },
   },
@@ -107,7 +106,7 @@ test('startup snapshot normalizer marks recent snapshots as restored UI state', 
 });
 
 test('startup snapshot schema version is bumped for provider-keyed usage data', () => {
-  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 3);
+  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 4);
 });
 
 test('startup snapshot normalizer rejects stale and mismatched snapshots', () => {
@@ -161,6 +160,38 @@ test('StateManager revives restored snapshot session dates without persisted loc
   assert.equal(restored.projectName, 'Previous session');
   assert.equal(restored.jsonlPath, null);
   assert.deepEqual(manager.collectTrackedSessionFiles('claude', 1), []);
+});
+
+test('StateManager sanitizes restored provider quota snapshots', () => {
+  const now = Date.now();
+  const snapshot = makeStartupStateSnapshot({
+    ...BASE_STATE,
+    providerQuotas: {
+      codex: {
+        provider: 'codex',
+        source: 'api',
+        capturedAt: now,
+        planName: 'Team',
+        windows: {
+          h5: { pct: 25, resetMs: 60_000, source: 'api' },
+        },
+        groups: { malformed: true },
+        models: { malformed: true },
+        usage: { raw: true },
+        authMtimeMs: 123,
+      },
+    },
+  }, now);
+
+  const manager = new StateManager(makeStore({ _startupStateSnapshot: snapshot }), () => {});
+  const codexQuota = manager.getState().providerQuotas.codex;
+
+  assert.ok(codexQuota);
+  assert.equal(codexQuota.windows.h5.pct, 25);
+  assert.equal(codexQuota.groups, undefined);
+  assert.equal(codexQuota.models, undefined);
+  assert.equal('usage' in codexQuota, false);
+  assert.equal('authMtimeMs' in codexQuota, false);
 });
 
 test('startup snapshot normalizer rejects malformed session lists', () => {

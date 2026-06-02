@@ -1,6 +1,6 @@
-import type { AppState } from './types';
+import type { ProviderId, ProviderQuotaWindow } from './types';
 
-export type LimitWindow = AppState['limits']['h5'];
+export type LimitWindow = ProviderQuotaWindow;
 export type LimitDataState = 'ready' | 'syncing' | 'waiting';
 export type LimitSourceTone = 'good' | 'neutral' | 'warning';
 
@@ -24,7 +24,6 @@ export function limitDataState(limit: LimitWindow, syncing = false): LimitDataSt
 export function limitSourceDisplay(limit: LimitWindow): LimitSourceDisplay {
   switch (limit.source) {
     case 'api':
-    case 'codexApi':
       return {
         label: 'API',
         title: 'Account usage snapshot. Refreshed every few minutes.',
@@ -48,7 +47,27 @@ export function limitSourceDisplay(limit: LimitWindow): LimitSourceDisplay {
         title: 'Local session-log estimate. It can lag account-level limits.',
         tone: 'warning',
       };
+    case 'localRpc':
+      return {
+        label: 'RPC',
+        title: 'Local provider runtime snapshot.',
+        tone: 'neutral',
+      };
     default:
       return { tone: 'neutral' };
   }
+}
+
+export function providerDisplayName(provider: ProviderId): string {
+  if (provider === 'claude') return 'Claude';
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
+  return provider;
+}
+
+export function quotaWindowLabel(windowKey: string): string {
+  if (windowKey === 'h5') return '5h';
+  if (windowKey === 'week') return '1w';
+  if (windowKey === 'sonnetWeek') return 'Sonnet';
+  return windowKey;
 }

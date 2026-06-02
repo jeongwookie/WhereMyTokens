@@ -33,7 +33,7 @@ test('ledger usage query preserves current today, all-time, model, and hourly di
   snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = agg(100, 1.5);
   snapshot.monthlyModel['2026-04|codex|GPT-5-CODEX'] = agg(200, 2.5);
 
-  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now);
+  const usage = computeUsageFromLedger(snapshot, {}, now);
   assert.equal(usage.todayTokens, 100);
   assert.equal(usage.todayCost, 1.5);
   assert.equal(usage.allTimeCost, 4.0);
@@ -60,7 +60,7 @@ test('ledger all-time totals keep full monthly aggregates at daily retention bou
   snapshot.dailyModel[dayModelKey('2025-05-25', 'claude', 'Sonnet')] = agg(40, 0.4);
   snapshot.monthlyModel['2025-05|claude|Sonnet'] = agg(400, 4.0, 10);
 
-  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now);
+  const usage = computeUsageFromLedger(snapshot, {}, now);
 
   assert.equal(usage.allTimeCost, 4.0);
   assert.equal(usage.allTimeRequestCount, 10);
@@ -77,7 +77,7 @@ test('ledger usage query filters aggregates by enabled provider set', () => {
   snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = agg(100, 1.0);
   snapshot.dailyModel[dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX')] = agg(200, 2.0);
 
-  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now, new Set(['claude']));
+  const usage = computeUsageFromLedger(snapshot, {}, now, new Set(['claude']));
 
   assert.equal(usage.todayTokens, 100);
   assert.equal(usage.todayCost, 1.0);
@@ -85,6 +85,31 @@ test('ledger usage query filters aggregates by enabled provider set', () => {
   assert.equal(usage.byProvider.codex.windows.h5.totalTokens, 0);
   assert.deepEqual(usage.models.map(model => model.provider), ['claude']);
   assert.equal(usage.heatmap.reduce((sum, bucket) => sum + bucket.tokens, 0), 100);
+});
+
+test('ledger usage visibility filter counts full enabled-provider usage', () => {
+  const now = Date.parse('2026-05-25T12:30:00.000Z');
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'claude', 'claude-3-5-sonnet')] = agg(100, 1.0);
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'claude', 'claude-3-opus')] = agg(200, 2.0);
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'codex', 'gpt-5-codex')] = agg(300, 3.0);
+  snapshot.hourlyActivity[hourProviderKey(now - 60_000, 'claude')] = agg(300, 3.0);
+  snapshot.hourlyActivity[hourProviderKey(now - 60_000, 'codex')] = agg(300, 3.0);
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'claude-3-5-sonnet')] = agg(100, 1.0);
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'claude-3-opus')] = agg(200, 2.0);
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'codex', 'gpt-5-codex')] = agg(300, 3.0);
+
+  const usage = computeUsageFromLedger(snapshot, {}, now, {
+    providerScopes: new Set(['claude']),
+  });
+
+  assert.equal(usage.todayTokens, 300);
+  assert.equal(usage.todayCost, 3.0);
+  assert.equal(usage.byProvider.claude.windows.h5.totalTokens, 300);
+  assert.equal(usage.byProvider.codex.windows.h5.totalTokens, 0);
+  assert.deepEqual(usage.models.map(model => model.model), ['claude-3-opus', 'claude-3-5-sonnet']);
+  assert.equal(usage.heatmap.reduce((sum, bucket) => sum + bucket.tokens, 0), 300);
+  assert.equal(usage.todBuckets.reduce((sum, bucket) => sum + bucket.tokens, 0), 300);
 });
 
 test('ledger usage query exposes today cache efficiency and savings from daily aggregates', () => {
@@ -102,7 +127,7 @@ test('ledger usage query exposes today cache efficiency and savings from daily a
     cacheSavingsUSD: 2.25,
   });
 
-  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now);
+  const usage = computeUsageFromLedger(snapshot, {}, now);
 
   assert.equal(usage.todayCacheTokens, 700);
   assert.equal(usage.todayCacheSavingsUSD, 3.5);
@@ -123,6 +148,24 @@ test('ledger trend query filters rows by enabled provider set', () => {
   assert.deepEqual(trend.monthly.map(row => row.costUSD), [2.0]);
 });
 
+test('ledger trend query filters rows by enabled provider scopes', () => {
+  const now = Date.parse('2026-05-25T12:30:00.000Z');
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'claude-3-5-sonnet')] = agg(100, 1.0);
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'claude-3-opus')] = agg(200, 2.0);
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'codex', 'gpt-5-codex')] = agg(300, 3.0);
+  snapshot.monthlyModel['2026-05|claude|claude-3-5-sonnet'] = agg(100, 1.0);
+  snapshot.monthlyModel['2026-05|claude|claude-3-opus'] = agg(200, 2.0);
+  snapshot.monthlyModel['2026-05|codex|gpt-5-codex'] = agg(300, 3.0);
+
+  const trend = buildTrendDataFromLedger(snapshot, now, {
+    providerScopes: new Set(['codex']),
+  });
+
+  assert.deepEqual(trend.daily.map(row => row.tokens), [300]);
+  assert.deepEqual(trend.monthly.map(row => row.costUSD), [3.0]);
+});
+
 test('ledger activity weekly timeline uses the same calendar-week buckets as trend weekly data', () => {
   const now = Date.parse('2026-05-26T12:30:00.000Z');
   const snapshot = emptyUsageLedgerSnapshot();
@@ -131,7 +174,7 @@ test('ledger activity weekly timeline uses the same calendar-week buckets as tre
   snapshot.dailyModel[dayModelKey('2026-05-24', 'claude', 'Sonnet')] = agg(200, 0.2);
   snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = agg(300, 0.3);
 
-  const usage = computeUsageFromLedger(snapshot, { h5: 200_000, week: 1_000_000, sonnetWeek: 1_000_000 }, {}, now);
+  const usage = computeUsageFromLedger(snapshot, {}, now);
   const trend = buildTrendDataFromLedger(snapshot, now);
   const weeklyByLabel = new Map(usage.weeklyTimeline.map(row => [row.weekLabel, row.tokens]));
   const trendByLabel = new Map(trend.weekly.map(row => [weekLabel(row.weekStart), row.tokens]));

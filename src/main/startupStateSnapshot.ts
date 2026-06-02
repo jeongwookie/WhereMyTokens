@@ -1,4 +1,4 @@
-export const STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION = 3;
+export const STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION = 4;
 export const STARTUP_STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type StateFreshness = 'empty' | 'restored' | 'fresh';

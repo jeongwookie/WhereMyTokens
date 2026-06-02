@@ -7,6 +7,8 @@ import { Notification } from 'electron';
 import { appendCrashLog, buildErrorPayload, buildQuitTrace, collectRuntimeMemorySnapshot, getCrashLogPath, getDebugMemLogPath, isDebugInstrumentationEnabled, setListenerTargetsProvider } from './debugInstrumentation';
 import { initOAuthRefresh } from './oauthRefresh';
 import type { WindowStats } from './usageWindows';
+import type { ProviderId, ProviderQuotaWindow } from './providers/types';
+import { compactWidgetSize } from './compactWidgetSizing';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -33,10 +35,6 @@ type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
 const POPUP_MARGIN = 8;
-const WIDGET_WIDTH = 320;
-const WIDGET_HEIGHT_SINGLE = 112;
-const WIDGET_HEIGHT_BOTH = 176;
-
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
     { name: 'process', emitter: process },
@@ -172,20 +170,6 @@ function isCompactWidgetVisible() {
   return !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
 }
 
-function compactWidgetActivePlanProviders(settings: AppSettings): Array<'claude' | 'codex'> {
-  return settings.enabledProviders.filter((provider): provider is 'claude' | 'codex' =>
-    provider === 'claude' || provider === 'codex'
-  );
-}
-
-function compactWidgetSize(settings: AppSettings): { width: number; height: number } {
-  const activePlanProviders = compactWidgetActivePlanProviders(settings);
-  return {
-    width: WIDGET_WIDTH,
-    height: activePlanProviders.length > 1 ? WIDGET_HEIGHT_BOTH : WIDGET_HEIGHT_SINGLE,
-  };
-}
-
 type WidgetPosition = { x: number; y: number };
 type WidgetSize = { width: number; height: number };
 
@@ -246,9 +230,9 @@ function schedulePersistWidgetPosition(win: BrowserWindow) {
   }, 250);
 }
 
-function applyCompactWidgetBounds(settings = getSettings()) {
+function applyCompactWidgetBounds(settings = getSettings(), state: AppState | null | undefined = stateManager?.getState()) {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
-  const size = compactWidgetSize(settings);
+  const size = compactWidgetSize(settings, state);
   const [x, y] = widgetWindow.getPosition();
   const position = constrainWidgetPosition({ x, y }, size);
   widgetWindow.setBounds({ ...position, ...size }, false);
@@ -297,7 +281,7 @@ function openDashboardContextMenu() {
 
 function createWidgetWindow(): BrowserWindow {
   const settings = getSettings();
-  const size = compactWidgetSize(settings);
+  const size = compactWidgetSize(settings, stateManager?.getState());
   const position = resolveWidgetPosition(settings, size);
   const win = new BrowserWindow({
     width: size.width,
@@ -423,7 +407,7 @@ function sendWidgetStateUpdate(state: AppState) {
     return;
   }
   if (!widgetWindow.isVisible()) return;
-  applyCompactWidgetBounds(state.settings);
+  applyCompactWidgetBounds(state.settings, state);
   keepWindowOutOfTaskbar(widgetWindow);
   widgetWindow.webContents.send('state:updated', state);
 }
@@ -520,8 +504,12 @@ function applyRuntimeSettings() {
   }
 }
 
-function isCodexLimitProvisional(state: AppState, limit: AppState['limits']['codexH5']): boolean {
-  return state.historyWarmupPending && limit.source === 'localLog';
+function quotaWindow(state: AppState, provider: ProviderId, window: string): ProviderQuotaWindow | null {
+  return state.providerQuotas[provider]?.windows?.[window] ?? null;
+}
+
+function isCodexLimitProvisional(state: AppState, limit: ProviderQuotaWindow | null): boolean {
+  return state.historyWarmupPending && limit?.source === 'localLog';
 }
 
 function usageWindow(state: AppState, provider: 'claude' | 'codex', window: 'h5' | 'week'): WindowStats | null {
@@ -540,12 +528,15 @@ function buildTrayTitle(state: AppState): string {
     + (showCodex ? codexH5?.totalTokens ?? 0 : 0);
   const h5Cost = (showClaude ? claudeH5?.costUSD ?? 0 : 0)
     + (showCodex ? codexH5?.costUSD ?? 0 : 0);
-  const codexH5Provisional = isCodexLimitProvisional(state, state.limits.codexH5);
-  const stableCodexH5Pct = codexH5Provisional ? 0 : state.limits.codexH5.pct;
-  const h5Pct = Math.max(showClaude ? state.limits.h5.pct : 0, showCodex ? stableCodexH5Pct : 0);
+  const claudeH5Quota = quotaWindow(state, 'claude', 'h5');
+  const codexH5Quota = quotaWindow(state, 'codex', 'h5');
+  const codexH5Provisional = isCodexLimitProvisional(state, codexH5Quota);
+  const stableCodexH5Pct = codexH5Provisional ? 0 : codexH5Quota?.pct ?? 0;
+  const claudeH5Pct = claudeH5Quota?.pct ?? 0;
+  const h5Pct = Math.max(showClaude ? claudeH5Pct : 0, showCodex ? stableCodexH5Pct : 0);
   switch (display) {
     case 'h5pct':
-      if (codexH5Provisional && showCodex && (!showClaude || state.limits.h5.pct <= 0)) return 'scan';
+      if (codexH5Provisional && showCodex && (!showClaude || claudeH5Pct <= 0)) return 'scan';
       return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;
@@ -697,7 +688,7 @@ app.whenReady().then(() => {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
     if (typeof position?.x !== 'number' || typeof position?.y !== 'number') return;
     if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return;
-    const size = compactWidgetSize(getSettings());
+    const size = compactWidgetSize(getSettings(), stateManager?.getState());
     const next = constrainWidgetPosition({ x: position.x, y: position.y }, size);
     widgetWindow.setBounds({ ...next, width: size.width, height: size.height });
     keepWindowOutOfTaskbar(widgetWindow);

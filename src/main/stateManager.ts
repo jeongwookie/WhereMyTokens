@@ -4,9 +4,9 @@ import chokidar from 'chokidar';
 import { projectKeysForCwd } from './providers/shared/repoContext';
 import { scanCodexRateLimitsOnly } from './jsonlParser';
 import { JsonlCache } from './jsonlCache';
-import { computeUsage, UsageData } from './usageWindows';
+import { computeUsage, UsageData, UsageWindowResetHints } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
-import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, AutoLimits, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
+import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
 import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
@@ -22,8 +22,8 @@ import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentat
 import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
 import { UsageLedgerStore } from './usageLedgerStore';
-import { UsageProviderFilter, UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
-import type { UsageLedgerProvider } from './usageLedgerTypes';
+import type { SourceCheckpoint } from './usageLedgerTypes';
+import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
 import { makeStartupStateSnapshot, normalizeStartupStateSnapshot, StateFreshness } from './startupStateSnapshot';
 import { createProviderRegistry, ProviderRegistry } from './providers';
 import type {
@@ -31,17 +31,31 @@ import type {
   ExcludedProjectMatcher,
   ProviderAdapter,
   ProviderContext,
+  ProviderCreditBalance,
+  ProviderModelQuota,
+  ProviderQuotaDisplayBadge,
+  ProviderQuotaGroupSpec,
+  ProviderQuotaRowVisualKind,
   ProviderId,
   ProviderLedgerSource,
   ProviderQuotaSnapshot,
+  ProviderQuotaStatus,
+  ProviderQuotaWindow,
+  ProviderQuotaWindowDisplay,
   ProviderSource,
+  QuotaDisplayMode,
   SessionDiscoveryScope,
   SessionState,
   SourceBackedProviderAdapter,
 } from './providers/types';
-import { isProviderEnabled } from './providers/settings';
-import { isClaudeQuotaSnapshot } from './providers/claude/quota';
-import { isCodexQuotaSnapshot } from './providers/codex/quota';
+import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
+import { buildClaudeQuotaDisplayMetadata, isClaudeQuotaSnapshot } from './providers/claude/quota';
+import { buildCodexQuotaDisplayMetadata, isCodexQuotaSnapshot } from './providers/codex/quota';
+import {
+  buildUsageVisibilityFilter,
+  usageProviderVisible,
+  type UsageVisibilityFilter,
+} from './usageVisibilityFilter';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -83,30 +97,14 @@ export interface DebugMemSnapshot {
   jsonlCache: ReturnType<JsonlCache['getDebugStats']>;
 }
 
-export type UsageLimitSource = 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog';
-
-export interface UsageLimitWindow {
-  pct: number;
-  resetMs: number | null;
-  resetLabel?: string;
-  source?: UsageLimitSource;
-}
-
-export interface UsageLimits {
-  h5: UsageLimitWindow;
-  week: UsageLimitWindow;
-  so: UsageLimitWindow;
-  codexH5: UsageLimitWindow;
-  codexWeek: UsageLimitWindow;
-}
+export type ProviderQuotaMap = Partial<Record<ProviderId, ProviderQuotaSnapshot>>;
 
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
   usageTrend: UsageTrendData;
-  limits: UsageLimits;
+  providerQuotas: ProviderQuotaMap;
   settings: AppSettings;
-  autoLimits: AutoLimits | null;
   codexAccount: CodexAccountState;
   stateFreshness: StateFreshness;
   initialRefreshComplete: boolean;
@@ -121,7 +119,6 @@ export interface AppState {
   codexStatusLabel?: string;
   codexError?: string;
   bridgeActive: boolean;
-  extraUsage: ApiUsagePct['extraUsage'];
   repoGitStats: Record<string, GitStats>;
   codeOutputStats: CodeOutputStats;
   codeOutputLoading: boolean;
@@ -130,6 +127,11 @@ export interface AppState {
 
 type WatcherProfile = 'wide' | 'recent' | 'off';
 type WatcherMode = 'auto' | 'wide' | 'recent';
+
+const PROVIDER_QUOTA_SOURCES: ProviderQuotaSnapshot['source'][] = ['api', 'statusLine', 'localLog', 'localRpc', 'cache'];
+const QUOTA_DISPLAY_MODES: QuotaDisplayMode[] = ['rich', 'simple', 'none'];
+const QUOTA_ROW_VISUAL_KINDS: ProviderQuotaRowVisualKind[] = ['pace', 'percentOnly'];
+const QUOTA_BADGE_TONES: Array<NonNullable<ProviderQuotaDisplayBadge['tone']>> = ['good', 'neutral', 'warning'];
 
 interface PerfSampleStart {
   wallNs: bigint;
@@ -222,22 +224,266 @@ function ageCodexUsageSample(sample: CodexUsagePct, elapsedMs: number): CodexUsa
   };
 }
 
-function hasMeaningfulLimitWindow(window: UsageLimitWindow | null | undefined): boolean {
+function hasMeaningfulQuotaWindow(window: ProviderQuotaWindow | null | undefined): boolean {
   if (!window) return false;
   return window.pct > 0
     || window.resetMs != null
     || !!window.resetLabel
-    || window.source === 'codexApi'
+    || window.source === 'api'
     || window.source === 'statusLine'
     || window.source === 'localLog';
 }
 
-function emptyUsageLimitWindow(): UsageLimitWindow {
+function emptyQuotaWindow(): ProviderQuotaWindow {
   return { pct: 0, resetMs: null };
 }
 
-function canReuseClaudeCachedWindow(window: UsageLimitWindow | null | undefined): boolean {
-  return hasMeaningfulLimitWindow(window) && window?.source !== 'statusLine';
+function quotaRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function finiteQuotaNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function quotaString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function quotaStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const list = value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map(item => item.trim());
+  return list.length > 0 ? list : undefined;
+}
+
+function quotaSource(value: unknown, fallback: ProviderQuotaSnapshot['source'] = 'cache'): ProviderQuotaSnapshot['source'] {
+  return typeof value === 'string' && PROVIDER_QUOTA_SOURCES.includes(value as ProviderQuotaSnapshot['source'])
+    ? value as ProviderQuotaSnapshot['source']
+    : fallback;
+}
+
+function quotaDisplayMode(value: unknown): QuotaDisplayMode {
+  return typeof value === 'string' && (QUOTA_DISPLAY_MODES as readonly string[]).includes(value)
+    ? value as QuotaDisplayMode
+    : 'simple';
+}
+
+function quotaVisualKind(value: unknown): ProviderQuotaRowVisualKind | undefined {
+  return typeof value === 'string' && (QUOTA_ROW_VISUAL_KINDS as readonly string[]).includes(value)
+    ? value as ProviderQuotaRowVisualKind
+    : undefined;
+}
+
+function quotaBadgeTone(value: unknown): 'good' | 'neutral' | 'warning' | undefined {
+  return typeof value === 'string' && (QUOTA_BADGE_TONES as readonly string[]).includes(value)
+    ? value as 'good' | 'neutral' | 'warning'
+    : undefined;
+}
+
+function sanitizeQuotaWindow(value: unknown): ProviderQuotaWindow | null {
+  const record = quotaRecord(value);
+  if (!record) return null;
+  const resetMs = finiteQuotaNumber(record.resetMs);
+  const pct = finiteQuotaNumber(record.pct) ?? 0;
+  return {
+    pct: Math.max(0, Math.min(100, pct)),
+    resetMs: resetMs ?? null,
+    resetLabel: quotaString(record.resetLabel),
+    source: typeof record.source === 'string' ? quotaSource(record.source) : undefined,
+  };
+}
+
+function sanitizeQuotaWindows(value: unknown): ProviderQuotaSnapshot['windows'] | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  const windows: NonNullable<ProviderQuotaSnapshot['windows']> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const window = sanitizeQuotaWindow(entry);
+    if (window) windows[key] = window;
+  }
+  return Object.keys(windows).length > 0 ? windows : undefined;
+}
+
+function sanitizeQuotaBadge(value: unknown): ProviderQuotaDisplayBadge | null {
+  const record = quotaRecord(value);
+  const key = quotaString(record?.key);
+  const label = quotaString(record?.label);
+  if (!key || !label) return null;
+  return {
+    key,
+    label,
+    title: quotaString(record?.title),
+    tone: quotaBadgeTone(record?.tone),
+  };
+}
+
+function sanitizeQuotaBadges(value: unknown): ProviderQuotaDisplayBadge[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const badges = value
+    .map(sanitizeQuotaBadge)
+    .filter((badge): badge is ProviderQuotaDisplayBadge => !!badge);
+  return badges.length > 0 ? badges : undefined;
+}
+
+function sanitizeQuotaGroup(value: unknown): ProviderQuotaGroupSpec | null {
+  const record = quotaRecord(value);
+  const key = quotaString(record?.key);
+  const label = quotaString(record?.label);
+  const windowKeys = quotaStringList(record?.windowKeys);
+  if (!record || !key || !label || !windowKeys) return null;
+  return {
+    key,
+    label,
+    windowKeys,
+    defaultMode: quotaDisplayMode(record.defaultMode),
+    accentColor: quotaString(record.accentColor),
+    badges: sanitizeQuotaBadges(record.badges),
+    sortOrder: finiteQuotaNumber(record.sortOrder),
+  };
+}
+
+function sanitizeQuotaGroups(value: unknown): ProviderQuotaGroupSpec[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const groups = value
+    .map(sanitizeQuotaGroup)
+    .filter((group): group is ProviderQuotaGroupSpec => !!group);
+  return groups.length > 0 ? groups : undefined;
+}
+
+function sanitizeQuotaWindowDisplay(value: unknown): ProviderQuotaWindowDisplay | null {
+  const record = quotaRecord(value);
+  const label = quotaString(record?.label);
+  if (!record || !label) return null;
+  return {
+    label,
+    visualKind: quotaVisualKind(record.visualKind),
+    cacheMetricTitle: quotaString(record.cacheMetricTitle),
+    durationMs: finiteQuotaNumber(record.durationMs),
+    modelIncludes: quotaStringList(record.modelIncludes),
+    hideCost: record.hideCost === true,
+    badges: sanitizeQuotaBadges(record.badges),
+  };
+}
+
+function sanitizeQuotaWindowDisplayMap(value: unknown): ProviderQuotaSnapshot['windowDisplay'] | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  const display: Record<string, ProviderQuotaWindowDisplay> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const item = sanitizeQuotaWindowDisplay(entry);
+    if (item) display[key] = item;
+  }
+  return Object.keys(display).length > 0 ? display : undefined;
+}
+
+function sanitizeProviderQuotaStatus(value: unknown): ProviderQuotaStatus | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  return {
+    connected: record.connected === true,
+    code: quotaString(record.code) ?? 'unknown',
+    label: quotaString(record.label),
+    detail: quotaString(record.detail),
+    severity: record.severity === 'ok' || record.severity === 'warning' || record.severity === 'danger'
+      ? record.severity
+      : undefined,
+  };
+}
+
+function sanitizeProviderCredit(value: unknown): ProviderCreditBalance | null {
+  const record = quotaRecord(value);
+  if (!record) return null;
+  const resetMs = finiteQuotaNumber(record.resetMs);
+  return {
+    available: Math.max(0, finiteQuotaNumber(record.available) ?? 0),
+    used: finiteQuotaNumber(record.used),
+    total: finiteQuotaNumber(record.total),
+    remainingPct: finiteQuotaNumber(record.remainingPct),
+    resetMs: resetMs ?? (record.resetMs === null ? null : undefined),
+  };
+}
+
+function sanitizeProviderCredits(value: unknown): ProviderQuotaSnapshot['credits'] | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  const credits: Record<string, ProviderCreditBalance> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const credit = sanitizeProviderCredit(entry);
+    if (credit) credits[key] = credit;
+  }
+  return Object.keys(credits).length > 0 ? credits : undefined;
+}
+
+function sanitizeProviderModelQuota(value: unknown): ProviderModelQuota | null {
+  const record = quotaRecord(value);
+  const model = quotaString(record?.model);
+  const label = quotaString(record?.label);
+  if (!record || !model || !label) return null;
+  return {
+    model,
+    label,
+    remainingPct: Math.max(0, Math.min(100, finiteQuotaNumber(record.remainingPct) ?? 0)),
+    resetMs: finiteQuotaNumber(record.resetMs) ?? (record.resetMs === null ? null : undefined),
+    groupKey: quotaString(record.groupKey),
+    defaultMode: record.defaultMode == null ? undefined : quotaDisplayMode(record.defaultMode),
+    visualKind: quotaVisualKind(record.visualKind),
+    cacheMetricTitle: quotaString(record.cacheMetricTitle),
+    durationMs: finiteQuotaNumber(record.durationMs),
+    hideCost: record.hideCost === true,
+    accentColor: quotaString(record.accentColor),
+    badges: sanitizeQuotaBadges(record.badges),
+  };
+}
+
+function sanitizeProviderModels(value: unknown): ProviderModelQuota[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const models = value
+    .map(sanitizeProviderModelQuota)
+    .filter((model): model is ProviderModelQuota => !!model);
+  return models.length > 0 ? models : undefined;
+}
+
+function isProviderIdValue(value: unknown): value is ProviderId {
+  return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
+}
+
+function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
+  const record = quotaRecord(value);
+  if (!record) return null;
+  if (record.provider != null && record.provider !== provider) return null;
+  return {
+    provider,
+    source: quotaSource(record.source),
+    capturedAt: finiteQuotaNumber(record.capturedAt) ?? 0,
+    accountLabel: quotaString(record.accountLabel),
+    planName: quotaString(record.planName),
+    windows: sanitizeQuotaWindows(record.windows),
+    models: sanitizeProviderModels(record.models),
+    groups: sanitizeQuotaGroups(record.groups),
+    windowDisplay: sanitizeQuotaWindowDisplayMap(record.windowDisplay),
+    credits: sanitizeProviderCredits(record.credits),
+    status: sanitizeProviderQuotaStatus(record.status),
+  };
+}
+
+function sanitizeProviderQuotaMap(value: unknown): ProviderQuotaMap {
+  const record = quotaRecord(value);
+  if (!record) return {};
+  const quotas: ProviderQuotaMap = {};
+  for (const [provider, snapshot] of Object.entries(record)) {
+    if (!isProviderIdValue(provider)) continue;
+    const sanitized = sanitizeProviderQuotaSnapshot(provider, snapshot);
+    if (sanitized) quotas[provider] = sanitized;
+  }
+  return quotas;
+}
+
+function canReuseClaudeCachedWindow(window: ProviderQuotaWindow | null | undefined): boolean {
+  return hasMeaningfulQuotaWindow(window) && window?.source !== 'statusLine';
 }
 
 function approximateSessionState(lastModified: Date | null): SessionState {
@@ -330,11 +576,10 @@ export class StateManager {
   private state: AppState;
   private fastTimer: NodeJS.Timeout | null = null;
   private heavyTimer: NodeJS.Timeout | null = null;
-  private autoLimitTimer: NodeJS.Timeout | null = null;
+  private quotaRefreshTimer: NodeJS.Timeout | null = null;
   private watcher: chokidar.FSWatcher | null = null;
   private fastDebounce: NodeJS.Timeout | null = null;
   private onUpdate: (s: AppState) => void;
-  private autoLimits: AutoLimits | null = null;
   private apiUsagePct: ApiUsagePct | null = null;
   private apiUsagePctStoredAt = 0;
   private apiConnected = false;
@@ -352,6 +597,8 @@ export class StateManager {
   private lastCodexUsageCallMs = 0;
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
+  private providerQuotaRequestSeqs = new Map<ProviderId, number>();
+  private providerQuotaSnapshots = new Map<ProviderId, ProviderQuotaSnapshot>();
   private lastManualProviderUsageForceMs = 0;
   private bridgeWatcher: BridgeWatcher;
   private refreshScheduler: RefreshScheduler;
@@ -440,10 +687,9 @@ export class StateManager {
 
     this.bridgeWatcher = new BridgeWatcher((data) => {
       this.liveSession = data;
-      const limits = this.buildLimits();
       this.state = {
         ...this.state,
-        limits,
+        providerQuotas: this.buildProviderQuotas(),
         bridgeActive: true,
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
@@ -498,10 +744,16 @@ export class StateManager {
 
   private reviveRestoredState(state: AppState): AppState {
     const sessions = Array.isArray(state.sessions) ? state.sessions : [];
+    const providerQuotas = sanitizeProviderQuotaMap(state.providerQuotas);
+    this.providerQuotaSnapshots.clear();
+    for (const [provider, snapshot] of Object.entries(providerQuotas) as Array<[ProviderId, ProviderQuotaSnapshot | undefined]>) {
+      if (snapshot?.provider === provider) this.providerQuotaSnapshots.set(provider, snapshot);
+    }
     return {
       ...state,
       settings: this.getSettings(),
       repoGitStats: state.repoGitStats && typeof state.repoGitStats === 'object' ? state.repoGitStats : {},
+      providerQuotas,
       sessions: sessions.map(session => ({
         ...session,
         startedAt: this.reviveDate(session.startedAt) ?? new Date(0),
@@ -535,10 +787,6 @@ export class StateManager {
 
   private enabledProviderSet(settings: AppSettings): ReadonlySet<ProviderId> {
     return new Set(settings.enabledProviders);
-  }
-
-  private enabledUsageLedgerProviders(settings: AppSettings): UsageProviderFilter {
-    return new Set(settings.enabledProviders) as ReadonlySet<UsageLedgerProvider>;
   }
 
   private providerSelectionChanged(next: AppSettings, previous: AppSettings): boolean {
@@ -586,10 +834,7 @@ export class StateManager {
       sessions: [],
       usage: {
         byProvider: {
-          claude: {
-            windows: { h5: this.emptyWindow(), week: this.emptyWindow(), sonnetWeek: this.emptyWindow() },
-            burnRate: { h5OutputPerMin: 0, h5EtaMs: null, weekEtaMs: null },
-          },
+          claude: { windows: { h5: this.emptyWindow(), week: this.emptyWindow(), sonnetWeek: this.emptyWindow() } },
           codex: { windows: { h5: this.emptyWindow(), week: this.emptyWindow() } },
         },
         models: [],
@@ -615,15 +860,8 @@ export class StateManager {
         todBuckets: [],
       },
       usageTrend: emptyUsageTrendData(),
-      limits: {
-        h5: { pct: 0, resetMs: null, source: 'cache' },
-        week: { pct: 0, resetMs: null, source: 'cache' },
-        so: { pct: 0, resetMs: null, source: 'cache' },
-        codexH5: { pct: 0, resetMs: null, source: 'cache' },
-        codexWeek: { pct: 0, resetMs: null, source: 'cache' },
-      },
+      providerQuotas: {},
       settings: this.getSettings(),
-      autoLimits: null,
       codexAccount: readCodexAccountState(),
       stateFreshness: 'empty',
       initialRefreshComplete: false,
@@ -638,7 +876,6 @@ export class StateManager {
       codexStatusLabel: undefined,
       codexError: undefined,
       bridgeActive: false,
-      extraUsage: null,
       repoGitStats: {},
       codeOutputStats: this.emptyCodeOutputStats(),
       codeOutputLoading: false,
@@ -686,7 +923,7 @@ export class StateManager {
     this.startWatcher();
     this.startDebugMemTimer();
 
-    this.autoLimitTimer = setInterval(() => {
+    this.quotaRefreshTimer = setInterval(() => {
       void this.refreshProviderQuotas(this.getSettings(), false).catch(() => {});
     }, 5 * 60 * 1000);
   }
@@ -694,7 +931,7 @@ export class StateManager {
   stop() {
     if (this.fastTimer) clearInterval(this.fastTimer);
     if (this.heavyTimer) clearInterval(this.heavyTimer);
-    if (this.autoLimitTimer) clearInterval(this.autoLimitTimer);
+    if (this.quotaRefreshTimer) clearInterval(this.quotaRefreshTimer);
     if (this.debugMemTimer) clearInterval(this.debugMemTimer);
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
     if (this.historyWarmupTimer) clearTimeout(this.historyWarmupTimer);
@@ -992,17 +1229,20 @@ export class StateManager {
   }
 
   private beginProviderQuotaRequest(provider: ProviderId, force: boolean, now: number): number | null {
-    if (provider === 'claude') return this.beginClaudeQuotaRequest(force, now);
-    if (provider === 'codex') return this.beginCodexQuotaRequest(force, now);
-    return 0;
+    const requestSeq = provider === 'claude'
+      ? this.beginClaudeQuotaRequest(force, now)
+      : provider === 'codex'
+        ? this.beginCodexQuotaRequest(force, now)
+        : (this.providerQuotaRequestSeqs.get(provider) ?? 0) + 1;
+    if (requestSeq == null) return null;
+    this.providerQuotaRequestSeqs.set(provider, requestSeq);
+    return requestSeq;
   }
 
   private applyClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, requestStartedAtMs: number): boolean {
     if (!isClaudeQuotaSnapshot(snapshot)) return false;
     if (requestSeq !== this.apiRequestSeq) return false;
     this.applyApiStatus(snapshot.status);
-
-    if (snapshot.autoLimits) this.autoLimits = snapshot.autoLimits;
 
     if (snapshot.usage) {
       const mergedUsage = this.mergeApiUsageSample(snapshot.usage, snapshot.status, requestStartedAtMs);
@@ -1083,9 +1323,18 @@ export class StateManager {
   }
 
   private applyProviderQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, requestStartedAtMs: number): boolean {
-    if (snapshot.provider === 'claude') return this.applyClaudeQuotaSnapshot(snapshot, requestSeq, requestStartedAtMs);
-    if (snapshot.provider === 'codex') return this.applyCodexQuotaSnapshot(snapshot, requestSeq);
-    return false;
+    if (this.providerQuotaRequestSeqs.get(snapshot.provider) !== requestSeq) return false;
+    let accepted = true;
+    if (snapshot.provider === 'claude') {
+      accepted = this.applyClaudeQuotaSnapshot(snapshot, requestSeq, requestStartedAtMs);
+    } else if (snapshot.provider === 'codex') {
+      accepted = this.applyCodexQuotaSnapshot(snapshot, requestSeq);
+    }
+    if (!accepted) return false;
+    const publicSnapshot = sanitizeProviderQuotaSnapshot(snapshot.provider, snapshot);
+    if (!publicSnapshot) return false;
+    this.providerQuotaSnapshots.set(snapshot.provider, publicSnapshot);
+    return true;
   }
 
   private async refreshProviderQuota(
@@ -1214,36 +1463,28 @@ export class StateManager {
     this.gitWarmupTimer = null;
   }
 
-  private computeDerivedUsage(settings: AppSettings): Pick<AppState, 'usage' | 'limits' | 'bridgeActive' | 'extraUsage'> {
-    const effectiveLimits = this.autoLimits
-      ? { h5: this.autoLimits.h5, week: this.autoLimits.week, sonnetWeek: this.autoLimits.sonnetWeek }
-      : settings.usageLimits;
+  private computeDerivedUsage(settings: AppSettings): Pick<AppState, 'usage' | 'providerQuotas' | 'bridgeActive'> {
     const now = Date.now();
-    const apiUsagePct = this.getAgedApiUsagePct(now);
-    const rl = this.liveSession?.rate_limits;
+    const providerQuotas = this.buildProviderQuotas(now);
+    const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
     const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
-    const bridgeH5ResetMs = bridgeActive && rl?.five_hour?.resets_at ? rl.five_hour.resets_at - now : null;
-    const bridgeWeekResetMs = bridgeActive && rl?.seven_day?.resets_at ? rl.seven_day.resets_at - now : null;
-    const h5ResetMs = !this.apiConnected && bridgeH5ResetMs != null
-      ? bridgeH5ResetMs
-      : (apiUsagePct?.h5ResetMs ?? bridgeH5ResetMs);
-    const weekResetMs = !this.apiConnected && bridgeWeekResetMs != null
-      ? bridgeWeekResetMs
-      : (apiUsagePct?.weekResetMs ?? bridgeWeekResetMs);
-    const codexResetMs = this.getCodexLimitWindows(now);
-    const resetWindows = {
-      claude: { weekResetMs, h5ResetMs },
-      codex: { weekResetMs: codexResetMs.week.resetMs, h5ResetMs: codexResetMs.h5.resetMs },
-    };
+    const resetWindows: UsageWindowResetHints = {};
+    for (const provider of this.enabledProviderSet(settings)) {
+      const windows = providerQuotas[provider]?.windows;
+      if (!windows) continue;
+      resetWindows[provider] = {
+        weekResetMs: windows.week?.resetMs ?? null,
+        h5ResetMs: windows.h5?.resetMs ?? null,
+      };
+    }
     const ledgerSnapshot = this.usageLedgerStore.getSnapshot();
     const usage = this.canUseUsageLedger(ledgerSnapshot, settings)
-      ? computeUsageFromLedger(ledgerSnapshot, effectiveLimits, resetWindows, now, this.enabledUsageLedgerProviders(settings))
-      : computeUsage(this.getVisibleSummaries(settings), effectiveLimits, resetWindows);
+      ? computeUsageFromLedger(ledgerSnapshot, resetWindows, now, usageVisibilityFilter, providerQuotas)
+      : computeUsage(this.getVisibleSummaries(settings), resetWindows, usageVisibilityFilter, providerQuotas);
     return {
       usage,
-      limits: this.buildLimits(),
+      providerQuotas,
       bridgeActive,
-      extraUsage: apiUsagePct?.extraUsage ?? null,
     };
   }
 
@@ -1283,9 +1524,11 @@ export class StateManager {
   }
 
   private buildUsageTrend(settings = this.getSettings()): UsageTrendData {
+    const now = Date.now();
+    const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
     const snapshot = this.usageLedgerStore.getSnapshot();
     return this.canUseUsageLedger(snapshot, settings)
-      ? buildTrendDataFromLedger(snapshot, Date.now(), this.enabledUsageLedgerProviders(settings))
+      ? buildTrendDataFromLedger(snapshot, now, usageVisibilityFilter)
       : emptyUsageTrendData();
   }
 
@@ -1317,16 +1560,27 @@ export class StateManager {
     return visible;
   }
 
+  private checkpointHasVisibleUsage(checkpoint: SourceCheckpoint, filter: UsageVisibilityFilter): boolean {
+    if (checkpoint.hasUsage === false || checkpoint.needsRebuild) return false;
+    return usageProviderVisible(filter, checkpoint.provider);
+  }
+
+  private summaryHasVisibleUsage(summary: FileUsageSummary, filter: UsageVisibilityFilter): boolean {
+    if (!hasUsageRequests(summary)) return false;
+    return usageProviderVisible(filter, summary.provider);
+  }
+
   private countAllTimeUsageSessions(settings: AppSettings): number {
+    const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
     const snapshot = this.usageLedgerStore.getSnapshot();
     if (this.canUseUsageLedger(snapshot, settings)) {
       return Object.values(snapshot.sourceCheckpoints).filter(checkpoint =>
-        checkpoint.hasUsage !== false
-        && !checkpoint.needsRebuild
-        && this.enabledProviderSet(settings).has(checkpoint.provider)
+        this.checkpointHasVisibleUsage(checkpoint, usageVisibilityFilter)
       ).length;
     }
-    return this.getVisibleSummaries(settings).filter(hasUsageRequests).length;
+    return this.getVisibleSummaries(settings).filter(summary =>
+      this.summaryHasVisibleUsage(summary, usageVisibilityFilter)
+    ).length;
   }
 
   private sessionIdentityKey(session: Pick<DiscoveredSession, 'provider' | 'jsonlPath' | 'cwd' | 'sessionId'>): string {
@@ -1622,7 +1876,7 @@ export class StateManager {
       settings,
       usage: derived.usage,
       usageTrend,
-      limits: derived.limits,
+      providerQuotas: derived.providerQuotas,
       codexAccount,
       bridgeActive: derived.bridgeActive,
       apiStatusLabel: this.apiStatusLabel || undefined,
@@ -1630,7 +1884,6 @@ export class StateManager {
       codexUsageConnected: this.codexUsageConnected,
       codexStatusLabel: this.codexStatusLabel || undefined,
       codexError: this.codexError || undefined,
-      extraUsage: derived.extraUsage,
       codeOutputStats,
       codeOutputLoading: false,
       allTimeSessions,
@@ -1711,9 +1964,8 @@ export class StateManager {
           sessions,
           usage: derived.usage,
           usageTrend,
-          limits: derived.limits,
+          providerQuotas: derived.providerQuotas,
           settings,
-          autoLimits: this.autoLimits,
           codexAccount,
           lastUpdated: Date.now(),
           apiConnected: this.apiConnected,
@@ -1723,7 +1975,6 @@ export class StateManager {
           codexStatusLabel: this.codexStatusLabel || undefined,
           codexError: this.codexError || undefined,
           bridgeActive: derived.bridgeActive,
-          extraUsage: derived.extraUsage,
           codeOutputStats,
           codeOutputLoading: false,
           allTimeSessions,
@@ -1731,7 +1982,7 @@ export class StateManager {
           stateFreshness: this.currentStateFreshness(),
         };
         this.publishState();
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
+        checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: this.state.historyWarmupPending,
         });
         this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
@@ -1795,9 +2046,8 @@ export class StateManager {
         sessions,
         usage: derived.usage,
         usageTrend,
-        limits: derived.limits,
+        providerQuotas: derived.providerQuotas,
         settings,
-        autoLimits: this.autoLimits,
         codexAccount,
         stateFreshness: 'fresh',
         initialRefreshComplete: true,
@@ -1811,7 +2061,6 @@ export class StateManager {
         codexStatusLabel: this.codexStatusLabel || undefined,
         codexError: this.codexError || undefined,
         bridgeActive: derived.bridgeActive,
-        extraUsage: derived.extraUsage,
         repoGitStats: this.state.repoGitStats,
         codeOutputStats: partialCodeOutputStats,
         codeOutputLoading: true,
@@ -1821,7 +2070,7 @@ export class StateManager {
       this.publishState();
       if (!initialRefreshDone && !force) {
         this.scheduleGitWarmup();
-        checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
+        checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: partialHistoryScan,
         });
         await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
@@ -1856,9 +2105,8 @@ export class StateManager {
         sessions,
         usage: derived.usage,
         usageTrend,
-        limits: derived.limits,
+        providerQuotas: derived.providerQuotas,
         settings,
-        autoLimits: this.autoLimits,
         codexAccount,
         stateFreshness: 'fresh',
         initialRefreshComplete: true,
@@ -1872,7 +2120,6 @@ export class StateManager {
         codexStatusLabel: this.codexStatusLabel || undefined,
         codexError: this.codexError || undefined,
         bridgeActive: derived.bridgeActive,
-        extraUsage: derived.extraUsage,
         repoGitStats,
         codeOutputStats,
         codeOutputLoading: false,
@@ -1881,7 +2128,7 @@ export class StateManager {
       };
       this.publishState();
 
-      checkAlerts(derived.limits, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
+      checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
         deferCodexLocalLog: partialHistoryScan,
       });
       await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
@@ -1921,12 +2168,20 @@ export class StateManager {
     return (await this.buildScopedSessionInfosDetailed(summaries)).sessions;
   }
 
-  private buildLimits(): UsageLimits {
-    const now = Date.now();
+  private buildProviderQuotas(now = Date.now()): ProviderQuotaMap {
+    const quotas: ProviderQuotaMap = {};
+    for (const [provider, snapshot] of this.providerQuotaSnapshots.entries()) {
+      const publicSnapshot = sanitizeProviderQuotaSnapshot(provider, snapshot);
+      if (publicSnapshot) quotas[provider] = publicSnapshot;
+    }
+    quotas.claude = this.buildClaudeProviderQuota(now);
+    quotas.codex = this.buildCodexProviderQuota(now);
+    return quotas;
+  }
+
+  private buildClaudeProviderQuota(now: number): ProviderQuotaSnapshot {
+    const displayMetadata = buildClaudeQuotaDisplayMetadata();
     const apiUsagePct = this.getAgedApiUsagePct(now);
-    const codexResetMs = this.getCodexLimitWindows(now);
-    const codexH5 = codexResetMs.h5;
-    const codexWeek = codexResetMs.week;
     const rl = this.liveSession?.rate_limits;
     const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
     const bridgeH5 = bridgeActive && rl?.five_hour
@@ -1939,16 +2194,23 @@ export class StateManager {
       ? {
           pct: rl.seven_day.used_percentage ?? 0,
           resetMs: rl.seven_day.resets_at ? rl.seven_day.resets_at - now : null,
-        }
+      }
       : null;
+    const status = {
+      connected: this.apiConnected,
+      code: this.apiStatusLabel || (this.apiConnected ? 'connected' : 'unknown'),
+      label: this.apiStatusLabel || undefined,
+      detail: this.apiError || undefined,
+    };
+    const planName = apiUsagePct?.plan || this.state.providerQuotas.claude?.planName;
 
     if (apiUsagePct) {
-      const source: UsageLimitSource = this.apiConnected ? 'api' : 'cache';
+      const source: ProviderQuotaSnapshot['source'] = this.apiConnected ? 'api' : 'cache';
       const claudeH5 = !this.apiConnected && bridgeH5
         ? {
             pct: bridgeH5.pct,
             resetMs: bridgeH5.resetMs,
-            source: 'statusLine' as UsageLimitSource,
+            source: 'statusLine' as ProviderQuotaSnapshot['source'],
           }
         : {
             pct: apiUsagePct.h5Pct,
@@ -1960,7 +2222,7 @@ export class StateManager {
         ? {
             pct: bridgeWeek.pct,
             resetMs: bridgeWeek.resetMs,
-            source: 'statusLine' as UsageLimitSource,
+            source: 'statusLine' as ProviderQuotaSnapshot['source'],
           }
         : {
             pct: apiUsagePct.weekPct,
@@ -1969,61 +2231,117 @@ export class StateManager {
             source,
           };
       return {
-        h5: claudeH5,
-        week: claudeWeek,
-        so: {
-          pct: apiUsagePct.soPct,
-          resetMs: apiUsagePct.soResetMs,
-          resetLabel: apiUsagePct.soResetMs == null ? 'Claude Sonnet reset unavailable' : undefined,
-          source,
+        provider: 'claude',
+        source,
+        capturedAt: now,
+        accountLabel: planName || undefined,
+        planName: planName || undefined,
+        ...displayMetadata,
+        windows: {
+          h5: claudeH5,
+          week: claudeWeek,
+          sonnetWeek: {
+            pct: apiUsagePct.soPct,
+            resetMs: apiUsagePct.soResetMs,
+            resetLabel: apiUsagePct.soResetMs == null ? 'Claude Sonnet reset unavailable' : undefined,
+            source,
+          },
         },
-        codexH5,
-        codexWeek,
+        credits: this.claudeCredits(apiUsagePct),
+        status,
       };
     }
 
     if (bridgeH5 || bridgeWeek) {
       return {
-        h5: bridgeH5 ? { pct: bridgeH5.pct, resetMs: bridgeH5.resetMs, source: 'statusLine' } : emptyUsageLimitWindow(),
-        week: bridgeWeek ? { pct: bridgeWeek.pct, resetMs: bridgeWeek.resetMs, source: 'statusLine' } : emptyUsageLimitWindow(),
-        so: emptyUsageLimitWindow(),
-        codexH5,
-        codexWeek,
+        provider: 'claude',
+        source: 'statusLine',
+        capturedAt: now,
+        accountLabel: planName || undefined,
+        planName: planName || undefined,
+        ...displayMetadata,
+        windows: {
+          h5: bridgeH5 ? { pct: bridgeH5.pct, resetMs: bridgeH5.resetMs, source: 'statusLine' } : emptyQuotaWindow(),
+          week: bridgeWeek ? { pct: bridgeWeek.pct, resetMs: bridgeWeek.resetMs, source: 'statusLine' } : emptyQuotaWindow(),
+          sonnetWeek: emptyQuotaWindow(),
+        },
+        status,
       };
     }
 
     if (this.apiStatusLabel === 'local only') {
       return {
-        h5: emptyUsageLimitWindow(),
-        week: emptyUsageLimitWindow(),
-        so: emptyUsageLimitWindow(),
-        codexH5,
-        codexWeek,
+        provider: 'claude',
+        source: 'cache',
+        capturedAt: now,
+        accountLabel: planName || undefined,
+        planName: planName || undefined,
+        ...displayMetadata,
+        windows: {
+          h5: emptyQuotaWindow(),
+          week: emptyQuotaWindow(),
+          sonnetWeek: emptyQuotaWindow(),
+        },
+        status,
       };
     }
 
-    const previous = this.state?.limits ?? {
-      h5: { pct: 0, resetMs: null },
-      week: { pct: 0, resetMs: null },
-      so: { pct: 0, resetMs: null },
-      codexH5,
-      codexWeek,
-    };
+    const previous = this.state.providerQuotas.claude?.windows ?? {};
     return {
-      h5: canReuseClaudeCachedWindow(previous.h5) ? { ...previous.h5, source: 'cache' } : emptyUsageLimitWindow(),
-      week: canReuseClaudeCachedWindow(previous.week) ? { ...previous.week, source: 'cache' } : emptyUsageLimitWindow(),
-      so: canReuseClaudeCachedWindow(previous.so) ? { ...previous.so, source: 'cache' } : emptyUsageLimitWindow(),
-      codexH5,
-      codexWeek,
+      provider: 'claude',
+      source: 'cache',
+      capturedAt: now,
+      accountLabel: planName || undefined,
+      planName: planName || undefined,
+      ...displayMetadata,
+      windows: {
+        h5: canReuseClaudeCachedWindow(previous.h5) ? { ...previous.h5, source: 'cache' } : emptyQuotaWindow(),
+        week: canReuseClaudeCachedWindow(previous.week) ? { ...previous.week, source: 'cache' } : emptyQuotaWindow(),
+        sonnetWeek: canReuseClaudeCachedWindow(previous.sonnetWeek) ? { ...previous.sonnetWeek, source: 'cache' } : emptyQuotaWindow(),
+      },
+      status,
     };
   }
 
-  private getCodexLocalLogWindows(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
-    const toWindow = (window: CodexRateLimitWindow | undefined, maxWindowMs: number): UsageLimitWindow => {
-      if (!window) return emptyUsageLimitWindow();
+  private claudeCredits(usage: ApiUsagePct | null): ProviderQuotaSnapshot['credits'] {
+    const extraUsage = usage?.extraUsage;
+    if (!extraUsage?.isEnabled) return undefined;
+    return {
+      extraUsage: {
+        available: Math.max(0, extraUsage.monthlyLimit - extraUsage.usedCredits),
+        used: extraUsage.usedCredits,
+        total: extraUsage.monthlyLimit,
+        remainingPct: Math.max(0, Math.min(100, 100 - extraUsage.utilization)),
+        resetMs: null,
+      },
+    };
+  }
+
+  private buildCodexProviderQuota(now: number): ProviderQuotaSnapshot {
+    const windows = this.getCodexLimitWindows(now);
+    const raw = sanitizeProviderQuotaSnapshot('codex', this.providerQuotaSnapshots.get('codex'));
+    const source = windows.h5.source ?? windows.week.source ?? raw?.source ?? (this.codexUsageConnected ? 'api' : 'localLog');
+    return {
+      ...raw,
+      ...buildCodexQuotaDisplayMetadata(),
+      provider: 'codex',
+      source,
+      capturedAt: now,
+      planName: this.getAgedCodexUsagePct(now)?.plan || raw?.planName,
+      windows,
+      status: raw?.status ?? {
+        connected: this.codexUsageConnected,
+        code: this.codexUsageConnected ? 'connected' : 'local-log',
+      },
+    };
+  }
+
+  private getCodexLocalLogWindows(now: number): { h5: ProviderQuotaWindow; week: ProviderQuotaWindow } {
+    const toWindow = (window: CodexRateLimitWindow | undefined, maxWindowMs: number): ProviderQuotaWindow => {
+      if (!window) return emptyQuotaWindow();
       const resetMs = window.resetsAt * 1000 - now;
       if (!Number.isFinite(window.pct) || !Number.isFinite(resetMs) || resetMs <= 0 || resetMs > maxWindowMs) {
-        return emptyUsageLimitWindow();
+        return emptyQuotaWindow();
       }
       return {
         pct: Math.max(0, Math.min(100, window.pct)),
@@ -2037,17 +2355,17 @@ export class StateManager {
     };
   }
 
-  private getCodexLimitWindows(now: number): { h5: UsageLimitWindow; week: UsageLimitWindow } {
+  private getCodexLimitWindows(now: number): { h5: ProviderQuotaWindow; week: ProviderQuotaWindow } {
     const local = this.getCodexLocalLogWindows(now);
     const live = this.getAgedCodexUsagePct(now);
     if (!live) return local;
-    const source: UsageLimitSource = this.codexUsageConnected ? 'codexApi' : 'cache';
+    const source: ProviderQuotaSnapshot['source'] = this.codexUsageConnected ? 'api' : 'cache';
     const liveWindow = (
       available: boolean,
       pct: number,
       resetMs: number | null,
       resetLabel: string,
-    ): UsageLimitWindow | null => {
+    ): ProviderQuotaWindow | null => {
       if (!available) return null;
       return {
         pct: Math.max(0, Math.min(100, pct)),
@@ -2777,9 +3095,8 @@ export class StateManager {
         settings,
         usage: derived.usage,
         usageTrend,
-        limits: derived.limits,
+        providerQuotas: derived.providerQuotas,
         bridgeActive: derived.bridgeActive,
-        extraUsage: derived.extraUsage,
         codeOutputStats,
         codeOutputLoading: true,
         allTimeSessions,

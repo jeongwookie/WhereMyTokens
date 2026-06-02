@@ -1,10 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AppSettings, IntegrationStatus } from '../types';
+import { AppSettings, AppState, IntegrationStatus, QuotaDisplayMode } from '../types';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 import { DEFAULT_MAIN_SECTION_ORDER, MAIN_SECTION_LABELS, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
+import { buildQuotaTargetSettingsOptions } from '../quotaDisplayModels';
+import { quotaSourceBadgeToneStyle } from '../theme';
 
-interface Props { settings: AppSettings; onSave: (s: Partial<AppSettings>) => void; onBack: () => void; }
+interface Props {
+  settings: AppSettings;
+  providerQuotas: AppState['providerQuotas'];
+  onSave: (s: Partial<AppSettings>) => void;
+  onBack: () => void;
+}
 
 const KEY_NAME_BY_CODE: Record<string, string> = {
   Backspace: 'Backspace',
@@ -70,12 +77,10 @@ const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
 const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS;
 
 const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
-  'usageLimits',
   'enabledProviders',
   'alertThresholds',
   'currency',
   'usdToKrw',
-  'plan',
   'globalHotkey',
   'openAtLogin',
   'alwaysOnTop',
@@ -85,6 +90,8 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'hiddenMainSections',
   'hiddenProjects',
   'excludedProjects',
+  'quotaTargetModes',
+  'quotaTargetOrder',
   'compactWidgetEnabled',
   'compactWidgetWaitingAnimationEnabled',
   'theme',
@@ -94,6 +101,8 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
   const mainSectionOrder = normalizeMainSectionOrder(settings.mainSectionOrder);
   return {
     ...settings,
+    quotaTargetModes: settings.quotaTargetModes ?? {},
+    quotaTargetOrder: settings.quotaTargetOrder ?? [],
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
   };
@@ -146,7 +155,7 @@ function buildSettingsPatch(current: AppSettings, base: AppSettings, latest: App
   return patch;
 }
 
-export default function SettingsView({ settings, onSave, onBack }: Props) {
+export default function SettingsView({ settings, providerQuotas, onSave, onBack }: Props) {
   const C = useTheme();
   const [baseSettings] = useState(() => normalizeSettingsDraft(settings));
   const [s, setS] = useState(() => normalizeSettingsDraft(settings));
@@ -157,6 +166,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
   const [ledgerMsg, setLedgerMsg] = useState('');
   const latestSettings = useMemo(() => normalizeSettingsDraft(settings), [settings]);
   const settingsToSave = useMemo(() => buildSettingsPatch(s, baseSettings, latestSettings), [s, baseSettings, latestSettings]);
+  const quotaTargetOptions = useMemo(() => buildQuotaTargetSettingsOptions(s, providerQuotas), [s, providerQuotas]);
 
   const isDirty = useMemo(() => Object.keys(settingsToSave).length > 0, [settingsToSave]);
 
@@ -165,6 +175,26 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
   const sel: React.CSSProperties = useMemo(() => ({ background: C.bgRow, color: C.text, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 6px', fontSize: 12 }), [C]);
   const inp: React.CSSProperties = useMemo(() => ({ ...sel, width: 80 }), [sel]);
   const chk: React.CSSProperties = useMemo(() => ({ accentColor: C.accent }), [C]);
+
+  const setQuotaTargetMode = (targetId: string, mode: QuotaDisplayMode) => {
+    setS(current => ({
+      ...current,
+      quotaTargetModes: {
+        ...(current.quotaTargetModes ?? {}),
+        [targetId]: mode,
+      },
+    }));
+  };
+
+  function moveQuotaTarget(targetId: string, direction: -1 | 1) {
+    const order = quotaTargetOptions.map(target => target.id);
+    const index = order.indexOf(targetId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
+    const next = [...order];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    setS(current => ({ ...current, quotaTargetOrder: next }));
+  }
 
   useEffect(() => {
     window.wmt.getIntegrationStatus().then(setIntegrationStatus).catch(() => {});
@@ -405,7 +435,7 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
           )}
         </div>
 
-        <SectionHeader label="Tracking" />
+        <SectionHeader label="Providers" />
         <div style={{ padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'grid', gap: 6 }}>
             {PROVIDER_OPTIONS.map(option => {
@@ -446,6 +476,124 @@ export default function SettingsView({ settings, onSave, onBack }: Props) {
             })}
           </div>
         </div>
+        {quotaTargetOptions.length > 0 && (
+          <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 6 }}>Quota display</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {quotaTargetOptions.map((target, index) => (
+                <div key={target.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: C.textDim, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {target.label}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, marginTop: 2 }}>
+                      <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {target.period || `${target.rowCount} row${target.rowCount === 1 ? '' : 's'}`}
+                      </span>
+                      <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
+                        {target.defaultMode}
+                      </span>
+                      {target.badges.slice(0, 3).map(badge => (
+                        <span
+                          key={badge.key}
+                          title={badge.title}
+                          style={{
+                            ...quotaSourceBadgeToneStyle(badge.tone, C),
+                            borderRadius: 3,
+                            padding: '1px 3px',
+                            fontSize: 8,
+                            fontWeight: 700,
+                            fontFamily: C.fontMono,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 2 }}>
+                      {(['rich', 'simple', 'none'] as const).map(mode => {
+                        const active = target.mode === mode;
+                        const label = mode === 'rich' ? 'Rich' : mode === 'simple' ? 'Simple' : 'None';
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setQuotaTargetMode(target.id, mode)}
+                            style={{
+                              padding: '3px 7px',
+                              minWidth: 42,
+                              fontSize: 10,
+                              border: `1px solid ${active ? C.accent + '88' : C.border}`,
+                              borderRadius: 4,
+                              cursor: 'pointer',
+                              fontWeight: active ? 700 : 400,
+                              background: active ? C.accent + '22' : 'transparent',
+                              color: active ? C.accent : C.textDim,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', gap: 2 }}>
+                      <button
+                        type="button"
+                        title="Move up"
+                        disabled={index === 0}
+                        onClick={() => moveQuotaTarget(target.id, -1)}
+                        style={{
+                          background: C.bgRow,
+                          border: `1px solid ${C.border}`,
+                          color: index === 0 ? C.textMuted : C.textDim,
+                          opacity: index === 0 ? 0.45 : 1,
+                          cursor: index === 0 ? 'default' : 'pointer',
+                          borderRadius: 4,
+                          width: 24,
+                          height: 22,
+                          fontSize: 11,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        title="Move down"
+                        disabled={index === quotaTargetOptions.length - 1}
+                        onClick={() => moveQuotaTarget(target.id, 1)}
+                        style={{
+                          background: C.bgRow,
+                          border: `1px solid ${C.border}`,
+                          color: index === quotaTargetOptions.length - 1 ? C.textMuted : C.textDim,
+                          opacity: index === quotaTargetOptions.length - 1 ? 0.45 : 1,
+                          cursor: index === quotaTargetOptions.length - 1 ? 'default' : 'pointer',
+                          borderRadius: 4,
+                          width: 24,
+                          height: 22,
+                          fontSize: 11,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setS({ ...s, quotaTargetOrder: [] })}
+              style={{ marginTop: 6, background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
+            >
+              Reset order
+            </button>
+          </div>
+        )}
 
         <SectionHeader label="Data" />
         <div style={row}>

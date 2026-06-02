@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, X } from 'lucide-react';
-import { AppState } from '../types';
+import { AppState, ProviderId, ProviderQuotaDisplayBadge, ProviderQuotaStatus, ProviderQuotaWindow } from '../types';
 import { useTheme } from '../ThemeContext';
 import { hasLimitData, limitDataState, limitSourceDisplay, LimitWindow } from '../limitDisplay';
+import { buildQuotaDisplayModels, QuotaDisplayGroupViewModel, QuotaDisplayRowViewModel } from '../quotaDisplayModels';
+import { quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 
 interface Props {
   state: AppState;
@@ -10,16 +12,20 @@ interface Props {
 }
 
 type WidgetAgent = {
-  key: 'claude' | 'codex';
+  key: string;
+  provider: ProviderId;
   label: string;
   color: string;
+  badges: ProviderQuotaDisplayBadge[];
   scanning?: boolean;
   scanningTitle?: string;
   rows: Array<{
     key: string;
     label: string;
+    visualKind: QuotaDisplayRowViewModel['visualKind'];
     quotaPct: number;
     resetMs: number | null;
+    durationMs?: number;
     pending?: boolean;
     pendingTitle?: string;
     unknown?: boolean;
@@ -29,6 +35,8 @@ type WidgetAgent = {
   }>;
 };
 
+const EMPTY_QUOTA_WINDOW: ProviderQuotaWindow = { pct: 0, resetMs: null };
+
 type DragState = {
   pointerId: number;
   startX: number;
@@ -37,7 +45,7 @@ type DragState = {
   originY: number;
 };
 
-type HealthTone = 'claudeGood' | 'codexGood' | 'neutral' | 'warning' | 'danger';
+type HealthTone = 'good' | 'neutral' | 'warning' | 'danger';
 
 interface HealthItem {
   key: string;
@@ -73,14 +81,7 @@ function clampPct(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function windowDurationMs(label: string): number | null {
-  if (label === '5h') return 5 * 60 * 60 * 1000;
-  if (label === '1w') return 7 * 24 * 60 * 60 * 1000;
-  return null;
-}
-
-function timeElapsedPct(label: string, resetMs: number | null): number | null {
-  const durationMs = windowDurationMs(label);
+function timeElapsedPct(durationMs: number | null | undefined, resetMs: number | null): number | null {
   if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
   return clampPct(((durationMs - resetMs) / durationMs) * 100);
 }
@@ -130,6 +131,10 @@ function missingLimitStatus(
   return {};
 }
 
+function hasSimpleQuotaInput(window: ProviderQuotaWindow | undefined): boolean {
+  return !!window && (hasLimitData(window) || !!window.source);
+}
+
 function MiniLimitStatus({ state, animate = true }: { state: 'syncing' | 'waiting'; animate?: boolean }) {
   const C = useTheme();
   const label = state === 'syncing' ? 'syncing' : 'waiting';
@@ -161,99 +166,136 @@ function healthLabelForSource(limit: LimitWindow): string | null {
   return limitSourceDisplay(limit).label ?? null;
 }
 
-function providerOkTone(provider: 'Claude' | 'Codex'): HealthTone {
-  return provider === 'Claude' ? 'claudeGood' : 'codexGood';
+function quotaStatusTone(status: ProviderQuotaStatus | undefined): HealthTone {
+  if (status?.severity === 'warning') return 'warning';
+  if (status?.severity === 'danger') return 'danger';
+  const text = `${status?.code ?? ''} ${status?.label ?? ''}`.toLowerCase();
+  if (/\b(rate|refresh|timeout|local|partial|limited)\b/.test(text)) return 'warning';
+  if (/\b(auth|forbidden|login|schema|disconnect|offline|failed|error|unauthorized)\b/.test(text)) return 'danger';
+  return 'neutral';
+}
+
+function providerLabelFromQuota(provider: ProviderId, state: AppState): string {
+  const quota = state.providerQuotas[provider];
+  return quota?.groups?.[0]?.label
+    ?? quota?.accountLabel
+    ?? quota?.planName
+    ?? provider;
 }
 
 function providerHealth(
-  provider: 'Claude' | 'Codex',
-  h5: LimitWindow,
-  week: LimitWindow,
+  provider: ProviderId,
+  providerLabel: string,
+  primary: LimitWindow,
+  secondary: LimitWindow,
   syncing: boolean,
   statusLabel?: string,
   connected = true,
-  statusError?: string,
+  statusTone: HealthTone = 'neutral',
 ): HealthItem {
-  if (provider === 'Claude') {
-    switch (statusLabel) {
-      case 'rate limited':
-        return { key: 'claude', label: 'Claude limited', tone: 'warning', title: statusError || 'Claude API is rate limited; cached or bridge data may be used.' };
-      case 'refresh limited':
-        return { key: 'claude', label: 'Claude refresh', tone: 'warning', title: statusError || 'Claude OAuth refresh is rate limited; cached or bridge data may be used.' };
-      case 'refresh failed':
-        return { key: 'claude', label: 'Claude refresh', tone: 'danger', title: statusError || 'Claude OAuth refresh failed; cached or bridge data may be used.' };
-      case 'reset partial':
-        return { key: 'claude', label: 'Claude partial', tone: 'warning', title: statusError || 'Claude usage loaded, but reset timing is unavailable.' };
-      case 'local only':
-        return { key: 'claude', label: 'Claude local', tone: 'warning', title: statusError || 'Claude credentials are unavailable, so local data is being used.' };
-      case 'login required':
-        return { key: 'claude', label: 'Claude login', tone: 'danger', title: statusError || 'Run claude /login to re-authenticate Claude usage.' };
-      case 'auth failed':
-      case 'forbidden':
-      case 'api disconnected':
-        return { key: 'claude', label: 'Claude offline', tone: 'danger', title: statusError || 'Claude API is unavailable.' };
-      default:
-        break;
-    }
-  } else {
-    switch (statusLabel) {
-      case 'rate limited':
-        return { key: 'codex', label: 'Codex limited', tone: 'warning', title: statusError || 'Codex usage endpoint is rate limited; cache or local logs may be used.' };
-      case 'schema changed':
-        return { key: 'codex', label: 'Codex schema', tone: 'danger', title: statusError || 'Codex usage response shape changed.' };
-      case 'local log':
-        return { key: 'codex', label: 'Codex local', tone: 'warning', title: statusError || 'Codex credentials were not found; local log estimates are used.' };
-      case 'auth failed':
-        return { key: 'codex', label: 'Codex auth', tone: 'danger', title: statusError || 'Codex usage token was rejected or expired.' };
-      case 'forbidden':
-        return { key: 'codex', label: 'Codex blocked', tone: 'danger', title: statusError || 'Codex usage access was denied for this account.' };
-      case 'api timeout':
-        return { key: 'codex', label: 'Codex timeout', tone: 'warning', title: statusError || 'Codex usage request timed out.' };
-      case 'api disconnected':
-        return { key: 'codex', label: 'Codex offline', tone: 'danger', title: statusError || 'Codex usage request failed.' };
-      default:
-        break;
-    }
+  if (syncing || limitDataState(primary, syncing) === 'syncing' || limitDataState(secondary, syncing) === 'syncing') {
+    return { key: provider, label: `${providerLabel} syncing`, tone: 'good', title: `${providerLabel} limit data is syncing in the background.` };
   }
 
-  if (syncing || limitDataState(h5, syncing) === 'syncing' || limitDataState(week, syncing) === 'syncing') {
-    return { key: provider.toLowerCase(), label: `${provider} syncing`, tone: providerOkTone(provider), title: `${provider} limit data is syncing in the background.` };
+  if (statusLabel && !connected) {
+    return {
+      key: provider,
+      label: `${providerLabel} ${statusLabel}`,
+      tone: statusTone === 'neutral' ? 'danger' : statusTone,
+      title: `${providerLabel} provider quota status: ${statusLabel}.`,
+    };
   }
 
-  if (!hasLimitData(h5) && !hasLimitData(week)) {
-    return { key: provider.toLowerCase(), label: `${provider} waiting`, tone: 'neutral', title: `${provider} limit data has not arrived yet.` };
+  if (!connected) {
+    return { key: provider, label: `${providerLabel} offline`, tone: 'danger', title: `${providerLabel} provider quota is unavailable.` };
   }
 
-  if (provider === 'Claude' && !connected) {
-    return { key: 'claude', label: 'Claude offline', tone: 'danger', title: statusError || 'Claude API is unavailable.' };
-  }
-
-  const sources = [healthLabelForSource(h5), healthLabelForSource(week)].filter((label): label is string => !!label);
+  const sources = [healthLabelForSource(primary), healthLabelForSource(secondary)].filter((label): label is string => !!label);
   if (sources.includes('Log')) {
-    return { key: provider.toLowerCase(), label: `${provider} Log`, tone: 'warning', title: `${provider} is using local log estimates for at least one limit window.` };
+    return { key: provider, label: `${providerLabel} Log`, tone: 'warning', title: `${providerLabel} is using local log estimates for at least one limit window.` };
   }
   if (sources.includes('Cache')) {
-    return { key: provider.toLowerCase(), label: `${provider} Cache`, tone: 'neutral', title: `${provider} is using the last trusted cached usage snapshot.` };
+    return { key: provider, label: `${providerLabel} Cache`, tone: 'neutral', title: `${providerLabel} is using the last trusted cached usage snapshot.` };
   }
   if (sources.includes('Bridge')) {
-    return { key: provider.toLowerCase(), label: `${provider} Bridge`, tone: 'neutral', title: `${provider} is using the local status-line bridge.` };
+    return { key: provider, label: `${providerLabel} Bridge`, tone: 'neutral', title: `${providerLabel} is using the local status-line bridge.` };
   }
-  if (provider === 'Codex' && !connected && statusLabel) {
-    return { key: 'codex', label: 'Codex offline', tone: 'danger', title: statusError || 'Codex live usage is unavailable.' };
+
+  if (!hasLimitData(primary) && !hasLimitData(secondary)) {
+    return { key: provider, label: `${providerLabel} waiting`, tone: 'neutral', title: `${providerLabel} limit data has not arrived yet.` };
   }
+
   return {
-    key: provider.toLowerCase(),
-    label: `${provider} OK`,
-    tone: providerOkTone(provider),
-    title: `${provider} account limit data is current.`,
+    key: provider,
+    label: `${providerLabel} OK`,
+    tone: 'good',
+    title: `${providerLabel} account limit data is current.`,
   };
+}
+
+function buildWidgetAgents(state: AppState): WidgetAgent[] {
+  const { widgetGroups } = buildQuotaDisplayModels({
+    usage: state.usage,
+    providerQuotas: state.providerQuotas,
+    settings: state.settings,
+    historyWarmupPending: state.historyWarmupPending,
+    historyWarmupStartsAt: state.historyWarmupStartsAt,
+    formatWarmupEta: () => 'syncing',
+    simpleIncludesRich: true,
+  });
+  const bootPending = !state.initialRefreshComplete;
+  return widgetGroups.map((group: QuotaDisplayGroupViewModel) => {
+    const unavailableTitle = `${group.label} limit data has not arrived from provider quota sources yet.`;
+    const rowFor = (row: QuotaDisplayRowViewModel) => {
+      return {
+        key: row.key,
+        label: row.label,
+        visualKind: row.visualKind,
+        quotaPct: row.quotaPct,
+        resetMs: row.resetMs,
+        durationMs: row.durationMs,
+        pending: row.pending,
+        pendingTitle: row.pendingTitle,
+        ...(!row.pending && row.visualKind === 'pace' ? missingLimitStatus(row.quotaPct, row.resetMs, bootPending, unavailableTitle, row.label) : {}),
+      };
+    };
+    const rows: WidgetAgent['rows'] = group.rows.map(rowFor);
+    const scanning = rows.some(row => row.pending);
+    return {
+      key: group.id,
+      provider: group.provider,
+      label: group.label,
+      color: group.accentColor,
+      badges: group.badges,
+      scanning,
+      scanningTitle: group.rows.find(row => row.pending)?.pendingTitle,
+      rows,
+    };
+  });
+}
+
+function buildHealthItems(state: AppState): HealthItem[] {
+  const items: HealthItem[] = [];
+  for (const provider of state.settings.enabledProviders) {
+    const providerLabel = providerLabelFromQuota(provider, state);
+    const quota = state.providerQuotas[provider];
+    const windows = Object.values(quota?.windows ?? {});
+    const primary = windows[0] ?? EMPTY_QUOTA_WINDOW;
+    const secondary = windows[1] ?? EMPTY_QUOTA_WINDOW;
+    const syncing = state.historyWarmupPending && windows.some(window => window.source === 'localLog' || !hasLimitData(window));
+    const statusLabel = quota?.status?.label;
+    const connected = quota?.status?.connected ?? windows.some(hasSimpleQuotaInput);
+    items.push(providerHealth(provider, providerLabel, primary, secondary, syncing, statusLabel, connected, quotaStatusTone(quota?.status)));
+  }
+  return items;
 }
 
 function ProgressRow({
   label,
+  visualKind,
   quotaPct,
   resetMs,
-  color,
+  durationMs,
   pending = false,
   pendingTitle,
   unknown = false,
@@ -263,9 +305,10 @@ function ProgressRow({
   animateWaiting = false,
 }: {
   label: string;
+  visualKind: WidgetAgent['rows'][number]['visualKind'];
   quotaPct: number;
   resetMs: number | null;
-  color: string;
+  durationMs?: number;
   pending?: boolean;
   pendingTitle?: string;
   unknown?: boolean;
@@ -275,17 +318,19 @@ function ProgressRow({
   animateWaiting?: boolean;
 }) {
   const C = useTheme();
+  const percentOnly = visualKind === 'percentOnly';
   const quota = clampPct(quotaPct);
   const visualState: 'syncing' | 'waiting' | null = pending ? 'syncing' : unknown ? (unknownLabel === 'loading' ? 'syncing' : 'waiting') : null;
   const suppressWaitingAnimation = visualState === 'waiting' && !animateWaiting;
-  const elapsed = visualState ? null : timeElapsedPct(label, resetMs);
+  const elapsed = visualState || percentOnly ? null : timeElapsedPct(durationMs, resetMs);
   const elapsedWidth = elapsed ?? 0;
-  const resetLabel = pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
-  const quotaColor = visualState ? (visualState === 'syncing' ? C.accent : C.textMuted) : color;
+  const resetLabel = percentOnly ? '' : pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
+  const usedColor = visualState ? (visualState === 'syncing' ? C.accent : C.textMuted) : quotaPctBarColor(quota, C);
+  const quotaColor = usedColor;
   // pace 색상: 사용량이 경과 시간보다 빠르면 경고
   const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
-    ? (quota / elapsed > 1.5 ? C.barRed : quota / elapsed > 1.0 ? C.barYellow : color)
-    : color;
+    ? (quota / elapsed > 1.5 ? C.barRed : quota / elapsed > 1.0 ? C.barYellow : usedColor)
+    : usedColor;
   const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
   const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
@@ -293,7 +338,7 @@ function ProgressRow({
   return (
     <div
       title={rowTitle}
-      style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
+      style={{ display: 'grid', gridTemplateColumns: percentOnly ? '24px minmax(0, 1fr) 64px' : '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
     >
       <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
         {label}
@@ -333,26 +378,30 @@ function ProgressRow({
           />
         ) : null}
       </div>
+      {!percentOnly && (
+        <div
+          title={resetLabel ? `Time until reset: ${resetLabel}` : undefined}
+          style={{
+            color: C.textDim,
+            fontSize: 9,
+            fontFamily: C.fontMono,
+            textAlign: 'right',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {resetLabel}
+        </div>
+      )}
       <div
-        title={resetLabel ? `Time until reset: ${resetLabel}` : undefined}
-        style={{
-          color: C.textDim,
-          fontSize: 9,
-          fontFamily: C.fontMono,
-          textAlign: 'right',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {resetLabel}
-      </div>
-      <div
-        title="Used / Time elapsed"
+        title={percentOnly ? 'Used' : 'Used / Time elapsed'}
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
         {visualState ? (
           <MiniLimitStatus state={visualState} animate={!suppressWaitingAnimation} />
+        ) : percentOnly ? (
+          <span style={{ color: paceColor }}>{formatPct(quota)}</span>
         ) : (
           <>
             <span style={{ color: paceColor }}>{formatPct(quota)}</span>
@@ -371,7 +420,7 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
     <div style={{ display: 'grid', gap: 5 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: agent.color, boxShadow: `0 0 8px ${agent.color}88` }} />
-        <span style={{ fontSize: 11, fontWeight: 800, color: C.text, lineHeight: 1 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, lineHeight: 1, textTransform: 'uppercase', letterSpacing: 1 }}>
           {agent.label}
         </span>
         {agent.scanning ? (
@@ -391,15 +440,38 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
             scanning
           </span>
         ) : null}
+        {agent.badges.length > 0 ? (
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
+            {agent.badges.map(badge => (
+              <span
+                key={badge.key}
+                title={badge.title}
+                style={{
+                  ...quotaSourceBadgeToneStyle(badge.tone, C),
+                  borderRadius: 3,
+                  padding: '1px 4px',
+                  fontSize: 8,
+                  fontWeight: 700,
+                  fontFamily: C.fontMono,
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </span>
+        ) : null}
       </div>
       <div style={{ display: 'grid', gap: 5 }}>
         {agent.rows.map(row => (
           <ProgressRow
             key={row.key}
             label={row.label}
+            visualKind={row.visualKind}
             quotaPct={row.quotaPct}
             resetMs={row.resetMs}
-            color={agent.color}
+            durationMs={row.durationMs}
             pending={row.pending}
             pendingTitle={row.pendingTitle}
             unknown={row.unknown}
@@ -428,82 +500,16 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     return () => window.clearInterval(timer);
   }, [state.lastUpdated, state.stateFreshness]);
 
-  const agents = useMemo<WidgetAgent[]>(() => {
-    const enabledProviders = new Set(state.settings.enabledProviders);
-    const next: WidgetAgent[] = [];
-    const bootPending = !state.initialRefreshComplete;
-    const codexH5HasLimit = hasLimitData(state.limits.codexH5);
-    const codexWeekHasLimit = hasLimitData(state.limits.codexWeek);
-    const codexH5Pending = state.historyWarmupPending && (state.limits.codexH5.source === 'localLog' || !codexH5HasLimit);
-    const codexWeekPending = state.historyWarmupPending && (state.limits.codexWeek.source === 'localLog' || !codexWeekHasLimit);
-    const codexPendingTitle = 'Full Codex history is still scanning; local-log limits may update.';
-    const claudeUnavailableTitle = 'Claude limit data is unavailable until API or statusLine data is connected.';
-    const codexUnavailableTitle = 'Codex limit data has not arrived from API, cache, or local logs yet.';
-    if (enabledProviders.has('claude')) {
-      next.push({
-        key: 'claude',
-        label: 'Claude',
-        color: C.sonnet,
-        rows: [
-          { key: 'claude-5h', label: '5h', quotaPct: state.limits.h5.pct, resetMs: state.limits.h5.resetMs, ...missingLimitStatus(state.limits.h5.pct, state.limits.h5.resetMs, bootPending, claudeUnavailableTitle, '5h') },
-          { key: 'claude-1w', label: '1w', quotaPct: state.limits.week.pct, resetMs: state.limits.week.resetMs, ...missingLimitStatus(state.limits.week.pct, state.limits.week.resetMs, bootPending, claudeUnavailableTitle, '1w') },
-        ],
-      });
-    }
-    if (enabledProviders.has('codex')) {
-      next.push({
-        key: 'codex',
-        label: 'Codex',
-        color: C.active,
-        scanning: codexH5Pending || codexWeekPending,
-        scanningTitle: codexPendingTitle,
-        rows: [
-          { key: 'codex-5h', label: '5h', quotaPct: state.limits.codexH5.pct, resetMs: state.limits.codexH5.resetMs, pending: codexH5Pending, pendingTitle: codexPendingTitle, ...(!codexH5Pending ? missingLimitStatus(state.limits.codexH5.pct, state.limits.codexH5.resetMs, bootPending, codexUnavailableTitle, '5h') : {}) },
-          { key: 'codex-1w', label: '1w', quotaPct: state.limits.codexWeek.pct, resetMs: state.limits.codexWeek.resetMs, pending: codexWeekPending, pendingTitle: codexPendingTitle, ...(!codexWeekPending ? missingLimitStatus(state.limits.codexWeek.pct, state.limits.codexWeek.resetMs, bootPending, codexUnavailableTitle, '1w') : {}) },
-        ],
-      });
-    }
-    return next;
-  }, [C.active, C.sonnet, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5.pct, state.limits.codexH5.resetLabel, state.limits.codexH5.resetMs, state.limits.codexH5.source, state.limits.codexWeek.pct, state.limits.codexWeek.resetLabel, state.limits.codexWeek.resetMs, state.limits.codexWeek.source, state.limits.h5.pct, state.limits.h5.resetLabel, state.limits.h5.resetMs, state.limits.h5.source, state.limits.week.pct, state.limits.week.resetLabel, state.limits.week.resetMs, state.limits.week.source, state.settings.enabledProviders]);
+  const agents = useMemo<WidgetAgent[]>(() => buildWidgetAgents(state), [state]);
 
-  const healthItems = useMemo<HealthItem[]>(() => {
-    const enabledProviders = new Set(state.settings.enabledProviders);
-    const items: HealthItem[] = [];
-    if (enabledProviders.has('claude')) {
-      const claudeHealth = providerHealth(
-        'Claude',
-        state.limits.h5,
-        state.limits.week,
-        !state.initialRefreshComplete,
-        state.apiStatusLabel,
-        state.apiConnected,
-        state.apiError,
-      );
-      items.push(claudeHealth);
-    }
-    if (enabledProviders.has('codex')) {
-      const codexSyncing = state.historyWarmupPending && (!hasLimitData(state.limits.codexH5) || !hasLimitData(state.limits.codexWeek));
-      const codexHealth = providerHealth(
-        'Codex',
-        state.limits.codexH5,
-        state.limits.codexWeek,
-        codexSyncing,
-        state.codexStatusLabel,
-        state.codexUsageConnected,
-        state.codexError,
-      );
-      items.push(codexHealth);
-    }
-    return items;
-  }, [state.apiConnected, state.apiError, state.apiStatusLabel, state.codexError, state.codexStatusLabel, state.codexUsageConnected, state.historyWarmupPending, state.initialRefreshComplete, state.limits.codexH5, state.limits.codexWeek, state.limits.h5, state.limits.week, state.settings.enabledProviders]);
+  const healthItems = useMemo<HealthItem[]>(() => buildHealthItems(state), [state]);
 
   const healthToneStyle = useCallback((tone: HealthTone): React.CSSProperties => {
-    if (tone === 'claudeGood') return { color: C.sonnet, background: `${C.sonnet}14`, border: `1px solid ${C.sonnet}33` };
-    if (tone === 'codexGood') return { color: C.active, background: `${C.active}14`, border: `1px solid ${C.active}33` };
+    if (tone === 'good') return { color: C.active, background: `${C.active}14`, border: `1px solid ${C.active}33` };
     if (tone === 'warning') return { color: C.waiting, background: `${C.waiting}14`, border: `1px solid ${C.waiting}33` };
     if (tone === 'danger') return { color: C.barRed, background: `${C.barRed}12`, border: `1px solid ${C.barRed}33` };
     return { color: C.textMuted, background: C.bgRow, border: `1px solid ${C.borderSub}` };
-  }, [C.active, C.barRed, C.bgRow, C.borderSub, C.sonnet, C.waiting, C.textMuted]);
+  }, [C.active, C.barRed, C.bgRow, C.borderSub, C.waiting, C.textMuted]);
 
   const showFiveHourHint = agents.length > 1 && agents.every(agent =>
     agent.rows.some(row => row.label === '5h' && row.unknown && row.unknownLabel === 'waiting')

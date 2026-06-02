@@ -41,6 +41,18 @@ function refreshClaudeQuota(manager, force = true) {
   return manager.refreshProviderQuotas({ ...manager.getState().settings, enabledProviders: ['claude'] }, force);
 }
 
+function buildQuotaWindows(manager) {
+  const providerQuotas = manager.buildProviderQuotas();
+  const empty = { pct: 0, resetMs: null };
+  return {
+    h5: providerQuotas.claude?.windows?.h5 ?? empty,
+    week: providerQuotas.claude?.windows?.week ?? empty,
+    so: providerQuotas.claude?.windows?.sonnetWeek ?? empty,
+    codexH5: providerQuotas.codex?.windows?.h5 ?? empty,
+    codexWeek: providerQuotas.codex?.windows?.week ?? empty,
+  };
+}
+
 function withTempClaudeCredentials(oauthOverrides = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-test-'));
   tempClaudeDirs.push(dir);
@@ -103,7 +115,7 @@ test('cached Claude percentages with null resets expire instead of surviving for
     }),
   }), () => {});
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.pct, 0);
   assert.equal(limits.week.pct, 0);
@@ -128,7 +140,7 @@ test('cached Claude API samples are aged once after startup', () => {
     }),
   }), () => {});
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.pct, 5);
   assert.ok((limits.h5.resetMs ?? 0) > 20 * 60 * 1000);
@@ -212,7 +224,7 @@ test('offline Claude windows fall back to live status-line resets when API reset
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.source, 'statusLine');
   assert.equal(limits.week.source, 'statusLine');
@@ -241,7 +253,7 @@ test('missing bridge rate-limit windows do not zero out cached Claude API data',
     rate_limits: {},
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.pct, 58);
   assert.equal(limits.h5.source, 'cache');
@@ -255,11 +267,18 @@ test('stale status-line fallback does not linger as cached Claude API data', () 
   manager.apiUsagePct = null;
   manager.state = {
     ...manager.getState(),
-    limits: {
-      ...manager.getState().limits,
-      h5: { pct: 42, resetMs: 60_000, source: 'statusLine' },
-      week: { pct: 18, resetMs: 120_000, source: 'statusLine' },
-      so: { pct: 0, resetMs: null, source: 'statusLine' },
+    providerQuotas: {
+      ...manager.getState().providerQuotas,
+      claude: {
+        provider: 'claude',
+        source: 'statusLine',
+        capturedAt: Date.now(),
+        windows: {
+          h5: { pct: 42, resetMs: 60_000, source: 'statusLine' },
+          week: { pct: 18, resetMs: 120_000, source: 'statusLine' },
+          sonnetWeek: { pct: 0, resetMs: null, source: 'statusLine' },
+        },
+      },
     },
   };
   manager.liveSession = {
@@ -270,7 +289,7 @@ test('stale status-line fallback does not linger as cached Claude API data', () 
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.pct, 0);
   assert.equal(limits.h5.source, undefined);
@@ -283,14 +302,21 @@ test('stale Codex local-log windows do not linger after rate limits disappear', 
   manager.codexRateLimits = null;
   manager.state = {
     ...manager.getState(),
-    limits: {
-      ...manager.getState().limits,
-      codexH5: { pct: 66, resetMs: 60_000, source: 'localLog' },
-      codexWeek: { pct: 27, resetMs: 120_000, source: 'localLog' },
+    providerQuotas: {
+      ...manager.getState().providerQuotas,
+      codex: {
+        provider: 'codex',
+        source: 'localLog',
+        capturedAt: Date.now(),
+        windows: {
+          h5: { pct: 66, resetMs: 60_000, source: 'localLog' },
+          week: { pct: 27, resetMs: 120_000, source: 'localLog' },
+        },
+      },
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.codexH5.pct, 0);
   assert.equal(limits.codexH5.source, undefined);
@@ -314,7 +340,7 @@ test('expired Codex local-log rate limits do not linger as active windows', () =
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.codexH5.pct, 8);
   assert.equal(limits.codexH5.source, 'localLog');
@@ -338,7 +364,7 @@ test('malformed Codex local-log rate limits are clamped or dropped', () => {
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.codexH5.pct, 100);
   assert.equal(limits.codexH5.source, 'localLog');
@@ -378,12 +404,12 @@ test('Codex live usage overrides stale local-log rate limits', () => {
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.codexH5.pct, 100);
-  assert.equal(limits.codexH5.source, 'codexApi');
+  assert.equal(limits.codexH5.source, 'api');
   assert.equal(limits.codexWeek.pct, 53);
-  assert.equal(limits.codexWeek.source, 'codexApi');
+  assert.equal(limits.codexWeek.source, 'api');
 });
 
 test('cached Codex live usage is used before local logs and ages after startup', () => {
@@ -408,7 +434,7 @@ test('cached Codex live usage is used before local logs and ages after startup',
     },
   }), () => {});
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.codexH5.pct, 5);
   assert.equal(limits.codexH5.source, 'cache');
@@ -471,7 +497,7 @@ test('expired Codex live cache falls back to fresh local-log windows', () => {
     },
   };
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.codexH5.pct, 23);
   assert.equal(limits.codexH5.source, 'localLog');
@@ -553,7 +579,7 @@ test('offline live fallback also drives Claude usage windows', () => {
 
   const derived = manager.computeDerivedUsage(manager.getState().settings);
 
-  assert.equal(derived.limits.h5.source, 'statusLine');
+  assert.equal(derived.providerQuotas.claude.windows.h5.source, 'statusLine');
   assert.equal(derived.usage.byProvider.claude.windows.h5.requestCount, 0);
 });
 
@@ -642,7 +668,7 @@ test('in-memory null-reset samples also age out after later API loss', () => {
   manager.apiUsagePctStoredAt = Date.now() - (31 * 60 * 1000);
   manager.apiConnected = false;
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.pct, 0);
   assert.equal(limits.week.pct, 0);
@@ -664,7 +690,7 @@ test('expired Claude core usage windows age independently', () => {
   manager.apiUsagePctStoredAt = Date.now() - 10_000;
   manager.apiConnected = false;
 
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(limits.h5.pct, 0);
   assert.equal(limits.h5.source, 'cache');
@@ -890,7 +916,7 @@ test('unauthorized Claude refresh keeps the last trusted API sample as cache', a
   });
 
   await refreshClaudeQuota(manager, true);
-  const limits = manager.buildLimits();
+  const limits = buildQuotaWindows(manager);
 
   assert.equal(manager.apiStatusLabel, 'auth failed');
   assert.equal(manager.apiUsagePct.h5Pct, 5);
@@ -1139,6 +1165,81 @@ test('all-time session count comes from usage summaries instead of current UI ro
   assert.match(source, /private countAllTimeUsageSessions\(settings: AppSettings\): number/);
   assert.match(source, /allTimeSessions = this\.countAllTimeUsageSessions\(settings\)/);
   assert.doesNotMatch(source, /allTimeSessions: sessions\.length/);
+});
+
+test('all-time session count follows enabled providers for summary fallback', () => {
+  const manager = new StateManager(makeStore(), () => {});
+  const settings = {
+    ...manager.getState().settings,
+    enabledProviders: ['claude'],
+    quotaTargetModes: {
+      'claude.group.account': 'none',
+      'claude.group.sonnet': 'none',
+      'codex.group.account': 'rich',
+    },
+  };
+  const now = Date.now();
+  const aggregate = (requestCount) => ({
+    requestCount,
+    inputTokens: requestCount,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: requestCount,
+    costUSD: 0,
+    cacheSavingsUSD: 0,
+  });
+  const summary = ({ provider = 'claude', model = 'claude-3-5-sonnet', recent = false, historicalModels = {} } = {}) => ({
+    provider,
+    sessionSnapshot: {
+      modelName: model,
+      rawModel: model,
+      latestInputTokens: 0,
+      latestCacheCreationTokens: 0,
+      latestCacheReadTokens: 0,
+      toolCounts: {},
+      activityBreakdown: {
+        read: 0, editWrite: 0, search: 0, git: 0, buildTest: 0,
+        terminal: 0, thinking: 0, response: 0, subagents: 0, web: 0,
+      },
+      activityBreakdownKind: provider === 'codex' ? 'events' : 'tokens',
+    },
+    recentEntries: recent ? [{
+      requestId: `${provider}-${model}-recent`,
+      timestampMs: now,
+      model,
+      provider,
+      inputTokens: 1,
+      outputTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      costUSD: 0,
+      cacheSavingsUSD: 0,
+    }] : [],
+    historicalRollup: {
+      aggregate: aggregate(Object.keys(historicalModels).length),
+      modelTotals: historicalModels,
+      hourlyBuckets: {},
+    },
+    byteOffset: 0,
+    pendingBytes: 0,
+    mtimeMs: now,
+    size: 1,
+    lastAccessedAt: now,
+  });
+
+  manager.summaries = new Map([
+    ['visible-sonnet.jsonl', summary({ recent: true })],
+    ['hidden-opus.jsonl', summary({ model: 'claude-3-opus', recent: true })],
+    ['hidden-codex.jsonl', summary({ provider: 'codex', model: 'gpt-5-codex', recent: true })],
+    ['visible-history.jsonl', summary({
+      historicalModels: {
+        sonnet: { provider: 'claude', model: 'claude-3-5-sonnet', tokens: 3, costUSD: 0 },
+      },
+    })],
+  ]);
+
+  assert.equal(manager.countAllTimeUsageSessions(settings), 3);
 });
 
 test('visible fast refresh stays on cached session scope and logs anomalies', () => {

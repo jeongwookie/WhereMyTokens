@@ -12,14 +12,6 @@ const CLAUDE_OAUTH_REFRESH_USER_AGENT = 'claude-code/1.0';
 const MAX_SERVER_MESSAGE_LENGTH = 240;
 const MAX_CLAUDE_API_RESPONSE_BYTES = 256 * 1024;
 
-export interface AutoLimits {
-  h5: number;
-  week: number;
-  sonnetWeek: number;
-  plan: string;
-  source: 'credentials' | 'api' | 'default';
-}
-
 export type ApiResetMs = number | null;
 
 export interface ApiExtraUsage {
@@ -451,24 +443,6 @@ function planFromTier(tier: string, sub: string): string {
   return sub || tier || 'Unknown';
 }
 
-function limitsFromTier(tier: string, sub: string): AutoLimits {
-  const t = tier.toLowerCase();
-  const s = sub.toLowerCase();
-  if (t.includes('max_5') || t.includes('5x')) {
-    return { h5: 975, week: 7640, sonnetWeek: 1_280_000_000, plan: 'Max 5x', source: 'credentials' };
-  }
-  if (t.includes('max') || s === 'max') {
-    return { h5: 195, week: 1528, sonnetWeek: 256_000_000, plan: 'Max 1x', source: 'credentials' };
-  }
-  if (t.includes('pro') || s === 'pro') {
-    return { h5: 45, week: 180, sonnetWeek: 50_000_000, plan: 'Pro', source: 'credentials' };
-  }
-  if (t.includes('free') || s === 'free') {
-    return { h5: 10, week: 50, sonnetWeek: 10_000_000, plan: 'Free', source: 'credentials' };
-  }
-  return { h5: 100, week: 500, sonnetWeek: 100_000_000, plan: sub || tier || 'Unknown', source: 'default' };
-}
-
 async function performUsageFetch(cred: Credentials): Promise<ApiUsageFetchResult> {
   const body = await httpsGet('https://api.anthropic.com/api/oauth/usage', {
     Authorization: `Bearer ${cred.accessToken}`,
@@ -647,15 +621,6 @@ export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
     logStatus(status);
     return { usage: null, status };
   }
-}
-
-export async function fetchAutoLimits(): Promise<AutoLimits | null> {
-  const cred = readCredentials();
-  if (!cred) return null;
-  if (cred.rateLimitTier || cred.subscriptionType) {
-    return limitsFromTier(cred.rateLimitTier, cred.subscriptionType);
-  }
-  return null;
 }
 
 export function getPlanName(): string {

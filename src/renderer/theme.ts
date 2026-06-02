@@ -67,9 +67,6 @@ export interface Theme {
   gradePoorBg:         string;
   gradePoorColor:      string;
 
-  // ETA 경고
-  etaWarning: string;
-
   // 폰트
   fontMono: string;
   fontSans: string;
@@ -130,8 +127,6 @@ export const LIGHT: Theme = {
   gradeFairBg:         '#fff4e0', gradeFairColor:      '#9a5c00',
   gradePoorBg:         '#fde8e8', gradePoorColor:      '#8b1a1a',
 
-  etaWarning: '#c0392b',
-
   fontMono: "'JetBrains Mono', monospace",
   fontSans: "'Noto Sans', 'Noto Sans KR', sans-serif",
 };
@@ -191,8 +186,6 @@ export const DARK: Theme = {
   gradeFairBg:         '#2a2210', gradeFairColor:      '#fbbf24',
   gradePoorBg:         '#2a1515', gradePoorColor:      '#f87171',
 
-  etaWarning: '#f87171',
-
   fontMono: "'JetBrains Mono', monospace",
   fontSans: "'Noto Sans', 'Noto Sans KR', sans-serif",
 };
@@ -209,6 +202,21 @@ export function pctColor(pct: number, C: Theme): string {
   if (pct >= 80) return C.barRed;
   if (pct >= 50) return C.barOrange;
   return C.barGreen;
+}
+
+export type QuotaSourceBadgeTone = 'good' | 'neutral' | 'warning' | undefined;
+
+export function quotaPctBarColor(pct: number, C: Theme): string {
+  if (pct >= 90) return C.barRed;
+  if (pct >= 75) return C.barOrange;
+  if (pct >= 50) return C.bgCard === '#ffffff' ? C.barOrange : C.barYellow;
+  return C.accent;
+}
+
+export function quotaSourceBadgeToneStyle(tone: QuotaSourceBadgeTone, C: Theme): { background: string; color: string; border: string } {
+  if (tone === 'good') return { background: `${C.accent}18`, color: C.accent, border: `1px solid ${C.accent}3d` };
+  if (tone === 'warning') return { background: `${C.waiting}18`, color: C.waiting, border: `1px solid ${C.waiting}45` };
+  return { background: C.bgRow, color: C.textMuted, border: `1px solid ${C.border}` };
 }
 
 export function modelColor(model: string, C: Theme): string {
@@ -312,7 +320,6 @@ const CSS_VAR_MAP: Record<keyof Theme, string> = {
   gradeGoodBg: '--wmt-grade-good-bg', gradeGoodColor: '--wmt-grade-good-color',
   gradeFairBg: '--wmt-grade-fair-bg', gradeFairColor: '--wmt-grade-fair-color',
   gradePoorBg: '--wmt-grade-poor-bg', gradePoorColor: '--wmt-grade-poor-color',
-  etaWarning: '--wmt-eta-warning',
   fontMono: '--wmt-font-mono', fontSans: '--wmt-font-sans',
 };
 

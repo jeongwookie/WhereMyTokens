@@ -11,7 +11,7 @@ import {
   setupIntegration,
 } from './integration';
 import type { ProviderId } from './providers/types';
-import { normalizeEnabledProviders } from './providers/settings';
+import { PROVIDER_IDS, normalizeEnabledProviders } from './providers/settings';
 
 const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'];
 const MAIN_SECTION_IDS = new Set(DEFAULT_MAIN_SECTION_ORDER);
@@ -21,8 +21,9 @@ export interface CompactWidgetBounds {
   y: number;
 }
 
+export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
+
 export interface AppSettings {
-  usageLimits: { h5: number; week: number; sonnetWeek: number };
   enabledProviders: ProviderId[];
 
   // 사용자 설정
@@ -38,6 +39,8 @@ export interface AppSettings {
   hiddenMainSections: string[];
   hiddenProjects: string[];
   excludedProjects: string[];
+  quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
+  quotaTargetOrder: string[];
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
   compactWidgetBounds: CompactWidgetBounds | null;
@@ -60,16 +63,6 @@ function positiveNumber(value: unknown): number | null {
 function stringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   return value.filter((item): item is string => typeof item === 'string');
-}
-
-function normalizeUsageLimits(value: unknown): AppSettings['usageLimits'] | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  const h5 = positiveNumber(record.h5);
-  const week = positiveNumber(record.week);
-  const sonnetWeek = positiveNumber(record.sonnetWeek);
-  if (h5 == null || week == null || sonnetWeek == null) return null;
-  return { h5, week, sonnetWeek };
 }
 
 function normalizeAlertThresholds(value: unknown): number[] | null {
@@ -119,6 +112,50 @@ function normalizeCompactWidgetBounds(value: unknown): CompactWidgetBounds | nul
   return x == null || y == null ? undefined : { x, y };
 }
 
+function isQuotaDisplayMode(value: unknown): value is QuotaDisplayMode {
+  return value === 'rich' || value === 'simple' || value === 'none';
+}
+
+function isProviderId(value: unknown): value is ProviderId {
+  return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
+}
+
+function isSafeQuotaGroupKey(value: string): boolean {
+  return /^[A-Za-z0-9._~%-]+$/.test(value);
+}
+
+function isQuotaTargetId(value: string): boolean {
+  const [provider, namespace, ...groupParts] = value.split('.');
+  const encodedGroupKey = groupParts.join('.');
+  return isProviderId(provider)
+    && namespace === 'group'
+    && encodedGroupKey.length > 0
+    && isSafeQuotaGroupKey(encodedGroupKey);
+}
+
+function normalizeQuotaTargetModes(value: unknown): Partial<Record<string, QuotaDisplayMode>> | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const normalized: Partial<Record<string, QuotaDisplayMode>> = {};
+  for (const [targetId, mode] of Object.entries(record)) {
+    if (!isQuotaTargetId(targetId) || !isQuotaDisplayMode(mode)) continue;
+    normalized[targetId] = mode;
+  }
+  return normalized;
+}
+
+function normalizeQuotaTargetOrder(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const targetId of value) {
+    if (typeof targetId !== 'string' || !isQuotaTargetId(targetId) || seen.has(targetId)) continue;
+    seen.add(targetId);
+    normalized.push(targetId);
+  }
+  return normalized;
+}
+
 function legacyProviderToEnabledProviders(value: unknown): ProviderId[] | null {
   if (value === 'claude') return ['claude'];
   if (value === 'codex') return ['codex'];
@@ -131,8 +168,6 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (!record) return {};
   const next: Partial<AppSettings> = {};
 
-  const usageLimits = normalizeUsageLimits(record.usageLimits);
-  if (usageLimits) next.usageLimits = usageLimits;
   if (Array.isArray(record.enabledProviders)) {
     next.enabledProviders = normalizeEnabledProviders(record.enabledProviders);
   } else {
@@ -157,6 +192,14 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (hiddenProjects) next.hiddenProjects = hiddenProjects;
   const excludedProjects = stringArray(record.excludedProjects);
   if (excludedProjects) next.excludedProjects = excludedProjects;
+  if (Object.prototype.hasOwnProperty.call(record, 'quotaTargetModes')) {
+    const quotaTargetModes = normalizeQuotaTargetModes(record.quotaTargetModes);
+    if (quotaTargetModes) next.quotaTargetModes = quotaTargetModes;
+  }
+  if (Object.prototype.hasOwnProperty.call(record, 'quotaTargetOrder')) {
+    const quotaTargetOrder = normalizeQuotaTargetOrder(record.quotaTargetOrder);
+    if (quotaTargetOrder) next.quotaTargetOrder = quotaTargetOrder;
+  }
   if (typeof record.compactWidgetEnabled === 'boolean') next.compactWidgetEnabled = record.compactWidgetEnabled;
   if (typeof record.compactWidgetWaitingAnimationEnabled === 'boolean') next.compactWidgetWaitingAnimationEnabled = record.compactWidgetWaitingAnimationEnabled;
   if (Object.prototype.hasOwnProperty.call(record, 'compactWidgetBounds')) {
@@ -179,11 +222,12 @@ export function normalizeSettings(value: unknown): AppSettings {
     hiddenMainSections: sanitized.hiddenMainSections ?? DEFAULT_SETTINGS.hiddenMainSections,
     hiddenProjects: sanitized.hiddenProjects ?? DEFAULT_SETTINGS.hiddenProjects,
     excludedProjects: sanitized.excludedProjects ?? DEFAULT_SETTINGS.excludedProjects,
+    quotaTargetModes: sanitized.quotaTargetModes ?? DEFAULT_SETTINGS.quotaTargetModes,
+    quotaTargetOrder: sanitized.quotaTargetOrder ?? DEFAULT_SETTINGS.quotaTargetOrder,
   };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  usageLimits: { h5: 100, week: 2000, sonnetWeek: 100_000_000 },
   enabledProviders: ['claude', 'codex'],
   alertThresholds: [50, 80, 90],
   openAtLogin: false,
@@ -197,6 +241,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hiddenMainSections: [],
   hiddenProjects: [],
   excludedProjects: [],
+  quotaTargetModes: {},
+  quotaTargetOrder: [],
   compactWidgetEnabled: false,
   compactWidgetWaitingAnimationEnabled: false,
   compactWidgetBounds: null,

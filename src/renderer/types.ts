@@ -100,12 +100,6 @@ export interface WeeklyTotal {
   costUSD: number;
 }
 
-export interface BurnRate {
-  h5OutputPerMin: number;    // 최근 5분 output tokens/min
-  h5EtaMs: number | null;    // h5 한도 도달 예상 ms (null = 활동 없음)
-  weekEtaMs: number | null;  // 1w 한도 도달 예상 ms
-}
-
 export interface TimeOfDayBucket {
   period: 'morning' | 'afternoon' | 'evening' | 'night';
   label: string;
@@ -116,7 +110,6 @@ export interface TimeOfDayBucket {
 
 export interface ProviderWindowUsage {
   windows: Record<string, WindowStats>;
-  burnRate?: BurnRate;
 }
 
 export interface UsageData {
@@ -161,16 +154,91 @@ export interface UsageTrendData {
 
 export type StateFreshness = 'empty' | 'restored' | 'fresh';
 
-export interface UsageLimits {
-  h5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
-  week: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
-  so: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
-  codexH5: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
-  codexWeek: { pct: number; resetMs: number | null; resetLabel?: string; source?: 'api' | 'codexApi' | 'statusLine' | 'cache' | 'localLog' };
+export type ProviderId = 'claude' | 'codex' | 'antigravity';
+export type ProviderQuotaSource = 'api' | 'statusLine' | 'localLog' | 'localRpc' | 'cache';
+export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
+export type ProviderQuotaRowVisualKind = 'pace' | 'percentOnly';
+
+export interface ProviderQuotaWindow {
+  pct: number;
+  resetMs: number | null;
+  resetLabel?: string;
+  source?: ProviderQuotaSource;
+}
+
+export interface ProviderQuotaStatus {
+  connected: boolean;
+  code: string;
+  label?: string;
+  detail?: string;
+  severity?: 'ok' | 'warning' | 'danger';
+}
+
+export interface ProviderCreditBalance {
+  available: number;
+  used?: number;
+  total?: number;
+  remainingPct?: number;
+  resetMs?: number | null;
+}
+
+export interface ProviderModelQuota {
+  model: string;
+  label: string;
+  remainingPct: number;
+  resetMs?: number | null;
+  groupKey?: string;
+  defaultMode?: QuotaDisplayMode;
+  visualKind?: ProviderQuotaRowVisualKind;
+  cacheMetricTitle?: string;
+  durationMs?: number;
+  hideCost?: boolean;
+  accentColor?: string;
+  badges?: ProviderQuotaDisplayBadge[];
+}
+
+export interface ProviderQuotaDisplayBadge {
+  key: string;
+  label: string;
+  title?: string;
+  tone?: 'good' | 'neutral' | 'warning';
+}
+
+export interface ProviderQuotaWindowDisplay {
+  label: string;
+  visualKind?: ProviderQuotaRowVisualKind;
+  cacheMetricTitle?: string;
+  durationMs?: number;
+  modelIncludes?: string[];
+  hideCost?: boolean;
+  badges?: ProviderQuotaDisplayBadge[];
+}
+
+export interface ProviderQuotaGroupSpec {
+  key: string;
+  label: string;
+  windowKeys: string[];
+  defaultMode: QuotaDisplayMode;
+  accentColor?: string;
+  badges?: ProviderQuotaDisplayBadge[];
+  sortOrder?: number;
+}
+
+export interface ProviderQuotaSnapshot {
+  provider: ProviderId;
+  source: ProviderQuotaSource;
+  capturedAt: number;
+  accountLabel?: string;
+  planName?: string;
+  windows?: Record<string, ProviderQuotaWindow>;
+  models?: ProviderModelQuota[];
+  groups?: ProviderQuotaGroupSpec[];
+  windowDisplay?: Record<string, ProviderQuotaWindowDisplay>;
+  credits?: Record<string, ProviderCreditBalance>;
+  status?: ProviderQuotaStatus;
 }
 
 export interface AppSettings {
-  usageLimits: { h5: number; week: number; sonnetWeek: number };
   enabledProviders: Array<'claude' | 'codex' | 'antigravity'>;
   alertThresholds: number[];
   openAtLogin: boolean;
@@ -184,6 +252,8 @@ export interface AppSettings {
   hiddenMainSections: MainSectionId[];
   hiddenProjects: string[];
   excludedProjects: string[];
+  quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
+  quotaTargetOrder: string[];
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
   compactWidgetBounds: { x: number; y: number } | null;
@@ -198,16 +268,6 @@ export interface HistoryItem {
   body: string;
   timestamp: number;
   icon: string;
-}
-
-export interface AutoLimits {
-  h5: number;
-  week: number;
-  sonnetWeek: number;
-  h5Used: number;
-  weekUsed: number;
-  plan: string;
-  source: 'api';
 }
 
 export interface ExtraUsage {
@@ -226,9 +286,8 @@ export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
   usageTrend: UsageTrendData;
-  limits: UsageLimits;
+  providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>;
   settings: AppSettings;
-  autoLimits: AutoLimits | null;
   codexAccount: CodexAccountState;
   stateFreshness: StateFreshness;
   initialRefreshComplete: boolean;
@@ -243,7 +302,6 @@ export interface AppState {
   codexStatusLabel?: string;
   codexError?: string;
   bridgeActive: boolean;
-  extraUsage: ExtraUsage | null;
   repoGitStats: Record<string, GitStats>;  // gitCommonDir → GitStats (세션 유무 무관 전체 repo)
   codeOutputStats: CodeOutputStats;
   codeOutputLoading: boolean;
