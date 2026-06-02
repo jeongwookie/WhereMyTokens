@@ -240,7 +240,8 @@ function ContentEN() {
           <B>Last cached value</B> — kept when live limit data is unavailable. Claude API cache is tied to the current Claude login, and stale data past its reset window is auto-cleared on startup.
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <InfoRow label="Provider">Settings → Providers uses provider checkboxes. Disabled providers are not scanned locally and do not make live usage requests.</InfoRow>
+          <InfoRow label="Provider">Settings → Tracking uses provider checkboxes. Disabled providers are not scanned locally and do not make live usage requests.</InfoRow>
+          <InfoRow label="Quota display">Settings → Quota display controls Rich, Simple, or hidden presentation per provider window or model target. It changes Plan Usage and the floating widget only.</InfoRow>
           <InfoRow label="Claude OAuth">Expired Claude access tokens may be refreshed through Anthropic for usage polling. WhereMyTokens does not keep a separate credential backup.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget or the main header PiP button opens the always-on-top compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window. Waiting animations are off by default; enable Settings → Waiting animation if you want them.</InfoRow>
@@ -357,7 +358,8 @@ function ContentKO() {
           <B>마지막 캐시값</B> — 실시간 한도 데이터를 사용할 수 없을 때 직전 값을 유지합니다. Claude API 캐시는 현재 Claude 로그인에 묶이며, 리셋 시각이 지난 stale 데이터는 시작 시 자동 초기화.
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <InfoRow label="Provider">Settings → Providers의 provider 체크박스로 선택합니다. 꺼진 provider는 로컬 스캔과 live usage 요청을 모두 하지 않습니다.</InfoRow>
+          <InfoRow label="Provider">Settings → Tracking의 provider 체크박스로 선택합니다. 꺼진 provider는 로컬 스캔과 live usage 요청을 모두 하지 않습니다.</InfoRow>
+          <InfoRow label="Quota display">Settings → Quota display에서 provider window 또는 model target별 Rich, Simple, 숨김 표시를 선택합니다. Plan Usage와 Floating widget 표시만 바뀝니다.</InfoRow>
           <InfoRow label="Claude OAuth">만료된 Claude access token은 사용량 조회를 위해 Anthropic을 통해 refresh될 수 있습니다. WhereMyTokens는 별도 credentials 백업을 보관하지 않습니다.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget 또는 메인 헤더 PiP 버튼으로 항상 위에 표시되는 작은 Quota Pace 창을 열고 닫을 수 있습니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다. Waiting 애니메이션은 기본 꺼짐이며 Settings → Waiting animation에서 켤 수 있습니다.</InfoRow>
@@ -474,7 +476,8 @@ function ContentJA() {
           <B>最後のキャッシュ値</B> — ライブ制限データが利用できない場合に直近の値を保持。Claude API キャッシュは現在の Claude ログインに紐づき、リセット済みの古いデータは起動時に自動削除。
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <InfoRow label="Provider">Settings → Providers の provider チェックボックスで選択します。無効な provider はローカルスキャンも live usage request も行いません。</InfoRow>
+          <InfoRow label="Provider">Settings → Tracking の provider チェックボックスで選択します。無効な provider はローカルスキャンも live usage request も行いません。</InfoRow>
+          <InfoRow label="Quota display">Settings → Quota display で provider window または model target ごとの Rich、Simple、非表示を選択します。Plan Usage と Floating widget の表示だけが変わります。</InfoRow>
           <InfoRow label="Claude OAuth">期限切れの Claude access token は、使用量 polling のため Anthropic で refresh されることがあります。WhereMyTokens は別の credentials backup を保持しません。</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup。</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget またはメインヘッダーの PiP ボタンで、常に最前面のコンパクトな Quota Pace ウィンドウを開閉できます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。Waiting animation はデフォルトでオフで、Settings → Waiting animation から有効にできます。</InfoRow>

@@ -96,6 +96,16 @@ function modelWindowLabel(durationMs: number | undefined): string {
   return 'usage';
 }
 
+function quotaGroupLabel(snapshot: ProviderQuotaSnapshot | undefined, provider: ProviderId, windowKey: string): string {
+  return snapshot?.groups?.find(group => group.windowKeys.includes(windowKey))?.label
+    ?? providerLabel(provider);
+}
+
+function quotaWindowLabel(snapshot: ProviderQuotaSnapshot | undefined, windowKey: string): string {
+  return snapshot?.windowDisplay?.[windowKey]?.label
+    ?? windowLabel(windowKey);
+}
+
 export function quotaChecks(
   providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>,
   enabledProviders: ReadonlySet<ProviderId>,
@@ -103,36 +113,19 @@ export function quotaChecks(
 ): Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> {
   const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> = [];
   for (const provider of enabledProviders) {
-    const quota = providerQuotas[provider];
-    const windows = quota?.windows;
-    const groupedWindows = new Set<string>();
-    for (const group of quota?.groups ?? []) {
-      for (const windowKey of group.windowKeys) {
-        groupedWindows.add(windowKey);
-        const window = windows?.[windowKey];
-        if (!window) continue;
-        checks.push({
-          key: `${provider}-${windowKey}`,
-          pct: window.pct,
-          resetMs: window.resetMs,
-          label: `${providerLabel(provider)} ${windowLabel(windowKey)}`,
-          source: window.source,
-          provider,
-        });
-      }
-    }
+    const snapshot = providerQuotas[provider];
+    const windows = snapshot?.windows;
     for (const [windowKey, window] of Object.entries(windows ?? {})) {
-      if (groupedWindows.has(windowKey)) continue;
       checks.push({
         key: `${provider}-${windowKey}`,
         pct: window.pct,
         resetMs: window.resetMs,
-        label: `${providerLabel(provider)} ${windowLabel(windowKey)}`,
+        label: `${quotaGroupLabel(snapshot, provider, windowKey)} ${quotaWindowLabel(snapshot, windowKey)}`,
         source: window.source,
         provider,
       });
     }
-    for (const model of quota?.models ?? []) {
+    for (const model of snapshot?.models ?? []) {
       const resetMs = model.resetMs ?? null;
       const durationLabel = modelDurationLabel(model.durationMs);
       checks.push({
@@ -140,7 +133,7 @@ export function quotaChecks(
         pct: Math.max(0, Math.min(100, 100 - model.remainingPct)),
         resetMs,
         label: `${providerLabel(provider)} ${model.label} ${modelWindowLabel(model.durationMs)}`,
-        source: quota?.source,
+        source: snapshot?.source,
         provider,
       });
     }

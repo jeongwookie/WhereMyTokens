@@ -9,6 +9,7 @@ export interface ProviderWindowTarget {
   provider: ProviderId;
   windowKey: string;
   startMs: number;
+  modelIncludes?: string[];
 }
 
 export type ProviderWindowResetHintMap = Partial<Record<ProviderId, ProviderWindowResetHints>>;
@@ -62,11 +63,27 @@ function addWindowTarget(
   provider: ProviderId,
   windowKey: string,
   startMs: number,
+  modelIncludes?: string[],
 ): void {
   if (!windowKey) return;
   const list = targets.get(provider) ?? [];
-  list.push({ provider, windowKey, startMs });
+  list.push({ provider, windowKey, startMs, modelIncludes });
   targets.set(provider, list);
+}
+
+function windowModelIncludes(quota: ProviderQuotaSnapshot | undefined, windowKey: string): string[] | undefined {
+  const includes = quota?.windowDisplay?.[windowKey]?.modelIncludes;
+  if (!Array.isArray(includes)) return undefined;
+  const normalized = includes
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map(item => item.trim().toLowerCase());
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+export function targetAcceptsModel(target: ProviderWindowTarget, model: string): boolean {
+  if (!target.modelIncludes?.length) return true;
+  const normalizedModel = model.toLowerCase();
+  return target.modelIncludes.some(fragment => normalizedModel.includes(fragment));
 }
 
 export function buildProviderWindowTargets(
@@ -89,6 +106,7 @@ export function buildProviderWindowTargets(
           provider,
           windowKey,
           quotaWindowStart(provider, quota, windowKey, resets, nowMs, weekStartMs),
+          windowModelIncludes(quota, windowKey),
         );
       }
     }

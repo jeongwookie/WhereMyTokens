@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe"><strong>v1.16.1 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe"><strong>v1.17.0 をダウンロード</strong></a>
   ·
   <a href="#主な機能">主な機能</a>
   ·
@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <em>Antigravity 対応は次のパッケージリリース向けのソースに含まれており、v1.16.1 のダウンロードにはまだ含まれていません。</em>
+  <em>Antigravity 対応は次のパッケージリリース向けのソースに含まれており、v1.17.0 のダウンロードにはまだ含まれていません。</em>
 </p>
 
 <p align="center">
@@ -64,11 +64,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 6/2 | Plan Usage を provider quota snapshot ベースに再構成し、target 別 Rich/Simple/None 表示グループと安全な quota 状態復元・移行を追加 |
 | **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 途中で止まった full-history ledger import や失敗した source があっても budgeted warmup を継続し、古い provider completion marker を避けるよう修正 |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 永続 usage ledger、即時起動 snapshot、cost/token 履歴と git net-line output を重ねる Trend カードを追加 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | refresh 処理を scheduler で直列化し、startup / watcher / history / manual refresh 中も tray UI と hotkey popup の応答性を維持 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex アーカイブログと Claude agent ログを all-time 使用量に含め、all-time セッション数を全使用履歴ベースで表示 |
-| **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | hotkey popup の応答性を保ちながら全セッション履歴を取りこぼさないようにし、トレイ補助ウィンドウを taskbar に出さないよう修正 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -76,9 +76,9 @@
 
 ## ダウンロード
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-v1.16.1-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-v1.17.0-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -88,7 +88,7 @@
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.16.1-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.17.0-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -105,7 +105,8 @@
 - **ツール使用バー** — 比例色分けバー + ツールチップ（Bash、Edit、Read など）
 
 ### レート制限 & アラート
-- **Quota バー** — Claude 5h/1w は Anthropic API/statusLine フォールバックを使い、ローカル access token が期限切れの場合は passive OAuth refresh で復旧します。Codex 5h/1w は live Codex usage、キャッシュ、ローカル rate-limit ログイベントの順で表示し、Antigravity は IDE 実行中に 127.0.0.1 local RPC からモデル quota を読み取ります
+- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は `providerQuotas` snapshot で有効な quota を公開します。Claude は Anthropic API/statusLine/cache、Codex は live usage/cache/local-log、Antigravity は IDE 実行中の 127.0.0.1 local RPC からモデル quota を読み取ります
+- **Target 別 quota 表示** — 各 provider window または model target を Settings で Rich、Simple、非表示にできます。この設定は Plan Usage と Floating widget の表示だけに影響します
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` プラグインで API ポーリングなしのリアルタイムデータ受信
 - **Windows トースト通知** — 使用量しきい値（50% / 80% / 90%）でアラート
@@ -202,7 +203,7 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 
 認証情報の扱いは狭く限定されています。WhereMyTokens は公式 CLI のローカル credential ファイルを読み取り、API key の貼り付けを求めず、別の credential バックアップを保存しません。Claude access token が期限切れの場合は Anthropic で refresh し、更新された credentials を `~/.claude/.credentials.json` に原子的に書き戻すことがあります。
 
-ネットワークアクセスは有効な provider モードの usage endpoint とローカル loopback に限定されます。Claude usage polling は最大 5 分ごとに実行し、429 backoff を適用します。Codex live usage は HTTPS-only request、timeout、レスポンスサイズ制限、cache、backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。ローカル JSONL 解析と `statusLine` bridge はセッション内容を外部へ送信しません。
+ネットワークアクセスは有効にした provider チェックボックスの usage endpoint とローカル loopback に限定されます。Claude usage polling は最大 5 分ごとに実行し、429 backoff を適用します。Codex live usage は HTTPS-only request、timeout、レスポンスサイズ制限、cache、backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。ローカル JSONL 解析、Antigravity local RPC、`statusLine` bridge はセッション内容を外部へ送信しません。
 
 Claude Code bridge を無効化するには **Settings -> Claude Code Integration -> Disable** を押します。アプリは WhereMyTokens bridge command が所有する `statusLine` entry だけを削除し、他の custom `statusLine` を上書きまたは削除しません。手動では `~/.claude/settings.json` から WhereMyTokens の `statusLine` entry を削除し、Claude Code を再起動してください。
 
@@ -224,7 +225,7 @@ WhereMyTokens は Claude Code の公式 `statusLine` プラグインメカニズ
 
 ### Codex 追跡
 
-WhereMyTokens は Codex のローカル JSONL ログ（`~/.codex/sessions/**/*.jsonl`、`~/.codex/archived_sessions/**/*.jsonl`、`~/.codex/session-cleanup-archive/**/*.jsonl`）も読み取れます。Settings の provider チェックボックスで追跡する provider を選択します。
+WhereMyTokens は Codex のローカル JSONL ログ（`~/.codex/sessions/**/*.jsonl`、`~/.codex/archived_sessions/**/*.jsonl`、`~/.codex/session-cleanup-archive/**/*.jsonl`）も読み取れます。Settings で追跡したい provider チェックボックスを有効にします。
 
 **Codex 追跡に含まれるもの：**
 - セッション状態、プロジェクト/ブランチのグループ化、VS Code や Codex Exec などの source 表示
@@ -259,8 +260,7 @@ Claude は input、output、cache creation、cache read を提供します。Cod
 |---------|------|------------|
 | ヘッダー (today) | 今日の深夜以降 | In/Out/Cache + 呼び出し数、セッション数、キャッシュ節約 |
 | ヘッダー (all) | 全期間 | In/Out/Cache + 呼び出し数、セッション数、キャッシュ節約 |
-| Plan Usage (Claude 5h / 1w) | Claude reset window | Claude トークン種別 + API/statusLine 制限 |
-| Plan Usage (Codex 5h / 1w) | Codex reset window | Codex トークン種別 + live/cache/log 制限ソース |
+| Plan Usage (provider quotas) | Provider reset window | Provider トークン種別 + `providerQuotas[provider]` window、status、source、credit、target 別 Rich/Simple/None 表示モード |
 | Model Usage | 全期間、provider 別の上位 4 モデル | すべてのトークン種別 |
 
 > **注意：** `$` 値は推定値であり、実際の請求額ではありません。Claude Max/Pro サブスクリプションは月額固定料金であり、コスト表示はサブスクリプションから得られる使用価値を示します。

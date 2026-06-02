@@ -31,16 +31,24 @@ import type {
   ExcludedProjectMatcher,
   ProviderAdapter,
   ProviderContext,
+  ProviderCreditBalance,
+  ProviderModelQuota,
+  ProviderQuotaDisplayBadge,
+  ProviderQuotaGroupSpec,
+  ProviderQuotaRowVisualKind,
   ProviderId,
   ProviderLedgerSource,
   ProviderQuotaSnapshot,
+  ProviderQuotaStatus,
   ProviderQuotaWindow,
+  ProviderQuotaWindowDisplay,
   ProviderSource,
+  QuotaDisplayMode,
   SessionDiscoveryScope,
   SessionState,
   SourceBackedProviderAdapter,
 } from './providers/types';
-import { isProviderEnabled } from './providers/settings';
+import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
 import { buildClaudeQuotaDisplayMetadata, isClaudeQuotaSnapshot } from './providers/claude/quota';
 import { buildCodexQuotaDisplayMetadata, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
@@ -119,6 +127,11 @@ export interface AppState {
 
 type WatcherProfile = 'wide' | 'recent' | 'off';
 type WatcherMode = 'auto' | 'wide' | 'recent';
+
+const PROVIDER_QUOTA_SOURCES: ProviderQuotaSnapshot['source'][] = ['api', 'statusLine', 'localLog', 'localRpc', 'cache'];
+const QUOTA_DISPLAY_MODES: QuotaDisplayMode[] = ['rich', 'simple', 'none'];
+const QUOTA_ROW_VISUAL_KINDS: ProviderQuotaRowVisualKind[] = ['pace', 'percentOnly'];
+const QUOTA_BADGE_TONES: Array<NonNullable<ProviderQuotaDisplayBadge['tone']>> = ['good', 'neutral', 'warning'];
 
 interface PerfSampleStart {
   wallNs: bigint;
@@ -223,6 +236,250 @@ function hasMeaningfulQuotaWindow(window: ProviderQuotaWindow | null | undefined
 
 function emptyQuotaWindow(): ProviderQuotaWindow {
   return { pct: 0, resetMs: null };
+}
+
+function quotaRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function finiteQuotaNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function quotaString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function quotaStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const list = value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map(item => item.trim());
+  return list.length > 0 ? list : undefined;
+}
+
+function quotaSource(value: unknown, fallback: ProviderQuotaSnapshot['source'] = 'cache'): ProviderQuotaSnapshot['source'] {
+  return typeof value === 'string' && PROVIDER_QUOTA_SOURCES.includes(value as ProviderQuotaSnapshot['source'])
+    ? value as ProviderQuotaSnapshot['source']
+    : fallback;
+}
+
+function quotaDisplayMode(value: unknown): QuotaDisplayMode {
+  return typeof value === 'string' && (QUOTA_DISPLAY_MODES as readonly string[]).includes(value)
+    ? value as QuotaDisplayMode
+    : 'simple';
+}
+
+function quotaVisualKind(value: unknown): ProviderQuotaRowVisualKind | undefined {
+  return typeof value === 'string' && (QUOTA_ROW_VISUAL_KINDS as readonly string[]).includes(value)
+    ? value as ProviderQuotaRowVisualKind
+    : undefined;
+}
+
+function quotaBadgeTone(value: unknown): 'good' | 'neutral' | 'warning' | undefined {
+  return typeof value === 'string' && (QUOTA_BADGE_TONES as readonly string[]).includes(value)
+    ? value as 'good' | 'neutral' | 'warning'
+    : undefined;
+}
+
+function sanitizeQuotaWindow(value: unknown): ProviderQuotaWindow | null {
+  const record = quotaRecord(value);
+  if (!record) return null;
+  const resetMs = finiteQuotaNumber(record.resetMs);
+  const pct = finiteQuotaNumber(record.pct) ?? 0;
+  return {
+    pct: Math.max(0, Math.min(100, pct)),
+    resetMs: resetMs ?? null,
+    resetLabel: quotaString(record.resetLabel),
+    source: typeof record.source === 'string' ? quotaSource(record.source) : undefined,
+  };
+}
+
+function sanitizeQuotaWindows(value: unknown): ProviderQuotaSnapshot['windows'] | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  const windows: NonNullable<ProviderQuotaSnapshot['windows']> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const window = sanitizeQuotaWindow(entry);
+    if (window) windows[key] = window;
+  }
+  return Object.keys(windows).length > 0 ? windows : undefined;
+}
+
+function sanitizeQuotaBadge(value: unknown): ProviderQuotaDisplayBadge | null {
+  const record = quotaRecord(value);
+  const key = quotaString(record?.key);
+  const label = quotaString(record?.label);
+  if (!key || !label) return null;
+  return {
+    key,
+    label,
+    title: quotaString(record?.title),
+    tone: quotaBadgeTone(record?.tone),
+  };
+}
+
+function sanitizeQuotaBadges(value: unknown): ProviderQuotaDisplayBadge[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const badges = value
+    .map(sanitizeQuotaBadge)
+    .filter((badge): badge is ProviderQuotaDisplayBadge => !!badge);
+  return badges.length > 0 ? badges : undefined;
+}
+
+function sanitizeQuotaGroup(value: unknown): ProviderQuotaGroupSpec | null {
+  const record = quotaRecord(value);
+  const key = quotaString(record?.key);
+  const label = quotaString(record?.label);
+  const windowKeys = quotaStringList(record?.windowKeys);
+  if (!record || !key || !label || !windowKeys) return null;
+  return {
+    key,
+    label,
+    windowKeys,
+    defaultMode: quotaDisplayMode(record.defaultMode),
+    accentColor: quotaString(record.accentColor),
+    badges: sanitizeQuotaBadges(record.badges),
+    sortOrder: finiteQuotaNumber(record.sortOrder),
+  };
+}
+
+function sanitizeQuotaGroups(value: unknown): ProviderQuotaGroupSpec[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const groups = value
+    .map(sanitizeQuotaGroup)
+    .filter((group): group is ProviderQuotaGroupSpec => !!group);
+  return groups.length > 0 ? groups : undefined;
+}
+
+function sanitizeQuotaWindowDisplay(value: unknown): ProviderQuotaWindowDisplay | null {
+  const record = quotaRecord(value);
+  const label = quotaString(record?.label);
+  if (!record || !label) return null;
+  return {
+    label,
+    visualKind: quotaVisualKind(record.visualKind),
+    cacheMetricTitle: quotaString(record.cacheMetricTitle),
+    durationMs: finiteQuotaNumber(record.durationMs),
+    modelIncludes: quotaStringList(record.modelIncludes),
+    hideCost: record.hideCost === true,
+    badges: sanitizeQuotaBadges(record.badges),
+  };
+}
+
+function sanitizeQuotaWindowDisplayMap(value: unknown): ProviderQuotaSnapshot['windowDisplay'] | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  const display: Record<string, ProviderQuotaWindowDisplay> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const item = sanitizeQuotaWindowDisplay(entry);
+    if (item) display[key] = item;
+  }
+  return Object.keys(display).length > 0 ? display : undefined;
+}
+
+function sanitizeProviderQuotaStatus(value: unknown): ProviderQuotaStatus | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  return {
+    connected: record.connected === true,
+    code: quotaString(record.code) ?? 'unknown',
+    label: quotaString(record.label),
+    detail: quotaString(record.detail),
+    severity: record.severity === 'ok' || record.severity === 'warning' || record.severity === 'danger'
+      ? record.severity
+      : undefined,
+  };
+}
+
+function sanitizeProviderCredit(value: unknown): ProviderCreditBalance | null {
+  const record = quotaRecord(value);
+  if (!record) return null;
+  const resetMs = finiteQuotaNumber(record.resetMs);
+  return {
+    available: Math.max(0, finiteQuotaNumber(record.available) ?? 0),
+    used: finiteQuotaNumber(record.used),
+    total: finiteQuotaNumber(record.total),
+    remainingPct: finiteQuotaNumber(record.remainingPct),
+    resetMs: resetMs ?? (record.resetMs === null ? null : undefined),
+  };
+}
+
+function sanitizeProviderCredits(value: unknown): ProviderQuotaSnapshot['credits'] | undefined {
+  const record = quotaRecord(value);
+  if (!record) return undefined;
+  const credits: Record<string, ProviderCreditBalance> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const credit = sanitizeProviderCredit(entry);
+    if (credit) credits[key] = credit;
+  }
+  return Object.keys(credits).length > 0 ? credits : undefined;
+}
+
+function sanitizeProviderModelQuota(value: unknown): ProviderModelQuota | null {
+  const record = quotaRecord(value);
+  const model = quotaString(record?.model);
+  const label = quotaString(record?.label);
+  if (!record || !model || !label) return null;
+  return {
+    model,
+    label,
+    remainingPct: Math.max(0, Math.min(100, finiteQuotaNumber(record.remainingPct) ?? 0)),
+    resetMs: finiteQuotaNumber(record.resetMs) ?? (record.resetMs === null ? null : undefined),
+    groupKey: quotaString(record.groupKey),
+    defaultMode: record.defaultMode == null ? undefined : quotaDisplayMode(record.defaultMode),
+    visualKind: quotaVisualKind(record.visualKind),
+    cacheMetricTitle: quotaString(record.cacheMetricTitle),
+    durationMs: finiteQuotaNumber(record.durationMs),
+    hideCost: record.hideCost === true,
+    accentColor: quotaString(record.accentColor),
+    badges: sanitizeQuotaBadges(record.badges),
+  };
+}
+
+function sanitizeProviderModels(value: unknown): ProviderModelQuota[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const models = value
+    .map(sanitizeProviderModelQuota)
+    .filter((model): model is ProviderModelQuota => !!model);
+  return models.length > 0 ? models : undefined;
+}
+
+function isProviderIdValue(value: unknown): value is ProviderId {
+  return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
+}
+
+function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
+  const record = quotaRecord(value);
+  if (!record) return null;
+  if (record.provider != null && record.provider !== provider) return null;
+  return {
+    provider,
+    source: quotaSource(record.source),
+    capturedAt: finiteQuotaNumber(record.capturedAt) ?? 0,
+    accountLabel: quotaString(record.accountLabel),
+    planName: quotaString(record.planName),
+    windows: sanitizeQuotaWindows(record.windows),
+    models: sanitizeProviderModels(record.models),
+    groups: sanitizeQuotaGroups(record.groups),
+    windowDisplay: sanitizeQuotaWindowDisplayMap(record.windowDisplay),
+    credits: sanitizeProviderCredits(record.credits),
+    status: sanitizeProviderQuotaStatus(record.status),
+  };
+}
+
+function sanitizeProviderQuotaMap(value: unknown): ProviderQuotaMap {
+  const record = quotaRecord(value);
+  if (!record) return {};
+  const quotas: ProviderQuotaMap = {};
+  for (const [provider, snapshot] of Object.entries(record)) {
+    if (!isProviderIdValue(provider)) continue;
+    const sanitized = sanitizeProviderQuotaSnapshot(provider, snapshot);
+    if (sanitized) quotas[provider] = sanitized;
+  }
+  return quotas;
 }
 
 function canReuseClaudeCachedWindow(window: ProviderQuotaWindow | null | undefined): boolean {
@@ -487,9 +744,7 @@ export class StateManager {
 
   private reviveRestoredState(state: AppState): AppState {
     const sessions = Array.isArray(state.sessions) ? state.sessions : [];
-    const providerQuotas = state.providerQuotas && typeof state.providerQuotas === 'object'
-      ? state.providerQuotas
-      : {};
+    const providerQuotas = sanitizeProviderQuotaMap(state.providerQuotas);
     this.providerQuotaSnapshots.clear();
     for (const [provider, snapshot] of Object.entries(providerQuotas) as Array<[ProviderId, ProviderQuotaSnapshot | undefined]>) {
       if (snapshot?.provider === provider) this.providerQuotaSnapshots.set(provider, snapshot);
@@ -1077,7 +1332,9 @@ export class StateManager {
       accepted = this.applyCodexQuotaSnapshot(snapshot, requestSeq);
     }
     if (!accepted) return false;
-    this.providerQuotaSnapshots.set(snapshot.provider, snapshot);
+    const publicSnapshot = sanitizeProviderQuotaSnapshot(snapshot.provider, snapshot);
+    if (!publicSnapshot) return false;
+    this.providerQuotaSnapshots.set(snapshot.provider, publicSnapshot);
     return true;
   }
 
@@ -1940,7 +2197,8 @@ export class StateManager {
   private buildProviderQuotas(now = Date.now()): ProviderQuotaMap {
     const quotas: ProviderQuotaMap = {};
     for (const [provider, snapshot] of this.providerQuotaSnapshots.entries()) {
-      quotas[provider] = snapshot;
+      const publicSnapshot = sanitizeProviderQuotaSnapshot(provider, snapshot);
+      if (publicSnapshot) quotas[provider] = publicSnapshot;
     }
     quotas.claude = this.buildClaudeProviderQuota(now);
     quotas.codex = this.buildCodexProviderQuota(now);
@@ -2087,7 +2345,7 @@ export class StateManager {
 
   private buildCodexProviderQuota(now: number): ProviderQuotaSnapshot {
     const windows = this.getCodexLimitWindows(now);
-    const raw = this.providerQuotaSnapshots.get('codex');
+    const raw = sanitizeProviderQuotaSnapshot('codex', this.providerQuotaSnapshots.get('codex'));
     const source = windows.h5.source ?? windows.week.source ?? raw?.source ?? (this.codexUsageConnected ? 'api' : 'localLog');
     return {
       ...raw,

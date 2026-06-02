@@ -536,7 +536,9 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const cacheColor = cacheMetricColor(cacheEff, C);
   const cacheTitle = cacheMetricTitle(enabledProviderList);
   const planLabel = showClaudeUsage ? (claudeQuota?.planName || claudeQuota?.accountLabel) : undefined;
-  const codexTierLabel = showCodexUsage ? formatCodexServiceTier(state.codexAccount.serviceTier) : null;
+  const codexTierLabel = showCodexUsage
+    ? (codexQuota?.planName || codexQuota?.accountLabel || formatCodexServiceTier(state.codexAccount.serviceTier))
+    : null;
   const statusStyles = headerStatus?.tone === 'danger'
     ? {
         color: C.barRed,

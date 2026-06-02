@@ -69,6 +69,7 @@ export function buildClaudeQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, '
         label: '1w',
         visualKind: 'percentOnly',
         durationMs: SEVEN_DAYS_MS,
+        modelIncludes: ['sonnet'],
         hideCost: true,
       },
     },

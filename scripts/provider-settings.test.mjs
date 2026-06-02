@@ -13,9 +13,9 @@ test('settings use implemented enabledProviders as the canonical provider select
   assert.equal('provider' in settings, false);
 });
 
-test('removed provider mode is ignored instead of migrated', () => {
-  assert.deepEqual(normalizeSettings({ provider: 'claude' }).enabledProviders, ['claude', 'codex']);
-  assert.deepEqual(normalizeSettings({ provider: 'codex' }).enabledProviders, ['claude', 'codex']);
+test('legacy provider mode migrates when enabledProviders is absent', () => {
+  assert.deepEqual(normalizeSettings({ provider: 'claude' }).enabledProviders, ['claude']);
+  assert.deepEqual(normalizeSettings({ provider: 'codex' }).enabledProviders, ['codex']);
   assert.deepEqual(normalizeSettings({ provider: 'both' }).enabledProviders, ['claude', 'codex']);
   assert.equal('provider' in DEFAULT_SETTINGS, false);
   assert.equal('provider' in normalizeSettings({ provider: 'codex' }), false);

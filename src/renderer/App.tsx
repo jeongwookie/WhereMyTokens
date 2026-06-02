@@ -254,6 +254,9 @@ function normalizeQuotaWindowDisplay(value: unknown): ProviderQuotaWindowDisplay
     durationMs: typeof record.durationMs === 'number' && Number.isFinite(record.durationMs) && record.durationMs > 0
       ? record.durationMs
       : undefined,
+    modelIncludes: Array.isArray(record.modelIncludes)
+      ? record.modelIncludes.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : undefined,
     hideCost: record.hideCost === true,
     badges: normalizeQuotaBadges(record.badges),
   };

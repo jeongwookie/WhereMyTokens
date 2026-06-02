@@ -135,6 +135,22 @@ test('quota display groups hide missing rows from rendered targets while keeping
   assert.deepEqual(settingsTarget.rows.map(row => row.label), ['burst', 'durable']);
 });
 
+test('quota display groups keep waiting rows when provider quota is disconnected', async () => {
+  const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
+  const options = baseOptions();
+  options.providerQuotas.codex.status = { connected: false, code: 'no-credentials', label: 'login required' };
+  options.providerQuotas.codex.windows = {};
+  options.usage.byProvider.codex.windows.burst = stats(0);
+  options.usage.byProvider.codex.windows.durable = stats(0);
+
+  const models = buildQuotaDisplayModels(options);
+  const rendered = models.richGroups.find(group => group.id === 'codex.group.account');
+
+  assert.ok(rendered);
+  assert.deepEqual(rendered.rows.map(row => row.label), ['burst', 'durable']);
+  assert.equal(rendered.rows.every(row => row.apiConnected === false), true);
+});
+
 test('quota display modes are group-level settings', async () => {
   const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
   const models = buildQuotaDisplayModels(baseOptions({

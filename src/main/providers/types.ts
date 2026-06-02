@@ -194,6 +194,7 @@ export interface ProviderQuotaWindowDisplay {
   visualKind?: ProviderQuotaRowVisualKind;
   cacheMetricTitle?: string;
   durationMs?: number;
+  modelIncludes?: string[];
   hideCost?: boolean;
   badges?: ProviderQuotaDisplayBadge[];
 }
