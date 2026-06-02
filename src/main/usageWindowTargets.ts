@@ -28,6 +28,15 @@ function quotaWindowDuration(quota: ProviderQuotaSnapshot | undefined, windowKey
   return Number.isFinite(durationMs) && durationMs && durationMs > 0 ? durationMs : undefined;
 }
 
+function modelQuotaDuration(model: NonNullable<ProviderQuotaSnapshot['models']>[number]): number | undefined {
+  if (Number.isFinite(model.durationMs) && model.durationMs && model.durationMs > 0) return model.durationMs;
+  return undefined;
+}
+
+function modelQuotaWindowKey(model: NonNullable<ProviderQuotaSnapshot['models']>[number]): string {
+  return model.statsWindowKey || `model.${model.model}`;
+}
+
 function quotaWindowStart(
   provider: ProviderId,
   quota: ProviderQuotaSnapshot | undefined,
@@ -100,6 +109,17 @@ export function buildProviderWindowTargets(
           windowModelIncludes(quota, windowKey),
         );
       }
+    }
+
+    for (const model of quota?.models ?? []) {
+      const durationMs = modelQuotaDuration(model);
+      if (!durationMs) continue;
+      addWindowTarget(
+        targets,
+        provider,
+        modelQuotaWindowKey(model),
+        rollingWindowStart(durationMs, model.resetMs, nowMs - durationMs, nowMs),
+      );
     }
 
     if (!targets.has(provider)) {

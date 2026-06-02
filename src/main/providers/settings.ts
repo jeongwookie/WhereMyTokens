@@ -3,10 +3,9 @@ import type { ProviderId } from './types';
 
 export const BUILTIN_PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex'];
 export const PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex', 'antigravity'];
-export const ENABLED_PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex'];
 
 export function normalizeEnabledProviders(value: unknown): ProviderId[] {
-  const allowed = new Set<ProviderId>(ENABLED_PROVIDER_IDS);
+  const allowed = new Set<ProviderId>(PROVIDER_IDS);
   if (Array.isArray(value)) {
     const normalized = value.filter((item): item is ProviderId =>
       typeof item === 'string' && allowed.has(item as ProviderId)

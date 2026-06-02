@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 
 import providersModule from '../dist/main/providers/index.js';
 
-test('provider registry registers Claude and Codex adapters', () => {
+test('provider registry registers Claude, Codex, and Antigravity adapters', () => {
   const registry = providersModule.createProviderRegistry();
 
-  assert.deepEqual(registry.getAll().map(provider => provider.id), ['claude', 'codex']);
+  assert.deepEqual(registry.getAll().map(provider => provider.id), ['claude', 'codex', 'antigravity']);
   assert.equal(registry.get('claude').displayName, 'Claude Code');
   assert.equal(registry.get('codex').displayName, 'Codex');
+  assert.equal(registry.get('antigravity').displayName, 'Antigravity');
 });
 
 test('provider registry rejects duplicate provider ids', () => {
@@ -34,7 +35,7 @@ test('provider registry getEnabled resolves requested ids in order and ignores u
   );
   assert.deepEqual(
     registry.getEnabled(['claude', 'antigravity', 'bogus']).map(provider => provider.id),
-    ['claude'],
+    ['claude', 'antigravity'],
   );
 });
 
@@ -63,4 +64,19 @@ test('source-backed Claude and Codex adapters expose discovery and source method
     assert.equal(typeof provider.isExcludedSource, 'function');
     assert.equal(typeof provider.fetchQuota, 'function');
   }
+});
+
+test('Antigravity adapter exposes sessions, usage, and quota without source-backed file methods', () => {
+  const registry = providersModule.createProviderRegistry();
+  const antigravity = registry.get('antigravity');
+
+  assert.ok(antigravity.capabilities.has('sessions'));
+  assert.ok(antigravity.capabilities.has('usage'));
+  assert.ok(antigravity.capabilities.has('quota'));
+  assert.equal(typeof antigravity.discoverSessions, 'function');
+  assert.equal(typeof antigravity.scanUsage, 'function');
+  assert.equal(typeof antigravity.fetchQuota, 'function');
+  assert.equal(typeof antigravity.ownsPath, 'undefined');
+  assert.equal(typeof antigravity.listRecentSources, 'undefined');
+  assert.equal(typeof antigravity.scanSourceSummary, 'undefined');
 });

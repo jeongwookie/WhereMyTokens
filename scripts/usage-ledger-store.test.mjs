@@ -6,7 +6,7 @@ import aggregates from '../dist/main/usageLedgerAggregates.js';
 
 const { UsageLedgerStore } = storeModule;
 const { emptyUsageLedgerSnapshot, emptyUsageAggregate, minuteKey } = aggregates;
-const EXPECTED_SCHEMA_VERSION = 2;
+const EXPECTED_SCHEMA_VERSION = 3;
 
 class FakeStore {
   constructor() {

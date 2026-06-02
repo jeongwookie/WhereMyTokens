@@ -4,7 +4,7 @@
  */
 import { Notification } from 'electron';
 import { addNotification } from './notificationHistory';
-import type { ProviderId, ProviderQuotaSnapshot } from './providers/types';
+import type { ProviderId, ProviderQuotaSnapshot, QuotaDisplayMode } from './providers/types';
 
 interface AlertState {
   lastAlertTime: number;    // ms timestamp
@@ -14,6 +14,9 @@ interface AlertState {
 
 interface AlertOptions {
   deferCodexLocalLog?: boolean;
+  quotaTargetModes?: Partial<Record<string, QuotaDisplayMode>>;
+  nowMs?: number;
+  emitNotification?: (title: string, body: string) => void;
 }
 
 const alertStates: Record<string, AlertState> = {};
@@ -76,6 +79,23 @@ function windowLabel(windowKey: string): string {
   return `${windowKey} usage`;
 }
 
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function modelDurationLabel(durationMs: number | undefined): string {
+  const resolved = durationMs;
+  if (resolved === FIVE_HOURS_MS) return '5h';
+  if (resolved === WEEK_MS) return '1w';
+  return 'quota';
+}
+
+function modelWindowLabel(durationMs: number | undefined): string {
+  const label = modelDurationLabel(durationMs);
+  if (label === '5h') return '5h usage';
+  if (label === '1w') return 'weekly usage';
+  return 'usage';
+}
+
 function quotaGroupLabel(snapshot: ProviderQuotaSnapshot | undefined, provider: ProviderId, windowKey: string): string {
   return snapshot?.groups?.find(group => group.windowKeys.includes(windowKey))?.label
     ?? providerLabel(provider);
@@ -86,16 +106,16 @@ function quotaWindowLabel(snapshot: ProviderQuotaSnapshot | undefined, windowKey
     ?? windowLabel(windowKey);
 }
 
-function quotaChecks(
+export function quotaChecks(
   providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>,
   enabledProviders: ReadonlySet<ProviderId>,
+  options: Pick<AlertOptions, 'quotaTargetModes'> = {},
 ): Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> {
   const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> = [];
   for (const provider of enabledProviders) {
     const snapshot = providerQuotas[provider];
     const windows = snapshot?.windows;
-    if (!windows) continue;
-    for (const [windowKey, window] of Object.entries(windows)) {
+    for (const [windowKey, window] of Object.entries(windows ?? {})) {
       checks.push({
         key: `${provider}-${windowKey}`,
         pct: window.pct,
@@ -105,8 +125,32 @@ function quotaChecks(
         provider,
       });
     }
+    for (const model of snapshot?.models ?? []) {
+      const resetMs = model.resetMs ?? null;
+      const durationLabel = modelDurationLabel(model.durationMs);
+      checks.push({
+        key: `${provider}-model-${model.model}-${durationLabel}`,
+        pct: Math.max(0, Math.min(100, 100 - model.remainingPct)),
+        resetMs,
+        label: `${providerLabel(provider)} ${model.label} ${modelWindowLabel(model.durationMs)}`,
+        source: snapshot?.source,
+        provider,
+      });
+    }
   }
   return checks;
+}
+
+function emitUsageAlert(title: string, body: string, options: AlertOptions): void {
+  if (options.emitNotification) {
+    options.emitNotification(title, body);
+    return;
+  }
+
+  addNotification('alert', title, body);
+  try {
+    new Notification({ title: `WhereMyTokens ${title}`, body }).show();
+  } catch { /* ignore */ }
 }
 
 export function checkAlerts(
@@ -118,9 +162,16 @@ export function checkAlerts(
 ): void {
   if (!enabled) return;
 
-  const now = Date.now();
+  const now = options.nowMs ?? Date.now();
+  const triggered: Array<{
+    label: string;
+    threshold: number;
+    pct: number;
+    resetMs: number | null;
+    source?: string;
+  }> = [];
 
-  for (const { key, pct, resetMs, label, source, provider } of quotaChecks(providerQuotas, enabledProviders)) {
+  for (const { key, pct, resetMs, label, source, provider } of quotaChecks(providerQuotas, enabledProviders, options)) {
     if (options.deferCodexLocalLog && provider === 'codex' && source === 'localLog') continue;
     if (pct <= 0) continue;
     const state = getState(key);
@@ -153,15 +204,25 @@ export function checkAlerts(
       if (smoothPct >= threshold && !state.firedThresholds.has(threshold) && cooldownExpired && (isRising || prev === 0)) {
         state.firedThresholds.add(threshold);
         state.lastAlertTime = now;
-
-        const title = `Usage alert: ${label} reached ${threshold}%`;
-        const body = `Currently at ${Math.round(smoothPct)}% usage${formatReset(resetMs)}${formatSource(source)}`;
-        addNotification('alert', title, body);
-        try {
-          new Notification({ title: `WhereMyTokens ${title}`, body }).show();
-        } catch { /* ignore */ }
+        triggered.push({ label, threshold, pct: smoothPct, resetMs, source });
         break; // only fire the highest matching threshold
       }
     }
   }
+
+  if (triggered.length === 0) return;
+  if (triggered.length === 1) {
+    const alert = triggered[0];
+    emitUsageAlert(
+      `Usage alert: ${alert.label} reached ${alert.threshold}%`,
+      `Currently at ${Math.round(alert.pct)}% usage${formatReset(alert.resetMs)}${formatSource(alert.source)}`,
+      options,
+    );
+    return;
+  }
+
+  const body = triggered
+    .map(alert => `${alert.label} reached ${alert.threshold}% · currently ${Math.round(alert.pct)}% usage${formatReset(alert.resetMs)}${formatSource(alert.source)}`)
+    .join('\n');
+  emitUsageAlert(`Usage alerts: ${triggered.length} limits reached thresholds`, body, options);
 }

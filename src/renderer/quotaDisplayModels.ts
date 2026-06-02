@@ -46,6 +46,19 @@ export interface QuotaDisplayGroupViewModel {
   sortOrder: number;
 }
 
+export interface QuotaDisplayRichCardViewModel {
+  key: string;
+  provider: ProviderId;
+  group: QuotaDisplayGroupViewModel;
+  row: QuotaDisplayRowViewModel;
+}
+
+export interface QuotaDisplayRichRowViewModel {
+  key: string;
+  provider: ProviderId;
+  cards: QuotaDisplayRichCardViewModel[];
+}
+
 export interface QuotaDisplayModels {
   targets: QuotaDisplayGroupViewModel[];
   richGroups: QuotaDisplayGroupViewModel[];
@@ -90,6 +103,8 @@ const EMPTY_WINDOW_STATS: WindowStats = {
 
 const EMPTY_QUOTA_WINDOW: ProviderQuotaWindow = { pct: 0, resetMs: null };
 const FALLBACK_ACCENTS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#dc2626', '#0891b2', '#4f46e5'];
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function quotaGroupId(provider: ProviderId, groupKey: string): string {
   return `${provider}.group.${encodeURIComponent(groupKey)}`;
@@ -154,11 +169,11 @@ function firstExtraUsage(
   return null;
 }
 
-function modelQuotaWindow(model: ProviderModelQuota): ProviderQuotaWindow {
+function modelQuotaWindow(model: ProviderModelQuota, source: ProviderQuotaSnapshot['source']): ProviderQuotaWindow {
   return {
     pct: Math.max(0, Math.min(100, 100 - model.remainingPct)),
     resetMs: model.resetMs ?? null,
-    source: 'api',
+    source,
   };
 }
 
@@ -200,23 +215,62 @@ function sourceBadges(rows: readonly QuotaDisplayRowViewModel[]): ProviderQuotaD
   return badges;
 }
 
-function tokenBadge(rows: readonly QuotaDisplayRowViewModel[]): ProviderQuotaDisplayBadge | undefined {
-  const totalTokens = rows.reduce((sum, row) => sum + row.stats.totalTokens, 0);
-  if (totalTokens <= 0) return undefined;
-  const label = totalTokens >= 1_000_000
-    ? `${Math.round(totalTokens / 100_000) / 10}M tok`
-    : totalTokens >= 1_000
-      ? `${Math.round(totalTokens / 100) / 10}K tok`
-      : `${totalTokens} tok`;
-  return { key: 'tokens.total', label, title: `${totalTokens.toLocaleString()} tokens`, tone: 'neutral' };
-}
-
 function rowStats(
   usage: AppState['usage'],
   provider: ProviderId,
   windowKey: string,
 ): WindowStats {
   return usage.byProvider[provider]?.windows?.[windowKey] ?? EMPTY_WINDOW_STATS;
+}
+
+function cacheEfficiencyWeight(stats: WindowStats): number {
+  return Math.max(0, stats.inputTokens + stats.cacheCreationTokens + stats.cacheReadTokens);
+}
+
+function addStats(target: WindowStats, stats: WindowStats): void {
+  const existingWeight = cacheEfficiencyWeight(target);
+  const incomingWeight = cacheEfficiencyWeight(stats);
+  const weightedEfficiency = target.cacheEfficiency * existingWeight + stats.cacheEfficiency * incomingWeight;
+  target.inputTokens += stats.inputTokens;
+  target.outputTokens += stats.outputTokens;
+  target.cacheCreationTokens += stats.cacheCreationTokens;
+  target.cacheReadTokens += stats.cacheReadTokens;
+  target.totalTokens += stats.totalTokens;
+  target.costUSD += stats.costUSD;
+  target.requestCount += stats.requestCount;
+  target.cacheSavingsUSD += stats.cacheSavingsUSD;
+  target.cacheEfficiency = existingWeight + incomingWeight > 0
+    ? weightedEfficiency / (existingWeight + incomingWeight)
+    : 0;
+}
+
+function fallbackModelStatsWindowKey(model: ProviderModelQuota): string | null {
+  if (model.statsWindowKey) return model.statsWindowKey;
+  if (model.durationMs === FIVE_HOURS_MS) return 'h5';
+  if (model.durationMs === WEEK_MS) return 'week';
+  if (model.resetMs != null) return model.resetMs <= FIVE_HOURS_MS ? 'h5' : 'week';
+  return null;
+}
+
+function modelStats(
+  usage: AppState['usage'],
+  provider: ProviderId,
+  model: ProviderModelQuota,
+): WindowStats {
+  const windowKey = fallbackModelStatsWindowKey(model);
+  if (!windowKey) return EMPTY_WINDOW_STATS;
+  const windowModels = usage.modelWindows?.[provider]?.windows?.[windowKey];
+  if (!windowModels) return EMPTY_WINDOW_STATS;
+  const candidateNames = new Set(
+    [model.usageModel, model.label, model.model]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0),
+  );
+  const stats = { ...EMPTY_WINDOW_STATS };
+  for (const candidate of candidateNames) {
+    const candidateStats = windowModels[candidate];
+    if (candidateStats) addStats(stats, candidateStats);
+  }
+  return stats;
 }
 
 function buildGroupRows(
@@ -274,7 +328,6 @@ function buildGroup(
   const id = quotaGroupId(provider, group.key);
   const rows = buildGroupRows(provider, id, group, quota, options);
   if (!hasGroupSignal(id, group, rows, options.settings)) return null;
-  const token = tokenBadge(rows);
   return {
     id,
     provider,
@@ -283,7 +336,7 @@ function buildGroup(
     defaultMode: group.defaultMode,
     accentColor: group.accentColor ?? stableColorFromId(id),
     rows,
-    badges: mergeBadges(group.badges, sourceBadges(rows), token ? [token] : undefined),
+    badges: mergeBadges(group.badges, sourceBadges(rows)),
     sortOrder: group.sortOrder ?? 0,
   };
 }
@@ -296,18 +349,19 @@ function buildModelGroup(
 ): QuotaDisplayGroupViewModel {
   const groupKey = model.groupKey ?? modelQuotaGroupKey(model.model);
   const id = quotaGroupId(provider, groupKey);
-  const quotaWindow = modelQuotaWindow(model);
+  const quotaWindow = modelQuotaWindow(model, quota.source);
+  const stats = modelStats(options.usage, provider, model);
   const row: QuotaDisplayRowViewModel = {
     key: `${id}.model`,
     groupId: id,
     provider,
-    label: model.label || model.model,
+    label: 'Quota',
     visualKind: model.visualKind ?? 'percentOnly',
     quotaPct: quotaWindow.pct,
     resetMs: quotaWindow.resetMs,
     resetLabel: undefined,
     quota: quotaWindow,
-    stats: EMPTY_WINDOW_STATS,
+    stats,
     apiConnected: quota.status?.connected ?? true,
     pending: false,
     cacheMetricTitle: model.cacheMetricTitle,
@@ -361,12 +415,52 @@ export function buildQuotaDisplayGroups(options: BuildQuotaDisplayModelsOptions)
   });
 }
 
+export function buildRichCardRows(
+  richGroups: readonly QuotaDisplayGroupViewModel[],
+): QuotaDisplayRichRowViewModel[] {
+  const providerOrder: ProviderId[] = [];
+  const cardsByProvider = new Map<ProviderId, QuotaDisplayRichCardViewModel[]>();
+
+  for (const group of richGroups) {
+    if (!cardsByProvider.has(group.provider)) {
+      providerOrder.push(group.provider);
+      cardsByProvider.set(group.provider, []);
+    }
+
+    const cards = cardsByProvider.get(group.provider)!;
+    for (const row of group.rows) {
+      cards.push({
+        key: row.key,
+        provider: group.provider,
+        group,
+        row,
+      });
+    }
+  }
+
+  const rows: QuotaDisplayRichRowViewModel[] = [];
+  for (const provider of providerOrder) {
+    const cards = cardsByProvider.get(provider) ?? [];
+    for (let index = 0; index < cards.length; index += 2) {
+      const rowCards = cards.slice(index, index + 2);
+      if (rowCards.length === 0) continue;
+      rows.push({
+        key: `${provider}.${Math.floor(index / 2)}`,
+        provider,
+        cards: rowCards,
+      });
+    }
+  }
+
+  return rows;
+}
+
 export function buildQuotaTargetSettingsOptions(
   settings: AppState['settings'],
   providerQuotas: AppState['providerQuotas'] = {},
 ): QuotaTargetSettingsOption[] {
   const models = buildQuotaDisplayModels({
-    usage: { byProvider: {}, models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [], todBuckets: [] } as AppState['usage'],
+    usage: { byProvider: {}, modelWindows: {}, models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [], todBuckets: [] } as AppState['usage'],
     providerQuotas,
     settings,
     historyWarmupPending: false,

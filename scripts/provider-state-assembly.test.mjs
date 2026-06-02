@@ -118,6 +118,20 @@ test('StateManager session discovery and startup bootstrap use provider adapters
   assert.doesNotMatch(body, /buildStartupCodexSession/);
 });
 
+test('StateManager binds non-file provider sessions to summaries through summaryKey', () => {
+  const types = fs.readFileSync('src/main/providers/types.ts', 'utf8');
+  const identityBody = methodBody('sessionIdentityKey');
+  const scopedBody = methodBody('buildScopedSessionInfosDetailed');
+  const retainBody = methodBody('retainScopedSessionInfos');
+
+  assert.match(types, /summaryKey\?: string \| null/);
+  assert.match(identityBody, /summaryKey/);
+  assert.match(identityBody, /session\.summaryKey/);
+  assert.match(scopedBody, /session\.summaryKey\s*\?\s*summaries\.get\(session\.summaryKey\)/);
+  assert.match(retainBody, /session\.summaryKey/);
+  assert.match(retainBody, /this\.summaries\.has\(session\.summaryKey\)/);
+});
+
 test('StateManager recent watcher targets are assembled through source-backed providers', () => {
   const body = methodBody('buildRecentWatchTargets');
 

@@ -5,11 +5,12 @@
 <h1 align="center">WhereMyTokens</h1>
 
 <p align="center">
-  <strong>Claude Code + Codex token usage, live in your Windows tray.</strong>
+  <strong>Claude Code, Codex, and Antigravity token usage, live in your Windows tray.</strong>
 </p>
 
 <p align="center">
   <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-new-4f46e5?style=for-the-badge">
+  <img alt="Antigravity" src="https://img.shields.io/badge/Antigravity-local_RPC-0f766e?style=for-the-badge">
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
   <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
 </p>
@@ -33,7 +34,11 @@
 </p>
 
 <p align="center">
-  A local-first Windows tray app for monitoring Claude Code and Codex tokens, costs, sessions, cache, model usage, and rate limits at a glance.
+  <em>Antigravity support is in source for the next packaged release; v1.17.0 downloads do not include it yet.</em>
+</p>
+
+<p align="center">
+  A local-first Windows tray app for monitoring Claude Code, Codex, and Antigravity tokens, costs, sessions, cache, model usage, and rate limits at a glance.
 </p>
 
 <a id="screenshots"></a>
@@ -92,16 +97,16 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 ## Features
 
 ### Session Tracking
-- **Claude + Codex provider checkboxes** — track Claude only, Codex only, or both together in one dashboard
+- **Provider checkboxes** — track Claude, Codex, Antigravity, or any enabled combination in one dashboard
 - **Live session detection** — Terminal, VS Code, Cursor, Windsurf, and more with real-time status: `active` / `waiting` / `idle` / `compacting`
 - **Recent + active popup scope** — keep the tray popup focused on active sessions and recently touched work instead of reopening the full local archive on every refresh
-- **Compact grouping** — sessions grouped by git project → branch, with repeated Claude/Codex sessions stacked by provider, source, model, and state
+- **Compact grouping** — sessions grouped by git project → branch, with repeated provider sessions stacked by provider, source, model, and state
 - **Branch row limit** — each branch shows the first 3 rows by default, with "Show N more" for the rest
 - **Context window warnings** — per-session bar; amber at 70%, orange at 85%, red at 95%+
 - **Tool usage bars** — proportional color bar + tool chips (Bash, Edit, Read, …)
 
 ### Rate Limits & Alerts
-- **Provider quota bars** — Claude, Codex, and future providers publish effective quota snapshots through `providerQuotas`; Claude uses Anthropic API/statusLine/cache precedence, and Codex uses live usage/cache/local-log precedence
+- **Provider quota bars** — Claude, Codex, Antigravity, and future providers publish effective quota snapshots through `providerQuotas`; Claude uses Anthropic API/statusLine/cache precedence, Codex uses live usage/cache/local-log precedence, and Antigravity uses local RPC model quota snapshots
 - **Per-target quota display** — each provider window or model target can be shown as Rich, Simple, or hidden in Settings; this affects Plan Usage and the floating widget only
 - **Quota Pace view** — compares used quota % with elapsed window %; yellow/red means usage pace is ahead of the reset window
 - **Claude Code bridge** — register as a `statusLine` plugin for live rate limit data without API polling
@@ -125,7 +130,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Output growth chart** - shows cumulative net line growth from an all-time baseline across the latest 7 local days
 - **Current session repo scope** - Code Output now labels that git totals are scoped to repos tied to your current tracked sessions
 - **Branch-aware all-time** - all-time Code Output counts commits and line changes across local branches, using your local git author email
-- **Auto-discovery** — Claude projects from `~/.claude/projects/` including agent usage logs, plus Codex sessions from `~/.codex/sessions/`, `~/.codex/archived_sessions/`, and `~/.codex/session-cleanup-archive/`
+- **Auto-discovery** — Claude projects from `~/.claude/projects/` including agent usage logs, Codex sessions from `~/.codex/sessions/`, `~/.codex/archived_sessions/`, and `~/.codex/session-cleanup-archive/`, plus running Antigravity IDE cascades through local RPC
 - **Your commits only** — filtered by `git config user.email`
 
 ### Customization
@@ -148,7 +153,7 @@ Click the tray icon (or press the global shortcut `Ctrl+Shift+D`).
 **Settings → Claude Code Integration → Setup** — enables live rate limit data without API polling.
 
 ### 3. Configure
-- **Tracking providers** — enable Claude Code and/or Codex checkboxes
+- **Providers** — enable Claude Code, Codex, and/or Antigravity checkboxes
 - **Currency** — USD or KRW
 - **Alerts** — set usage thresholds (50% / 80% / 90%)
 - **Theme** — Auto (follows system) / Light / Dark
@@ -165,7 +170,7 @@ WhereMyTokens is a local-first Electron tray app. The renderer never reads local
 
 | Layer | Responsibility |
 |-------|----------------|
-| Electron main | Discovers Claude/Codex sessions, parses JSONL logs, fetches provider usage, manages tray/window state, and persists app settings. |
+| Electron main | Discovers Claude/Codex/Antigravity sessions, parses local usage sources, fetches provider usage, manages tray/window state, and persists app settings. |
 | Preload bridge | Exposes the typed `window.wmt` IPC surface while keeping `contextIsolation` boundaries intact. |
 | React renderer | Shows the tray dashboard, settings, notifications, activity charts, and the compact quota widget. |
 | `statusLine` bridge | `src/bridge/bridge.ts` receives Claude Code JSON on stdin and writes a local bridge snapshot for the main process to watch. |
@@ -177,10 +182,11 @@ WhereMyTokens is a local-first Electron tray app. The renderer never reads local
 | Claude quota snapshot | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | Yes, direct to Anthropic |
 | Codex sessions | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Main-process parser/cache, then renderer state | No |
 | Codex quota snapshot | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint | Yes, direct to OpenAI/ChatGPT |
+| Antigravity sessions, model quota, and usage metadata | Running Antigravity language server on `127.0.0.1` | Main-process local RPC client, then renderer state | No external network |
 | Aggregate usage ledger | Local JSONL usage summaries | `%APPDATA%\WhereMyTokens\usage-ledger.json` | No |
 | Git output ledger | Local git scans | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | No |
 
-Rate-limit precedence is provider-specific and is assembled into `AppState.providerQuotas`: Claude uses the Anthropic API first, then the `statusLine` bridge and cache; Codex uses live usage first, then cache and local `rate_limits` events from JSONL logs. API/Bridge/Cache/Log chips are renderer labels derived from the snapshot `source`, not separate state fields. Settings store provider enablement separately from quota display preferences. The `Providers` setting controls scanning, quota fetching, sessions, statistics, and alerts. `Quota display` stores only `Rich`, `Simple`, or `None` per target and affects Plan Usage and the floating widget only.
+Rate-limit precedence is provider-specific and is assembled into `AppState.providerQuotas`: Claude uses the Anthropic API first, then the `statusLine` bridge and cache; Codex uses live usage first, then cache and local `rate_limits` events from JSONL logs; Antigravity uses the running IDE language server's local RPC model quota data. API/Bridge/Cache/Log/Local RPC chips are renderer labels derived from the snapshot `source`, not separate state fields. Settings store provider enablement separately from quota display preferences. The `Providers` setting controls scanning, quota fetching, sessions, statistics, and alerts. `Quota display` stores only `Rich`, `Simple`, or `None` per target and affects Plan Usage and the floating widget only.
 
 ---
 
@@ -197,6 +203,7 @@ WhereMyTokens reads local files and, when enabled, makes direct provider usage r
 | `~/.codex/archived_sessions/**/*.jsonl` | Archived Codex session logs included in all-time usage totals. |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | Codex session-cleanup archives included in all-time usage totals. |
 | `~/.codex/auth.json` | ChatGPT OAuth material used only for Codex usage snapshots; it is not logged or copied into app storage. |
+| Antigravity local language server on `127.0.0.1` | Sessions, per-model quota percentages, reset times, and token metadata while Antigravity IDE is running and signed in. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Local bridge snapshot written by the Claude Code `statusLine` bridge. |
 | `%APPDATA%\WhereMyTokens\usage-ledger.json` | Aggregated local usage ledger for long-range totals, trend buckets, and heatmaps. |
 | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | Aggregated daily git output snapshots used by Code Output and Trend. |
@@ -204,7 +211,7 @@ WhereMyTokens reads local files and, when enabled, makes direct provider usage r
 
 Credential handling is intentionally narrow: WhereMyTokens reads provider credentials from the official local CLI files, does not ask you to paste API keys, does not store a separate credential backup, and redacts credential details from status output. If Claude's local access token expires, the app may refresh it through Anthropic and atomically write the updated credentials back to `~/.claude/.credentials.json`.
 
-Network access is limited to provider usage endpoints for enabled providers. Disabled providers are not scanned locally and do not make live usage requests. Claude usage polling runs at most every 5 minutes with 429 backoff. Codex live usage uses HTTPS-only requests with timeout, response-size cap, cache, and backoff. Local JSONL parsing and the `statusLine` bridge do not send session contents anywhere.
+Network access is limited to provider usage endpoints for enabled providers. Disabled providers are not scanned locally and do not make live usage requests. Claude usage polling runs at most every 5 minutes with 429 backoff. Codex live usage uses HTTPS-only requests with timeout, response-size cap, cache, and backoff. Antigravity uses loopback local RPC only; it does not use Google OAuth, refresh tokens, Google cloud usage endpoints, or offline database fallback. Local JSONL parsing, Antigravity local RPC, and the `statusLine` bridge do not send session contents anywhere.
 
 To disable the Claude Code bridge, open **Settings -> Claude Code Integration -> Disable**. The app removes the `statusLine` entry only when it owns the WhereMyTokens bridge command; it will not overwrite or delete another custom `statusLine`. Manual removal is also possible by deleting the WhereMyTokens `statusLine` entry from `~/.claude/settings.json`, then restarting Claude Code.
 
@@ -214,7 +221,7 @@ To disable the Claude Code bridge, open **Settings -> Claude Code Integration ->
 
 At startup the dashboard shows current sessions and recent usage first. If you see `Partial History`, older history is still syncing in budgeted background slices so the tray app can open quickly and hotkey popups stay responsive.
 
-The small PiP button in the header toggles the floating Quota Pace widget. The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline`, and `refresh failed`. The Quota Pace widget shows provider-specific health chips such as `Claude OK` and `Codex OK`; hover any pill for the latest detail.
+The small PiP button in the header toggles the floating Quota Pace widget. The header status pill summarizes the most important provider/API state in one place. Common labels are `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline`, `Antigravity unavailable`, and `refresh failed`. The Quota Pace widget shows provider-specific health chips such as `Claude OK`, `Codex OK`, and `Antigravity OK`; hover any pill for the latest detail.
 
 ---
 
@@ -235,17 +242,29 @@ WhereMyTokens can also read Codex's local JSONL logs from `~/.codex/sessions/**/
 - 5h/1w Codex limit percentages and reset times from live Codex usage when available, with cache/local `rate_limits` fallback
 - Activity Breakdown based on tool events, because Codex logs expose tool calls rather than per-tool output-token attribution
 
-**Codex cache math:** Codex logs report `input_tokens` and `cached_input_tokens`. WhereMyTokens stores uncached input as `input_tokens - cached_input_tokens`, stores cached input as cache-read tokens, and shows cache efficiency as:
+**Prompt cache math:** Codex logs report `input_tokens` and `cached_input_tokens`; WhereMyTokens stores uncached input as `input_tokens - cached_input_tokens` and cached input as cache-read tokens. Codex and Antigravity show cache efficiency as cache reads divided by prompt tokens:
 
 ```text
-cached_input_tokens / input_tokens
+cache_read_tokens / (uncached_input_tokens + cache_creation_tokens + cache_read_tokens)
 ```
 
-This differs from Claude, where cache efficiency is:
+For Codex this is equivalent to `cached_input_tokens / input_tokens`. Claude differs because it tracks cache write/read efficiency:
 
 ```text
 cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)
 ```
+
+### Antigravity tracking
+
+WhereMyTokens can read a running, signed-in Antigravity IDE through its local language server on `127.0.0.1`. In Settings, enable the Antigravity provider checkbox.
+
+**Antigravity tracking includes:**
+- Cascade sessions grouped with the same provider/session UI as Claude and Codex
+- Per-model quota percentages and reset times from `GetUserStatus`
+- Token metadata from `GetCascadeTrajectoryGeneratorMetadata`, with bounded full-trajectory fallback
+- API-equivalent cost estimates for recognized local model metadata; unpriced models stay zero/hidden
+
+Antigravity support is local-only. It does not read Google OAuth credentials, refresh tokens, Google cloud usage endpoints, credits, or offline `state.vscdb` data.
 
 ## How numbers work
 

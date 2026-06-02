@@ -508,35 +508,90 @@ function quotaWindow(state: AppState, provider: ProviderId, window: string): Pro
   return state.providerQuotas[provider]?.windows?.[window] ?? null;
 }
 
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+
 function isCodexLimitProvisional(state: AppState, limit: ProviderQuotaWindow | null): boolean {
   return state.historyWarmupPending && limit?.source === 'localLog';
 }
 
-function usageWindow(state: AppState, provider: 'claude' | 'codex', window: 'h5' | 'week'): WindowStats | null {
+function usageWindow(state: AppState, provider: ProviderId, window: string): WindowStats | null {
   return state.usage.byProvider[provider]?.windows[window] ?? null;
+}
+
+function isFiveHourDuration(durationMs: number | null | undefined): boolean {
+  return typeof durationMs === 'number' && Number.isFinite(durationMs) && Math.abs(durationMs - FIVE_HOURS_MS) < 1000;
+}
+
+function modelStatsWindowKey(model: { statsWindowKey?: string; model: string }): string {
+  return model.statsWindowKey || `model.${model.model}`;
+}
+
+function trayH5WindowKeys(state: AppState, provider: ProviderId): string[] {
+  const keys = new Set<string>();
+  const providerUsage = state.usage.byProvider[provider]?.windows ?? {};
+  const quota = state.providerQuotas[provider];
+  if (providerUsage.h5 || quota?.windows?.h5) keys.add('h5');
+
+  for (const [windowKey, display] of Object.entries(quota?.windowDisplay ?? {})) {
+    if (windowKey === 'h5' || isFiveHourDuration(display.durationMs)) keys.add(windowKey);
+  }
+  for (const model of quota?.models ?? []) {
+    if (isFiveHourDuration(model.durationMs)) {
+      keys.add(modelStatsWindowKey(model));
+    }
+  }
+  return [...keys];
+}
+
+function trayH5Stats(state: AppState, provider: ProviderId): WindowStats | null {
+  let selected: WindowStats | null = null;
+  for (const windowKey of trayH5WindowKeys(state, provider)) {
+    const stats = usageWindow(state, provider, windowKey);
+    if (!stats) continue;
+    if (!selected || stats.totalTokens > selected.totalTokens) selected = stats;
+  }
+  return selected;
+}
+
+function trayH5Pct(state: AppState, provider: ProviderId): { pct: number; provisional: boolean } {
+  const quota = state.providerQuotas[provider];
+  let pct = 0;
+  let provisional = false;
+  const consider = (candidatePct: number, window: ProviderQuotaWindow | null) => {
+    if (provider === 'codex' && isCodexLimitProvisional(state, window)) {
+      provisional = true;
+      return;
+    }
+    if (Number.isFinite(candidatePct)) pct = Math.max(pct, Math.max(0, Math.min(100, candidatePct)));
+  };
+
+  for (const windowKey of trayH5WindowKeys(state, provider)) {
+    const window = quotaWindow(state, provider, windowKey);
+    if (window) consider(window.pct, window);
+  }
+  for (const model of quota?.models ?? []) {
+    if (isFiveHourDuration(model.durationMs)) {
+      consider(100 - model.remainingPct, { pct: 100 - model.remainingPct, resetMs: model.resetMs ?? null, source: quota?.source });
+    }
+  }
+  return { pct, provisional };
 }
 
 function buildTrayTitle(state: AppState): string {
   const settings = state.settings ?? DEFAULT_SETTINGS;
   const display = settings.trayDisplay ?? 'h5pct';
-  const enabledProviders = new Set(settings.enabledProviders);
-  const showClaude = enabledProviders.has('claude');
-  const showCodex = enabledProviders.has('codex');
-  const claudeH5 = usageWindow(state, 'claude', 'h5');
-  const codexH5 = usageWindow(state, 'codex', 'h5');
-  const h5Tokens = (showClaude ? claudeH5?.totalTokens ?? 0 : 0)
-    + (showCodex ? codexH5?.totalTokens ?? 0 : 0);
-  const h5Cost = (showClaude ? claudeH5?.costUSD ?? 0 : 0)
-    + (showCodex ? codexH5?.costUSD ?? 0 : 0);
-  const claudeH5Quota = quotaWindow(state, 'claude', 'h5');
-  const codexH5Quota = quotaWindow(state, 'codex', 'h5');
-  const codexH5Provisional = isCodexLimitProvisional(state, codexH5Quota);
-  const stableCodexH5Pct = codexH5Provisional ? 0 : codexH5Quota?.pct ?? 0;
-  const claudeH5Pct = claudeH5Quota?.pct ?? 0;
-  const h5Pct = Math.max(showClaude ? claudeH5Pct : 0, showCodex ? stableCodexH5Pct : 0);
+  const enabledProviders = settings.enabledProviders;
+  const h5Stats = enabledProviders
+    .map(provider => trayH5Stats(state, provider))
+    .filter((stats): stats is WindowStats => !!stats);
+  const h5Tokens = h5Stats.reduce((total, stats) => total + stats.totalTokens, 0);
+  const h5Cost = h5Stats.reduce((total, stats) => total + stats.costUSD, 0);
+  const pctRows = enabledProviders.map(provider => trayH5Pct(state, provider));
+  const h5Pct = Math.max(0, ...pctRows.map(row => row.pct));
+  const provisionalOnly = pctRows.some(row => row.provisional) && h5Pct <= 0;
   switch (display) {
     case 'h5pct':
-      if (codexH5Provisional && showCodex && (!showClaude || claudeH5Pct <= 0)) return 'scan';
+      if (provisionalOnly) return 'scan';
       return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;

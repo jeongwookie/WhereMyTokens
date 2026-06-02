@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
+import { build } from 'esbuild';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import stateManager from '../dist/main/stateManager.js';
 import * as gitStatsKeys from '../dist/main/gitStatsKeys.js';
 
@@ -29,6 +33,23 @@ function repoStatsFor(root) {
     totalLinesRemoved: 20,
     daily7d: [],
   };
+}
+
+async function importRendererComponent(entryPoint, name) {
+  const outdir = fs.mkdtempSync(path.resolve(`.tmp-${name}-`));
+  const outfile = path.join(outdir, `${name}.mjs`);
+  await build({
+    entryPoints: [entryPoint],
+    outfile,
+    bundle: true,
+    format: 'esm',
+    platform: 'node',
+    external: ['react'],
+    logLevel: 'silent',
+  });
+  const mod = await import(pathToFileURL(outfile).href);
+  fs.rmSync(outdir, { recursive: true, force: true });
+  return mod.default ?? mod;
 }
 
 test('initial app state does not release the startup splash', () => {
@@ -77,6 +98,64 @@ test('renderer mutes cached usage text and shows soft loading states', () => {
   assert.match(source, /noData \|\| cachedDisconnected \? C\.textMuted : limitValueColor/);
   assert.match(source, /LimitStatusIndicator/);
   assert.match(source, /LimitStatusBar/);
+});
+
+test('rich quota card title uses CSS ellipsis and keeps full title tooltip', async () => {
+  const TokenStatsCard = await importRendererComponent(
+    path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'),
+    'TokenStatsCard',
+  );
+  const provider = 'Gemini 3.1 Pro Extremely Long Provider Variant Name';
+  const period = '(High Reasoning Extended Window) Quota';
+  const displayTitle = `${provider} ${period}`;
+  const html = renderToStaticMarkup(React.createElement(TokenStatsCard, {
+    provider,
+    period,
+    hero: true,
+    currency: 'USD',
+    usdToKrw: 1300,
+    limitPct: 42,
+    resetMs: 60 * 60 * 1000,
+    durationMs: 5 * 60 * 60 * 1000,
+    limitSourceLabel: 'API',
+    limitSourceTitle: 'Provider API quota',
+    limitSourceTone: 'good',
+    cacheMetricTitle: 'Provider cache metric',
+    stats: {
+      inputTokens: 1000,
+      outputTokens: 2000,
+      cacheCreationTokens: 3000,
+      cacheReadTokens: 97000,
+      totalTokens: 100000,
+      costUSD: 0.42,
+      requestCount: 3,
+      cacheEfficiency: 95,
+      cacheSavingsUSD: 0.1,
+    },
+  }));
+
+  assert.match(html, new RegExp(`title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+  const titleSpan = html.match(new RegExp(`<span title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" style="([^"]+)"`));
+  assert.ok(titleSpan, html);
+  const titleText = html.match(new RegExp(`<span title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" style="[^"]+">([^<]+)`));
+  assert.ok(titleText, html);
+  assert.equal(titleText[1], displayTitle);
+  assert.match(titleSpan[1], /flex:1 1 auto/);
+  assert.match(titleSpan[1], /overflow:hidden/);
+  assert.match(titleSpan[1], /text-overflow:ellipsis/);
+  assert.match(titleSpan[1], /white-space:nowrap/);
+
+  const sourceChip = html.match(/<span title="Provider API quota" style="([^"]+)"/);
+  assert.ok(sourceChip, html);
+  assert.match(sourceChip[1], /flex-shrink:0/);
+  assert.match(sourceChip[1], /overflow:hidden/);
+  assert.match(sourceChip[1], /text-overflow:ellipsis/);
+  assert.match(html, />API<\/span>/);
+
+  const cacheChip = html.match(/<span title="Provider cache metric" style="([^"]+)"/);
+  assert.ok(cacheChip, html);
+  assert.match(cacheChip[1], /flex-shrink:0/);
+  assert.match(html, />Cache 95%<\/span>/);
 });
 
 test('warmup mode marks Codex local-log limits as provisional and defers alerts', () => {
@@ -147,6 +226,9 @@ test('Plan Usage and floating widget render providerQuotas through generic provi
   assert.match(panelBody, /richGroups/);
   assert.match(panelBody, /SimpleQuotaGroupBlock/);
   assert.match(panelBody, /durationMs=\{card\.durationMs\}/);
+  assert.doesNotMatch(panelBody, /badges=\{quotaGroupBadgesForCard\(group\.badges\)\}/);
+  assert.doesNotMatch(tokenStatsSource, /badges\?: ProviderQuotaDisplayBadge\[\]/);
+  assert.doesNotMatch(modelSource, /tokens\.total|cost\.total|modelTotalTokenBadge|modelTotalCostBadge/);
   assert.match(agentsBody, /buildQuotaDisplayModels/);
   assert.match(agentsBody, /widgetGroups/);
   assert.match(agentsBody, /row\.visualKind/);
@@ -313,6 +395,25 @@ test('header today cache metric uses today aggregates instead of the 5-hour wind
 
   assert.match(source, /const cacheEff = isAll \? usage\.allTimeAvgCacheEfficiency : usage\.todayCacheEfficiency/);
   assert.match(source, /const saved = isAll \? usage\.allTimeSavedUSD : usage\.todayCacheSavingsUSD/);
+});
+
+test('tray and header status derive provider data from enabled providers', () => {
+  const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
+  const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  const settingsSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'SettingsView.tsx'), 'utf8');
+  const trayStart = mainSource.indexOf('function buildTrayTitle');
+  const trayEnd = mainSource.indexOf('function updateTray', trayStart);
+  const trayBody = mainSource.slice(trayStart, trayEnd);
+
+  assert.match(trayBody, /settings\.enabledProviders/);
+  assert.match(trayBody, /trayH5Stats\(state, provider\)/);
+  assert.match(trayBody, /trayH5Pct\(state, provider\)/);
+  assert.doesNotMatch(trayBody, /usageWindow\(state, 'claude'/);
+  assert.doesNotMatch(trayBody, /usageWindow\(state, 'codex'/);
+  assert.match(rendererSource, /function buildProviderQuotaHeaderStatus/);
+  assert.match(rendererSource, /enabledProviders: enabledProviderList/);
+  assert.match(rendererSource, /args\.enabledProviders/);
+  assert.match(settingsSource, /enabled provider history/);
 });
 
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {

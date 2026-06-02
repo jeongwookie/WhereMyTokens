@@ -53,6 +53,17 @@ export interface UsageLedgerIngestSource {
   rawModel?: string;
 }
 
+export interface UsageLedgerProviderSlice {
+  provider: ProviderId;
+  minuteRecent: Record<string, UsageAggregate>;
+  recentRequestIndex: UsageLedgerSnapshot['recentRequestIndex'];
+  hourlyActivity: Record<string, UsageAggregate>;
+  dailyModel: Record<string, UsageAggregate>;
+  monthlyModel: Record<string, UsageAggregate>;
+  sourceCheckpoints: UsageLedgerSnapshot['sourceCheckpoints'];
+  sourceRepairRollup: Record<string, UsageAggregate>;
+}
+
 function cooperativeYield(): Promise<void> {
   return new Promise(resolve => setImmediate(resolve));
 }
@@ -72,6 +83,92 @@ export function cloneUsageLedgerSnapshot(snapshot: UsageLedgerSnapshot): UsageLe
     sourceCheckpoints: Object.fromEntries(Object.entries(snapshot.sourceCheckpoints).map(([key, value]) => [key, { ...value }])),
     sourceRepairRollup: Object.fromEntries(Object.entries(snapshot.sourceRepairRollup).map(([key, value]) => [key, cloneAggregate(value)])),
   };
+}
+
+function cloneAggregateRecord(record: Record<string, UsageAggregate>): Record<string, UsageAggregate> {
+  return Object.fromEntries(Object.entries(record).map(([key, aggregate]) => [key, cloneAggregate(aggregate)]));
+}
+
+function providerFromPipeKey(key: string, providerIndex: number): ProviderId | null {
+  const parts = key.split('|');
+  const provider = parts[providerIndex];
+  return provider === 'claude' || provider === 'codex' || provider === 'antigravity' ? provider : null;
+}
+
+function withoutProviderAggregateRows(
+  record: Record<string, UsageAggregate>,
+  provider: ProviderId,
+  providerIndex: number,
+): Record<string, UsageAggregate> {
+  const next: Record<string, UsageAggregate> = {};
+  for (const [key, aggregate] of Object.entries(record)) {
+    if (providerFromPipeKey(key, providerIndex) !== provider) next[key] = cloneAggregate(aggregate);
+  }
+  return next;
+}
+
+function withoutProviderRecentRequests(
+  record: UsageLedgerSnapshot['recentRequestIndex'],
+  provider: ProviderId,
+): UsageLedgerSnapshot['recentRequestIndex'] {
+  const next: UsageLedgerSnapshot['recentRequestIndex'] = {};
+  for (const [key, entry] of Object.entries(record)) {
+    if (providerFromPipeKey(entry.minuteKey, 1) !== provider) {
+      next[key] = { ...entry, aggregate: cloneAggregate(entry.aggregate) };
+    }
+  }
+  return next;
+}
+
+function withoutProviderCheckpoints(
+  record: UsageLedgerSnapshot['sourceCheckpoints'],
+  provider: ProviderId,
+): UsageLedgerSnapshot['sourceCheckpoints'] {
+  const next: UsageLedgerSnapshot['sourceCheckpoints'] = {};
+  for (const [key, checkpoint] of Object.entries(record)) {
+    if (checkpoint.provider !== provider) next[key] = { ...checkpoint };
+  }
+  return next;
+}
+
+export function replaceProviderUsageSliceInSnapshot(
+  snapshot: UsageLedgerSnapshot,
+  slice: UsageLedgerProviderSlice,
+  _nowMs = Date.now(),
+): UsageLedgerSnapshot {
+  const next = cloneUsageLedgerSnapshot(snapshot);
+  next.minuteRecent = {
+    ...withoutProviderAggregateRows(snapshot.minuteRecent, slice.provider, 1),
+    ...cloneAggregateRecord(slice.minuteRecent),
+  };
+  next.recentRequestIndex = {
+    ...withoutProviderRecentRequests(snapshot.recentRequestIndex, slice.provider),
+    ...Object.fromEntries(Object.entries(slice.recentRequestIndex).map(([key, entry]) => [key, {
+      ...entry,
+      aggregate: cloneAggregate(entry.aggregate),
+    }])),
+  };
+  next.hourlyActivity = {
+    ...withoutProviderAggregateRows(snapshot.hourlyActivity, slice.provider, 1),
+    ...cloneAggregateRecord(slice.hourlyActivity),
+  };
+  next.dailyModel = {
+    ...withoutProviderAggregateRows(snapshot.dailyModel, slice.provider, 1),
+    ...cloneAggregateRecord(slice.dailyModel),
+  };
+  next.monthlyModel = {
+    ...withoutProviderAggregateRows(snapshot.monthlyModel, slice.provider, 1),
+    ...cloneAggregateRecord(slice.monthlyModel),
+  };
+  next.sourceCheckpoints = {
+    ...withoutProviderCheckpoints(snapshot.sourceCheckpoints, slice.provider),
+    ...Object.fromEntries(Object.entries(slice.sourceCheckpoints).map(([key, checkpoint]) => [key, { ...checkpoint }])),
+  };
+  next.sourceRepairRollup = {
+    ...withoutProviderAggregateRows(snapshot.sourceRepairRollup, slice.provider, 2),
+    ...cloneAggregateRecord(slice.sourceRepairRollup),
+  };
+  return next;
 }
 
 export function aggregateFromUsageEntry(entry: UsageLedgerIngestUsageEntry): UsageAggregate {
@@ -107,6 +204,28 @@ function parseMinuteLedgerKey(key: string): { timestampMs: number; provider: Usa
   return { timestampMs, provider: providerRaw, model };
 }
 
+function sameAggregate(a: UsageAggregate, b: UsageAggregate): boolean {
+  return a.requestCount === b.requestCount
+    && a.inputTokens === b.inputTokens
+    && a.outputTokens === b.outputTokens
+    && a.cacheCreationTokens === b.cacheCreationTokens
+    && a.cacheReadTokens === b.cacheReadTokens
+    && a.totalTokens === b.totalTokens
+    && a.costUSD === b.costUSD
+    && a.cacheSavingsUSD === b.cacheSavingsUSD;
+}
+
+function shouldKeepExistingRecentRequest(
+  existing: UsageLedgerSnapshot['recentRequestIndex'][string],
+  sourceEntry: UsageLedgerIngestEntry,
+): boolean {
+  if (existing.aggregate.outputTokens > sourceEntry.aggregate.outputTokens) return true;
+  const existingRow = parseMinuteLedgerKey(existing.minuteKey);
+  return !!existingRow
+    && existingRow.model === sourceEntry.entry.model
+    && sameAggregate(existing.aggregate, sourceEntry.aggregate);
+}
+
 function subtractExistingRecentRequest(
   snapshot: UsageLedgerSnapshot,
   sourceHash: string,
@@ -126,13 +245,27 @@ function subtractExistingRecentRequest(
   delete snapshot.recentRequestIndex[requestIndexKey];
 }
 
+function filterEntriesAfterCursor(
+  snapshot: UsageLedgerSnapshot,
+  source: UsageLedgerIngestSource,
+  entries: UsageLedgerIngestEntry[],
+): { entries: UsageLedgerIngestEntry[]; missingCursor: boolean } {
+  const currentCursor = snapshot.sourceCheckpoints[source.sourceHash]?.cursor;
+  if (!currentCursor || !source.cursor) return { entries, missingCursor: false };
+
+  const cursorIndex = entries.findIndex(sourceEntry => sourceEntry.entry.requestId === currentCursor);
+  if (cursorIndex >= 0) return { entries: entries.slice(cursorIndex + 1), missingCursor: false };
+  if (currentCursor === source.cursor) return { entries: [], missingCursor: false };
+  return { entries: [], missingCursor: true };
+}
+
 function addEntryToSnapshot(next: UsageLedgerSnapshot, sourceHash: string, sourceEntry: UsageLedgerIngestEntry, nowMs: number): void {
   const { entry, aggregate } = sourceEntry;
   const provider = entry.provider;
   const requestIndexKey = `${sourceHash}|${entry.requestId}`;
   const existing = next.recentRequestIndex[requestIndexKey];
   if (existing) {
-    if (existing.aggregate.outputTokens >= aggregate.outputTokens) return;
+    if (shouldKeepExistingRecentRequest(existing, sourceEntry)) return;
     subtractExistingRecentRequest(next, sourceHash, requestIndexKey, existing);
   }
 
@@ -174,8 +307,25 @@ export async function importUsageEntriesIntoSnapshot(
   }
 
   const next = cloneUsageLedgerSnapshot(snapshot);
+  const filtered = filterEntriesAfterCursor(snapshot, source, entries);
+  if (filtered.missingCursor) {
+    const currentCheckpoint = snapshot.sourceCheckpoints[source.sourceHash];
+    next.sourceCheckpoints[source.sourceHash] = {
+      provider: source.provider,
+      sourceHash: source.sourceHash,
+      lastImportedAt: nowMs,
+      hasUsage: currentCheckpoint?.hasUsage ?? entries.length > 0,
+      needsRebuild: true,
+      rebuildReason: 'source cursor missing from generic provider source',
+      ...(source.sourceKey ? { sourceKey: source.sourceKey } : (currentCheckpoint?.sourceKey ? { sourceKey: currentCheckpoint.sourceKey } : {})),
+      ...(source.cursor ? { cursor: source.cursor } : (currentCheckpoint?.cursor ? { cursor: currentCheckpoint.cursor } : {})),
+      ...(source.rawModel ? { rawModel: source.rawModel } : (currentCheckpoint?.rawModel ? { rawModel: currentCheckpoint.rawModel } : {})),
+    };
+    return next;
+  }
+
   let processedEntries = 0;
-  for (const entry of entries) {
+  for (const entry of filtered.entries) {
     addEntryToSnapshot(next, source.sourceHash, entry, nowMs);
     processedEntries += 1;
     if (processedEntries % LEDGER_IMPORT_YIELD_EVERY === 0) await cooperativeYield();

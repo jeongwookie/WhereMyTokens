@@ -9,7 +9,7 @@ const { DEFAULT_SETTINGS, normalizeSettings } = ipcModule;
 test('settings use implemented enabledProviders as the canonical provider selection', () => {
   const settings = normalizeSettings({ enabledProviders: ['antigravity', 'claude', 'claude', 'bogus'] });
 
-  assert.deepEqual(settings.enabledProviders, ['claude']);
+  assert.deepEqual(settings.enabledProviders, ['antigravity', 'claude']);
   assert.equal('provider' in settings, false);
 });
 
@@ -31,7 +31,8 @@ test('enabledProviders is the only accepted provider selection setting', () => {
 test('invalid enabledProviders returns the builtin default providers', () => {
   assert.deepEqual(normalizeSettings({ enabledProviders: [] }).enabledProviders, ['claude', 'codex']);
   assert.deepEqual(normalizeSettings({ enabledProviders: ['bogus'] }).enabledProviders, ['claude', 'codex']);
-  assert.deepEqual(normalizeSettings({ enabledProviders: ['antigravity'] }).enabledProviders, ['claude', 'codex']);
+  assert.deepEqual(normalizeSettings({ enabledProviders: ['antigravity'] }).enabledProviders, ['antigravity']);
+  assert.deepEqual(normalizeSettings({ enabledProviders: ['claude', 'antigravity'] }).enabledProviders, ['claude', 'antigravity']);
 });
 
 test('settings normalize quota target display modes by target id', () => {
@@ -114,9 +115,12 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /lockedLastProvider/);
   assert.match(settingsView, /disabled=\{disabled\}/);
   assert.match(settingsView, /ACTIVE_PROVIDER_OPTIONS/);
+  assert.match(settingsView, /id: 'antigravity'/);
+  assert.match(settingsView, /label: 'Antigravity'/);
+  assert.match(settingsView, /Requires Antigravity IDE running and signed in\. Uses local RPC only\./);
   assert.match(settingsView, /At least one provider must stay enabled\./);
   assert.doesNotMatch(settingsView, /Coming soon, not tracked yet/);
-  assert.doesNotMatch(settingsView, /Antigravity', label: 'Antigravity/);
+  assert.doesNotMatch(settingsView, /credit/i);
   assert.doesNotMatch(settingsView, /legacyProviderFromEnabled/);
   assert.doesNotMatch(settingsView, /Claude \+ Codex/);
 });

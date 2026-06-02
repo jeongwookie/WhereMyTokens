@@ -9,6 +9,7 @@ import {
   targetAcceptsModel,
   type ProviderWindowResetHintMap,
 } from './usageWindowTargets';
+import { cacheEfficiencyDenominator, cacheEfficiencyPct } from './cacheMetrics';
 
 export interface WindowStats {
   inputTokens: number;
@@ -54,8 +55,13 @@ export interface ProviderWindowUsage {
   windows: Record<string, WindowStats>;
 }
 
+export interface ProviderModelWindowUsage {
+  windows: Record<string, Record<string, WindowStats>>;
+}
+
 export interface UsageData {
   byProvider: Partial<Record<ProviderId, ProviderWindowUsage>>;
+  modelWindows: Partial<Record<ProviderId, ProviderModelWindowUsage>>;
   models: ModelUsage[];
   heatmap: HourlyBucket[];
   heatmap30: HourlyBucket[];
@@ -90,12 +96,6 @@ interface AggregateLike {
   totalTokens: number;
   costUSD: number;
   cacheSavingsUSD: number;
-}
-
-interface CacheMetricLike {
-  inputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
 }
 
 function emptyWindow(): WindowStats {
@@ -135,14 +135,7 @@ function addEntry(target: AggregateLike, entry: CompactRecentEntry): void {
 }
 
 function finalize(window: WindowStats, provider: UsageProvider): void {
-  const denominator = cacheEfficiencyDenominator(provider, window);
-  window.cacheEfficiency = denominator > 0 ? (window.cacheReadTokens / denominator) * 100 : 0;
-}
-
-function cacheEfficiencyDenominator(provider: UsageProvider, aggregate: CacheMetricLike): number {
-  return provider === 'codex'
-    ? aggregate.inputTokens + aggregate.cacheReadTokens
-    : aggregate.cacheReadTokens + aggregate.cacheCreationTokens;
+  window.cacheEfficiency = cacheEfficiencyPct(provider, window);
 }
 
 function getWeekStart(timestampMs = Date.now()): Date {
@@ -190,6 +183,7 @@ export function computeUsage(
   const providerIds = new Set<ProviderId>(summaries.map(summary => summary.provider).filter(isProviderId));
   const providerWindowTargets = buildProviderWindowTargets(providerIds, providerQuotas, resets, now, currentWeekStart);
   const providerWindows = new Map<ProviderId, ProviderWindowUsage>();
+  const providerModelWindows = new Map<ProviderId, ProviderModelWindowUsage>();
   const modelMap = new Map<string, ModelUsage>();
   const heatMap7 = new Map<string, HourlyBucket>();
   const heatMap30 = new Map<string, HourlyBucket>();
@@ -268,6 +262,21 @@ export function computeUsage(
     return next;
   };
 
+  const getProviderModelWindowUsage = (provider: ProviderId): ProviderModelWindowUsage => {
+    const existing = providerModelWindows.get(provider);
+    if (existing) return existing;
+    const next = { windows: {} };
+    providerModelWindows.set(provider, next);
+    return next;
+  };
+
+  const getProviderModelWindow = (provider: ProviderId, windowKey: string, model: string): WindowStats => {
+    const usage = getProviderModelWindowUsage(provider);
+    usage.windows[windowKey] ??= {};
+    usage.windows[windowKey][model] ??= emptyWindow();
+    return usage.windows[windowKey][model];
+  };
+
   for (const [provider, targets] of providerWindowTargets) {
     const usage = getProviderWindowUsage(provider);
     for (const target of targets) {
@@ -283,6 +292,7 @@ export function computeUsage(
       if (!targetAcceptsModel(target, entry.model)) continue;
       usage.windows[target.windowKey] ??= emptyWindow();
       addEntry(usage.windows[target.windowKey], entry);
+      addEntry(getProviderModelWindow(entry.provider, target.windowKey, entry.model), entry);
     }
   };
 
@@ -358,6 +368,11 @@ export function computeUsage(
   for (const [provider, usage] of providerWindows) {
     for (const window of Object.values(usage.windows)) finalize(window, provider);
   }
+  for (const [provider, usage] of providerModelWindows) {
+    for (const models of Object.values(usage.windows)) {
+      for (const window of Object.values(models)) finalize(window, provider);
+    }
+  }
 
   const models = Array.from(modelMap.values())
     .filter(model => model.tokens > 0)
@@ -372,6 +387,7 @@ export function computeUsage(
 
   return {
     byProvider: Object.fromEntries(providerWindows),
+    modelWindows: Object.fromEntries(providerModelWindows),
     models,
     heatmap: Array.from(heatMap7.values()),
     heatmap30: Array.from(heatMap30.values()),

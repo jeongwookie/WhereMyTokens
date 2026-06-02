@@ -5,11 +5,12 @@
 <h1 align="center">WhereMyTokens</h1>
 
 <p align="center">
-  <strong>이제 Codex도 함께 추적합니다.</strong>
+  <strong>이제 Codex와 Antigravity도 함께 추적합니다.</strong>
 </p>
 
 <p align="center">
   <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-new-4f46e5?style=for-the-badge">
+  <img alt="Antigravity local RPC" src="https://img.shields.io/badge/Antigravity-local_RPC-0f766e?style=for-the-badge">
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
   <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
 </p>
@@ -33,7 +34,11 @@
 </p>
 
 <p align="center">
-  Claude Code와 Codex의 토큰, 비용, 세션, 캐시, 모델별 사용량, 속도 제한을 한눈에 보여주는 로컬 우선 Windows 트레이 앱입니다.
+  <em>Antigravity 지원은 다음 패키지 릴리스용 소스에 포함되어 있으며, v1.17.0 다운로드에는 아직 포함되지 않습니다.</em>
+</p>
+
+<p align="center">
+  Claude Code, Codex, Antigravity의 토큰, 비용, 세션, 캐시, 모델별 사용량, quota를 한눈에 보여주는 로컬 우선 Windows 트레이 앱입니다.
 </p>
 
 <a id="screenshots"></a>
@@ -92,15 +97,15 @@
 ## 주요 기능
 
 ### 세션 추적
-- **Claude + Codex provider 체크박스** — Claude만, Codex만, 또는 둘 다 하나의 대시보드에서 추적
+- **Provider 선택** — Claude Code, Codex, Antigravity를 하나의 대시보드에서 켜고 끄며 추적
 - **실시간 세션 감지** — Terminal, VS Code, Cursor, Windsurf 등, 실시간 상태: `active` / `waiting` / `idle` / `compacting`
-- **Compact 그루핑** — git 프로젝트 → 브랜치별 그루핑, 반복 Claude/Codex 세션은 provider/source/model/state 기준으로 stack 처리
+- **Compact 그루핑** — git 프로젝트 → 브랜치별 그루핑, 반복 provider 세션은 provider/source/model/state 기준으로 stack 처리
 - **브랜치 row 제한** — 각 브랜치는 기본 3개 행만 표시하고 나머지는 "Show N more"로 펼침
 - **컨텍스트 창 경고** — 세션별 바; 70% 황색, 85% 주황, 95%+ 적색
 - **툴 사용 바** — 비례 색상 바 + 툴 칩 (Bash, Edit, Read 등)
 
 ### 속도 제한 & 알림
-- **Provider quota 바** — Claude, Codex와 이후 provider가 `providerQuotas` snapshot으로 유효 quota를 게시합니다. Claude는 Anthropic API/statusLine/cache 우선순위, Codex는 live usage/cache/local-log 우선순위로 표시합니다
+- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 `providerQuotas` snapshot으로 유효 quota를 게시합니다. Claude는 Anthropic API/statusLine/cache, Codex는 live usage/cache/local-log, Antigravity는 IDE 실행 중 127.0.0.1 local RPC에서 모델 quota를 읽습니다
 - **Target별 quota 표시** — 각 provider window 또는 model target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있습니다. 이 설정은 Plan Usage와 Floating widget 표시만 바꿉니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
@@ -108,7 +113,7 @@
 - **Claude Extra Usage 예산** — Claude 월간 크레딧 사용량 / 한도 / 이용률 표시
 
 ### 분석 & 활동
-- **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 Claude/Codex 메타데이터, provider별 health/fallback 상태. `all`의 세션 수는 현재 표시 중인 행이 아니라 전체 사용 기록 기준입니다
+- **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 provider 메타데이터, provider별 health/fallback 상태. `all`의 세션 수는 현재 표시 중인 행이 아니라 전체 사용 기록 기준입니다
 - **즉시 시작 snapshot** — 마지막으로 정상 표시된 UI 상태를 즉시 복원하고, fresh scan은 백그라운드에서 이어서 실행
 - **시작 친화적 히스토리 동기화** — 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 budgeted refresh scheduler를 통해 백그라운드에서 계속 동기화되어 hotkey popup과 UI 반응성을 유지
 - **지속 사용량 ledger** — 로컬 JSONL 사용량을 aggregate ledger로 저장해 오래된 합계가 JSONL cache eviction에 덜 의존하고, 필요하면 Settings에서 재빌드 가능
@@ -124,7 +129,7 @@
 - **Output 성장 그래프** — 최근 7일 로컬 날짜별로 전체 누적 순 라인 증가 흐름 표시
 - **현재 세션 repo 범위** — Code Output은 현재 추적 중인 세션에 연결된 repo 기준으로 집계된다는 라벨을 함께 표시
 - **브랜치 반영 전체 기간** — Code Output의 전체 기간은 로컬 브랜치 전체의 커밋과 라인 변경을 로컬 git 작성자 이메일 기준으로 집계
-- **자동 발견** — Claude 프로젝트는 `~/.claude/projects/`에서 agent 사용 로그까지 포함하고, Codex 세션은 `~/.codex/sessions/`, `~/.codex/archived_sessions/`, `~/.codex/session-cleanup-archive/`에서 자동 포함
+- **자동 발견** — Claude 프로젝트는 `~/.claude/projects/`에서 agent 사용 로그까지 포함하고, Codex 세션은 `~/.codex/sessions/`, `~/.codex/archived_sessions/`, `~/.codex/session-cleanup-archive/`에서 자동 포함하며, Antigravity는 실행 중인 로컬 language server의 cascade를 local RPC로 읽습니다
 - **본인 커밋만** — `git config user.email` 기준 필터링
 
 ### 커스터마이징
@@ -146,7 +151,7 @@
 **Settings → Claude Code Integration → Setup** — API 폴링 없이 실시간 속도 제한 데이터 수신.
 
 ### 3. 설정
-- **Tracking providers** — Claude Code와 Codex 체크박스를 켜고 끕니다
+- **Tracking providers** — Claude Code, Codex, Antigravity 체크박스를 켜고 끕니다
 - **통화** — USD 또는 KRW
 - **알림** — 사용량 임계값 설정 (50% / 80% / 90%)
 - **테마** — Auto (시스템 설정 따름) / Light / Dark
@@ -161,7 +166,7 @@ WhereMyTokens는 local-first Electron 트레이 앱입니다. renderer는 로컬
 
 | 계층 | 역할 |
 |------|------|
-| Electron main | Claude/Codex 세션 발견, JSONL 로그 파싱, provider 사용량 조회, 트레이/창 상태 관리, 앱 설정 저장. |
+| Electron main | Provider 세션 발견, JSONL/local RPC 사용량 조회, 트레이/창 상태 관리, 앱 설정 저장. |
 | Preload bridge | `contextIsolation` 경계를 유지하면서 typed `window.wmt` IPC 표면만 노출. |
 | React renderer | 트레이 대시보드, 설정, 알림, 활동 차트, compact quota 위젯 표시. |
 | `statusLine` bridge | `src/bridge/bridge.ts`가 Claude Code stdin JSON을 받아 main process가 감시하는 로컬 bridge snapshot을 기록. |
@@ -173,8 +178,9 @@ WhereMyTokens는 local-first Electron 트레이 앱입니다. renderer는 로컬
 | Claude 사용량 한도 | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | 있음, Anthropic 직접 호출 |
 | Codex 세션 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process parser/cache, 이후 renderer state | 없음 |
 | Codex 사용량 한도 | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint | 있음, OpenAI/ChatGPT 직접 호출 |
+| Antigravity 세션/quota | 실행 중인 Antigravity language server | 127.0.0.1 local RPC, 이후 renderer state | 없음 |
 
-속도 제한 우선순위는 provider별로 다릅니다. Claude는 Anthropic API를 1순위로 사용하고 `statusLine` bridge를 폴백으로 사용합니다. Codex는 live usage를 1순위로 사용하고 JSONL 로그의 로컬 `rate_limits` 이벤트를 폴백으로 사용합니다. 두 provider 모두 마지막 성공 값은 stale 상태가 되기 전까지만 유지합니다.
+Quota 우선순위는 provider별로 다릅니다. Claude는 Anthropic API를 1순위로 사용하고 `statusLine` bridge를 폴백으로 사용합니다. Codex는 live usage를 1순위로 사용하고 JSONL 로그의 로컬 `rate_limits` 이벤트를 폴백으로 사용합니다. Antigravity는 실행 중인 IDE의 127.0.0.1 local RPC만 사용하며, 마지막 성공 값은 stale 상태가 되기 전까지만 유지합니다.
 
 ---
 
@@ -191,12 +197,13 @@ WhereMyTokens는 로컬 파일을 읽고, 활성화된 경우 본인 계정의 p
 | `~/.codex/archived_sessions/**/*.jsonl` | all-time 사용량 합계에 포함되는 Codex 아카이브 세션 로그. |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | all-time 사용량 합계에 포함되는 Codex 세션 정리 아카이브 로그. |
 | `~/.codex/auth.json` | Codex 사용량 snapshot 조회에만 쓰는 ChatGPT OAuth 정보. 앱 storage에 복사하거나 로그로 남기지 않습니다. |
+| Antigravity local RPC | 실행 중인 Antigravity IDE의 language server에서 세션, 모델 quota, generator metadata를 읽습니다. Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Claude Code `statusLine` bridge가 쓰는 로컬 bridge snapshot. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | 앱 설정, 로컬 캐시, 알림 기록, bridge 상태. |
 
 자격 증명 처리는 좁게 제한되어 있습니다. WhereMyTokens는 공식 CLI의 로컬 credential 파일을 읽고, API key를 직접 입력받지 않으며, 별도 credential 백업을 저장하지 않습니다. Claude access token이 만료되면 Anthropic을 통해 refresh하고 갱신된 credentials를 `~/.claude/.credentials.json`에 원자적으로 다시 쓸 수 있습니다.
 
-네트워크 접근은 활성화한 provider 체크박스의 usage endpoint로 제한됩니다. Claude usage polling은 최대 5분마다 실행하고 429 backoff를 적용합니다. Codex live usage는 HTTPS-only 요청, timeout, 응답 크기 제한, cache, backoff를 적용합니다. 로컬 JSONL 파싱과 `statusLine` bridge는 세션 내용을 외부로 보내지 않습니다.
+네트워크 접근은 활성화한 provider 체크박스의 usage endpoint와 로컬 loopback으로 제한됩니다. Claude usage polling은 최대 5분마다 실행하고 429 backoff를 적용합니다. Codex live usage는 HTTPS-only 요청, timeout, 응답 크기 제한, cache, backoff를 적용합니다. Antigravity 추적은 127.0.0.1 local RPC만 사용하며 Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback을 사용하지 않습니다. 로컬 JSONL 파싱, Antigravity local RPC, `statusLine` bridge는 세션 내용을 외부로 보내지 않습니다.
 
 Claude Code bridge를 끄려면 **Settings -> Claude Code Integration -> Disable**을 누릅니다. 앱은 WhereMyTokens bridge command가 소유한 `statusLine` entry만 제거하며, 다른 custom `statusLine`은 덮어쓰거나 삭제하지 않습니다. 수동으로는 `~/.claude/settings.json`에서 WhereMyTokens `statusLine` entry를 삭제한 뒤 Claude Code를 재시작하면 됩니다.
 
@@ -206,7 +213,7 @@ Claude Code bridge를 끄려면 **Settings -> Claude Code Integration -> Disable
 
 시작 직후에는 현재 세션과 최근 사용량을 먼저 보여줍니다. `Partial History`가 보이면 오래된 히스토리를 budgeted background slice로 계속 동기화 중이라는 뜻이며, 트레이 앱과 hotkey popup이 빠르게 반응하도록 하기 위한 동작입니다.
 
-헤더의 작은 PiP 버튼은 Floating Quota Pace 위젯을 바로 켜고 끕니다. 헤더 상태 pill은 provider/API 관련 핵심 상태를 한 곳에 요약합니다. 대표 라벨은 `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline`, `refresh failed`입니다. Quota Pace 위젯은 `Claude OK`, `Codex OK`처럼 provider별 health 칩을 따로 보여주며, pill이나 칩에 마우스를 올리면 최신 상세 사유를 볼 수 있습니다.
+헤더의 작은 PiP 버튼은 Floating Quota Pace 위젯을 바로 켜고 끕니다. 헤더 상태 pill은 provider/API 관련 핵심 상태를 한 곳에 요약합니다. 대표 라벨은 `Claude local`, `Claude partial`, `Claude refresh`, `Claude login`, `Claude limited`, `Claude offline`, `refresh failed`입니다. Quota Pace 위젯은 `Claude OK`, `Codex OK`, `Antigravity OK`처럼 provider별 health 칩을 따로 보여주며, pill이나 칩에 마우스를 올리면 최신 상세 사유를 볼 수 있습니다.
 
 ---
 
@@ -227,13 +234,17 @@ WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~
 - live Codex usage가 가능할 때 Codex 5h/1w 사용률과 reset 시간, 실패 시 캐시/로컬 `rate_limits` 폴백
 - Codex 로그는 tool별 output token이 아니라 tool call을 제공하므로, Activity Breakdown은 tool event count 기준으로 표시
 
-**Codex 캐시 계산식:** Codex 로그는 `input_tokens`와 `cached_input_tokens`를 제공합니다. WhereMyTokens는 uncached input을 `input_tokens - cached_input_tokens`로, cached input을 cache-read token으로 저장하고, 캐시 효율은 다음처럼 표시합니다.
+### Antigravity 추적
+
+Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. 세션 cascade, 모델 quota, generator metadata를 읽어 providerQuotas와 사용량 ledger에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
+
+**Prompt 캐시 계산식:** Codex 로그는 `input_tokens`와 `cached_input_tokens`를 제공합니다. WhereMyTokens는 uncached input을 `input_tokens - cached_input_tokens`로, cached input을 cache-read token으로 저장합니다. Codex와 Antigravity는 cache read가 prompt token에서 차지하는 비율을 캐시 효율로 표시합니다.
 
 ```text
-cached_input_tokens / input_tokens
+cache_read_tokens / (uncached_input_tokens + cache_creation_tokens + cache_read_tokens)
 ```
 
-Claude의 캐시 효율은 다음 식을 사용합니다.
+Codex에서는 이 값이 `cached_input_tokens / input_tokens`와 같습니다. Claude는 cache write/read 효율을 사용합니다.
 
 ```text
 cache_read_input_tokens / (cache_read_input_tokens + cache_creation_input_tokens)

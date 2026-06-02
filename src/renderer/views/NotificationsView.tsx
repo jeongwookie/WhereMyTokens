@@ -31,6 +31,7 @@ export default function NotificationsView({ onBack }: Props) {
   const enabledProviders = new Set(settings.enabledProviders);
   const showClaudeTargets = enabledProviders.has('claude');
   const showCodexTargets = enabledProviders.has('codex');
+  const showAntigravityTargets = enabledProviders.has('antigravity');
 
   function toggleThreshold(v: number) {
     if (!settings) return;
@@ -128,8 +129,13 @@ export default function NotificationsView({ onBack }: Props) {
               <TargetLine label="Codex weekly limit" detail="Codex live usage, cache, or local log weekly window" />
             </>
           )}
+          {showAntigravityTargets && (
+            <>
+              <TargetLine label="Antigravity model quotas" detail="Local RPC model quota usage when Antigravity is running" />
+            </>
+          )}
           <div style={{ marginTop: 8, color: C.textMuted }}>
-            Alerts follow the enabled providers. Auto-refreshed every 60s, 1-hour cooldown per alert.
+            Alerts follow enabled providers and quota/model targets. Auto-refreshed every 60s, 1-hour cooldown per alert.
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { PictureInPicture2 } from 'lucide-react';
-import { AppState, ProviderQuotaSource, SessionInfo } from '../types';
+import { AppState, ProviderQuotaSource, ProviderQuotaStatus, SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtRelative, modelColor, quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 import SessionRow from '../components/SessionRow';
@@ -13,7 +13,12 @@ import TrendCard from '../components/TrendCard';
 import RenderErrorBoundary from '../components/RenderErrorBoundary';
 import { MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 import { limitDataState, limitSourceDisplay } from '../limitDisplay';
-import { buildQuotaDisplayModels, QuotaDisplayGroupViewModel, QuotaDisplayRowViewModel } from '../quotaDisplayModels';
+import {
+  buildQuotaDisplayModels,
+  buildRichCardRows,
+  QuotaDisplayGroupViewModel,
+  QuotaDisplayRowViewModel,
+} from '../quotaDisplayModels';
 
 interface Props {
   state: AppState;
@@ -85,16 +90,23 @@ function cacheMetricColor(value: number, C: ReturnType<typeof useTheme>): string
   return C.barRed;
 }
 
-function cacheMetricTitle(showClaudeUsage: boolean, showCodexUsage: boolean): string {
-  if (showClaudeUsage && !showCodexUsage) return 'Claude: cache read / (cache read + cache creation)';
-  if (showCodexUsage && !showClaudeUsage) return 'Codex: cached input / input';
+function providerLabel(provider: ProviderId): string {
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
+  return 'Claude';
+}
+
+function cacheMetricTitle(enabledProviders: readonly ProviderId[]): string {
+  if (enabledProviders.length === 1) {
+    const provider = enabledProviders[0];
+    if (provider === 'codex' || provider === 'antigravity') return `${providerLabel(provider)}: cache read / prompt tokens`;
+    return `${providerLabel(provider)}: cache read / (cache read + cache creation)`;
+  }
   return 'Combined view: provider-specific cache metrics are aggregated';
 }
 
 function sessionProviderLabel(provider: SessionInfo['provider']): string {
-  if (provider === 'codex') return 'Codex';
-  if (provider === 'antigravity') return 'Antigravity';
-  return 'Claude';
+  return providerLabel(provider);
 }
 
 function sessionProviderBadgeColors(provider: SessionInfo['provider'], C: ReturnType<typeof useTheme>): { background: string; color: string } {
@@ -279,7 +291,28 @@ function buildCodexHeaderStatus(args: {
   return null;
 }
 
+function buildProviderQuotaHeaderStatus(
+  provider: ProviderId,
+  status: ProviderQuotaStatus | undefined,
+): HeaderStatus | null {
+  if (!status || status.connected || status.severity === 'ok') return null;
+  const label = providerLabel(provider);
+  const statusLabel = status.label || status.code || 'unavailable';
+  const compactLabel = status.code === 'not-running'
+    ? (provider === 'antigravity' ? 'Start Antigravity' : `${label} off`)
+    : status.code === 'unavailable'
+      ? `${label} offline`
+      : `${label} ${statusLabel}`;
+  return {
+    label: compactLabel,
+    title: status.detail || `${label} provider status: ${statusLabel}.`,
+    tone: status.severity === 'danger' ? 'danger' : 'warning',
+  };
+}
+
 function buildHeaderStatus(args: {
+  enabledProviders: readonly ProviderId[];
+  providerQuotas: AppState['providerQuotas'];
   showClaudeUsage: boolean;
   showCodexUsage: boolean;
   hasClaudeFallback: boolean;
@@ -292,9 +325,14 @@ function buildHeaderStatus(args: {
   codexError?: string;
   codexFallbackSource?: ProviderQuotaSource;
 }): HeaderStatus | null {
+  const claudeStatus = buildClaudeHeaderStatus(args);
+  const codexStatus = buildCodexHeaderStatus(args);
   const statuses = [
-    buildClaudeHeaderStatus(args),
-    buildCodexHeaderStatus(args),
+    claudeStatus,
+    codexStatus,
+    ...args.enabledProviders
+      .filter(provider => !((provider === 'claude' && claudeStatus) || (provider === 'codex' && codexStatus)))
+      .map(provider => buildProviderQuotaHeaderStatus(provider, args.providerQuotas[provider]?.status)),
   ].filter((status): status is HeaderStatus => !!status);
   return statuses.find(status => status.tone === 'danger') ?? statuses[0] ?? null;
 }
@@ -458,7 +496,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   } = state;
   const { currency, usdToKrw } = settings;
   const compactWidgetEnabled = settings.compactWidgetEnabled === true;
-  const enabledProviders = new Set(settings.enabledProviders);
+  const enabledProviderList = settings.enabledProviders;
+  const enabledProviders = new Set(enabledProviderList);
   const showClaudeUsage = enabledProviders.has('claude');
   const showCodexUsage = enabledProviders.has('codex');
   const claudeQuota = state.providerQuotas.claude;
@@ -473,6 +512,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const codexFallbackSource = codexFallbackWindows.some(window => window.source === 'cache') ? 'cache' : (codexFallbackWindows[0]?.source as ProviderQuotaSource | undefined);
   const [period, setPeriod] = useState<'today' | 'all'>('today');
   const headerStatus = useMemo(() => buildHeaderStatus({
+    enabledProviders: enabledProviderList,
+    providerQuotas: state.providerQuotas,
     showClaudeUsage,
     showCodexUsage,
     hasClaudeFallback,
@@ -484,7 +525,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
     codexStatusLabel,
     codexError,
     codexFallbackSource,
-  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage]);
+  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, enabledProviderList, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage, state.providerQuotas]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -493,7 +534,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const cacheEff = isAll ? usage.allTimeAvgCacheEfficiency : usage.todayCacheEfficiency;
   const saved = isAll ? usage.allTimeSavedUSD : usage.todayCacheSavingsUSD;
   const cacheColor = cacheMetricColor(cacheEff, C);
-  const cacheTitle = cacheMetricTitle(showClaudeUsage, showCodexUsage);
+  const cacheTitle = cacheMetricTitle(enabledProviderList);
   const planLabel = showClaudeUsage ? (claudeQuota?.planName || claudeQuota?.accountLabel) : undefined;
   const codexTierLabel = showCodexUsage
     ? (codexQuota?.planName || codexQuota?.accountLabel || formatCodexServiceTier(state.codexAccount.serviceTier))
@@ -838,6 +879,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
     historyWarmupStartsAt,
     formatWarmupEta,
   });
+  const richRows = buildRichCardRows(richGroups);
   const showExtraUsage = !!extraUsage?.isEnabled;
 
   return (
@@ -846,13 +888,14 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
         <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
       </div>
 
-      {richGroups.map(group => (
-        <div key={`quota-rich-${group.id}`} style={{ display: 'grid', gridTemplateColumns: group.rows.length === 1 ? '1fr' : '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-          {group.rows.map((card, cardIndex) => {
+      {richRows.map(richRow => (
+        <div key={`quota-rich-row-${richRow.key}`} style={{ display: 'grid', gridTemplateColumns: richRow.cards.length === 1 ? '1fr' : '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+          {richRow.cards.map((cardView, cardIndex) => {
+            const { group, row: card } = cardView;
             const source = limitSourceDisplay(card.quota);
             return (
               <TokenStatsCard
-                key={card.key}
+                key={cardView.key}
                 provider={group.label}
                 period={card.label}
                 stats={card.stats}
@@ -873,7 +916,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
                 durationMs={card.durationMs}
                 hideCost={card.hideCost}
                 hero
-                borderRight={group.rows.length > 1 && cardIndex === 0}
+                borderRight={richRow.cards.length > 1 && cardIndex === 0}
               />
             );
           })}

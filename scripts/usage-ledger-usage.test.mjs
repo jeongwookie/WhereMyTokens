@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import queryModule from '../dist/main/usageLedgerUsage.js';
 import aggregates from '../dist/main/usageLedgerAggregates.js';
+import ingestModule from '../dist/main/usageLedgerIngest.js';
 
 const { computeUsageFromLedger, buildTrendDataFromLedger } = queryModule;
-const { emptyUsageLedgerSnapshot, dayModelKey, hourProviderKey, minuteKey } = aggregates;
+const { replaceProviderUsageSliceInSnapshot } = ingestModule;
+const { emptyUsageLedgerSnapshot, dayModelKey, hourProviderKey, minuteKey, monthModelKey } = aggregates;
 
 function agg(tokens, cost, calls = 1, overrides = {}) {
   return {
@@ -164,6 +166,91 @@ test('ledger trend query filters rows by enabled provider scopes', () => {
 
   assert.deepEqual(trend.daily.map(row => row.tokens), [300]);
   assert.deepEqual(trend.monthly.map(row => row.costUSD), [3.0]);
+});
+
+test('ledger usage query exposes cached Antigravity model window stats', () => {
+  const now = Date.parse('2026-06-01T12:00:00.000Z');
+  const callTs = now - 60_000;
+  const snapshot = emptyUsageLedgerSnapshot();
+  const aggregate = agg(170, 0.12, 1, {
+    inputTokens: 100,
+    outputTokens: 20,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 50,
+    totalTokens: 170,
+    cacheSavingsUSD: 0.05,
+  });
+  snapshot.minuteRecent[minuteKey(callTs, 'antigravity', 'Gemini 3 Pro')] = aggregate;
+  snapshot.hourlyActivity[hourProviderKey(callTs, 'antigravity')] = aggregate;
+  snapshot.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')] = aggregate;
+  snapshot.monthlyModel[monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')] = aggregate;
+
+  const providerQuotas = {
+    antigravity: {
+      provider: 'antigravity',
+      source: 'localRpc',
+      capturedAt: now,
+      models: [
+        {
+          model: 'gemini-3-pro-high',
+          label: 'Gemini 3 Pro (High)',
+          usageModel: 'Gemini 3 Pro',
+          statsWindowKey: 'model.gemini-3-pro-high',
+          remainingPct: 80,
+          resetMs: 4 * 60 * 60 * 1000,
+          durationMs: 5 * 60 * 60 * 1000,
+        },
+      ],
+    },
+  };
+
+  const usage = computeUsageFromLedger(snapshot, {}, now, undefined, providerQuotas);
+  const modelWindow = usage.modelWindows.antigravity.windows['model.gemini-3-pro-high']['Gemini 3 Pro'];
+
+  assert.equal(modelWindow.inputTokens, 100);
+  assert.equal(modelWindow.outputTokens, 20);
+  assert.equal(modelWindow.cacheReadTokens, 50);
+  assert.equal(modelWindow.totalTokens, 170);
+  assert.equal(modelWindow.costUSD, 0.12);
+});
+
+test('ledger trend query remains idempotent after replacing the Antigravity provider slice twice', () => {
+  const now = Date.parse('2026-06-01T12:00:00.000Z');
+  const aggregate = agg(170, 0.12, 1, {
+    inputTokens: 100,
+    outputTokens: 20,
+    cacheReadTokens: 50,
+    totalTokens: 170,
+  });
+  const slice = {
+    provider: 'antigravity',
+    minuteRecent: {},
+    recentRequestIndex: {},
+    hourlyActivity: {},
+    dailyModel: {
+      [dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')]: aggregate,
+    },
+    monthlyModel: {
+      [monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')]: aggregate,
+    },
+    sourceCheckpoints: {
+      'ag-cache-source': {
+        provider: 'antigravity',
+        sourceHash: 'ag-cache-source',
+        sourceKey: 'antigravity:usage-cache',
+        lastImportedAt: now,
+        hasUsage: true,
+      },
+    },
+    sourceRepairRollup: {},
+  };
+
+  const afterFirst = replaceProviderUsageSliceInSnapshot(emptyUsageLedgerSnapshot(), slice, now);
+  const afterSecond = replaceProviderUsageSliceInSnapshot(afterFirst, slice, now);
+  const trend = buildTrendDataFromLedger(afterSecond, now);
+
+  assert.equal(trend.daily.at(-1).tokens, 170);
+  assert.equal(trend.daily.at(-1).requestCount, 1);
 });
 
 test('ledger activity weekly timeline uses the same calendar-week buckets as trend weekly data', () => {
