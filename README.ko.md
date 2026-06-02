@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe"><strong>v1.16.1 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe"><strong>v1.17.0 다운로드</strong></a>
   ·
   <a href="#주요-기능">주요 기능</a>
   ·
@@ -59,11 +59,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 6/2 | Plan Usage를 provider quota snapshot 기반으로 재구성하고, target별 Rich/Simple/None 표시 그룹과 안전한 quota 상태 복원/마이그레이션을 추가 |
 | **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 잘린 full-history ledger import나 실패한 source가 있어도 budgeted warmup을 계속 예약하고 stale provider completion marker를 피하도록 수정 |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 5/26 | 지속 사용량 ledger, 즉시 시작 snapshot, cost/token 히스토리와 git 순 라인 산출을 함께 보는 Trend 카드를 추가 |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 5/25 | Refresh 작업을 scheduler로 직렬화하고 기본 budget을 적용해 startup, watcher, history, manual refresh 중에도 tray UI와 hotkey popup 반응성을 유지 |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 5/21 | Codex 아카이브 로그와 Claude agent 로그를 all-time 사용량에 포함하고, all-time 세션 수를 전체 사용 기록 기준으로 표시 |
-| **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 5/21 | Hotkey popup은 빠르게 열리면서도 전체 세션 기록을 놓치지 않게 하고, 트레이 보조 창이 taskbar에 나타나지 않도록 수정 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## 다운로드
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-v1.16.1-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-v1.17.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -83,7 +83,7 @@
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.16.1-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.17.0-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -100,7 +100,8 @@
 - **툴 사용 바** — 비례 색상 바 + 툴 칩 (Bash, Edit, Read 등)
 
 ### 속도 제한 & 알림
-- **속도 제한 바** — Claude 5h/1w는 Anthropic API/statusLine 폴백 기준이며 로컬 access token 만료 시 passive OAuth refresh로 복구합니다. Codex 5h/1w는 live Codex usage, 캐시, 로컬 rate-limit 로그 이벤트 순으로 표시
+- **Provider quota 바** — Claude, Codex와 이후 provider가 `providerQuotas` snapshot으로 유효 quota를 게시합니다. Claude는 Anthropic API/statusLine/cache 우선순위, Codex는 live usage/cache/local-log 우선순위로 표시합니다
+- **Target별 quota 표시** — 각 provider window 또는 model target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있습니다. 이 설정은 Plan Usage와 Floating widget 표시만 바꿉니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
 - **Windows 토스트 알림** — 사용량 임계값(50% / 80% / 90%)에서 알림
@@ -195,7 +196,7 @@ WhereMyTokens는 로컬 파일을 읽고, 활성화된 경우 본인 계정의 p
 
 자격 증명 처리는 좁게 제한되어 있습니다. WhereMyTokens는 공식 CLI의 로컬 credential 파일을 읽고, API key를 직접 입력받지 않으며, 별도 credential 백업을 저장하지 않습니다. Claude access token이 만료되면 Anthropic을 통해 refresh하고 갱신된 credentials를 `~/.claude/.credentials.json`에 원자적으로 다시 쓸 수 있습니다.
 
-네트워크 접근은 활성 provider 모드의 usage endpoint로 제한됩니다. Claude usage polling은 최대 5분마다 실행하고 429 backoff를 적용합니다. Codex live usage는 HTTPS-only 요청, timeout, 응답 크기 제한, cache, backoff를 적용합니다. 로컬 JSONL 파싱과 `statusLine` bridge는 세션 내용을 외부로 보내지 않습니다.
+네트워크 접근은 활성화한 provider 체크박스의 usage endpoint로 제한됩니다. Claude usage polling은 최대 5분마다 실행하고 429 backoff를 적용합니다. Codex live usage는 HTTPS-only 요청, timeout, 응답 크기 제한, cache, backoff를 적용합니다. 로컬 JSONL 파싱과 `statusLine` bridge는 세션 내용을 외부로 보내지 않습니다.
 
 Claude Code bridge를 끄려면 **Settings -> Claude Code Integration -> Disable**을 누릅니다. 앱은 WhereMyTokens bridge command가 소유한 `statusLine` entry만 제거하며, 다른 custom `statusLine`은 덮어쓰거나 삭제하지 않습니다. 수동으로는 `~/.claude/settings.json`에서 WhereMyTokens `statusLine` entry를 삭제한 뒤 Claude Code를 재시작하면 됩니다.
 
@@ -248,8 +249,7 @@ Claude는 input, output, cache creation, cache read를 제공합니다. Codex는
 |---------|------|----------|
 | 헤더 (today) | 오늘 자정 이후 | In/Out/Cache + 호출 수, 세션 수, 캐시 절약 |
 | 헤더 (all) | 전체 기간 | In/Out/Cache + 호출 수, 세션 수, 캐시 절약 |
-| Plan Usage (Claude 5h / 1w) | Claude reset window | Claude 토큰 유형 + API/statusLine 한도 |
-| Plan Usage (Codex 5h / 1w) | Codex reset window | Codex 토큰 유형 + live/cache/log 한도 소스 |
+| Plan Usage (provider quotas) | Provider reset window | Provider 토큰 유형 + `providerQuotas[provider]` window, status, source, credit, target별 Rich/Simple/None 표시 모드 |
 | Model Usage | 전체 기간, provider별 상위 4개 모델 | 모든 토큰 유형 |
 
 > **참고:** `$` 값은 추정값으로 실제 청구액이 아닙니다. Claude Max/Pro 구독은 월정액이며, 비용 표시는 구독에서 얻는 사용 가치를 보여줍니다.

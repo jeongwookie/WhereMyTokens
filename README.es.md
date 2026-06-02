@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.16.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.17.0</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -59,11 +59,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 2 jun | Refactoriza Plan Usage sobre snapshots de provider quota, añade grupos de visualización Rich/Simple/None por target y endurece la restauración/migración de estado quota |
 | **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 27 may | Mantiene el budgeted ledger warmup tras imports full-history truncados o fallidos y evita completion markers obsoletos por provider |
 | **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 26 may | Añade el ledger persistente de uso, snapshots de inicio instantáneo y la tarjeta Trend con historial de costos/tokens y líneas netas de git |
 | **[v1.15.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.3)** | 25 may | Enruta el refresh por un scheduler serializado y con presupuesto para que la UI de bandeja y el hotkey popup sigan respondiendo durante startup, watcher, history y refresh manual |
 | **[v1.15.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.2)** | 21 may | Incluye logs archivados de Codex y logs agent de Claude en el uso all-time, y muestra sesiones all-time desde el historial completo |
-| **[v1.15.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.15.1)** | 21 may | Mantiene ágil el hotkey popup sin perder el historial completo de sesiones y evita que las ventanas auxiliares de la bandeja aparezcan en la taskbar |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -71,9 +71,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.16.1/WhereMyTokens-v1.16.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.17.0/WhereMyTokens-v1.17.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -83,7 +83,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.16.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.17.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -100,7 +100,8 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de límite de uso** — Claude 5h/1sem desde Anthropic API/statusLine como respaldo, con recuperación passive OAuth refresh si el access token local expira; Codex 5h/1sem desde live Codex usage, caché y luego eventos locales de rate-limit
+- **Barras de provider quota** — Claude, Codex y futuros providers publican snapshots efectivos por `providerQuotas`; Claude usa Anthropic API/statusLine/cache, y Codex usa live usage/cache/local-log como prioridad
+- **Visualización quota por target** — cada provider window o model target puede mostrarse como Rich, Simple u oculto desde Settings; esto solo afecta Plan Usage y el widget flotante
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
