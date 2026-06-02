@@ -4,7 +4,7 @@ import type {
   ProviderQuotaSnapshot,
 } from '../types';
 import { defaultQuotaModeForModel, normalizeAntigravityModel } from './models';
-import { maskEmail, parseTimestampMs } from './pathUtils';
+import { parseTimestampMs } from './pathUtils';
 import { resolveAntigravityPriceForModel } from './pricing';
 import { findAntigravityServersCached, getTrajectorySummariesCached, getUserStatusCached } from './runtimeCache';
 import type {
@@ -13,9 +13,6 @@ import type {
   AntigravityTrajectorySummariesResponse,
   AntigravityUserStatusResponse,
 } from './types';
-
-const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function deadlineMs(ctx: ProviderContext): number {
   return Date.now() + Math.min(ctx.scanBudgetMs ?? 8_000, 8_000);
@@ -29,8 +26,8 @@ function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function remainingPctFromFraction(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+function remainingPctFromFraction(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return clampPercent(Math.max(0, Math.min(1, value)) * 100);
 }
 
@@ -40,37 +37,33 @@ function resetMsFromValue(value: unknown, nowMs: number): number | null {
   return Number.isFinite(parsed) ? Math.max(0, parsed - nowMs) : null;
 }
 
-function durationMsFromReset(resetMs: number | null): number | undefined {
-  if (resetMs == null) return undefined;
-  return resetMs <= FIVE_HOURS_MS ? FIVE_HOURS_MS : WEEK_MS;
-}
-
 export function parseAntigravityModelQuotas(
   configs: AntigravityModelConfig[],
   nowMs: number,
 ): ProviderModelQuota[] {
   return configs
     .filter(config => !!config.quotaInfo)
-    .map(config => {
+    .map((config): ProviderModelQuota | null => {
+      const remainingPct = remainingPctFromFraction(config.quotaInfo?.remainingFraction);
+      if (remainingPct == null) return null;
       const model = config.modelOrAlias?.model || config.label || 'unknown';
       const label = config.label || model;
       const resetMs = resetMsFromValue(config.quotaInfo?.resetTime, nowMs);
-      const durationMs = durationMsFromReset(resetMs);
       const usageModel = normalizeAntigravityModel(model, new Map([[model, label]]));
       return {
         model,
         label,
         statsWindowKey: `model.${model}`,
-        remainingPct: remainingPctFromFraction(config.quotaInfo?.remainingFraction),
+        remainingPct,
         resetMs,
         defaultMode: defaultQuotaModeForModel(label, model),
         usageModel,
-        visualKind: durationMs ? 'pace' : 'percentOnly',
+        visualKind: 'percentOnly',
         cacheMetricTitle: 'Cache read / prompt tokens',
-        durationMs,
         hideCost: !resolveAntigravityPriceForModel(usageModel, `${model} ${label}`),
       };
-    });
+    })
+    .filter((quota): quota is ProviderModelQuota => !!quota);
 }
 
 function newestCascadeMs(value: AntigravityTrajectorySummariesResponse | null): number {
@@ -93,7 +86,6 @@ interface CandidateQuota {
 
 function candidateScore(candidate: CandidateQuota): number {
   let score = 0;
-  if (candidate.snapshot.accountLabel) score += 10_000;
   if (candidate.newestCascadeMs > 0) score += Math.min(candidate.newestCascadeMs / 1000, 9_000_000);
   if (candidate.server.processStartedAtMs) score += candidate.server.processStartedAtMs / 10_000;
   return score;
@@ -101,12 +93,14 @@ function candidateScore(candidate: CandidateQuota): number {
 
 function snapshotFromStatus(response: AntigravityUserStatusResponse, nowMs: number): ProviderQuotaSnapshot {
   const userStatus = response.userStatus;
-  const configs = userStatus?.cascadeModelConfigData?.clientModelConfigs ?? [];
+  const rawConfigs = userStatus?.cascadeModelConfigData?.clientModelConfigs;
+  const configs = Array.isArray(rawConfigs)
+    ? rawConfigs.filter((config): config is AntigravityModelConfig => !!config && typeof config === 'object' && !Array.isArray(config))
+    : [];
   return {
     provider: 'antigravity',
     source: 'localRpc',
     capturedAt: nowMs,
-    accountLabel: maskEmail(userStatus?.email),
     planName: userStatus?.planStatus?.planInfo?.planName,
     models: parseAntigravityModelQuotas(configs, nowMs),
     status: {

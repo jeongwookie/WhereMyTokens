@@ -46,7 +46,6 @@ test('Antigravity usage cache upserts calls and builds a provider ledger slice',
 
   cache.upsertCascade({
     cascadeId: 'cascade-1',
-    title: 'Work',
     totalSteps: 4,
     status: 'CASCADE_RUN_STATUS_IDLE',
     lastModifiedMs: nowMs,
@@ -58,7 +57,8 @@ test('Antigravity usage cache upserts calls and builds a provider ledger slice',
   const slice = cache.buildLedgerSlice(nowMs);
 
   assert.equal(Object.keys(snapshot.cascades).length, 1);
-  assert.equal(Object.keys(snapshot.cascades['cascade-1'].calls).length, 1);
+  assert.equal(Object.keys(snapshot.cascades['legacy:cascade-1'].calls).length, 1);
+  assert.equal('title' in snapshot.cascades['legacy:cascade-1'], false);
   assert.equal(slice.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].totalTokens, 175);
   assert.equal(slice.monthlyModel[monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].requestCount, 1);
 });
@@ -71,7 +71,6 @@ test('Antigravity usage cache replaces a richer version of the same call', () =>
 
   cache.upsertCascade({
     cascadeId: 'cascade-1',
-    title: 'Work',
     totalSteps: 4,
     status: 'CASCADE_RUN_STATUS_RUNNING',
     lastModifiedMs: nowMs,
@@ -80,7 +79,6 @@ test('Antigravity usage cache replaces a richer version of the same call', () =>
   }, nowMs);
   cache.upsertCascade({
     cascadeId: 'cascade-1',
-    title: 'Work',
     totalSteps: 4,
     status: 'CASCADE_RUN_STATUS_IDLE',
     lastModifiedMs: nowMs,
@@ -100,7 +98,6 @@ test('Antigravity usage cache writes one ledger checkpoint per cascade', () => {
 
   cache.upsertCascade({
     cascadeId: 'cascade-1',
-    title: 'First',
     totalSteps: 4,
     status: 'CASCADE_RUN_STATUS_IDLE',
     lastModifiedMs: nowMs,
@@ -109,7 +106,6 @@ test('Antigravity usage cache writes one ledger checkpoint per cascade', () => {
   }, nowMs);
   cache.upsertCascade({
     cascadeId: 'cascade-2',
-    title: 'Second',
     totalSteps: 5,
     status: 'CASCADE_RUN_STATUS_IDLE',
     lastModifiedMs: nowMs,

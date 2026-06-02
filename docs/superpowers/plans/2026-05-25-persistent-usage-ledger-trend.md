@@ -12,10 +12,8 @@
 
 ## Current Baseline
 
-- Current local worktree: `D:\Git\wheremytokens`
-- Current branch observed during planning: `codex-refresh-pipeline`
-- Current upstream remote: `upstream https://github.com/jeongwookie/WhereMyTokens`
-- `git fetch upstream main` was run before this plan; observed `upstream/main` at `e81e533`.
+- Use an isolated local worktree rooted at `<repo-root>`.
+- Treat the current branch, upstream remote, and upstream commit as live values checked during implementation.
 - Repository scan found `README*.md` and `RELEASE.md`, but no PRD file. No PRD update is required unless a PRD is added before implementation starts.
 - Current `docs/` is untracked in this checkout. Do not delete or reset it.
 
@@ -126,7 +124,7 @@ Expected: a short commit hash is printed. During planning this was `e81e533`; us
 
 - [ ] **Step 3: Create an isolated worktree from upstream/main**
 
-Run from `D:\Git\wheremytokens`:
+Run from `<repo-root>`:
 
 ```powershell
 rtk git worktree add ..\wheremytokens-ledger upstream/main -b codex-persistent-usage-ledger-trend

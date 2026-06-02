@@ -86,6 +86,7 @@ export interface RequestIndexEntry extends CompactRecentEntry {
 
 export interface FileUsageSummary {
   provider: ProviderId;
+  projectKeys?: string[];
   sessionSnapshot: SessionSnapshot;
   recentEntries: CompactRecentEntry[];
   historicalRollup: HistoricalRollup;

@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <em>Antigravity 対応は次のパッケージリリース向けのソースに含まれており、v1.16.1 のダウンロードにはまだ含まれていません。</em>
+</p>
+
+<p align="center">
   Claude Code、Codex、Antigravity のトークン、コスト、セッション、キャッシュ、モデル別使用量、quota を一目で確認できるローカル優先の Windows トレイアプリです。
 </p>
 

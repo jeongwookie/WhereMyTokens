@@ -31,10 +31,11 @@ test('Antigravity session parser adds summaryKey and bounds ranked cascade summa
   assert.equal(ranked.length, SESSION_DISCOVERY_LIMIT);
   assert.equal(ranked[0][0], 'cascade-0');
 
-  const session = trajectorySummaryToSession('cascade-0', ranked[0][1], now);
+  const summaryKey = 'antigravity:test-owner:cascade:cascade-0';
+  const session = trajectorySummaryToSession(summaryKey, ranked[0][1], now);
   assert.equal(session.provider, 'antigravity');
   assert.equal(session.jsonlPath, null);
-  assert.equal(session.summaryKey, 'antigravity:cascade:cascade-0');
+  assert.equal(session.summaryKey, summaryKey);
   assert.equal(session.entrypoint, 'antigravity');
 });
 
@@ -43,14 +44,14 @@ test('Antigravity session parser uses created time fallback and leaves unknown m
   const old = new Date(now - 60 * 60_000).toISOString();
   const cwd = 'file:///C:/repo/app';
 
-  const fromCreated = trajectorySummaryToSession('created-only', {
+  const fromCreated = trajectorySummaryToSession('antigravity:test-owner:cascade:created-only', {
     createdTime: old,
     workspaces: [{ workspaceFolderAbsoluteUri: cwd }],
   }, now);
   assert.equal(fromCreated.state, 'idle');
   assert.equal(fromCreated.lastModified.getTime(), Date.parse(old));
 
-  const unknownTime = trajectorySummaryToSession('unknown-time', {
+  const unknownTime = trajectorySummaryToSession('antigravity:test-owner:cascade:unknown-time', {
     workspaces: [{ workspaceFolderAbsoluteUri: cwd }],
   }, now);
   assert.equal(unknownTime.state, 'idle');

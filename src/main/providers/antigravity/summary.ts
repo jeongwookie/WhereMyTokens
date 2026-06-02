@@ -73,6 +73,7 @@ function addToRollup(rollup: HistoricalRollup, entry: AntigravityRecentEntry, no
 
 export function buildAntigravitySummary(params: {
   cascadeId: string;
+  projectKeys?: string[];
   calls: AntigravityUsageCall[];
   nowMs: number;
   lastModifiedMs: number;
@@ -109,6 +110,7 @@ export function buildAntigravitySummary(params: {
 
   return {
     provider: 'antigravity',
+    projectKeys: params.projectKeys,
     sessionSnapshot: snapshot,
     recentEntries,
     historicalRollup,

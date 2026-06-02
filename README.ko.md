@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <em>Antigravity 지원은 다음 패키지 릴리스용 소스에 포함되어 있으며, v1.16.1 다운로드에는 아직 포함되지 않습니다.</em>
+</p>
+
+<p align="center">
   Claude Code, Codex, Antigravity의 토큰, 비용, 세션, 캐시, 모델별 사용량, quota를 한눈에 보여주는 로컬 우선 Windows 트레이 앱입니다.
 </p>
 

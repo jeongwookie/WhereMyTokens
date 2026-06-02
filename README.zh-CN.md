@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <em>Antigravity 支持已在下一次打包发布的源码中；v1.16.1 下载版暂不包含该功能。</em>
+</p>
+
+<p align="center">
   一个本地优先的 Windows 托盘应用，可一目了然地查看 Claude Code、Codex 与 Antigravity 的令牌、费用、会话、缓存、模型使用量和速率限制。
 </p>
 
@@ -257,7 +261,7 @@ WhereMyTokens 可以通过 `127.0.0.1` 上运行中的 Antigravity IDE local lan
 - 与 Claude、Codex 共用 provider/session UI 的 cascade 会话分组
 - 来自 `GetUserStatus` 的逐模型 quota 百分比和重置时间
 - 来自 `GetCascadeTrajectoryGeneratorMetadata` 的 token metadata，并带有有界 full-trajectory fallback
-- 本地 zero-cost 使用摘要，因为 Antigravity 的 local RPC 路径不暴露 API 等价费用
+- 对可识别的本地模型 metadata 显示 API 等价费用估算；未定价模型保持为 0 或隐藏
 
 Antigravity 支持保持 local-only。它不会读取 Google OAuth credential、refresh token、Google cloud usage endpoint、credits 或离线 `state.vscdb` 数据。
 

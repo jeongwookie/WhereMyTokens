@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseAntigravityModelQuotas } from '../dist/main/providers/antigravity/quota.js';
 
-test('Antigravity quota parser converts remaining fractions and reset times without credits or model source', () => {
+test('Antigravity quota parser converts finite remaining fractions without credits or model source', () => {
   const now = Date.parse('2026-06-01T00:00:00.000Z');
   const models = parseAntigravityModelQuotas([
     {
@@ -25,29 +25,24 @@ test('Antigravity quota parser converts remaining fractions and reset times with
 
   assert.equal(models[0].remainingPct, 70);
   assert.equal(models[0].resetMs, 60 * 60 * 1000);
-  assert.equal(models[0].visualKind, 'pace');
-  assert.equal(models[0].durationMs, 5 * 60 * 60 * 1000);
+  assert.equal(models[0].visualKind, 'percentOnly');
+  assert.equal(models[0].durationMs, undefined);
   assert.equal(models[0].defaultMode, 'simple');
   assert.equal(models[0].hideCost, false);
   assert.equal(models[0].usageModel, 'Gemini 3 Pro');
   assert.equal(models[1].remainingPct, 25);
   assert.equal(models[1].resetMs, 2 * 60 * 60 * 1000);
-  assert.equal(models[1].visualKind, 'pace');
-  assert.equal(models[1].durationMs, 5 * 60 * 60 * 1000);
+  assert.equal(models[1].visualKind, 'percentOnly');
+  assert.equal(models[1].durationMs, undefined);
   assert.equal(models[1].defaultMode, 'simple');
   assert.equal(models[1].hideCost, false);
   assert.equal(models[1].usageModel, 'Claude Opus');
-  assert.equal(models[2].remainingPct, 0);
-  assert.equal(models[2].resetMs, 3 * 60 * 60 * 1000);
-  assert.equal(models[2].visualKind, 'pace');
-  assert.equal(models[2].durationMs, 5 * 60 * 60 * 1000);
-  assert.equal(models[2].defaultMode, 'none');
-  assert.equal(models[2].hideCost, true);
+  assert.equal(models.length, 2);
   assert.equal('source' in models[0], false);
   assert.equal('credits' in models[0], false);
 });
 
-test('Antigravity quota parser infers weekly duration when reset is beyond five hours', () => {
+test('Antigravity quota parser does not infer a quota duration from reset time alone', () => {
   const now = Date.parse('2026-06-01T00:00:00.000Z');
   const [model] = parseAntigravityModelQuotas([
     {
@@ -58,6 +53,6 @@ test('Antigravity quota parser infers weekly duration when reset is beyond five 
   ], now);
 
   assert.equal(model.resetMs, 6 * 60 * 60 * 1000);
-  assert.equal(model.visualKind, 'pace');
-  assert.equal(model.durationMs, 7 * 24 * 60 * 60 * 1000);
+  assert.equal(model.visualKind, 'percentOnly');
+  assert.equal(model.durationMs, undefined);
 });

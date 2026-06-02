@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, X } from 'lucide-react';
-import { AppState, ProviderId, ProviderQuotaDisplayBadge, ProviderQuotaStatus, ProviderQuotaWindow } from '../types';
+import { AppState, ProviderId, ProviderQuotaDisplayBadge, ProviderQuotaSnapshot, ProviderQuotaStatus, ProviderQuotaWindow } from '../types';
 import { useTheme } from '../ThemeContext';
-import { hasLimitData, limitDataState, limitSourceDisplay, LimitWindow } from '../limitDisplay';
+import { hasLimitData, limitDataState, limitSourceDisplay, LimitWindow, providerDisplayName } from '../limitDisplay';
 import { buildQuotaDisplayModels, QuotaDisplayGroupViewModel, QuotaDisplayRowViewModel } from '../quotaDisplayModels';
 import { quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 
@@ -175,12 +175,18 @@ function quotaStatusTone(status: ProviderQuotaStatus | undefined): HealthTone {
   return 'neutral';
 }
 
-function providerLabelFromQuota(provider: ProviderId, state: AppState): string {
-  const quota = state.providerQuotas[provider];
-  return quota?.groups?.[0]?.label
-    ?? quota?.accountLabel
-    ?? quota?.planName
-    ?? provider;
+function providerLabelFromQuota(provider: ProviderId): string {
+  return providerDisplayName(provider);
+}
+
+function modelQuotaWindows(quota: ProviderQuotaSnapshot | undefined): ProviderQuotaWindow[] {
+  return (quota?.models ?? [])
+    .filter(model => Number.isFinite(model.remainingPct))
+    .map(model => ({
+      pct: clampPct(100 - model.remainingPct),
+      resetMs: model.resetMs ?? null,
+      source: quota?.source,
+    }));
 }
 
 function providerHealth(
@@ -277,9 +283,9 @@ function buildWidgetAgents(state: AppState): WidgetAgent[] {
 function buildHealthItems(state: AppState): HealthItem[] {
   const items: HealthItem[] = [];
   for (const provider of state.settings.enabledProviders) {
-    const providerLabel = providerLabelFromQuota(provider, state);
+    const providerLabel = providerLabelFromQuota(provider);
     const quota = state.providerQuotas[provider];
-    const windows = Object.values(quota?.windows ?? {});
+    const windows = [...Object.values(quota?.windows ?? {}), ...modelQuotaWindows(quota)];
     const primary = windows[0] ?? EMPTY_QUOTA_WINDOW;
     const secondary = windows[1] ?? EMPTY_QUOTA_WINDOW;
     const syncing = state.historyWarmupPending && windows.some(window => window.source === 'localLog' || !hasLimitData(window));

@@ -4,9 +4,11 @@ import http from 'node:http';
 
 import trackerModule from '../dist/main/providers/antigravity/gmTracker.js';
 import cacheModule from '../dist/main/providers/antigravity/usageCacheStore.js';
+import identityModule from '../dist/main/providers/antigravity/serverIdentity.js';
 
 const { AntigravityGmTracker } = trackerModule;
 const { AntigravityUsageCacheStore, emptyAntigravityUsageCacheSnapshot } = cacheModule;
+const { antigravityServerOwnerKey } = identityModule;
 
 function context(overrides = {}) {
   return {
@@ -53,6 +55,10 @@ function sendJson(res, payload) {
 function sendStatus(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
+}
+
+function cascadeCacheKey(serverInfo, cascadeId = 'c1') {
+  return `${antigravityServerOwnerKey(serverInfo)}:${cascadeId}`;
 }
 
 function userStatus() {
@@ -119,7 +125,7 @@ test('Antigravity GM tracker keeps cached IDLE cascades without refetching GM', 
     await tracker.fetchAllFromServers(context({ nowMs: nowMs + 20_000 }), [serverInfo], Date.now() + 10_000);
 
     assert.equal(gmRequests, 1);
-    assert.equal(Object.keys(cache.getSnapshot().cascades.c1.calls).length, 1);
+    assert.equal(Object.keys(cache.getSnapshot().cascades[cascadeCacheKey(serverInfo)].calls).length, 1);
   });
 });
 
@@ -157,7 +163,7 @@ test('Antigravity GM tracker refetches when RUNNING becomes IDLE', async () => {
     await tracker.fetchAllFromServers(context({ nowMs }), [serverInfo], Date.now() + 10_000);
     await tracker.fetchAllFromServers(context({ nowMs: nowMs + 20_000 }), [serverInfo], Date.now() + 10_000);
 
-    assert.equal(Object.keys(cache.getSnapshot().cascades.c1.calls).length, 2);
+    assert.equal(Object.keys(cache.getSnapshot().cascades[cascadeCacheKey(serverInfo)].calls).length, 2);
   });
 });
 
@@ -198,7 +204,7 @@ test('Antigravity GM tracker refetches idle cascades when lastModified changes w
     await tracker.fetchAllFromServers(context({ nowMs: nowMs + 20_000 }), [serverInfo], Date.now() + 10_000);
 
     assert.equal(gmRequests, 2);
-    assert.equal(Object.keys(cache.getSnapshot().cascades.c1.calls).length, 2);
+    assert.equal(Object.keys(cache.getSnapshot().cascades[cascadeCacheKey(serverInfo)].calls).length, 2);
   });
 });
 
@@ -233,7 +239,7 @@ test('Antigravity GM tracker enriches lightweight metadata from full trajectory'
     const cache = new AntigravityUsageCacheStore(memoryStore());
     const tracker = new AntigravityGmTracker(cache);
     await tracker.fetchAllFromServers(context({ nowMs }), [serverInfo], Date.now() + 10_000);
-    const call = Object.values(cache.getSnapshot().cascades.c1.calls)[0];
+    const call = Object.values(cache.getSnapshot().cascades[cascadeCacheKey(serverInfo)].calls)[0];
 
     assert.equal(call.inputTokens, 100);
     assert.equal(call.outputTokens, 20);
@@ -271,6 +277,6 @@ test('Antigravity GM tracker keeps stale cache when a later GM RPC fails', async
     const result = await tracker.fetchAllFromServers(context({ nowMs: nowMs + 20_000 }), [serverInfo], Date.now() + 10_000);
 
     assert.equal(result.partial, true);
-    assert.equal(Object.keys(cache.getSnapshot().cascades.c1.calls).length, 1);
+    assert.equal(Object.keys(cache.getSnapshot().cascades[cascadeCacheKey(serverInfo)].calls).length, 1);
   });
 });

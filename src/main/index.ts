@@ -536,7 +536,7 @@ function trayH5WindowKeys(state: AppState, provider: ProviderId): string[] {
     if (windowKey === 'h5' || isFiveHourDuration(display.durationMs)) keys.add(windowKey);
   }
   for (const model of quota?.models ?? []) {
-    if (isFiveHourDuration(model.durationMs) || (model.durationMs == null && model.resetMs != null && model.resetMs <= FIVE_HOURS_MS)) {
+    if (isFiveHourDuration(model.durationMs)) {
       keys.add(modelStatsWindowKey(model));
     }
   }
@@ -570,7 +570,7 @@ function trayH5Pct(state: AppState, provider: ProviderId): { pct: number; provis
     if (window) consider(window.pct, window);
   }
   for (const model of quota?.models ?? []) {
-    if (isFiveHourDuration(model.durationMs) || (model.durationMs == null && model.resetMs != null && model.resetMs <= FIVE_HOURS_MS)) {
+    if (isFiveHourDuration(model.durationMs)) {
       consider(100 - model.remainingPct, { pct: 100 - model.remainingPct, resetMs: model.resetMs ?? null, source: quota?.source });
     }
   }

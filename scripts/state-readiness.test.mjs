@@ -100,7 +100,7 @@ test('renderer mutes cached usage text and shows soft loading states', () => {
   assert.match(source, /LimitStatusBar/);
 });
 
-test('rich quota card title truncates before source badges and keeps full title tooltip', async () => {
+test('rich quota card title uses CSS ellipsis and keeps full title tooltip', async () => {
   const TokenStatsCard = await importRendererComponent(
     path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'),
     'TokenStatsCard',
@@ -139,8 +139,7 @@ test('rich quota card title truncates before source badges and keeps full title 
   assert.ok(titleSpan, html);
   const titleText = html.match(new RegExp(`<span title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" style="[^"]+">([^<]+)`));
   assert.ok(titleText, html);
-  assert.equal(titleText[1], displayTitle.slice(0, 14));
-  assert.ok(Array.from(titleText[1]).length <= 14);
+  assert.equal(titleText[1], displayTitle);
   assert.match(titleSpan[1], /flex:1 1 auto/);
   assert.match(titleSpan[1], /overflow:hidden/);
   assert.match(titleSpan[1], /text-overflow:ellipsis/);

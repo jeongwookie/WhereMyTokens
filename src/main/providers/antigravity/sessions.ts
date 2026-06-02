@@ -4,6 +4,7 @@ import { describeRepoContext } from '../shared/repoContext';
 import { isSafeLocalCwd } from '../../pathSafety';
 import { fileUriToPath, parseTimestampMs } from './pathUtils';
 import { findAntigravityServersCached, getTrajectorySummariesCached } from './runtimeCache';
+import { antigravityCascadeSummaryKey, antigravityServerOwnerKey } from './serverIdentity';
 import type { AntigravityServerInfo, AntigravityTrajectorySummary } from './types';
 
 export const SESSION_DISCOVERY_LIMIT = 48;
@@ -36,6 +37,8 @@ export function rankAntigravitySummaries(
 ): Array<[string, AntigravityTrajectorySummary]> {
   const limit = includeFullHistory ? FULL_SESSION_DISCOVERY_LIMIT : SESSION_DISCOVERY_LIMIT;
   return Object.entries(summaries)
+    .filter((entry): entry is [string, AntigravityTrajectorySummary] =>
+      !!entry[1] && typeof entry[1] === 'object' && !Array.isArray(entry[1]))
     .sort((a, b) =>
       parseTimestampMs(b[1].lastModifiedTime ?? b[1].createdTime, 0)
       - parseTimestampMs(a[1].lastModifiedTime ?? a[1].createdTime, 0)
@@ -44,7 +47,7 @@ export function rankAntigravitySummaries(
 }
 
 export function trajectorySummaryToSession(
-  cascadeId: string,
+  summaryKey: string,
   summary: AntigravityTrajectorySummary,
   nowMs: number,
 ): DiscoveredSession | null {
@@ -61,7 +64,7 @@ export function trajectorySummaryToSession(
   return {
     provider: 'antigravity',
     pid: null,
-    sessionId: cascadeId,
+    sessionId: summaryKey,
     cwd,
     projectName: repoContext.projectName || title,
     startedAt: new Date(createdMs),
@@ -69,7 +72,7 @@ export function trajectorySummaryToSession(
     source: 'Antigravity',
     state: stateFromMtime(lastModifiedMs, nowMs),
     jsonlPath: null,
-    summaryKey: `antigravity:cascade:${cascadeId}`,
+    summaryKey,
     lastModified: lastModifiedMs > 0 ? new Date(lastModifiedMs) : null,
     isWorktree: repoContext.isWorktree,
     worktreeBranch: repoContext.worktreeBranch,
@@ -89,13 +92,15 @@ export async function discoverAntigravitySessionsFromServers(
     if (Date.now() >= stopAt) break;
     const response = await getTrajectorySummariesCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));
     if (Date.now() >= stopAt) break;
+    const ownerKey = antigravityServerOwnerKey(server);
     for (const [cascadeId, summary] of Object.entries(response?.trajectorySummaries ?? {})) {
-      if (!summaries[cascadeId]) summaries[cascadeId] = summary;
+      const summaryKey = antigravityCascadeSummaryKey(ownerKey, cascadeId);
+      if (!summaries[summaryKey]) summaries[summaryKey] = summary;
     }
   }
 
   return rankAntigravitySummaries(summaries, ctx.nowMs, ctx.includeFullHistory)
-    .map(([cascadeId, summary]) => trajectorySummaryToSession(cascadeId, summary, ctx.nowMs))
+    .map(([summaryKey, summary]) => trajectorySummaryToSession(summaryKey, summary, ctx.nowMs))
     .filter((session): session is DiscoveredSession => !!session);
 }
 

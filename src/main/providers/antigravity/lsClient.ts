@@ -9,6 +9,7 @@ import type {
 } from './types';
 
 type RpcProtocol = 'http' | 'https';
+const MAX_RPC_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 function requestJson<T>(
   server: AntigravityServerInfo,
@@ -19,6 +20,17 @@ function requestJson<T>(
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body ?? {});
+    let settled = false;
+    const fail = (error: Error | unknown): void => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    const done = (value: T): void => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
     const lib = protocol === 'https' ? https : http;
     const options: http.RequestOptions & https.RequestOptions = {
       hostname: '127.0.0.1',
@@ -37,25 +49,34 @@ function requestJson<T>(
 
     const req = lib.request(options, res => {
       let raw = '';
+      let rawBytes = 0;
       res.setEncoding('utf8');
-      res.on('data', chunk => { raw += chunk; });
+      res.on('data', chunk => {
+        rawBytes += Buffer.byteLength(chunk, 'utf8');
+        if (rawBytes > MAX_RPC_RESPONSE_BYTES) {
+          fail(new Error(`Antigravity RPC ${method} response too large`));
+          req.destroy();
+          return;
+        }
+        raw += chunk;
+      });
       res.on('end', () => {
         if (res.statusCode && res.statusCode >= 400) {
-          reject(new Error(`Antigravity RPC ${method} HTTP ${res.statusCode}`));
+          fail(new Error(`Antigravity RPC ${method} HTTP ${res.statusCode}`));
           return;
         }
         try {
-          resolve(JSON.parse(raw || '{}') as T);
+          done(JSON.parse(raw || '{}') as T);
         } catch (error) {
-          reject(error);
+          fail(error);
         }
       });
     });
 
-    req.on('error', reject);
+    req.on('error', fail);
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`Antigravity RPC ${method} timeout`));
+      fail(new Error(`Antigravity RPC ${method} timeout`));
     });
     req.write(payload);
     req.end();

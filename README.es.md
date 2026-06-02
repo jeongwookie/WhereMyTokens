@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <em>El soporte de Antigravity está en el código fuente para el próximo paquete; las descargas v1.16.1 todavía no lo incluyen.</em>
+</p>
+
+<p align="center">
   Una app local-first para la bandeja de Windows que muestra tokens, costos, sesiones, caché, uso por modelo y quota de Claude Code, Codex y Antigravity de un vistazo.
 </p>
 

@@ -79,35 +79,18 @@ function windowLabel(windowKey: string): string {
   return `${windowKey} usage`;
 }
 
-function quotaGroupId(provider: ProviderId, groupKey: string): string {
-  return `${provider}.group.${encodeURIComponent(groupKey)}`;
-}
-
-function modelQuotaGroupKey(model: string): string {
-  return `model.${model}`;
-}
-
-function quotaTargetMode(
-  provider: ProviderId,
-  groupKey: string,
-  defaultMode: QuotaDisplayMode,
-  modes: Partial<Record<string, QuotaDisplayMode>> | undefined,
-): QuotaDisplayMode {
-  return modes?.[quotaGroupId(provider, groupKey)] ?? defaultMode;
-}
-
 const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-function modelDurationLabel(durationMs: number | undefined, resetMs: number | null | undefined): string {
-  const resolved = durationMs || (resetMs != null ? (resetMs <= FIVE_HOURS_MS ? FIVE_HOURS_MS : WEEK_MS) : undefined);
+function modelDurationLabel(durationMs: number | undefined): string {
+  const resolved = durationMs;
   if (resolved === FIVE_HOURS_MS) return '5h';
   if (resolved === WEEK_MS) return '1w';
   return 'quota';
 }
 
-function modelWindowLabel(durationMs: number | undefined, resetMs: number | null | undefined): string {
-  const label = modelDurationLabel(durationMs, resetMs);
+function modelWindowLabel(durationMs: number | undefined): string {
+  const label = modelDurationLabel(durationMs);
   if (label === '5h') return '5h usage';
   if (label === '1w') return 'weekly usage';
   return 'usage';
@@ -124,10 +107,8 @@ export function quotaChecks(
     const windows = quota?.windows;
     const groupedWindows = new Set<string>();
     for (const group of quota?.groups ?? []) {
-      const mode = quotaTargetMode(provider, group.key, group.defaultMode, options.quotaTargetModes);
       for (const windowKey of group.windowKeys) {
         groupedWindows.add(windowKey);
-        if (mode === 'none') continue;
         const window = windows?.[windowKey];
         if (!window) continue;
         checks.push({
@@ -153,15 +134,12 @@ export function quotaChecks(
     }
     for (const model of quota?.models ?? []) {
       const resetMs = model.resetMs ?? null;
-      const durationLabel = modelDurationLabel(model.durationMs, resetMs);
-      const groupKey = model.groupKey ?? modelQuotaGroupKey(model.model);
-      const mode = quotaTargetMode(provider, groupKey, model.defaultMode ?? 'simple', options.quotaTargetModes);
-      if (mode === 'none') continue;
+      const durationLabel = modelDurationLabel(model.durationMs);
       checks.push({
         key: `${provider}-model-${model.model}-${durationLabel}`,
         pct: Math.max(0, Math.min(100, 100 - model.remainingPct)),
         resetMs,
-        label: `${providerLabel(provider)} ${model.label} ${modelWindowLabel(model.durationMs, resetMs)}`,
+        label: `${providerLabel(provider)} ${model.label} ${modelWindowLabel(model.durationMs)}`,
         source: quota?.source,
         provider,
       });

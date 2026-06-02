@@ -32,7 +32,7 @@ test('quota alert checks include model-only provider quotas', async () => {
   assert.equal(checks[0].source, 'localRpc');
 });
 
-test('quota alert checks skip quota targets hidden with none mode', async () => {
+test('quota alert checks keep quota targets even when display mode is none', async () => {
   const alerts = await import('../dist/main/usageAlertManager.js');
 
   const checks = alerts.quotaChecks({
@@ -71,7 +71,11 @@ test('quota alert checks skip quota targets hidden with none mode', async () => 
     },
   });
 
-  assert.deepEqual(checks, []);
+  assert.deepEqual(checks.map(check => check.key), [
+    'claude-h5',
+    'claude-week',
+    'antigravity-model-MODEL_GEMINI_3_PRO-5h',
+  ]);
 });
 
 test('checkAlerts preserves the single alert notification format', async () => {

@@ -29,7 +29,6 @@ function quotaWindowDuration(quota: ProviderQuotaSnapshot | undefined, windowKey
 
 function modelQuotaDuration(model: NonNullable<ProviderQuotaSnapshot['models']>[number]): number | undefined {
   if (Number.isFinite(model.durationMs) && model.durationMs && model.durationMs > 0) return model.durationMs;
-  if (model.resetMs != null) return model.resetMs <= H5_MS ? H5_MS : WEEK_MS;
   return undefined;
 }
 

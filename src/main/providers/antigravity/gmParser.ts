@@ -160,14 +160,15 @@ export function antigravityCallFingerprint(call: AntigravityUsageCall): string {
 
 export function shouldEnrichForTokens(params: {
   stepCount: number;
-  rawGm: Record<string, unknown>[];
+  rawGm: unknown[];
   calls: AntigravityUsageCall[];
 }): boolean {
   if (params.rawGm.length === 0) return true;
   if (params.calls.length === 0 && params.stepCount > 0) return true;
   if (params.stepCount >= 350) return true;
   if (params.rawGm.some(gm => {
-    const cm = (gm.chatModel || {}) as Record<string, unknown>;
+    if (!gm || typeof gm !== 'object' || Array.isArray(gm)) return true;
+    const cm = ((gm as Record<string, unknown>).chatModel || {}) as Record<string, unknown>;
     return !cm.responseModel;
   })) return true;
   return params.calls.some(call => totalAntigravityCallTokens(call) === 0);
@@ -175,11 +176,12 @@ export function shouldEnrichForTokens(params: {
 
 export function parseAntigravityGmEntries(
   cascadeId: string,
-  rawGm: Record<string, unknown>[],
+  rawGm: unknown[],
   fallbackMs: number,
   labelMap?: Map<string, string>,
 ): AntigravityUsageCall[] {
   return rawGm
+    .filter((gm): gm is Record<string, unknown> => !!gm && typeof gm === 'object' && !Array.isArray(gm))
     .map(gm => parseAntigravityGmEntry(cascadeId, gm, fallbackMs, labelMap))
     .filter((call): call is AntigravityUsageCall => !!call)
     .sort((a, b) => a.timestampMs - b.timestampMs);

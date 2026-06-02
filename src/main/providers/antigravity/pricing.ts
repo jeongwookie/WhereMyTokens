@@ -8,66 +8,66 @@ export interface AntigravityPrice {
 }
 
 export interface AntigravityPriceRule {
-  key: string;
+  id: string;
   pattern: RegExp;
   price: AntigravityPrice | ((promptTokens: number) => AntigravityPrice);
 }
 
 export const ANTIGRAVITY_PRICING: AntigravityPriceRule[] = [
   {
-    key: 'gemini-3.1-pro',
+    id: 'gemini-3.1-pro',
     pattern: /gemini.*(3\.1|3).*pro|gemini.*pro/i,
     price: (promptTokens) => promptTokens > 200_000
       ? { in: 4.00, out: 18.00, cw: 4.00, cr: 0.40 }
       : { in: 2.00, out: 12.00, cw: 2.00, cr: 0.20 },
   },
   {
-    key: 'gemini-3-pro-image',
+    id: 'gemini-3-pro-image',
     pattern: /gemini.*3.*pro.*image|nano.*banana.*pro/i,
     price: { in: 2.00, out: 12.00, cw: 2.00, cr: 0.20 },
   },
   {
-    key: 'gemini-3.1-flash-image',
+    id: 'gemini-3.1-flash-image',
     pattern: /gemini.*3\.1.*flash.*image|flash.*image/i,
     price: { in: 0.50, out: 3.00, cw: 0.50, cr: 0.50 },
   },
   {
-    key: 'gemini-3.5-flash',
+    id: 'gemini-3.5-flash',
     pattern: /gemini.*3\.5.*flash|gemini.*flash(?!.*lite)/i,
     price: { in: 1.50, out: 9.00, cw: 1.50, cr: 0.15 },
   },
   {
-    key: 'gemini-3.1-flash-lite',
+    id: 'gemini-3.1-flash-lite',
     pattern: /gemini.*3\.1.*flash.*lite|flash.*lite/i,
     price: { in: 0.25, out: 1.50, cw: 0.25, cr: 0.025 },
   },
   {
-    key: 'gemini-3-flash',
+    id: 'gemini-3-flash',
     pattern: /gemini.*3.*flash/i,
     price: { in: 0.50, out: 3.00, cw: 0.50, cr: 0.05 },
   },
   {
-    key: 'claude-opus-4.6+',
+    id: 'claude-opus-4.6+',
     pattern: /claude.*opus|opus/i,
     price: { in: 5.00, out: 25.00, cw: 6.25, cr: 0.50 },
   },
   {
-    key: 'claude-sonnet-4.6',
+    id: 'claude-sonnet-4.6',
     pattern: /claude.*sonnet|sonnet/i,
     price: { in: 3.00, out: 15.00, cw: 3.75, cr: 0.30 },
   },
   {
-    key: 'claude-haiku-4.5',
+    id: 'claude-haiku-4.5',
     pattern: /claude.*haiku|haiku/i,
     price: { in: 1.00, out: 5.00, cw: 1.25, cr: 0.10 },
   },
   {
-    key: 'gpt-oss-120b',
+    id: 'gpt-oss-120b',
     pattern: /gpt[-\s_]*oss.*120b|120b/i,
     price: { in: 0.039, out: 0.18, cw: 0.039, cr: 0.039 },
   },
   {
-    key: 'gpt-oss-20b',
+    id: 'gpt-oss-20b',
     pattern: /gpt[-\s_]*oss.*20b|20b/i,
     price: { in: 0.029, out: 0.14, cw: 0.029, cr: 0.029 },
   },

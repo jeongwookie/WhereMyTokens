@@ -1278,9 +1278,13 @@ export class StateManager {
 
   private isExcludedSummary(
     filePath: string,
+    summary: FileUsageSummary,
     provider: ProviderId,
     isExcluded: ReturnType<typeof makeExcludedMatcher>,
   ): boolean {
+    if (summary.projectKeys && summary.projectKeys.length > 0) {
+      return isExcluded(summary.projectKeys);
+    }
     const adapter = this.providerRegistry.get(provider);
     if (adapter && isSourceBackedProvider(adapter) && adapter.isExcludedSource) {
       return adapter.isExcludedSource(this.sourceForPath(adapter, filePath), isExcluded);
@@ -1298,7 +1302,7 @@ export class StateManager {
     const visible: FileUsageSummary[] = [];
     for (const [filePath, summary] of this.summaries.entries()) {
       if (!enabled.has(summary.provider)) continue;
-      if (this.isExcludedSummary(filePath, summary.provider, isExcluded)) continue;
+      if (this.isExcludedSummary(filePath, summary, summary.provider, isExcluded)) continue;
       visible.push(summary);
     }
     return visible;
@@ -1433,7 +1437,12 @@ export class StateManager {
     });
     for (const provider of providers) {
       if (!provider.discoverSessions) continue;
-      const discovered = await provider.discoverSessions(discoveryCtx);
+      let discovered: DiscoveredSession[] = [];
+      try {
+        discovered = await provider.discoverSessions(discoveryCtx);
+      } catch {
+        continue;
+      }
       for (const session of discovered) {
         const summary = session.summaryKey
           ? summaries.get(session.summaryKey) ?? null
@@ -1769,7 +1778,7 @@ export class StateManager {
       this.startupFreshComplete = true;
       this.jsonlCache.flushPersisted();
       const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
-      const partialHistoryScan = effectiveScanBudgetMs !== null && (ledgerRefresh.partial || (hasExcludedProjects && loaded.partial));
+      const partialHistoryScan = ledgerRefresh.partial || loaded.partial;
       const nextSummaries = partialHistoryScan && initialRefreshDone
         ? new Map([...this.summaries, ...loaded.summaries])
         : loaded.summaries;
@@ -2387,7 +2396,12 @@ export class StateManager {
       });
       for (const provider of providers) {
         if (!provider.discoverSessions) continue;
-        const discovered = await provider.discoverSessions(discoveryCtx);
+        let discovered: DiscoveredSession[] = [];
+        try {
+          discovered = await provider.discoverSessions(discoveryCtx);
+        } catch {
+          continue;
+        }
         for (const session of discovered) {
           if (session.jsonlPath) startupPriority.add(normalizeFileKey(session.jsonlPath));
         }

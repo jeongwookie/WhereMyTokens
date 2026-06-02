@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <em>Antigravity support is in source for the next packaged release; v1.16.1 downloads do not include it yet.</em>
+</p>
+
+<p align="center">
   A local-first Windows tray app for monitoring Claude Code, Codex, and Antigravity tokens, costs, sessions, cache, model usage, and rate limits at a glance.
 </p>
 
@@ -258,7 +262,7 @@ WhereMyTokens can read a running, signed-in Antigravity IDE through its local la
 - Cascade sessions grouped with the same provider/session UI as Claude and Codex
 - Per-model quota percentages and reset times from `GetUserStatus`
 - Token metadata from `GetCascadeTrajectoryGeneratorMetadata`, with bounded full-trajectory fallback
-- Zero-cost local usage summaries, because Antigravity does not expose API-equivalent cost in this local RPC path
+- API-equivalent cost estimates for recognized local model metadata; unpriced models stay zero/hidden
 
 Antigravity support is local-only. It does not read Google OAuth credentials, refresh tokens, Google cloud usage endpoints, credits, or offline `state.vscdb` data.
 

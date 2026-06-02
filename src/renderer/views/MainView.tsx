@@ -99,7 +99,7 @@ function providerLabel(provider: ProviderId): string {
 function cacheMetricTitle(enabledProviders: readonly ProviderId[]): string {
   if (enabledProviders.length === 1) {
     const provider = enabledProviders[0];
-    if (provider === 'codex') return 'Codex: cached input / input';
+    if (provider === 'codex' || provider === 'antigravity') return `${providerLabel(provider)}: cache read / prompt tokens`;
     return `${providerLabel(provider)}: cache read / (cache read + cache creation)`;
   }
   return 'Combined view: provider-specific cache metrics are aggregated';
@@ -299,7 +299,7 @@ function buildProviderQuotaHeaderStatus(
   const label = providerLabel(provider);
   const statusLabel = status.label || status.code || 'unavailable';
   const compactLabel = status.code === 'not-running'
-    ? `${label} off`
+    ? (provider === 'antigravity' ? 'Start Antigravity' : `${label} off`)
     : status.code === 'unavailable'
       ? `${label} offline`
       : `${label} ${statusLabel}`;

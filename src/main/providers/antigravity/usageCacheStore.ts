@@ -18,6 +18,7 @@ import {
   antigravityCallFingerprint,
   antigravityCallRequestId,
 } from './gmParser';
+import { antigravityCascadeSummaryKey } from './serverIdentity';
 import { antigravityUsageEntryFromCall } from './summary';
 
 const ANTIGRAVITY_USAGE_CACHE_SCHEMA_VERSION = 1;
@@ -34,8 +35,9 @@ export interface CachedAntigravityCall extends AntigravityUsageCall {
 }
 
 export interface CachedAntigravityCascade {
+  ownerKey: string;
   cascadeId: string;
-  title: string;
+  projectKeys?: string[];
   totalSteps: number;
   status: string;
   lastModifiedMs: number;
@@ -50,8 +52,9 @@ export interface AntigravityUsageCacheSnapshot {
 }
 
 export interface AntigravityCascadeUpdate {
+  ownerKey: string;
   cascadeId: string;
-  title: string;
+  projectKeys?: string[];
   totalSteps: number;
   status: string;
   lastModifiedMs: number;
@@ -131,16 +134,22 @@ function normalizeSnapshot(value: unknown): AntigravityUsageCacheSnapshot {
   if (raw.schemaVersion !== ANTIGRAVITY_USAGE_CACHE_SCHEMA_VERSION) return emptyAntigravityUsageCacheSnapshot();
 
   const cascades: Record<string, CachedAntigravityCascade> = {};
-  for (const [cascadeId, rawCascade] of Object.entries(objectRecord<unknown>(raw.cascades))) {
+  for (const [cacheKey, rawCascade] of Object.entries(objectRecord<unknown>(raw.cascades))) {
     const cascade = objectRecord<unknown>(rawCascade);
+    const ownerKey = stringValue(cascade.ownerKey) || 'legacy';
+    const cascadeId = stringValue(cascade.cascadeId) || cacheKey;
+    const projectKeys = Array.isArray(cascade.projectKeys)
+      ? cascade.projectKeys.filter((item): item is string => typeof item === 'string' && item.length > 0)
+      : undefined;
     const calls: Record<string, CachedAntigravityCall> = {};
     for (const [requestId, rawCall] of Object.entries(objectRecord<unknown>(cascade.calls))) {
       const call = normalizeCall(rawCall);
       if (call) calls[requestId] = { ...call, requestId: call.requestId || requestId };
     }
-    cascades[cascadeId] = {
+    cascades[`${ownerKey}:${cascadeId}`] = {
+      ownerKey,
       cascadeId,
-      title: stringValue(cascade.title),
+      projectKeys,
       totalSteps: int0(cascade.totalSteps),
       status: stringValue(cascade.status),
       lastModifiedMs: finiteNumber(cascade.lastModifiedMs) ?? 0,
@@ -162,12 +171,12 @@ function addToRecord(record: Record<string, UsageAggregate>, key: string, aggreg
   record[key] = current;
 }
 
-function cascadeSourceKey(cascadeId: string): string {
-  return `antigravity:cascade:${cascadeId}`;
+function cascadeSourceKey(ownerKey: string, cascadeId: string): string {
+  return antigravityCascadeSummaryKey(ownerKey, cascadeId);
 }
 
-function cascadeSourceHash(cascadeId: string): string {
-  return sourceHashForIdentity(cascadeSourceKey(cascadeId));
+function cascadeSourceHash(ownerKey: string, cascadeId: string): string {
+  return sourceHashForIdentity(cascadeSourceKey(ownerKey, cascadeId));
 }
 
 export class AntigravityUsageCacheStore {
@@ -190,7 +199,9 @@ export class AntigravityUsageCacheStore {
 
   upsertCascade(update: AntigravityCascadeUpdate, nowMs = Date.now()): AntigravityUsageCacheSnapshot {
     const snapshot = this.getSnapshot();
-    const current = snapshot.cascades[update.cascadeId];
+    const ownerKey = update.ownerKey || 'legacy';
+    const cacheKey = `${ownerKey}:${update.cascadeId}`;
+    const current = snapshot.cascades[cacheKey];
     const calls = { ...(current?.calls ?? {}) };
 
     for (const call of update.calls) {
@@ -205,9 +216,10 @@ export class AntigravityUsageCacheStore {
       };
     }
 
-    snapshot.cascades[update.cascadeId] = {
+    snapshot.cascades[cacheKey] = {
+      ownerKey,
       cascadeId: update.cascadeId,
-      title: update.title,
+      projectKeys: update.projectKeys,
       totalSteps: update.totalSteps,
       status: update.status,
       lastModifiedMs: update.lastModifiedMs,
@@ -232,12 +244,13 @@ export class AntigravityUsageCacheStore {
     return snapshot;
   }
 
-  listCascades(): CachedAntigravityCascade[] {
+  listCascades(ownerKey?: string): CachedAntigravityCascade[] {
     return Object.values(this.getSnapshot().cascades)
+      .filter(cascade => !ownerKey || cascade.ownerKey === ownerKey)
       .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
   }
 
-  buildLedgerSlice(nowMs = Date.now()): UsageLedgerProviderSlice {
+  buildLedgerSlice(nowMs = Date.now(), ownerKey?: string): UsageLedgerProviderSlice {
     const minuteRecent: Record<string, UsageAggregate> = {};
     const recentRequestIndex: UsageLedgerProviderSlice['recentRequestIndex'] = {};
     const hourlyActivity: Record<string, UsageAggregate> = {};
@@ -248,9 +261,9 @@ export class AntigravityUsageCacheStore {
     const minuteCutoff = nowMs - MINUTE_RECENT_RETENTION_MS;
     const hourCutoff = nowMs - HOURLY_ACTIVITY_RETENTION_MS;
 
-    for (const cascade of this.listCascades()) {
-      const sourceKey = cascadeSourceKey(cascade.cascadeId);
-      const sourceHash = cascadeSourceHash(cascade.cascadeId);
+    for (const cascade of this.listCascades(ownerKey)) {
+      const sourceKey = cascadeSourceKey(cascade.ownerKey, cascade.cascadeId);
+      const sourceHash = cascadeSourceHash(cascade.ownerKey, cascade.cascadeId);
       let cascadeHasUsage = false;
       for (const call of Object.values(cascade.calls)) {
         const entry = antigravityUsageEntryFromCall(call);

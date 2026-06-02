@@ -43,7 +43,7 @@ test('Antigravity process finder parses single-object CIM JSON output', () => {
 test('Antigravity process finder accepts absolute Antigravity app data paths', () => {
   const candidate = parseWindowsProcessCandidates(JSON.stringify({
     ProcessId: '301',
-    CommandLine: 'language_server_windows_x64.exe --csrf_token="secret-d" --app_data_dir="C:\\Users\\Ray\\AppData\\Roaming\\Antigravity" --extension_server_port=34567',
+    CommandLine: 'language_server_windows_x64.exe --csrf_token="secret-d" --app_data_dir="C:\\Users\\example\\AppData\\Roaming\\Antigravity" --extension_server_port=34567',
   }));
 
   assert.equal(candidate.length, 1);

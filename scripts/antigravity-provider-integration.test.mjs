@@ -10,6 +10,10 @@ import {
   AntigravityUsageCacheStore,
   emptyAntigravityUsageCacheSnapshot,
 } from '../dist/main/providers/antigravity/usageCacheStore.js';
+import {
+  antigravityCascadeSummaryKey,
+  antigravityServerOwnerKey,
+} from '../dist/main/providers/antigravity/serverIdentity.js';
 import aggregates from '../dist/main/usageLedgerAggregates.js';
 
 const { emptyUsageAggregate, emptyUsageLedgerSnapshot, dayModelKey, monthModelKey } = aggregates;
@@ -59,6 +63,10 @@ function sendJson(res, payload) {
 function sendStatus(res, statusCode, payload) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
+}
+
+function summaryKey(serverInfo, cascadeId) {
+  return antigravityCascadeSummaryKey(antigravityServerOwnerKey(serverInfo), cascadeId);
 }
 
 test('Antigravity provider maps local quota and usage RPC data into WMT provider structures', async () => {
@@ -123,7 +131,7 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
     assert.equal(quota.models[0].remainingPct, 80);
     assert.equal('credits' in quota, false);
     assert.equal('source' in quota.models[0], false);
-    assert.equal(usage.summaries.has('antigravity:cascade:c1'), true);
+    assert.equal(usage.summaries.has(summaryKey(serverInfo, 'c1')), true);
     assert.equal(usage.ledgerSources.length, 1);
     assert.equal(usage.scannedSources, 1);
   });
@@ -301,7 +309,7 @@ test('Antigravity usage scan uses createdTime as timestamp fallback when lastMod
     sendJson(res, {});
   }, async serverInfo => {
     const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
-    const summary = usage.summaries.get('antigravity:cascade:createdOnly');
+    const summary = usage.summaries.get(summaryKey(serverInfo, 'createdOnly'));
 
     assert.equal(summary.recentEntries[0].timestampMs, createdMs);
   });
@@ -342,7 +350,7 @@ test('Antigravity usage scan falls back to now when cascade and GM timestamps ar
     sendJson(res, {});
   }, async serverInfo => {
     const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
-    const summary = usage.summaries.get('antigravity:cascade:noTime');
+    const summary = usage.summaries.get(summaryKey(serverInfo, 'noTime'));
 
     assert.equal(summary.recentEntries[0].timestampMs, nowMs);
     assert.equal(summary.mtimeMs, nowMs);
@@ -535,8 +543,8 @@ test('Antigravity usage scan returns summaries from persisted cache when current
       cacheStore,
     );
 
-    assert.equal(first.summaries.has('antigravity:cascade:cached'), true);
-    assert.equal(second.summaries.has('antigravity:cascade:cached'), true);
+    assert.equal(first.summaries.has(summaryKey(serverInfo, 'cached')), true);
+    assert.equal(second.summaries.has(summaryKey(serverInfo, 'cached')), true);
     assert.equal(second.ledgerSources.length, 1);
   });
 });
