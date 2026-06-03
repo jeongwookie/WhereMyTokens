@@ -128,13 +128,95 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
     assert.equal(quota.provider, 'antigravity');
     assert.equal(quota.source, 'localRpc');
     assert.equal(quota.status.connected, true);
+    assert.equal(quota.accountLabel, 'pe***@example.com');
     assert.equal(quota.models[0].remainingPct, 80);
+    assert.equal(quota.models[0].durationMs, undefined);
+    assert.equal(quota.models[0].visualKind, 'percentOnly');
     assert.equal('credits' in quota, false);
     assert.equal('source' in quota.models[0], false);
+    const quotaWithPace = await fetchAntigravityQuotaFromServers(
+      context({
+        nowMs,
+        settings: {
+          enabledProviders: ['antigravity'],
+          antigravityQuotaDurationPaceEnabled: true,
+        },
+      }),
+      [serverInfo],
+    );
+    assert.equal(quotaWithPace.models[0].durationMs, 5 * 60 * 60 * 1000);
+    assert.equal(quotaWithPace.models[0].visualKind, 'pace');
     assert.equal(usage.summaries.has(summaryKey(serverInfo, 'c1')), true);
     assert.equal(usage.ledgerSources.length, 1);
     assert.equal(usage.scannedSources, 1);
   });
+});
+
+test('Antigravity quota selection prefers the server with the newest cascade activity', async () => {
+  const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
+  const handlerFor = ({ remainingFraction, resetMs, newestMs }) => (req, res) => {
+    if (req.url.endsWith('/GetUserStatus')) {
+      sendJson(res, {
+        userStatus: {
+          cascadeModelConfigData: {
+            clientModelConfigs: [
+              {
+                label: 'Gemini 3 Pro',
+                modelOrAlias: { model: 'MODEL_GEMINI_3_PRO' },
+                quotaInfo: { remainingFraction, resetTime: nowMs + resetMs },
+              },
+            ],
+          },
+        },
+      });
+      return;
+    }
+    if (req.url.endsWith('/GetAllCascadeTrajectories')) {
+      sendJson(res, {
+        trajectorySummaries: {
+          c1: {
+            lastModifiedTime: new Date(newestMs).toISOString(),
+            stepCount: 1,
+            status: 'CASCADE_RUN_STATUS_RUNNING',
+          },
+        },
+      });
+      return;
+    }
+    sendJson(res, {});
+  };
+
+  await withAntigravityServer(
+    handlerFor({
+      remainingFraction: 1,
+      resetMs: 4 * 60 * 60 * 1000,
+      newestMs: nowMs - 60 * 60 * 1000,
+    }),
+    async olderServer => {
+      await withAntigravityServer(
+        handlerFor({
+          remainingFraction: 0.2,
+          resetMs: 6 * 60 * 60 * 1000,
+          newestMs: nowMs - 60 * 1000,
+        }),
+        async newerServer => {
+          const quota = await fetchAntigravityQuotaFromServers(
+            context({
+              nowMs,
+              settings: {
+                enabledProviders: ['antigravity'],
+                antigravityQuotaDurationPaceEnabled: true,
+              },
+            }),
+            [olderServer, newerServer],
+          );
+
+          assert.equal(quota.models[0].remainingPct, 20);
+          assert.equal(quota.models[0].durationMs, 7 * 24 * 60 * 60 * 1000);
+        },
+      );
+    },
+  );
 });
 
 test('Antigravity usage scan returns partial near deadline instead of waiting for slow GM RPC timeout', async () => {

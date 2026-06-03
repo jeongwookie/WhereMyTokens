@@ -34,7 +34,18 @@ function modelQuotaDuration(model: NonNullable<ProviderQuotaSnapshot['models']>[
 }
 
 function modelQuotaWindowKey(model: NonNullable<ProviderQuotaSnapshot['models']>[number]): string {
+  const durationMs = modelQuotaDuration(model);
+  if (durationMs === H5_MS) return 'h5';
+  if (durationMs === WEEK_MS) return 'week';
   return model.statsWindowKey || `model.${model.model}`;
+}
+
+function modelQuotaIncludes(model: NonNullable<ProviderQuotaSnapshot['models']>[number]): string[] | undefined {
+  const normalized = [model.usageModel, model.label, model.model]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map(item => item.trim().toLowerCase());
+  const unique = [...new Set(normalized)];
+  return unique.length > 0 ? unique : undefined;
 }
 
 function quotaWindowStart(
@@ -119,6 +130,7 @@ export function buildProviderWindowTargets(
         provider,
         modelQuotaWindowKey(model),
         rollingWindowStart(durationMs, model.resetMs, nowMs - durationMs, nowMs),
+        modelQuotaIncludes(model),
       );
     }
 

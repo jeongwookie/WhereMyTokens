@@ -56,3 +56,47 @@ test('Antigravity quota parser does not infer a quota duration from reset time a
   assert.equal(model.visualKind, 'percentOnly');
   assert.equal(model.durationMs, undefined);
 });
+
+test('Antigravity quota parser infers 5h and weekly duration only when enabled', () => {
+  const now = Date.parse('2026-06-01T00:00:00.000Z');
+  const models = parseAntigravityModelQuotas([
+    {
+      label: 'Gemini 3 Pro',
+      modelOrAlias: { model: 'MODEL_GEMINI_3_PRO' },
+      quotaInfo: { remainingFraction: 0.5, resetTime: now + 2 * 60 * 60 * 1000 },
+    },
+    {
+      label: 'Claude Opus',
+      modelOrAlias: { model: 'MODEL_CLAUDE_OPUS' },
+      quotaInfo: { remainingFraction: 0.4, resetTime: now + 6 * 60 * 60 * 1000 },
+    },
+  ], now, { inferDurationFromReset: true });
+
+  assert.equal(models[0].durationMs, 5 * 60 * 60 * 1000);
+  assert.equal(models[0].visualKind, 'pace');
+  assert.equal(models[1].durationMs, 7 * 24 * 60 * 60 * 1000);
+  assert.equal(models[1].visualKind, 'pace');
+});
+
+test('Antigravity quota parser does not infer duration for elapsed reset windows', () => {
+  const now = Date.parse('2026-06-01T00:00:00.000Z');
+  const models = parseAntigravityModelQuotas([
+    {
+      label: 'Gemini 3 Pro',
+      modelOrAlias: { model: 'MODEL_GEMINI_3_PRO' },
+      quotaInfo: { remainingFraction: 0.5, resetTime: now },
+    },
+    {
+      label: 'Claude Opus',
+      modelOrAlias: { model: 'MODEL_CLAUDE_OPUS' },
+      quotaInfo: { remainingFraction: 0.4, resetTime: now - 60 * 1000 },
+    },
+  ], now, { inferDurationFromReset: true });
+
+  assert.equal(models[0].resetMs, 0);
+  assert.equal(models[0].durationMs, undefined);
+  assert.equal(models[0].visualKind, 'percentOnly');
+  assert.equal(models[1].resetMs, 0);
+  assert.equal(models[1].durationMs, undefined);
+  assert.equal(models[1].visualKind, 'percentOnly');
+});

@@ -138,6 +138,7 @@ export interface ProviderQuotaSnapshot {
   source: 'api' | 'statusLine' | 'localLog' | 'localRpc' | 'cache';
   capturedAt: number;
   accountLabel?: string;
+  accountTooltip?: string;
   planName?: string;
   windows?: Record<string, ProviderQuotaWindow>;
   models?: ProviderModelQuota[];

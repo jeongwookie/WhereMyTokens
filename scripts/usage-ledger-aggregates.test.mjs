@@ -2,18 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import aggregates from '../dist/main/usageLedgerAggregates.js';
+import usageLedgerUsage from '../dist/main/usageLedgerUsage.js';
 import types from '../dist/main/usageLedgerTypes.js';
 
 const {
   addUsageAggregate,
   subtractUsageAggregate,
   emptyUsageAggregate,
+  emptyUsageLedgerSnapshot,
   minuteKey,
   hourProviderKey,
   dayModelKey,
   monthModelKey,
   compactUsageLedgerSnapshot,
 } = aggregates;
+const { computeUsageFromLedger } = usageLedgerUsage;
 const { USAGE_LEDGER_SCHEMA_VERSION } = types;
 
 test('usage aggregate add and subtract preserve all token fields', () => {
@@ -55,6 +58,49 @@ test('usage ledger key builders are stable strings', () => {
   assert.equal(hourProviderKey(1710003661000, 'codex'), '1710003600000|codex');
   assert.equal(dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX'), '2026-05-25|codex|GPT-5-CODEX');
   assert.equal(monthModelKey('2026-05-25', 'claude', 'claude-sonnet-4'), '2026-05|claude|claude-sonnet-4');
+});
+
+test('pace model quota targets populate duration bucket model windows', () => {
+  const now = Date.parse('2026-06-01T04:00:00Z');
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'antigravity', 'Gemini 3 Pro')] = {
+    requestCount: 1,
+    inputTokens: 1000,
+    outputTokens: 2000,
+    cacheCreationTokens: 3000,
+    cacheReadTokens: 4000,
+    totalTokens: 10_000,
+    costUSD: 0.1,
+    cacheSavingsUSD: 0.2,
+  };
+
+  const usage = computeUsageFromLedger(
+    snapshot,
+    {},
+    now,
+    new Set(['antigravity']),
+    {
+      antigravity: {
+        provider: 'antigravity',
+        source: 'localRpc',
+        capturedAt: now,
+        status: { connected: true, code: 'connected' },
+        models: [{
+          model: 'MODEL_GEMINI_3_PRO',
+          label: 'Gemini 3 Pro',
+          usageModel: 'Gemini 3 Pro',
+          remainingPct: 42,
+          defaultMode: 'rich',
+          visualKind: 'pace',
+          durationMs: 5 * 60 * 60 * 1000,
+          resetMs: 4 * 60 * 60 * 1000,
+          statsWindowKey: 'model.MODEL_GEMINI_3_PRO',
+        }],
+      },
+    },
+  );
+
+  assert.equal(usage.modelWindows.antigravity.windows.h5['Gemini 3 Pro'].totalTokens, 10_000);
 });
 
 test('compaction removes expired minute, request index, hourly, daily, and source repair rows', () => {

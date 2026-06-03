@@ -460,6 +460,7 @@ function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): Pr
     source: quotaSource(record.source),
     capturedAt: finiteQuotaNumber(record.capturedAt) ?? 0,
     accountLabel: quotaString(record.accountLabel),
+    accountTooltip: quotaString(record.accountTooltip),
     planName: quotaString(record.planName),
     windows: sanitizeQuotaWindows(record.windows),
     models: sanitizeProviderModels(record.models),
@@ -2035,7 +2036,8 @@ export class StateManager {
       this.startupFreshComplete = true;
       this.jsonlCache.flushPersisted();
       const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
-      const partialHistoryScan = ledgerRefresh.partial || loaded.partial;
+    const partialHistoryScan = effectiveScanBudgetMs !== null
+      && (ledgerRefresh.partial || (hasExcludedProjects && loaded.partial));
       const nextSummaries = partialHistoryScan && initialRefreshDone
         ? new Map([...this.summaries, ...loaded.summaries])
         : loaded.summaries;

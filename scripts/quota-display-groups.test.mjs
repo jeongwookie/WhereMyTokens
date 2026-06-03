@@ -350,6 +350,60 @@ test('model fallback quota rows attach matching model usage stats', async () => 
   assert.equal(models.richGroups[0].badges.some(badge => badge.key === 'cost.total'), false);
 });
 
+test('pace model quota rows fall back to duration bucket stats when dedicated model window is empty', async () => {
+  const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
+  const options = baseOptions({
+    enabledProviders: ['antigravity'],
+  });
+  options.usage.modelWindows = {
+    antigravity: {
+      windows: {
+        'model.MODEL_GEMINI_3_PRO': {},
+        h5: {
+          'Gemini 3 Pro': {
+            inputTokens: 1000,
+            outputTokens: 2000,
+            cacheCreationTokens: 3000,
+            cacheReadTokens: 6345,
+            totalTokens: 12_345,
+            costUSD: 0.456,
+            requestCount: 3,
+            cacheEfficiency: 67,
+            cacheSavingsUSD: 0.123,
+          },
+        },
+      },
+    },
+  };
+  options.providerQuotas = {
+    antigravity: {
+      provider: 'antigravity',
+      source: 'localRpc',
+      capturedAt: Date.now(),
+      status: { connected: true, code: 'connected' },
+      models: [
+        {
+          model: 'MODEL_GEMINI_3_PRO',
+          label: 'Gemini 3 Pro',
+          usageModel: 'Gemini 3 Pro',
+          remainingPct: 42,
+          defaultMode: 'rich',
+          visualKind: 'pace',
+          durationMs: 5 * 60 * 60 * 1000,
+          statsWindowKey: 'model.MODEL_GEMINI_3_PRO',
+          hideCost: false,
+        },
+      ],
+    },
+  };
+
+  const models = buildQuotaDisplayModels(options);
+  const row = models.richGroups[0].rows[0];
+
+  assert.equal(row.stats.totalTokens, 12_345);
+  assert.equal(row.stats.costUSD, 0.456);
+});
+
 test('model fallback quota rows preserve precomputed cache efficiency from usage windows', async () => {
   const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
   const options = baseOptions({

@@ -74,6 +74,7 @@ const DEFAULT_STATE: AppState = {
     hiddenProjects: [], excludedProjects: [],
     quotaTargetModes: {},
     quotaTargetOrder: [],
+    antigravityQuotaDurationPaceEnabled: false,
     compactWidgetEnabled: false, compactWidgetWaitingAnimationEnabled: false, compactWidgetBounds: null,
   },
   codexAccount: { serviceTier: null },
@@ -331,6 +332,7 @@ function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): P
     source: isQuotaSource(record.source) ? record.source : 'cache',
     capturedAt: typeof record.capturedAt === 'number' && Number.isFinite(record.capturedAt) ? record.capturedAt : 0,
     accountLabel: typeof record.accountLabel === 'string' ? record.accountLabel : undefined,
+    accountTooltip: typeof record.accountTooltip === 'string' ? record.accountTooltip : undefined,
     planName: typeof record.planName === 'string' ? record.planName : undefined,
     windows: Object.keys(windows).length > 0 ? windows : undefined,
     models: models && models.length > 0 ? models : undefined,
@@ -527,6 +529,7 @@ function normalizeState(next: AppState): AppState {
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
       quotaTargetModes: normalizeQuotaTargetModes(next.settings?.quotaTargetModes),
       quotaTargetOrder: normalizeQuotaTargetOrder(next.settings?.quotaTargetOrder),
+      antigravityQuotaDurationPaceEnabled: next.settings?.antigravityQuotaDurationPaceEnabled === true,
       compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,
       compactWidgetWaitingAnimationEnabled: next.settings?.compactWidgetWaitingAnimationEnabled === true,
       compactWidgetBounds: next.settings?.compactWidgetBounds

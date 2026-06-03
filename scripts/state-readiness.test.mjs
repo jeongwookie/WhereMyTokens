@@ -100,7 +100,7 @@ test('renderer mutes cached usage text and shows soft loading states', () => {
   assert.match(source, /LimitStatusBar/);
 });
 
-test('rich quota card title uses CSS ellipsis and keeps full title tooltip', async () => {
+test('rich quota card title truncates text and keeps full title tooltip', async () => {
   const TokenStatsCard = await importRendererComponent(
     path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'),
     'TokenStatsCard',
@@ -139,7 +139,7 @@ test('rich quota card title uses CSS ellipsis and keeps full title tooltip', asy
   assert.ok(titleSpan, html);
   const titleText = html.match(new RegExp(`<span title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" style="[^"]+">([^<]+)`));
   assert.ok(titleText, html);
-  assert.equal(titleText[1], displayTitle);
+  assert.equal(titleText[1], 'Gemini 3.1 Pro');
   assert.match(titleSpan[1], /flex:1 1 auto/);
   assert.match(titleSpan[1], /overflow:hidden/);
   assert.match(titleSpan[1], /text-overflow:ellipsis/);
@@ -395,6 +395,14 @@ test('header today cache metric uses today aggregates instead of the 5-hour wind
 
   assert.match(source, /const cacheEff = isAll \? usage\.allTimeAvgCacheEfficiency : usage\.todayCacheEfficiency/);
   assert.match(source, /const saved = isAll \? usage\.allTimeSavedUSD : usage\.todayCacheSavingsUSD/);
+});
+
+test('rich quota card titles truncate visually while preserving full hover title', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
+
+  assert.match(source, /title=\{displayTitle\}/);
+  assert.doesNotMatch(source, /title=\{visibleTitle\}/);
+  assert.doesNotMatch(source, />\{displayTitle\}<\/span>/);
 });
 
 test('tray and header status derive provider data from enabled providers', () => {

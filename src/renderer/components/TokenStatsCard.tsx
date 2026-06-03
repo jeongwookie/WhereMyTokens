@@ -24,6 +24,11 @@ function formatUsagePct(pct: number): string {
   return `${Math.round(pct)}%`;
 }
 
+function truncateTitle(title: string, maxChars = 15): string {
+  const chars = Array.from(title);
+  return chars.length > maxChars ? chars.slice(0, maxChars).join('') : title;
+}
+
 function timeElapsedPct(durationMs: number | null | undefined, resetMs: number | null | undefined): number | null {
   if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
   return Math.max(0, Math.min(100, ((durationMs - resetMs) / durationMs) * 100));
@@ -51,6 +56,7 @@ interface Props {
   pendingLimitTitle?: string;
   cacheMetricTitle?: string;
   durationMs?: number;
+  accountTooltip?: string;
 }
 
 function TokenDotRow({ label, value, color }: { label: string; value: number; color: string }) {
@@ -186,6 +192,7 @@ function TokenStatsCard({
   pendingLimitTitle,
   cacheMetricTitle,
   durationMs,
+  accountTooltip,
 }: Props) {
   const C = useTheme();
 
@@ -221,6 +228,8 @@ function TokenStatsCard({
   const showSavings = stats.cacheSavingsUSD > 0.005;
   const breakdownTokens = stats.inputTokens + stats.outputTokens + stats.cacheCreationTokens + stats.cacheReadTokens;
   const displayTitle = `${provider} ${period}`;
+  const visibleTitle = truncateTitle(displayTitle);
+  const displayTitleTooltip = accountTooltip ? `${displayTitle} · ${accountTooltip}` : displayTitle;
   const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'Syncing') : limitSourceLabel;
   const displayLimitSourceTitle = pendingLimitTitle ?? limitSourceTitle ?? displayLimitSourceLabel ?? '';
   const cachedDisconnected = apiConnected === false && limitSourceLabel === 'Cache';
@@ -255,8 +264,8 @@ function TokenStatsCard({
         background: C.bgCard,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span title={displayTitle} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {displayTitle}
+          <span title={displayTitleTooltip} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {visibleTitle}
             {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
             )}

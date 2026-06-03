@@ -74,6 +74,14 @@ test('settings normalize quota target display modes by target id', () => {
   assert.deepEqual(DEFAULT_SETTINGS.quotaTargetOrder, []);
 });
 
+test('Antigravity quota duration pace setting defaults off and normalizes boolean values', () => {
+  assert.equal(DEFAULT_SETTINGS.antigravityQuotaDurationPaceEnabled, false);
+  assert.equal(normalizeSettings({}).antigravityQuotaDurationPaceEnabled, false);
+  assert.equal(normalizeSettings({ antigravityQuotaDurationPaceEnabled: true }).antigravityQuotaDurationPaceEnabled, true);
+  assert.equal(normalizeSettings({ antigravityQuotaDurationPaceEnabled: false }).antigravityQuotaDurationPaceEnabled, false);
+  assert.equal(normalizeSettings({ antigravityQuotaDurationPaceEnabled: 'true' }).antigravityQuotaDurationPaceEnabled, false);
+});
+
 test('renderer settings model exposes enabledProviders as editable state', () => {
   const types = fs.readFileSync('src/renderer/types.ts', 'utf8');
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
@@ -81,10 +89,13 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(types, /enabledProviders: Array<'claude' \| 'codex' \| 'antigravity'>/);
   assert.match(types, /quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>/);
   assert.match(types, /quotaTargetOrder: string\[\]/);
+  assert.match(types, /antigravityQuotaDurationPaceEnabled: boolean/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
   assert.match(settingsView, /'enabledProviders'/);
   assert.match(settingsView, /'quotaTargetModes'/);
   assert.match(settingsView, /'quotaTargetOrder'/);
+  assert.match(settingsView, /'antigravityQuotaDurationPaceEnabled'/);
+  assert.match(settingsView, /Antigravity quota pace/);
   assert.doesNotMatch(settingsView, /'plan'/);
   assert.doesNotMatch(settingsView, /'provider'/);
 });
