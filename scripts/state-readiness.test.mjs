@@ -397,6 +397,15 @@ test('header today cache metric uses today aggregates instead of the 5-hour wind
   assert.match(source, /const saved = isAll \? usage\.allTimeSavedUSD : usage\.todayCacheSavingsUSD/);
 });
 
+test('rich quota card titles truncate visually while preserving full hover title', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'components', 'TokenStatsCard.tsx'), 'utf8');
+
+  assert.match(source, /title=\{displayTitleTooltip\}/);
+  assert.doesNotMatch(source, /visibleTitle/);
+  assert.doesNotMatch(source, /truncateTitle/);
+  assert.match(source, /\{displayTitle\}/);
+});
+
 test('tray and header status derive provider data from enabled providers', () => {
   const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
   const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
@@ -426,6 +435,25 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   assert.match(rendererSource, /apiStatusLabel/);
   assert.match(rendererSource, /formatWarmupStatus/);
   assert.match(rendererSource, /resetLabel=\{card\.visualKind === 'percentOnly' \? undefined : card\.quota\.resetLabel\}/);
+});
+
+test('history warmup ignores recent summary truncation but keeps real partial scans', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+
+  assert.match(source, /summaryPartial = loaded\.scanPartial \|\| \(hasExcludedProjects && loaded\.sourceListPartial\)/);
+  assert.match(source, /partialHistoryScan = ledgerRefresh\.partial \|\| summaryPartial/);
+  assert.doesNotMatch(source, /partialHistoryScan = effectiveScanBudgetMs !== null/);
+  assert.match(source, /sourceListPartial/);
+  assert.match(source, /scanPartial/);
+});
+
+test('Antigravity quota pace setting triggers quota refresh on save', () => {
+  const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+
+  assert.match(source, /quotaAffectingSettingsChanged/);
+  assert.match(source, /antigravityQuotaDurationPaceEnabled/);
+  assert.match(source, /quotaSettingsChanged && this\.enabledProviderSet\(settings\)\.has\('antigravity'\)/);
+  assert.match(source, /force: true/);
 });
 
 test('README release blocks stay compact and screenshots are full width', () => {

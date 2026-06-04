@@ -205,7 +205,7 @@ test('ledger usage query exposes cached Antigravity model window stats', () => {
   };
 
   const usage = computeUsageFromLedger(snapshot, {}, now, undefined, providerQuotas);
-  const modelWindow = usage.modelWindows.antigravity.windows['model.gemini-3-pro-high']['Gemini 3 Pro'];
+  const modelWindow = usage.modelWindows.antigravity.windows.h5['Gemini 3 Pro'];
 
   assert.equal(modelWindow.inputTokens, 100);
   assert.equal(modelWindow.outputTokens, 20);

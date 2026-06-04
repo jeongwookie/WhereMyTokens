@@ -809,6 +809,17 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
 
 function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel }) {
   const C = useTheme();
+  const tokenRows = group.rows.filter(row => row.stats.totalTokens > 0);
+  const tokenBadge = tokenRows.length === 0
+    ? null
+    : {
+      value: tokenRows.length === 1
+        ? tokenRows[0].stats.totalTokens
+        : tokenRows.reduce((max, row) => Math.max(max, row.stats.totalTokens), 0),
+      title: tokenRows.length === 1
+        ? 'Total tokens for this quota target'
+        : 'Largest window token count for this quota target',
+    };
   return (
     <div style={{ padding: '6px 12px', borderTop: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, minWidth: 0 }}>
@@ -827,7 +838,7 @@ function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel })
         >
           {group.label}
         </span>
-        {group.badges.length > 0 && (
+        {(group.badges.length > 0 || tokenBadge) && (
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
             {group.badges.map(badge => (
               <span
@@ -846,6 +857,24 @@ function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel })
                 {badge.label}
               </span>
             ))}
+            {tokenBadge && (
+              <span
+                title={tokenBadge.title}
+                style={{
+                  background: C.bgRow,
+                  color: C.textDim,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 3,
+                  padding: '1px 4px',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  fontFamily: C.fontMono,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {fmtTokens(tokenBadge.value)} tok
+              </span>
+            )}
           </span>
         )}
       </div>
@@ -893,6 +922,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
           {richRow.cards.map((cardView, cardIndex) => {
             const { group, row: card } = cardView;
             const source = limitSourceDisplay(card.quota);
+            const accountTooltip = providerQuotas[cardView.provider]?.accountTooltip;
             return (
               <TokenStatsCard
                 key={cardView.key}
@@ -914,6 +944,7 @@ const PlanUsagePanel = React.memo(function PlanUsagePanel({
                 pendingLimitTitle={card.pendingTitle}
                 cacheMetricTitle={card.cacheMetricTitle}
                 durationMs={card.durationMs}
+                accountTooltip={accountTooltip}
                 hideCost={card.hideCost}
                 hero
                 borderRight={richRow.cards.length > 1 && cardIndex === 0}

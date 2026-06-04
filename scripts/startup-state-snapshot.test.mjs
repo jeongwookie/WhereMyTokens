@@ -180,6 +180,20 @@ test('StateManager sanitizes restored provider quota snapshots', () => {
         usage: { raw: true },
         authMtimeMs: 123,
       },
+      antigravity: {
+        provider: 'antigravity',
+        source: 'localRpc',
+        capturedAt: now,
+        accountLabel: 'pe***@example.com',
+        accountTooltip: 'person@example.com',
+        models: [{
+          model: 'MODEL_GEMINI_3_PRO',
+          label: 'Gemini 3 Pro',
+          usageModel: 'Gemini 3 Pro',
+          statsWindowKey: 'model.MODEL_GEMINI_3_PRO',
+          remainingPct: 42,
+        }],
+      },
     },
   }, now);
 
@@ -192,6 +206,10 @@ test('StateManager sanitizes restored provider quota snapshots', () => {
   assert.equal(codexQuota.models, undefined);
   assert.equal('usage' in codexQuota, false);
   assert.equal('authMtimeMs' in codexQuota, false);
+  const antigravityQuota = manager.getState().providerQuotas.antigravity;
+  assert.equal(antigravityQuota.accountTooltip, 'pe***@example.com');
+  assert.equal(antigravityQuota.models[0].usageModel, 'Gemini 3 Pro');
+  assert.equal(antigravityQuota.models[0].statsWindowKey, 'model.MODEL_GEMINI_3_PRO');
 });
 
 test('startup snapshot normalizer rejects malformed session lists', () => {

@@ -230,11 +230,16 @@ test('provider changes refresh recent summaries without clearing the JSONL cache
   const settingsMatch = src.match(/applySettingsChange\(\) \{([\s\S]*?)\n  private async logMemorySnapshot/);
   assert.ok(settingsMatch);
   const settingsBody = settingsMatch[1];
+  const providerStart = settingsBody.indexOf('if (providerChanged) {');
+  const providerReturn = settingsBody.indexOf('      return;', providerStart);
+  assert.notEqual(providerStart, -1);
+  assert.notEqual(providerReturn, -1);
+  const providerBranch = settingsBody.slice(providerStart, providerReturn);
   assert.doesNotMatch(settingsBody, /jsonlCache\.clearAll/);
   assert.match(settingsBody, /reason: 'settings'/);
   assert.match(settingsBody, /includeFullHistory: true/);
   assert.match(settingsBody, /scanBudgetMs: StateManager\.FOREGROUND_SCAN_BUDGET_MS/);
-  assert.doesNotMatch(settingsBody, /reason: 'settings'[\s\S]*force: true/);
+  assert.doesNotMatch(providerBranch, /force: true/);
 });
 
 test('history warmup imports ledger sources instead of expanding summary scans to full history', () => {

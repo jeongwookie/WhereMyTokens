@@ -244,12 +244,22 @@ function addStats(target: WindowStats, stats: WindowStats): void {
     : 0;
 }
 
-function fallbackModelStatsWindowKey(model: ProviderModelQuota): string | null {
-  if (model.statsWindowKey) return model.statsWindowKey;
-  if (model.durationMs === FIVE_HOURS_MS) return 'h5';
-  if (model.durationMs === WEEK_MS) return 'week';
-  if (model.resetMs != null) return model.resetMs <= FIVE_HOURS_MS ? 'h5' : 'week';
-  return null;
+function fallbackModelStatsWindowKeys(model: ProviderModelQuota): string[] {
+  const keys: string[] = [];
+  if (model.statsWindowKey) keys.push(model.statsWindowKey);
+  if (model.durationMs === FIVE_HOURS_MS) keys.push('h5');
+  else if (model.durationMs === WEEK_MS) keys.push('week');
+  else if (model.resetMs != null) keys.push(model.resetMs <= FIVE_HOURS_MS ? 'h5' : 'week');
+  return [...new Set(keys)];
+}
+
+function hasStatsSignal(stats: WindowStats): boolean {
+  return stats.totalTokens > 0
+    || stats.requestCount > 0
+    || stats.inputTokens > 0
+    || stats.outputTokens > 0
+    || stats.cacheCreationTokens > 0
+    || stats.cacheReadTokens > 0;
 }
 
 function modelStats(
@@ -257,20 +267,21 @@ function modelStats(
   provider: ProviderId,
   model: ProviderModelQuota,
 ): WindowStats {
-  const windowKey = fallbackModelStatsWindowKey(model);
-  if (!windowKey) return EMPTY_WINDOW_STATS;
-  const windowModels = usage.modelWindows?.[provider]?.windows?.[windowKey];
-  if (!windowModels) return EMPTY_WINDOW_STATS;
   const candidateNames = new Set(
     [model.usageModel, model.label, model.model]
       .filter((value): value is string => typeof value === 'string' && value.length > 0),
   );
-  const stats = { ...EMPTY_WINDOW_STATS };
-  for (const candidate of candidateNames) {
-    const candidateStats = windowModels[candidate];
-    if (candidateStats) addStats(stats, candidateStats);
+  for (const windowKey of fallbackModelStatsWindowKeys(model)) {
+    const windowModels = usage.modelWindows?.[provider]?.windows?.[windowKey];
+    if (!windowModels) continue;
+    const stats = { ...EMPTY_WINDOW_STATS };
+    for (const candidate of candidateNames) {
+      const candidateStats = windowModels[candidate];
+      if (candidateStats) addStats(stats, candidateStats);
+    }
+    if (hasStatsSignal(stats)) return stats;
   }
-  return stats;
+  return EMPTY_WINDOW_STATS;
 }
 
 function buildGroupRows(

@@ -426,6 +426,8 @@ function sanitizeProviderModelQuota(value: unknown): ProviderModelQuota | null {
   return {
     model,
     label,
+    usageModel: quotaString(record.usageModel),
+    statsWindowKey: quotaString(record.statsWindowKey),
     remainingPct: Math.max(0, Math.min(100, finiteQuotaNumber(record.remainingPct) ?? 0)),
     resetMs: finiteQuotaNumber(record.resetMs) ?? (record.resetMs === null ? null : undefined),
     groupKey: quotaString(record.groupKey),
@@ -460,6 +462,7 @@ function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): Pr
     source: quotaSource(record.source),
     capturedAt: finiteQuotaNumber(record.capturedAt) ?? 0,
     accountLabel: quotaString(record.accountLabel),
+    accountTooltip: quotaString(record.accountLabel),
     planName: quotaString(record.planName),
     windows: sanitizeQuotaWindows(record.windows),
     models: sanitizeProviderModels(record.models),
@@ -794,6 +797,10 @@ export class StateManager {
     const previousProviders = this.enabledProviderSet(previous);
     if (nextProviders.size !== previousProviders.size) return true;
     return [...nextProviders].some(provider => !previousProviders.has(provider));
+  }
+
+  private quotaAffectingSettingsChanged(next: AppSettings, previous: AppSettings): boolean {
+    return next.antigravityQuotaDurationPaceEnabled !== previous.antigravityQuotaDurationPaceEnabled;
   }
 
   private sourceBackedProviders(settings: AppSettings): SourceBackedProviderAdapter[] {
@@ -2035,7 +2042,8 @@ export class StateManager {
       this.startupFreshComplete = true;
       this.jsonlCache.flushPersisted();
       const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
-      const partialHistoryScan = ledgerRefresh.partial || loaded.partial;
+      const summaryPartial = loaded.scanPartial || (hasExcludedProjects && loaded.sourceListPartial);
+      const partialHistoryScan = ledgerRefresh.partial || summaryPartial;
       const nextSummaries = partialHistoryScan && initialRefreshDone
         ? new Map([...this.summaries, ...loaded.summaries])
         : loaded.summaries;
@@ -2108,6 +2116,8 @@ export class StateManager {
           ledgerScannedFiles: ledgerRefresh.scannedFiles,
           partial: partialHistoryScan,
           summaryPartial: loaded.partial,
+          summarySourcePartial: loaded.sourceListPartial,
+          summaryScanPartial: loaded.scanPartial,
           ledgerPartial: ledgerRefresh.partial,
           scanBudgetMs: effectiveScanBudgetMs,
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
@@ -2166,6 +2176,8 @@ export class StateManager {
         ledgerScannedFiles: ledgerRefresh.scannedFiles,
         partial: partialHistoryScan,
         summaryPartial: loaded.partial,
+        summarySourcePartial: loaded.sourceListPartial,
+        summaryScanPartial: loaded.scanPartial,
         ledgerPartial: ledgerRefresh.partial,
         scanBudgetMs: effectiveScanBudgetMs,
         ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
@@ -2624,6 +2636,8 @@ export class StateManager {
     codexRateLimits: SessionSnapshot['codexRateLimits'] | null;
     scannedFiles: number;
     partial: boolean;
+    sourceListPartial: boolean;
+    scanPartial: boolean;
   }> {
     const settings = this.getSettings();
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
@@ -2632,7 +2646,8 @@ export class StateManager {
     let sessionCount = 0;
     let codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
     let scannedFiles = 0;
-    let partial = false;
+    let sourceListPartial = false;
+    let scanPartial = false;
     const startedAt = Date.now();
     const startupPriority = new Set<string>();
     for (const filePath of priorityFiles ?? []) startupPriority.add(normalizeFileKey(filePath));
@@ -2691,7 +2706,7 @@ export class StateManager {
           const cachedLoose = allowPersistedReuse ? this.jsonlCache.get(source.filePath) : null;
           if (cachedLoose && cachedLoose.mtimeMs === stat.mtimeMs && cachedLoose.size === stat.size) return cachedLoose;
           if (!priority && shouldStopForBudget()) {
-            partial = true;
+            scanPartial = true;
             return null;
           }
         }
@@ -2703,7 +2718,7 @@ export class StateManager {
         }
 
         if (!priority && shouldStopForBudget()) {
-          partial = true;
+          scanPartial = true;
           const fallback = this.summaries.get(normalizedPath) ?? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size);
           return fallback;
         }
@@ -2726,7 +2741,7 @@ export class StateManager {
       const sourceList = includeFullHistory
         ? provider.listAllSources(ctx)
         : provider.listRecentSources(ctx, this.startupLimitForProvider(provider.id));
-      partial = partial || sourceList.truncated;
+      sourceListPartial = sourceListPartial || sourceList.truncated;
       for (const source of sourceList.sources) {
         const key = normalizeFileKey(source.filePath);
         if (!sourcesByPath.has(key)) sourcesByPath.set(key, source);
@@ -2738,7 +2753,7 @@ export class StateManager {
       for (const source of sources) {
         const priority = shouldPrioritize(source);
         if (!priority && shouldStopForBudget()) {
-          partial = true;
+          scanPartial = true;
           break;
         }
         if (provider.isExcludedSource?.(source, isExcluded)) {
@@ -2769,7 +2784,7 @@ export class StateManager {
     const elapsedMs = Date.now() - startedAt;
     const remainingBudgetMs = budgetMs === null ? null : Math.max(0, budgetMs - elapsedMs);
     if (remainingBudgetMs === 0) {
-      partial = true;
+      scanPartial = true;
     } else {
       const genericCtx = budgetMs === null
         ? ctx
@@ -2785,11 +2800,20 @@ export class StateManager {
         summaries.set(key, summary);
       }
       scannedFiles += genericUsage.scannedFiles;
-      partial = partial || genericUsage.partial;
+      scanPartial = scanPartial || genericUsage.partial;
       ledgerSources = genericUsage.ledgerSources;
     }
 
-    return { summaries, ledgerSources, sessionCount, codexRateLimits, scannedFiles, partial };
+    return {
+      summaries,
+      ledgerSources,
+      sessionCount,
+      codexRateLimits,
+      scannedFiles,
+      partial: sourceListPartial || scanPartial,
+      sourceListPartial,
+      scanPartial,
+    };
   }
 
   private async refreshChangedSummaries(changedFiles: Set<string>): Promise<void> {
@@ -3116,6 +3140,7 @@ export class StateManager {
   applySettingsChange() {
     const settings = this.getSettings();
     const providerChanged = this.providerSelectionChanged(settings, this.state.settings);
+    const quotaSettingsChanged = this.quotaAffectingSettingsChanged(settings, this.state.settings);
     if (providerChanged) {
       this.summaries.clear();
       clearSessionMetadataCache();
@@ -3178,6 +3203,14 @@ export class StateManager {
       lastUpdated: Date.now(),
     };
     this.publishState();
+    if (quotaSettingsChanged && this.enabledProviderSet(settings).has('antigravity')) {
+      void this.requestRefresh({
+        mode: 'heavy',
+        reason: 'settings',
+        force: true,
+        scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+      });
+    }
   }
 
   private async logMemorySnapshot(label: string, scannedFiles = 0): Promise<void> {

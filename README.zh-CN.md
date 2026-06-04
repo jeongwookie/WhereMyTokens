@@ -263,6 +263,8 @@ WhereMyTokens 可以通过 `127.0.0.1` 上运行中的 Antigravity IDE local lan
 - 来自 `GetCascadeTrajectoryGeneratorMetadata` 的 token metadata，并带有有界 full-trajectory fallback
 - 对可识别的本地模型 metadata 显示 API 等价费用估算；未定价模型保持为 0 或隐藏
 
+Antigravity 模型 quota 卡片默认仅显示百分比。在 Settings 中启用 **Antigravity quota pace** 后，会根据 reset time 估算 5h/weekly pacing。
+
 Antigravity 支持保持 local-only。它不会读取 Google OAuth credential、refresh token、Google cloud usage endpoint、credits 或离线 `state.vscdb` 数据。
 
 ---

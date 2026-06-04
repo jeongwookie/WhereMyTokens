@@ -97,6 +97,7 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'excludedProjects',
   'quotaTargetModes',
   'quotaTargetOrder',
+  'antigravityQuotaDurationPaceEnabled',
   'compactWidgetEnabled',
   'compactWidgetWaitingAnimationEnabled',
   'theme',
@@ -108,6 +109,7 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     ...settings,
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
+    antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
   };
@@ -486,6 +488,22 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
             })}
           </div>
         </div>
+        {enabledProvidersFromSettings(s).includes('antigravity') && (
+          <div style={row}>
+            <div>
+              <div style={labelStyle}>Antigravity quota pace estimate</div>
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+                Estimate 5h or weekly pacing from reset times; off keeps Antigravity model quotas percent-only
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              style={chk}
+              checked={s.antigravityQuotaDurationPaceEnabled}
+              onChange={e => setS({ ...s, antigravityQuotaDurationPaceEnabled: e.target.checked })}
+            />
+          </div>
+        )}
         {quotaTargetOptions.length > 0 && (
           <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
             <div style={{ ...labelStyle, marginBottom: 6 }}>Quota display</div>

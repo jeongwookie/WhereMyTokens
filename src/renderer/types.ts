@@ -237,6 +237,7 @@ export interface ProviderQuotaSnapshot {
   source: ProviderQuotaSource;
   capturedAt: number;
   accountLabel?: string;
+  accountTooltip?: string;
   planName?: string;
   windows?: Record<string, ProviderQuotaWindow>;
   models?: ProviderModelQuota[];
@@ -262,6 +263,7 @@ export interface AppSettings {
   excludedProjects: string[];
   quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
   quotaTargetOrder: string[];
+  antigravityQuotaDurationPaceEnabled: boolean;
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
   compactWidgetBounds: { x: number; y: number } | null;

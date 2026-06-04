@@ -287,9 +287,13 @@ export function computeUsage(
   const addProviderWindowEntry = (entry: CompactRecentEntry, timestampMs: number) => {
     if (!isProviderId(entry.provider)) return;
     const usage = getProviderWindowUsage(entry.provider);
+    const addedWindowKeys = new Set<string>();
     for (const target of providerWindowTargets.get(entry.provider) ?? []) {
       if (timestampMs < target.startMs) continue;
       if (!targetAcceptsModel(target, entry.model)) continue;
+      const windowModelKey = `${target.windowKey}\0${entry.model}`;
+      if (addedWindowKeys.has(windowModelKey)) continue;
+      addedWindowKeys.add(windowModelKey);
       usage.windows[target.windowKey] ??= emptyWindow();
       addEntry(usage.windows[target.windowKey], entry);
       addEntry(getProviderModelWindow(entry.provider, target.windowKey, entry.model), entry);

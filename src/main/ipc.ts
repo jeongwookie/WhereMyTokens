@@ -41,6 +41,7 @@ export interface AppSettings {
   excludedProjects: string[];
   quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
   quotaTargetOrder: string[];
+  antigravityQuotaDurationPaceEnabled: boolean;
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
   compactWidgetBounds: CompactWidgetBounds | null;
@@ -200,6 +201,9 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
     const quotaTargetOrder = normalizeQuotaTargetOrder(record.quotaTargetOrder);
     if (quotaTargetOrder) next.quotaTargetOrder = quotaTargetOrder;
   }
+  if (typeof record.antigravityQuotaDurationPaceEnabled === 'boolean') {
+    next.antigravityQuotaDurationPaceEnabled = record.antigravityQuotaDurationPaceEnabled;
+  }
   if (typeof record.compactWidgetEnabled === 'boolean') next.compactWidgetEnabled = record.compactWidgetEnabled;
   if (typeof record.compactWidgetWaitingAnimationEnabled === 'boolean') next.compactWidgetWaitingAnimationEnabled = record.compactWidgetWaitingAnimationEnabled;
   if (Object.prototype.hasOwnProperty.call(record, 'compactWidgetBounds')) {
@@ -243,6 +247,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   excludedProjects: [],
   quotaTargetModes: {},
   quotaTargetOrder: [],
+  antigravityQuotaDurationPaceEnabled: false,
   compactWidgetEnabled: false,
   compactWidgetWaitingAnimationEnabled: false,
   compactWidgetBounds: null,

@@ -4,7 +4,7 @@ import type {
   ProviderQuotaSnapshot,
 } from '../types';
 import { defaultQuotaModeForModel, normalizeAntigravityModel } from './models';
-import { parseTimestampMs } from './pathUtils';
+import { maskEmail, parseTimestampMs } from './pathUtils';
 import { resolveAntigravityPriceForModel } from './pricing';
 import { findAntigravityServersCached, getTrajectorySummariesCached, getUserStatusCached } from './runtimeCache';
 import type {
@@ -13,6 +13,13 @@ import type {
   AntigravityTrajectorySummariesResponse,
   AntigravityUserStatusResponse,
 } from './types';
+
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface AntigravityQuotaParseOptions {
+  inferDurationFromReset?: boolean;
+}
 
 function deadlineMs(ctx: ProviderContext): number {
   return Date.now() + Math.min(ctx.scanBudgetMs ?? 8_000, 8_000);
@@ -37,9 +44,15 @@ function resetMsFromValue(value: unknown, nowMs: number): number | null {
   return Number.isFinite(parsed) ? Math.max(0, parsed - nowMs) : null;
 }
 
+function durationMsFromReset(resetMs: number | null, enabled: boolean): number | undefined {
+  if (!enabled || resetMs == null || resetMs <= 0) return undefined;
+  return resetMs <= FIVE_HOURS_MS ? FIVE_HOURS_MS : WEEK_MS;
+}
+
 export function parseAntigravityModelQuotas(
   configs: AntigravityModelConfig[],
   nowMs: number,
+  options: AntigravityQuotaParseOptions = {},
 ): ProviderModelQuota[] {
   return configs
     .filter(config => !!config.quotaInfo)
@@ -49,6 +62,7 @@ export function parseAntigravityModelQuotas(
       const model = config.modelOrAlias?.model || config.label || 'unknown';
       const label = config.label || model;
       const resetMs = resetMsFromValue(config.quotaInfo?.resetTime, nowMs);
+      const durationMs = durationMsFromReset(resetMs, options.inferDurationFromReset === true);
       const usageModel = normalizeAntigravityModel(model, new Map([[model, label]]));
       return {
         model,
@@ -58,8 +72,9 @@ export function parseAntigravityModelQuotas(
         resetMs,
         defaultMode: defaultQuotaModeForModel(label, model),
         usageModel,
-        visualKind: 'percentOnly',
+        visualKind: durationMs ? 'pace' : 'percentOnly',
         cacheMetricTitle: 'Cache read / prompt tokens',
+        durationMs,
         hideCost: !resolveAntigravityPriceForModel(usageModel, `${model} ${label}`),
       };
     })
@@ -86,23 +101,33 @@ interface CandidateQuota {
 
 function candidateScore(candidate: CandidateQuota): number {
   let score = 0;
-  if (candidate.newestCascadeMs > 0) score += Math.min(candidate.newestCascadeMs / 1000, 9_000_000);
+  if (candidate.newestCascadeMs > 0) score += candidate.newestCascadeMs;
   if (candidate.server.processStartedAtMs) score += candidate.server.processStartedAtMs / 10_000;
   return score;
 }
 
-function snapshotFromStatus(response: AntigravityUserStatusResponse, nowMs: number): ProviderQuotaSnapshot {
+function snapshotFromStatus(
+  response: AntigravityUserStatusResponse,
+  nowMs: number,
+  options: AntigravityQuotaParseOptions = {},
+): ProviderQuotaSnapshot {
   const userStatus = response.userStatus;
   const rawConfigs = userStatus?.cascadeModelConfigData?.clientModelConfigs;
   const configs = Array.isArray(rawConfigs)
     ? rawConfigs.filter((config): config is AntigravityModelConfig => !!config && typeof config === 'object' && !Array.isArray(config))
     : [];
+  const accountEmail = typeof userStatus?.email === 'string' && userStatus.email.trim().length > 0
+    ? userStatus.email.trim()
+    : undefined;
+  const accountLabel = maskEmail(accountEmail);
   return {
     provider: 'antigravity',
     source: 'localRpc',
     capturedAt: nowMs,
+    accountLabel,
+    accountTooltip: accountLabel,
     planName: userStatus?.planStatus?.planInfo?.planName,
-    models: parseAntigravityModelQuotas(configs, nowMs),
+    models: parseAntigravityModelQuotas(configs, nowMs, options),
     status: {
       connected: true,
       code: 'connected',
@@ -154,7 +179,9 @@ export async function fetchAntigravityQuotaFromServers(
         : await getTrajectorySummariesCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));
       candidates.push({
         server,
-        snapshot: snapshotFromStatus(status, ctx.nowMs),
+        snapshot: snapshotFromStatus(status, ctx.nowMs, {
+          inferDurationFromReset: ctx.settings.antigravityQuotaDurationPaceEnabled === true,
+        }),
         newestCascadeMs: newestCascadeMs(trajectories),
       });
     } catch {

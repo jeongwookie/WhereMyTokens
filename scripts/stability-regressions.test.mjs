@@ -1345,7 +1345,8 @@ test('foreground and manual refresh use budgeted ledger-backed history scans', (
   assert.match(heavyBody, /const summaryForce = force && hasExcludedProjects/);
   assert.match(heavyBody, /const summaryIncludeFullHistory = includeFullHistory && hasExcludedProjects/);
   assert.match(heavyBody, /this\.loadProviderSummaries\(summaryForce, effectiveScanBudgetMs, priorityFiles, summaryIncludeFullHistory\)/);
-  assert.match(heavyBody, /const partialHistoryScan = ledgerRefresh\.partial \|\| loaded\.partial/);
+  assert.match(heavyBody, /const summaryPartial = loaded\.scanPartial \|\| \(hasExcludedProjects && loaded\.sourceListPartial\)/);
+  assert.match(heavyBody, /const partialHistoryScan = ledgerRefresh\.partial \|\| summaryPartial/);
   assert.match(heavyBody, /const nextSummaries = partialHistoryScan && initialRefreshDone/);
   assert.match(heavyBody, /new Map\(\[\.\.\.this\.summaries, \.\.\.loaded\.summaries\]\)/);
   assert.match(heavyBody, /this\.mergeCodexRateLimits\(this\.codexRateLimits, loaded\.codexRateLimits \?\? undefined\)/);
