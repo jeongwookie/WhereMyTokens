@@ -253,12 +253,13 @@ function TokenStatsCard({
   if (hero && showLimitBar) {
     return (
       <div style={{
+        minWidth: 0,
         borderRight: borderRight ? `1px solid ${C.border}` : 'none',
         padding: '8px 12px 8px',
         background: C.bgCard,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-          <span title={displayTitleTooltip} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span title={displayTitleTooltip} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'clip', whiteSpace: 'nowrap' }}>
             {displayTitle}
             {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
