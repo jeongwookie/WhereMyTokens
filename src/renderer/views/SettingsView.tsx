@@ -491,9 +491,9 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         {enabledProvidersFromSettings(s).includes('antigravity') && (
           <div style={row}>
             <div>
-              <div style={labelStyle}>Antigravity quota pace</div>
+              <div style={labelStyle}>Antigravity quota pace estimate</div>
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-                Infer 5h or weekly pacing from reset times; off keeps Antigravity model quotas percent-only
+                Estimate 5h or weekly pacing from reset times; off keeps Antigravity model quotas percent-only
               </div>
             </div>
             <input

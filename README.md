@@ -264,6 +264,8 @@ WhereMyTokens can read a running, signed-in Antigravity IDE through its local la
 - Token metadata from `GetCascadeTrajectoryGeneratorMetadata`, with bounded full-trajectory fallback
 - API-equivalent cost estimates for recognized local model metadata; unpriced models stay zero/hidden
 
+Antigravity model quota cards are percent-only by default. Enable **Antigravity quota pace** in Settings to estimate 5h/weekly pacing from reset times.
+
 Antigravity support is local-only. It does not read Google OAuth credentials, refresh tokens, Google cloud usage endpoints, credits, or offline `state.vscdb` data.
 
 ## How numbers work

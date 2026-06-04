@@ -119,12 +119,13 @@ function snapshotFromStatus(
   const accountEmail = typeof userStatus?.email === 'string' && userStatus.email.trim().length > 0
     ? userStatus.email.trim()
     : undefined;
+  const accountLabel = maskEmail(accountEmail);
   return {
     provider: 'antigravity',
     source: 'localRpc',
     capturedAt: nowMs,
-    accountLabel: maskEmail(accountEmail),
-    accountTooltip: accountEmail,
+    accountLabel,
+    accountTooltip: accountLabel,
     planName: userStatus?.planStatus?.planInfo?.planName,
     models: parseAntigravityModelQuotas(configs, nowMs, options),
     status: {

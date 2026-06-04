@@ -318,9 +318,13 @@ export function computeUsageFromLedger(
   const addProviderWindowAggregate = (row: KeyedAggregate, aggregate: UsageAggregate): void => {
     if (!isProviderId(row.provider)) return;
     const usage = getProviderWindowUsage(row.provider);
+    const addedWindowKeys = new Set<string>();
     for (const target of providerWindowTargets.get(row.provider) ?? []) {
       if (row.timestampMs < target.startMs) continue;
       if (!targetAcceptsModel(target, row.model)) continue;
+      const windowModelKey = `${target.windowKey}\0${row.model}`;
+      if (addedWindowKeys.has(windowModelKey)) continue;
+      addedWindowKeys.add(windowModelKey);
       usage.windows[target.windowKey] ??= emptyWindow();
       addAggregate(usage.windows[target.windowKey], aggregate);
       addAggregate(getProviderModelWindow(row.provider, target.windowKey, row.model), aggregate);

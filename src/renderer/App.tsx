@@ -332,7 +332,7 @@ function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): P
     source: isQuotaSource(record.source) ? record.source : 'cache',
     capturedAt: typeof record.capturedAt === 'number' && Number.isFinite(record.capturedAt) ? record.capturedAt : 0,
     accountLabel: typeof record.accountLabel === 'string' ? record.accountLabel : undefined,
-    accountTooltip: typeof record.accountTooltip === 'string' ? record.accountTooltip : undefined,
+    accountTooltip: typeof record.accountLabel === 'string' ? record.accountLabel : undefined,
     planName: typeof record.planName === 'string' ? record.planName : undefined,
     windows: Object.keys(windows).length > 0 ? windows : undefined,
     models: models && models.length > 0 ? models : undefined,

@@ -359,6 +359,54 @@ test('provider reset hints apply to generic provider windows', () => {
   assert.equal(ledger.byProvider.antigravity.windows.week.totalTokens, 300);
 });
 
+test('timed model quota windows count overlapping model names once', () => {
+  const now = Date.parse('2026-05-25T12:00:00.000Z');
+  const quotas = {
+    antigravity: {
+      provider: 'antigravity',
+      source: 'localRpc',
+      capturedAt: now,
+      models: [
+        {
+          model: 'MODEL_GEMINI_3_PRO',
+          label: 'Gemini 3 Pro',
+          usageModel: 'Gemini 3 Pro',
+          remainingPct: 80,
+          resetMs: 4 * 60 * 60 * 1000,
+          durationMs: 5 * 60 * 60 * 1000,
+        },
+        {
+          model: 'MODEL_GEMINI_3_PRO_PREVIEW',
+          label: 'Gemini 3 Pro Preview',
+          usageModel: 'Gemini 3 Pro Preview',
+          remainingPct: 70,
+          resetMs: 4 * 60 * 60 * 1000,
+          durationMs: 5 * 60 * 60 * 1000,
+        },
+      ],
+    },
+  };
+  const originalNow = Date.now;
+  Date.now = () => now;
+  try {
+    const summaryUsage = computeUsage([
+      summary('antigravity', [
+        usageEntry('antigravity', 'Gemini 3 Pro Preview', 300, now - 60_000),
+      ]),
+    ], {}, undefined, quotas);
+
+    assert.equal(summaryUsage.byProvider.antigravity.windows.h5.totalTokens, 300);
+  } finally {
+    Date.now = originalNow;
+  }
+
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.minuteRecent[minuteKey(now - 60_000, 'antigravity', 'Gemini 3 Pro Preview')] = agg(300);
+  const ledger = computeUsageFromLedger(snapshot, {}, now, undefined, quotas);
+
+  assert.equal(ledger.byProvider.antigravity.windows.h5.totalTokens, 300);
+});
+
 test('Antigravity cache efficiency includes uncached prompt tokens instead of reporting all cache reads as 100%', () => {
   const now = Date.now();
   const promptStats = {

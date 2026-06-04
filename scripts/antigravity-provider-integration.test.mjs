@@ -129,7 +129,11 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
     assert.equal(quota.source, 'localRpc');
     assert.equal(quota.status.connected, true);
     assert.equal(quota.accountLabel, 'pe***@example.com');
+    assert.equal(quota.accountTooltip, 'pe***@example.com');
+    assert.equal(quota.accountTooltip.includes('person@example.com'), false);
     assert.equal(quota.models[0].remainingPct, 80);
+    assert.equal(quota.models[0].usageModel, 'Gemini 3 Pro');
+    assert.equal(quota.models[0].statsWindowKey, 'model.MODEL_GEMINI_3_PRO');
     assert.equal(quota.models[0].durationMs, undefined);
     assert.equal(quota.models[0].visualKind, 'percentOnly');
     assert.equal('credits' in quota, false);
