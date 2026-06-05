@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.18.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.18.2</strong></a>
   ·
   <a href="#características">Características</a>
   ·
@@ -34,7 +34,7 @@
 </p>
 
 <p align="center">
-  <em>v1.18.1 estabiliza el pacing de quota de Antigravity, el masking de cuenta y la sincronización de historial al inicio.</em>
+  <em>v1.18.2 corrige el overflow de títulos largos en Rich quota cards y mantiene el truncado con ellipsis.</em>
 </p>
 
 <p align="center">
@@ -64,11 +64,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 5 jun | Corrige títulos largos en Rich quota cards para que las columnas de Plan Usage sigan alineadas, manteniendo ellipsis y tooltip fallback |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 4 jun | Estabiliza la selección y el pacing de quota de Antigravity, evita bucles de Partial History al inicio, enmascara labels de cuenta y conserva model token stats |
 | **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | 2 jun | Añade soporte local-only para el provider Antigravity con detección de procesos, escaneo de quota/session por local RPC, caché persistente de uso e importación al provider ledger |
 | **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 2 jun | Refactoriza Plan Usage sobre snapshots de provider quota, añade grupos de visualización Rich/Simple/None por target y endurece la restauración/migración de estado quota |
 | **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 27 may | Mantiene el budgeted ledger warmup tras imports full-history truncados o fallidos y evita completion markers obsoletos por provider |
-| **[v1.16.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.0)** | 26 may | Añade el ledger persistente de uso, snapshots de inicio instantáneo y la tarjeta Trend con historial de costos/tokens y líneas netas de git |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -76,9 +76,9 @@
 
 ## Descargar
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.1/WhereMyTokens-v1.18.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-v1.18.2-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -88,7 +88,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.18.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.18.2-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

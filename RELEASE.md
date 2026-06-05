@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.18.2 | 2026-06-05 | Fix Rich quota card title overflow so long provider/model period names no longer stretch Plan Usage columns while preserving ellipsis truncation and tooltip metadata |
 | v1.18.1 | 2026-06-04 | Stabilize Antigravity quota selection, pace display refresh, startup history warmup completion, account label masking, model quota token stats, and overlapping timed model window aggregation |
 | v1.18.0 | 2026-06-02 | Add local-only Antigravity provider support with process discovery, local RPC quota/session scanning, persisted usage cache, cache-savings estimates, provider ledger import, privacy documentation, and quota alert coverage |
 | v1.17.0 | 2026-06-02 | Refactor Plan Usage around provider quota snapshots, add generic quota target display groups, restore legacy provider-setting migration, and harden provider quota state sanitization/fallback UI |
