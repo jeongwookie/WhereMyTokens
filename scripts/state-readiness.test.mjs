@@ -135,6 +135,7 @@ test('rich quota card title uses CSS ellipsis and keeps full title tooltip', asy
   }));
 
   assert.match(html, new RegExp(`title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+  assert.match(html, /<div style="min-width:0;border-right:none;padding:8px 12px 8px;background:#[0-9a-f]{6}">/);
   const titleSpan = html.match(new RegExp(`<span title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" style="([^"]+)"`));
   assert.ok(titleSpan, html);
   const titleText = html.match(new RegExp(`<span title="${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}" style="[^"]+">([^<]+)`));

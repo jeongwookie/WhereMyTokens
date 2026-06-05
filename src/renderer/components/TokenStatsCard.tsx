@@ -253,6 +253,7 @@ function TokenStatsCard({
   if (hero && showLimitBar) {
     return (
       <div style={{
+        minWidth: 0,
         borderRight: borderRight ? `1px solid ${C.border}` : 'none',
         padding: '8px 12px 8px',
         background: C.bgCard,
