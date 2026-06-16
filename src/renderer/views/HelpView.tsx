@@ -208,6 +208,7 @@ function ContentEN() {
       <Divider />
 
       <Section icon={<Activity size={15} />} title="Activity">
+        <div style={{ marginBottom: 5 }}><B>Trend</B> — daily, weekly, or monthly cost/token history with git net-line output. Click a bucket to open provider input/output, thinking/response/tool usage, cache work/billing tokens, and git net-line categories.</div>
         <div style={{ marginBottom: 5 }}><B>7d</B> — 7-day × 24-hour heatmap grid.</div>
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5-month GitHub-style calendar. Hover for date + tokens.</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — Token distribution by hour across the last 30 days.</div>
@@ -327,6 +328,7 @@ function ContentKO() {
       <Divider />
 
       <Section icon={<Activity size={15} />} title="활동 탭">
+        <div style={{ marginBottom: 5 }}><B>Trend</B> — 일/주/월 cost/token 히스토리와 git 순 라인 산출을 함께 보여줍니다. 버킷을 클릭하면 provider별 input/output, thinking/response/tool 사용량, cache work/billing 토큰, git 순 라인 카테고리를 확인할 수 있습니다.</div>
         <div style={{ marginBottom: 5 }}><B>7d</B> — 7일 × 24시간 히트맵 그리드.</div>
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5개월 GitHub 스타일 캘린더. 날짜+토큰 호버.</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 시간대별 토큰 분포 (최근 30일).</div>
@@ -445,6 +447,7 @@ function ContentJA() {
       <Divider />
 
       <Section icon={<Activity size={15} />} title="アクティビティ">
+        <div style={{ marginBottom: 5 }}><B>Trend</B> — 日/週/月の cost/token 履歴と git net-line output を表示します。bucket をクリックすると provider 別 input/output、thinking/response/tool 使用量、cache work/billing token、git net-line category を確認できます。</div>
         <div style={{ marginBottom: 5 }}><B>7d</B> — 7日間 × 24時間のヒートマップ。</div>
         <div style={{ marginBottom: 5 }}><B>5mo</B> — 5ヶ月分の GitHub スタイルカレンダー。ホバーで日付とトークン数を確認。</div>
         <div style={{ marginBottom: 5 }}><B>Hourly</B> — 直近 30 日の時間帯別トークン分布。</div>

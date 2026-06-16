@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe"><strong>v1.18.2 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe"><strong>v1.19.0 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.18.2 は長い Rich quota card title でレイアウトが崩れないよう修正し、ellipsis 表示を維持します。</em>
+  <em>v1.19.0 は Trend bucket をクリックして各 bucket の token の行き先を確認できる breakdown を追加します。</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | クリック可能な Trend breakdown を追加し、provider 別 input/output、thinking/response/tool 使用量、work/billing token、git net-line category を表示 |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 長い Rich quota card title でも Plan Usage の列が崩れないよう修正し、ellipsis の手がかりと tooltip fallback は維持 |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 6/4 | Antigravity quota 選択と pacing を安定化し、起動時の Partial History ループを防ぎ、アカウント label masking と model token stats 表示を強化 |
 | **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | 6/2 | local-only Antigravity provider 対応を追加し、プロセス検出、local RPC quota/session scan、永続 usage cache、provider ledger import を含めました |
 | **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 6/2 | Plan Usage を provider quota snapshot ベースに再構成し、target 別 Rich/Simple/None 表示グループと安全な quota 状態復元・移行を追加 |
-| **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 途中で止まった full-history ledger import や失敗した source があっても budgeted warmup を継続し、古い provider completion marker を避けるよう修正 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-v1.18.2-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-v1.19.0-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -99,7 +99,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.18.2-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.19.0-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -128,7 +128,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **即時起動 snapshot** — 最後に正常表示された UI 状態をすぐに復元し、新しい scan はバックグラウンドで続行
 - **起動にやさしい履歴同期** — 現在のセッションと最近の使用量を先に表示し、古い履歴は budgeted refresh scheduler 経由でバックグラウンド同期され、hotkey popup と UI の応答性を保ちます
 - **永続 usage ledger** — ローカル JSONL 使用量を集計 ledger に保存し、古い合計が JSONL cache eviction に依存しにくくなり、必要に応じて Settings から再構築できます
-- **Trend カード** — 日/週/月の cost/token 履歴に git net-line output を重ねて表示し、欠けている series を 0 として誤表示しません
+- **Trend カード** — 日/週/月の cost/token 履歴に git net-line output を重ね、bucket をクリックすると provider 別 input/output、thinking/response/tool 使用量、work/billing token、git net-line category を breakdown 表示します
 - **アクティビティタブ** — 7 日間ヒートマップ、5 ヶ月カレンダー（GitHub スタイル）、時間帯別分布、4 週間比較
 - **Rhythm タブ** — 時間帯別コスト分布（Morning/Afternoon/Evening/Night）、グラデーションバー、ピーク詳細統計、ローカルタイムゾーン
 - **モデル別分析** — 上位モデルごとのトークン・コスト合計、グラデーションバー

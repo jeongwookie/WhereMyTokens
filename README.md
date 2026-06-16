@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe"><strong>Download v1.18.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe"><strong>Download v1.19.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.18.2 fixes long Rich quota card title overflow while preserving ellipsis truncation.</em>
+  <em>v1.19.0 adds clickable Trend bucket breakdowns that show where each bucket's tokens went.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Version | Date | Highlights |
 |---------|------|-----------|
+| **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | Jun 17 | Add clickable Trend breakdowns with provider input/output, thinking/response/tool usage, cache-aware work/billing tokens, and git net-line categories |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | Jun 5 | Fix long Rich quota card titles so Plan Usage columns stay aligned while keeping the ellipsis cue and tooltip fallback |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | Jun 4 | Stabilize Antigravity quota selection and pacing, prevent startup Partial History loops, mask account labels, and keep model token stats visible |
 | **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | Jun 2 | Add local-only Antigravity provider support with process discovery, local RPC quota/session scanning, persisted usage cache, and provider ledger import |
 | **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | Jun 2 | Refactor Plan Usage around provider quota snapshots, add per-target quota display groups, and harden provider quota state migration/fallback behavior |
-| **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | May 27 | Keep budgeted ledger warmup running after truncated or failed full-history imports and avoid stale provider completion markers |
 
 [→ Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 Looking for macOS? Use the separate public repository:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe)** - just run and done
+**[⬇ Download Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe)** - just run and done
 
-**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-v1.18.2-win-x64.zip)** - no install required
+**[⬇ Download Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-v1.19.0-win-x64.zip)** - no install required
 
 By downloading or installing, you agree to the [End-User License Agreement (EULA)](EULA.txt).
 
@@ -99,7 +99,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 3. The app opens automatically and sits in your system tray
 
 **Option B — Portable ZIP** _(no install required)_
-1. Download `WhereMyTokens-v1.18.2-win-x64.zip` from the release page
+1. Download `WhereMyTokens-v1.19.0-win-x64.zip` from the release page
 2. Extract the zip anywhere
 3. Run `WhereMyTokens.exe`
 
@@ -129,7 +129,7 @@ By downloading or installing, you agree to the [End-User License Agreement (EULA
 - **Instant startup snapshots** — the tray popup restores the last good UI state immediately while fresh scans continue in the background
 - **Startup-friendly history sync** — current sessions and recent usage appear first; older history continues through a budgeted refresh scheduler with a `Partial History` banner so hotkeys and popup interactions stay responsive
 - **Persistent usage ledger** — rolls local JSONL usage into a local aggregate ledger so older totals survive JSONL cache eviction, refresh faster after warmup, and can be repaired from Settings if needed
-- **Trend card** — daily, weekly, or monthly cost/token trend overlaid with git net-line output, with partial data shown without false zero-value dips
+- **Trend card** — daily, weekly, or monthly cost/token trend overlaid with git net-line output; click any bucket to see provider input/output, thinking/response/tool usage, cache-aware work/billing tokens, and git net-line categories without false zero-value dips
 - **Activity tabs** — 7-day heatmap, 5-month calendar (GitHub-style), hourly distribution, 4-week comparison
 - **Rhythm tab** — time-of-day cost distribution (Morning/Afternoon/Evening/Night) with gradient bars, peak detail stats, local timezone
 - **Model breakdown** — top per-model token and cost totals with gradient bars

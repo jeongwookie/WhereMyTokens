@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe"><strong>下载 v1.18.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe"><strong>下载 v1.19.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.18.2 修复长 Rich quota card title 撑开布局的问题，并保留 ellipsis 截断提示。</em>
+  <em>v1.19.0 新增可点击的 Trend bucket breakdown，用来查看每个 bucket 的 token 去向。</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | 新增可点击的 Trend breakdown，按 provider 展示 input/output、thinking/response/tool 用量、work/billing token 和 git 净行数分类 |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 修复长 Rich quota card title 撑开 Plan Usage 列的问题，同时保留 ellipsis 提示和 tooltip fallback |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 6/4 | 稳定 Antigravity quota 选择与 pacing，避免启动 Partial History 循环，强化账号 label masking 和 model token stats 显示 |
 | **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | 6/2 | 新增 local-only Antigravity provider 支持，包括进程发现、local RPC quota/session 扫描、持久化 usage cache 和 provider ledger import |
 | **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 6/2 | 基于 provider quota snapshot 重构 Plan Usage，新增按 target 的 Rich/Simple/None 展示分组，并强化 quota 状态恢复与迁移 |
-| **[v1.16.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.16.1)** | 5/27 | 修复截断或失败的 full-history ledger import，确保 budgeted warmup 持续运行并避免过期 provider completion marker |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-v1.18.2-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-v1.19.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -99,7 +99,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.18.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.19.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -128,7 +128,7 @@ macOS 用户请使用单独的公开仓库:
 - **即时启动 snapshot** — 立即恢复上一次成功显示的 UI 状态，新的扫描继续在后台运行
 - **启动友好的历史同步** — 先显示当前会话和最近用量；较早的历史会通过 budgeted refresh scheduler 在后台继续同步，让 hotkey popup 和 UI 保持响应
 - **持久化使用账本** — 将本地 JSONL 用量写入本地聚合账本，让较早的总量不再依赖 JSONL cache；必要时可在 Settings 中重建
-- **Trend 卡片** — 按天、周、月查看 cost/token 趋势，并叠加 git 净行数产出；缺失数据不会被误画成 0
+- **Trend 卡片** — 按天、周、月查看 cost/token 趋势并叠加 git 净行数；点击 bucket 可按 provider 查看 input/output、thinking/response/tool 用量、work/billing token 和 git 净行数分类
 - **活动标签页** — 7天热力图、5个月日历（GitHub 风格）、按小时分布、4周对比
 - **Rhythm 标签页** — 按时段费用分布（Morning/Afternoon/Evening/Night），渐变条，峰值详细统计，本地时区
 - **模型分析** — 按热门模型的令牌和费用总计，渐变条
