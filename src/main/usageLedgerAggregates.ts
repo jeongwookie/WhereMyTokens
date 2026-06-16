@@ -1,9 +1,14 @@
 import {
+  emptyBreakdownDelta,
+} from '../shared/breakdownTypes';
+import {
+  DAILY_BREAKDOWN_RETENTION_MS,
   DAILY_MODEL_RETENTION_MS,
   HOURLY_ACTIVITY_RETENTION_MS,
   MINUTE_RECENT_RETENTION_MS,
   RECENT_REQUEST_INDEX_RETENTION_MS,
   SOURCE_REPAIR_RETENTION_MS,
+  DailyBreakdownRow,
   USAGE_LEDGER_SCHEMA_VERSION,
   UsageAggregate,
   UsageLedgerSnapshot,
@@ -34,10 +39,20 @@ export function emptyUsageLedgerSnapshot(): UsageLedgerSnapshot {
     hourlyActivity: {},
     dailyModel: {},
     monthlyModel: {},
+    dailyBreakdown: {},
+    recentBreakdownIndex: {},
+    breakdownStartedDate: null,
     sourceCheckpoints: {},
     sourceRepairRollup: {},
     lastCompactedAt: 0,
     lastFullImportAt: 0,
+  };
+}
+
+export function emptyDailyBreakdownRow(firstSeenDate: string): DailyBreakdownRow {
+  return {
+    ...emptyBreakdownDelta(),
+    firstSeenDate,
   };
 }
 
@@ -135,6 +150,14 @@ export function compactUsageLedgerSnapshot(snapshot: UsageLedgerSnapshot, nowMs 
     if (value.lastSeenMs >= indexCutoff) recentIndex[key] = value;
   }
 
+  const dailyBreakdown = keepByTimestamp(snapshot.dailyBreakdown, nowMs - DAILY_BREAKDOWN_RETENTION_MS);
+  const recentBreakdownIndex: UsageLedgerSnapshot['recentBreakdownIndex'] = {};
+  for (const [key, value] of Object.entries(snapshot.recentBreakdownIndex)) {
+    if (Object.prototype.hasOwnProperty.call(dailyBreakdown, value.dailyBreakdownKey)) {
+      recentBreakdownIndex[key] = value;
+    }
+  }
+
   return {
     ...snapshot,
     schemaVersion: USAGE_LEDGER_SCHEMA_VERSION,
@@ -142,6 +165,9 @@ export function compactUsageLedgerSnapshot(snapshot: UsageLedgerSnapshot, nowMs 
     recentRequestIndex: recentIndex,
     hourlyActivity: keepByTimestamp(snapshot.hourlyActivity, nowMs - HOURLY_ACTIVITY_RETENTION_MS),
     dailyModel: keepByTimestamp(snapshot.dailyModel, nowMs - DAILY_MODEL_RETENTION_MS),
+    dailyBreakdown,
+    recentBreakdownIndex,
+    breakdownStartedDate: snapshot.breakdownStartedDate,
     sourceRepairRollup: sourceRepair,
     lastCompactedAt: nowMs,
   };

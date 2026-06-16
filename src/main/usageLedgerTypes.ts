@@ -1,11 +1,13 @@
 import type { UsageProvider } from './jsonlTypes';
 import type { ProviderId } from './providers/types';
+import type { BreakdownDelta } from '../shared/breakdownTypes';
 
-export const USAGE_LEDGER_SCHEMA_VERSION = 3;
+export const USAGE_LEDGER_SCHEMA_VERSION = 5;
 export const MINUTE_RECENT_RETENTION_MS = 8 * 24 * 60 * 60 * 1000;
 export const RECENT_REQUEST_INDEX_RETENTION_MS = MINUTE_RECENT_RETENTION_MS;
 export const HOURLY_ACTIVITY_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 export const DAILY_MODEL_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+export const DAILY_BREAKDOWN_RETENTION_MS = DAILY_MODEL_RETENTION_MS;
 export const SOURCE_REPAIR_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface UsageAggregate {
@@ -23,6 +25,15 @@ export interface RecentRequestIndexEntry {
   minuteKey: string;
   aggregate: UsageAggregate;
   lastSeenMs: number;
+}
+
+export interface DailyBreakdownRow extends BreakdownDelta {
+  firstSeenDate: string;
+}
+
+export interface RecentBreakdownIndexEntry {
+  dailyBreakdownKey: string;
+  delta: BreakdownDelta;
 }
 
 export interface SourceCheckpoint {
@@ -47,6 +58,9 @@ export interface UsageLedgerSnapshot {
   hourlyActivity: Record<string, UsageAggregate>;
   dailyModel: Record<string, UsageAggregate>;
   monthlyModel: Record<string, UsageAggregate>;
+  dailyBreakdown: Record<string, DailyBreakdownRow>;
+  recentBreakdownIndex: Record<string, RecentBreakdownIndexEntry>;
+  breakdownStartedDate: string | null;
   sourceCheckpoints: Record<string, SourceCheckpoint>;
   sourceRepairRollup: Record<string, UsageAggregate>;
   lastCompactedAt: number;

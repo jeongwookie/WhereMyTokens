@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import storeModule from '../dist/main/providers/antigravity/usageCacheStore.js';
+import * as gmParser from '../dist/main/providers/antigravity/gmParser.js';
 import aggregates from '../dist/main/usageLedgerAggregates.js';
 
 const { AntigravityUsageCacheStore, emptyAntigravityUsageCacheSnapshot } = storeModule;
+const { classifyAntigravityToolName, parseAntigravityGmEntry } = gmParser;
 const { dayModelKey, monthModelKey } = aggregates;
 
 function memoryStore(initial) {
@@ -61,6 +63,89 @@ test('Antigravity usage cache upserts calls and builds a provider ledger slice',
   assert.equal('title' in snapshot.cascades['legacy:cascade-1'], false);
   assert.equal(slice.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].totalTokens, 175);
   assert.equal(slice.monthlyModel[monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].requestCount, 1);
+});
+
+test('Antigravity usage cache builds dailyBreakdown from API-true tokens and tool counts', () => {
+  const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
+  const cache = new AntigravityUsageCacheStore(memoryStore(emptyAntigravityUsageCacheSnapshot()));
+
+  cache.upsertCascade({
+    cascadeId: 'cascade-1',
+    totalSteps: 4,
+    status: 'CASCADE_RUN_STATUS_IDLE',
+    lastModifiedMs: nowMs,
+    fetchedAtMs: nowMs,
+    calls: [call({
+      thinkingTokens: 10,
+      responseTokens: 5,
+      outputTokens: 15,
+      toolNames: ['view_file'],
+    })],
+  }, nowMs);
+
+  const row = cache.buildLedgerSlice(nowMs).dailyBreakdown['2026-06-01|antigravity'];
+  assert.equal(row.thinking, 10);
+  assert.equal(row.response + row.toolOutputRead, 5);
+  assert.equal(row.read, 1);
+});
+
+test('Antigravity classifies provider-native tool names via the shared AG classifier', () => {
+  assert.equal(classifyAntigravityToolName('view_file'), 'read');
+  assert.equal(classifyAntigravityToolName('replace_file_content'), 'editWrite');
+});
+
+test('Antigravity slice: thinking exact, toolOutput populated via AG classifier, exact sum, counts non-regression', () => {
+  const timestampMs = Date.parse('2026-06-01T10:00:00.000Z');
+  const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
+  const parsedCall = parseAntigravityGmEntry('cascade-tool-output', {
+    executionId: 'exec-tool-output',
+    stepIndices: [2],
+    chatModel: {
+      model: 'MODEL_GEMINI_3_PRO',
+      usage: {
+        inputTokens: 100,
+        thinkingOutputTokens: 10,
+        responseOutputTokens: 5,
+        outputTokens: 30,
+      },
+      tools: [
+        { name: 'view_file' },
+        { name: 'replace_file_content' },
+      ],
+    },
+    createdAt: '2026-06-01T10:00:00.000Z',
+  }, timestampMs, new Map([['MODEL_GEMINI_3_PRO', 'Gemini 3 Pro']]));
+  assert.ok(parsedCall);
+
+  const cache = new AntigravityUsageCacheStore(memoryStore(emptyAntigravityUsageCacheSnapshot()));
+  cache.upsertCascade({
+    cascadeId: 'cascade-tool-output',
+    totalSteps: 4,
+    status: 'CASCADE_RUN_STATUS_IDLE',
+    lastModifiedMs: nowMs,
+    fetchedAtMs: nowMs,
+    calls: [parsedCall],
+  }, nowMs);
+
+  const row = cache.buildLedgerSlice(nowMs).dailyBreakdown['2026-06-01|antigravity'];
+  const toolOutputTotal = row.toolOutputRead
+    + row.toolOutputEditWrite
+    + row.toolOutputSearch
+    + row.toolOutputGit
+    + row.toolOutputBuildTest
+    + row.toolOutputTerminal
+    + row.toolOutputSubagents
+    + row.toolOutputWeb;
+
+  assert.equal(row.thinking, 10);
+  assert.equal(row.response + toolOutputTotal, 20);
+  assert.equal(row.thinking + row.response + toolOutputTotal, 30);
+  assert.ok(row.toolOutputRead > 0);
+  assert.ok(row.toolOutputEditWrite > 0);
+  assert.equal(row.toolOutputTerminal, 0);
+  assert.equal(row.read, 1);
+  assert.equal(row.editWrite, 1);
+  assert.equal(row.terminal, 0);
 });
 
 test('Antigravity usage cache replaces a richer version of the same call', () => {

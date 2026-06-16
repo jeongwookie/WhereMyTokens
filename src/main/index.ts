@@ -686,22 +686,23 @@ app.whenReady().then(() => {
 
   const manager = new StateManager(store, (state) => updateTray(state));
   stateManager = manager;
-  registerIpcHandlers(
+  registerIpcHandlers({
     store,
-    () => manager.getState(),
-    () => manager.forceRefresh(),
-    () => {
+    getState: () => manager.getState(),
+    forceRefresh: () => manager.forceRefresh(),
+    applySettingsChange: () => {
       manager.applySettingsChange();
       applyRuntimeSettings();
     },
-    () => manager.rebuildUsageLedger(),
-    () => manager.getDebugMemSnapshot('ipc'),
-    {
+    rebuildUsageLedger: () => manager.rebuildUsageLedger(),
+    getDebugMemSnapshot: () => manager.getDebugMemSnapshot('ipc'),
+    windowActions: {
       openDashboard: () => showPopup('main'),
       openSettings: () => showPopup('settings'),
       hideCompactWidget,
     },
-  );
+    getBreakdown: (grain, bucketKey) => manager.getBreakdown(grain, bucketKey),
+  });
 
   tray = createTray();
   rebuildTrayMenu();

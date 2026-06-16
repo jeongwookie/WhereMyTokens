@@ -1,5 +1,7 @@
 import Store from 'electron-store';
 import * as crypto from 'crypto';
+import { PATH_CATEGORIES, type PathCategory } from './pathClassifier';
+import { emptyNetLinesByCategory, type NetLinesByCategory } from '../shared/breakdownTypes';
 
 export interface GitDailyOutputRow {
   date: string;
@@ -8,6 +10,7 @@ export interface GitDailyOutputRow {
   added: number;
   removed: number;
   netLines: number;
+  byCategory: NetLinesByCategory;
 }
 
 export interface GitOutputLedgerSnapshot {
@@ -20,6 +23,7 @@ export interface GitDailyInput {
   commits: number;
   added: number;
   removed: number;
+  byCategory: NetLinesByCategory;
 }
 
 export interface CodeOutputStatsLike {
@@ -36,10 +40,29 @@ interface StoreLike {
   set(key: 'ledger', value: GitOutputLedgerSnapshot): void;
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 export function emptyGitOutputLedgerSnapshot(): GitOutputLedgerSnapshot {
   return { schemaVersion: SCHEMA_VERSION, dailyOutput: {} };
+}
+
+function finiteNumber(value: unknown): number {
+  return Number.isFinite(value) ? value as number : 0;
+}
+
+export function normalizeByCategory(value: unknown): NetLinesByCategory {
+  const out = emptyNetLinesByCategory();
+  if (!value || typeof value !== 'object') return out;
+  const raw = value as Partial<Record<PathCategory, Partial<{ added: number; removed: number }>>>;
+  for (const category of PATH_CATEGORIES) {
+    const row = raw[category];
+    if (!row || typeof row !== 'object') continue;
+    out[category] = {
+      added: finiteNumber(row.added),
+      removed: finiteNumber(row.removed),
+    };
+  }
+  return out;
 }
 
 function normalizeSnapshot(value: unknown): GitOutputLedgerSnapshot {
@@ -53,9 +76,9 @@ function normalizeSnapshot(value: unknown): GitOutputLedgerSnapshot {
     if (!row || typeof row !== 'object') continue;
     const item = row as Partial<GitDailyOutputRow>;
     if (typeof item.date !== 'string' || typeof item.repoKey !== 'string') continue;
-    const commits = Number.isFinite(item.commits) ? item.commits as number : 0;
-    const added = Number.isFinite(item.added) ? item.added as number : 0;
-    const removed = Number.isFinite(item.removed) ? item.removed as number : 0;
+    const commits = finiteNumber(item.commits);
+    const added = finiteNumber(item.added);
+    const removed = finiteNumber(item.removed);
     const repoKey = item.repoKey.startsWith('repo:') ? item.repoKey : repoLedgerKey(item.repoKey);
     dailyOutput[`${item.date}|${repoKey}`] = {
       date: item.date,
@@ -64,6 +87,7 @@ function normalizeSnapshot(value: unknown): GitOutputLedgerSnapshot {
       added,
       removed,
       netLines: added - removed,
+      byCategory: normalizeByCategory(item.byCategory),
     };
   }
   return {
@@ -86,7 +110,7 @@ function buildDaily7dWindow(today: string): GitDailyInput[] {
   for (let offset = 6; offset >= 0; offset--) {
     const item = new Date(date);
     item.setDate(date.getDate() - offset);
-    days.push({ date: dateKey(item), commits: 0, added: 0, removed: 0 });
+    days.push({ date: dateKey(item), commits: 0, added: 0, removed: 0, byCategory: emptyNetLinesByCategory() });
   }
   return days;
 }
@@ -102,15 +126,57 @@ export function mergeGitDailyOutput(snapshot: GitOutputLedgerSnapshot, repoKey: 
   }
   for (const day of days) {
     if (!day.date) continue;
+    const added = finiteNumber(day.added);
+    const removed = finiteNumber(day.removed);
     snapshot.dailyOutput[`${day.date}|${ledgerRepoKey}`] = {
       date: day.date,
       repoKey: ledgerRepoKey,
-      commits: Number.isFinite(day.commits) ? day.commits : 0,
-      added: Number.isFinite(day.added) ? day.added : 0,
-      removed: Number.isFinite(day.removed) ? day.removed : 0,
-      netLines: (Number.isFinite(day.added) ? day.added : 0) - (Number.isFinite(day.removed) ? day.removed : 0),
+      commits: finiteNumber(day.commits),
+      added,
+      removed,
+      netLines: added - removed,
+      byCategory: normalizeByCategory(day.byCategory),
     };
   }
+}
+
+export function buildCategoryNetLines(
+  snapshot: GitOutputLedgerSnapshot,
+  repoKeys: string[],
+  startDate: string,
+  endDate: string,
+): NetLinesByCategory {
+  const allowed = new Set(repoKeys.filter(Boolean).map(repoLedgerKey));
+  const out = emptyNetLinesByCategory();
+  for (const row of Object.values(snapshot.dailyOutput)) {
+    if (allowed.size > 0 && !allowed.has(row.repoKey)) continue;
+    if (row.date < startDate || row.date > endDate) continue;
+    for (const category of PATH_CATEGORIES) {
+      const lines = row.byCategory?.[category];
+      if (!lines) continue;
+      out[category].added += finiteNumber(lines.added);
+      out[category].removed += finiteNumber(lines.removed);
+    }
+  }
+  return out;
+}
+
+/**
+ * True when any commit exists in [startDate, endDate] for the given repo scope
+ * (empty repoKeys → all repos). Uses the same repoLedgerKey scope as
+ * buildCategoryNetLines so callers (breakdownQuery) need not re-derive it (SPOT).
+ */
+export function hasCommitsInRange(
+  snapshot: Pick<GitOutputLedgerSnapshot, 'dailyOutput'>,
+  repoKeys: string[],
+  startDate: string,
+  endDate: string,
+): boolean {
+  const allowed = new Set(repoKeys.filter(Boolean).map(repoLedgerKey));
+  return Object.values(snapshot.dailyOutput).some(row => {
+    if (allowed.size > 0 && !allowed.has(row.repoKey)) return false;
+    return row.date >= startDate && row.date <= endDate && row.commits > 0;
+  });
 }
 
 export function buildCodeOutputFromGitLedger(
@@ -137,16 +203,25 @@ export function buildCodeOutputFromGitLedger(
     all.commits += row.commits;
     all.added += row.added;
     all.removed += row.removed;
-    const allDay = dailyAllMap.get(row.date) ?? { date: row.date, commits: 0, added: 0, removed: 0 };
+    const rowByCategory = normalizeByCategory(row.byCategory);
+    const allDay = dailyAllMap.get(row.date) ?? { date: row.date, commits: 0, added: 0, removed: 0, byCategory: emptyNetLinesByCategory() };
     allDay.commits += row.commits;
     allDay.added += row.added;
     allDay.removed += row.removed;
+    for (const category of PATH_CATEGORIES) {
+      allDay.byCategory[category].added += rowByCategory[category].added;
+      allDay.byCategory[category].removed += rowByCategory[category].removed;
+    }
     dailyAllMap.set(row.date, allDay);
     const recentDay = daily7dMap.get(row.date);
     if (recentDay) {
       recentDay.commits += row.commits;
       recentDay.added += row.added;
       recentDay.removed += row.removed;
+      for (const category of PATH_CATEGORIES) {
+        recentDay.byCategory[category].added += rowByCategory[category].added;
+        recentDay.byCategory[category].removed += rowByCategory[category].removed;
+      }
     }
   }
 

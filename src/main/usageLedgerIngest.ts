@@ -1,6 +1,8 @@
 import type { ProviderId } from './providers/types';
 import {
+  DAILY_BREAKDOWN_RETENTION_MS,
   DAILY_MODEL_RETENTION_MS,
+  DailyBreakdownRow,
   HOURLY_ACTIVITY_RETENTION_MS,
   MINUTE_RECENT_RETENTION_MS,
   SOURCE_REPAIR_RETENTION_MS,
@@ -13,6 +15,7 @@ import {
   addUsageAggregate,
   aggregateFromParts,
   dayModelKey,
+  emptyDailyBreakdownRow,
   emptyUsageAggregate,
   hourProviderKey,
   hourSourceModelKey,
@@ -21,6 +24,9 @@ import {
   monthModelKey,
   subtractUsageAggregate,
 } from './usageLedgerAggregates';
+import { BREAKDOWN_KEYS, type BreakdownDelta } from '../shared/breakdownTypes';
+
+export type { BreakdownDelta };
 
 export const LEDGER_IMPORT_YIELD_EVERY = 250;
 
@@ -35,6 +41,12 @@ export interface UsageLedgerIngestUsageEntry {
   cacheReadTokens: number;
   costUSD?: number;
   cacheSavingsUSD?: number;
+  breakdown?: BreakdownDelta;
+  /**
+   * R2-001: when false, only `breakdown` is applied. No usage aggregate
+   * maps or recentRequestIndex are written.
+   */
+  countsAsUsage?: boolean;
 }
 
 export interface UsageLedgerIngestEntry {
@@ -60,6 +72,7 @@ export interface UsageLedgerProviderSlice {
   hourlyActivity: Record<string, UsageAggregate>;
   dailyModel: Record<string, UsageAggregate>;
   monthlyModel: Record<string, UsageAggregate>;
+  dailyBreakdown: Record<string, DailyBreakdownRow>;
   sourceCheckpoints: UsageLedgerSnapshot['sourceCheckpoints'];
   sourceRepairRollup: Record<string, UsageAggregate>;
 }
@@ -72,6 +85,14 @@ function cloneAggregate(aggregate: UsageAggregate): UsageAggregate {
   return { ...aggregate };
 }
 
+function cloneDailyBreakdownRow(row: DailyBreakdownRow): DailyBreakdownRow {
+  return { ...row };
+}
+
+function cloneBreakdownDelta(delta: BreakdownDelta): BreakdownDelta {
+  return { ...delta };
+}
+
 export function cloneUsageLedgerSnapshot(snapshot: UsageLedgerSnapshot): UsageLedgerSnapshot {
   return {
     ...snapshot,
@@ -80,6 +101,12 @@ export function cloneUsageLedgerSnapshot(snapshot: UsageLedgerSnapshot): UsageLe
     hourlyActivity: Object.fromEntries(Object.entries(snapshot.hourlyActivity).map(([key, value]) => [key, cloneAggregate(value)])),
     dailyModel: Object.fromEntries(Object.entries(snapshot.dailyModel).map(([key, value]) => [key, cloneAggregate(value)])),
     monthlyModel: Object.fromEntries(Object.entries(snapshot.monthlyModel).map(([key, value]) => [key, cloneAggregate(value)])),
+    dailyBreakdown: Object.fromEntries(Object.entries(snapshot.dailyBreakdown).map(([key, value]) => [key, cloneDailyBreakdownRow(value)])),
+    recentBreakdownIndex: Object.fromEntries(Object.entries(snapshot.recentBreakdownIndex).map(([key, value]) => [key, {
+      ...value,
+      delta: cloneBreakdownDelta(value.delta),
+    }])),
+    breakdownStartedDate: snapshot.breakdownStartedDate,
     sourceCheckpoints: Object.fromEntries(Object.entries(snapshot.sourceCheckpoints).map(([key, value]) => [key, { ...value }])),
     sourceRepairRollup: Object.fromEntries(Object.entries(snapshot.sourceRepairRollup).map(([key, value]) => [key, cloneAggregate(value)])),
   };
@@ -120,6 +147,30 @@ function withoutProviderRecentRequests(
   return next;
 }
 
+function withoutProviderRecentBreakdowns(
+  record: UsageLedgerSnapshot['recentBreakdownIndex'],
+  provider: ProviderId,
+): UsageLedgerSnapshot['recentBreakdownIndex'] {
+  const next: UsageLedgerSnapshot['recentBreakdownIndex'] = {};
+  for (const [key, entry] of Object.entries(record)) {
+    if (providerFromPipeKey(entry.dailyBreakdownKey, 1) !== provider) {
+      next[key] = { ...entry, delta: cloneBreakdownDelta(entry.delta) };
+    }
+  }
+  return next;
+}
+
+function withoutProviderBreakdownRows(
+  record: Record<string, DailyBreakdownRow>,
+  provider: ProviderId,
+): Record<string, DailyBreakdownRow> {
+  const next: Record<string, DailyBreakdownRow> = {};
+  for (const [key, row] of Object.entries(record)) {
+    if (providerFromPipeKey(key, 1) !== provider) next[key] = cloneDailyBreakdownRow(row);
+  }
+  return next;
+}
+
 function withoutProviderCheckpoints(
   record: UsageLedgerSnapshot['sourceCheckpoints'],
   provider: ProviderId,
@@ -134,9 +185,10 @@ function withoutProviderCheckpoints(
 export function replaceProviderUsageSliceInSnapshot(
   snapshot: UsageLedgerSnapshot,
   slice: UsageLedgerProviderSlice,
-  _nowMs = Date.now(),
+  nowMs = Date.now(),
 ): UsageLedgerSnapshot {
   const next = cloneUsageLedgerSnapshot(snapshot);
+  const breakdownBoundary = ensureBreakdownBoundary(next, nowMs);
   next.minuteRecent = {
     ...withoutProviderAggregateRows(snapshot.minuteRecent, slice.provider, 1),
     ...cloneAggregateRecord(slice.minuteRecent),
@@ -148,6 +200,7 @@ export function replaceProviderUsageSliceInSnapshot(
       aggregate: cloneAggregate(entry.aggregate),
     }])),
   };
+  next.recentBreakdownIndex = withoutProviderRecentBreakdowns(snapshot.recentBreakdownIndex, slice.provider);
   next.hourlyActivity = {
     ...withoutProviderAggregateRows(snapshot.hourlyActivity, slice.provider, 1),
     ...cloneAggregateRecord(slice.hourlyActivity),
@@ -159,6 +212,14 @@ export function replaceProviderUsageSliceInSnapshot(
   next.monthlyModel = {
     ...withoutProviderAggregateRows(snapshot.monthlyModel, slice.provider, 1),
     ...cloneAggregateRecord(slice.monthlyModel),
+  };
+  next.dailyBreakdown = {
+    ...withoutProviderBreakdownRows(snapshot.dailyBreakdown, slice.provider),
+    ...Object.fromEntries(
+      Object.entries(slice.dailyBreakdown)
+        .filter(([key]) => key.slice(0, key.indexOf('|')) >= breakdownBoundary)
+        .map(([key, row]) => [key, cloneDailyBreakdownRow(row)]),
+    ),
   };
   next.sourceCheckpoints = {
     ...withoutProviderCheckpoints(snapshot.sourceCheckpoints, slice.provider),
@@ -194,6 +255,55 @@ function subtractFromRecord(record: Record<string, UsageAggregate>, key: string,
   subtractUsageAggregate(current, aggregate);
   if (current.requestCount <= 0 || current.totalTokens <= 0) delete record[key];
   else record[key] = current;
+}
+
+function applyBreakdownDelta(row: DailyBreakdownRow, delta: BreakdownDelta, sign: 1 | -1): void {
+  for (const key of BREAKDOWN_KEYS) row[key] += sign * delta[key];
+}
+
+function isEmptyBreakdownRow(row: DailyBreakdownRow): boolean {
+  return BREAKDOWN_KEYS.every(key => row[key] === 0);
+}
+
+function subtractBreakdownIndexEntry(
+  snapshot: UsageLedgerSnapshot,
+  requestIndexKey: string,
+): void {
+  const breakdown = snapshot.recentBreakdownIndex[requestIndexKey];
+  if (!breakdown) return;
+  const row = snapshot.dailyBreakdown[breakdown.dailyBreakdownKey];
+  if (row) {
+    applyBreakdownDelta(row, breakdown.delta, -1);
+    if (isEmptyBreakdownRow(row)) delete snapshot.dailyBreakdown[breakdown.dailyBreakdownKey];
+  }
+  delete snapshot.recentBreakdownIndex[requestIndexKey];
+}
+
+function accumulateBreakdown(
+  next: UsageLedgerSnapshot,
+  provider: ProviderId,
+  requestIndexKey: string,
+  entry: UsageLedgerIngestUsageEntry,
+  nowMs: number,
+): void {
+  // Idempotent latest-wins: reverse any prior delta for this request before re-adding,
+  // independent of recentRequestIndex lifetime. recentBreakdownIndex follows the daily
+  // (breakdown) retention while recentRequestIndex follows the shorter minute retention,
+  // so a re-emit of an entry older than the minute window must still subtract here or it
+  // would double-count dailyBreakdown.
+  subtractBreakdownIndexEntry(next, requestIndexKey);
+  if (!entry.breakdown) return;
+  if (entry.timestampMs < nowMs - DAILY_BREAKDOWN_RETENTION_MS) return;
+  const date = localDateKey(entry.timestampMs);
+  const key = `${date}|${provider}`;
+  const row = next.dailyBreakdown[key] ?? emptyDailyBreakdownRow(date);
+  applyBreakdownDelta(row, entry.breakdown, 1);
+  if (date < row.firstSeenDate) row.firstSeenDate = date;
+  next.dailyBreakdown[key] = row;
+  next.recentBreakdownIndex[requestIndexKey] = {
+    dailyBreakdownKey: key,
+    delta: cloneBreakdownDelta(entry.breakdown),
+  };
 }
 
 function parseMinuteLedgerKey(key: string): { timestampMs: number; provider: UsageLedgerProvider; model: string } | null {
@@ -243,6 +353,7 @@ function subtractExistingRecentRequest(
   subtractFromRecord(snapshot.monthlyModel, monthModelKey(row.timestampMs, row.provider, row.model), existing.aggregate);
   subtractFromRecord(snapshot.sourceRepairRollup, hourSourceModelKey(sourceHash, row.timestampMs, row.provider, row.model), existing.aggregate);
   delete snapshot.recentRequestIndex[requestIndexKey];
+  subtractBreakdownIndexEntry(snapshot, requestIndexKey);
 }
 
 function filterEntriesAfterCursor(
@@ -263,6 +374,14 @@ function addEntryToSnapshot(next: UsageLedgerSnapshot, sourceHash: string, sourc
   const { entry, aggregate } = sourceEntry;
   const provider = entry.provider;
   const requestIndexKey = `${sourceHash}|${entry.requestId}`;
+
+  if (entry.countsAsUsage === false) {
+    // accumulateBreakdown reverses any prior delta first (idempotent), so a re-scan of the
+    // same breakdown-only event replaces rather than doubles.
+    accumulateBreakdown(next, provider, requestIndexKey, entry, nowMs);
+    return;
+  }
+
   const existing = next.recentRequestIndex[requestIndexKey];
   if (existing) {
     if (shouldKeepExistingRecentRequest(existing, sourceEntry)) return;
@@ -292,6 +411,13 @@ function addEntryToSnapshot(next: UsageLedgerSnapshot, sourceHash: string, sourc
   if (entry.timestampMs >= nowMs - SOURCE_REPAIR_RETENTION_MS) {
     addToRecord(next.sourceRepairRollup, hourSourceModelKey(sourceHash, entry.timestampMs, provider, entry.model), aggregate);
   }
+
+  accumulateBreakdown(next, provider, requestIndexKey, entry, nowMs);
+}
+
+export function ensureBreakdownBoundary(snapshot: UsageLedgerSnapshot, nowMs: number): string {
+  if (snapshot.breakdownStartedDate === null) snapshot.breakdownStartedDate = localDateKey(nowMs);
+  return snapshot.breakdownStartedDate;
 }
 
 export async function importUsageEntriesIntoSnapshot(
@@ -307,6 +433,7 @@ export async function importUsageEntriesIntoSnapshot(
   }
 
   const next = cloneUsageLedgerSnapshot(snapshot);
+  ensureBreakdownBoundary(next, nowMs);
   const filtered = filterEntriesAfterCursor(snapshot, source, entries);
   if (filtered.missingCursor) {
     const currentCheckpoint = snapshot.sourceCheckpoints[source.sourceHash];

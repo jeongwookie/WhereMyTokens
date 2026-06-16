@@ -1,15 +1,18 @@
 import { execFile } from 'child_process';
 import path from 'path';
 import Store from 'electron-store';
-import { getGitOutputLedgerStore } from './gitOutputLedger';
+import { getGitOutputLedgerStore, normalizeByCategory } from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
 import { isStaleGitStats, normalizeGitCwdKey, normalizeGitPathKey, preferGitStats } from './gitStatsKeys';
+import { classifyPath, PATH_CATEGORIES } from './pathClassifier';
+import { emptyNetLinesByCategory, type NetLinesByCategory } from '../shared/breakdownTypes';
 
 export interface GitDailyStats {
   date: string;
   commits: number;
   added: number;
   removed: number;
+  byCategory: NetLinesByCategory;
 }
 
 export interface GitStats {
@@ -36,6 +39,18 @@ export interface GitStats {
 const cache = new Map<string, { stats: GitStats; ts: number }>();
 const CACHE_TTL = 120_000;
 const DAILY_LOG_DATE_MARKER = '__WMT_DAY__';
+
+function addCategoryLines(target: NetLinesByCategory, source: unknown): void {
+  const normalized = normalizeByCategory(source);
+  for (const category of PATH_CATEGORIES) {
+    target[category].added += normalized[category].added;
+    target[category].removed += normalized[category].removed;
+  }
+}
+
+function cloneDailyStats(day: GitDailyStats): GitDailyStats {
+  return { ...day, byCategory: normalizeByCategory(day.byCategory) };
+}
 
 // 진행 중인 요청 중복 방지
 const pending = new Map<string, Promise<GitStats | null>>();
@@ -127,17 +142,46 @@ export function getAllPersistedStatsByRepo(): Record<string, GitStats> {
   } catch { return {}; }
 }
 
-function parseNumstat(output: string): { added: number; removed: number } {
+function parseNumstatCount(value: string): number {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function pathForClassification(rawPath: string): string {
+  if (!rawPath.includes(' => ')) return rawPath;
+
+  const arrowIndex = rawPath.lastIndexOf(' => ');
+  const beforeArrow = rawPath.slice(0, arrowIndex);
+  const afterArrow = rawPath.slice(arrowIndex + ' => '.length);
+  const braceStart = beforeArrow.lastIndexOf('{');
+  const braceEnd = afterArrow.indexOf('}');
+
+  if (braceStart !== -1 && braceEnd !== -1) {
+    return beforeArrow.slice(0, braceStart) + afterArrow.slice(0, braceEnd) + afterArrow.slice(braceEnd + 1);
+  }
+
+  return afterArrow.trim();
+}
+
+function addNumstatPath(target: NetLinesByCategory, rawPath: string, added: number, removed: number): void {
+  const category = classifyPath(pathForClassification(rawPath));
+  target[category].added += added;
+  target[category].removed += removed;
+}
+
+function parseNumstat(output: string): { added: number; removed: number; byCategory: NetLinesByCategory } {
   let added = 0, removed = 0;
+  const byCategory = emptyNetLinesByCategory();
   for (const line of output.split('\n')) {
     const parts = line.split('\t');
     if (parts.length < 3) continue;
-    const a = parseInt(parts[0], 10);
-    const r = parseInt(parts[1], 10);
-    if (!isNaN(a)) added += a;
-    if (!isNaN(r)) removed += r;
+    const a = parseNumstatCount(parts[0]);
+    const r = parseNumstatCount(parts[1]);
+    added += a;
+    removed += r;
+    addNumstatPath(byCategory, parts[2], a, r);
   }
-  return { added, removed };
+  return { added, removed, byCategory };
 }
 
 // 비동기 git 실행 (메인 프로세스 블로킹 방지)
@@ -155,7 +199,7 @@ export function buildDaily7dWindow(now = new Date()): GitDailyStats[] {
   for (let offset = 6; offset >= 0; offset--) {
     const date = new Date(today);
     date.setDate(today.getDate() - offset);
-    days.push({ date: formatLocalDate(date), commits: 0, added: 0, removed: 0 });
+    days.push({ date: formatLocalDate(date), commits: 0, added: 0, removed: 0, byCategory: emptyNetLinesByCategory() });
   }
   return days;
 }
@@ -169,11 +213,12 @@ function normalizeDailyStats(daily: GitDailyStats[] | undefined): GitDailyStats[
       commits: Number.isFinite(day.commits) ? day.commits : 0,
       added: Number.isFinite(day.added) ? day.added : 0,
       removed: Number.isFinite(day.removed) ? day.removed : 0,
+      byCategory: normalizeByCategory(day.byCategory),
     }));
 }
 
 export function parseDaily7dLog(output: string, days: GitDailyStats[] = buildDaily7dWindow()): GitDailyStats[] {
-  const byDate = new Map(days.map(day => [day.date, { ...day }]));
+  const byDate = new Map(days.map(day => [day.date, cloneDailyStats(day)]));
   let currentDate: string | null = null;
 
   for (const line of output.split('\n')) {
@@ -188,14 +233,15 @@ export function parseDaily7dLog(output: string, days: GitDailyStats[] = buildDai
     if (!currentDate || !byDate.has(currentDate)) continue;
     const parts = line.split('\t');
     if (parts.length < 3) continue;
-    const a = parseInt(parts[0], 10);
-    const r = parseInt(parts[1], 10);
+    const a = parseNumstatCount(parts[0]);
+    const r = parseNumstatCount(parts[1]);
     const bucket = byDate.get(currentDate)!;
-    if (!isNaN(a)) bucket.added += a;
-    if (!isNaN(r)) bucket.removed += r;
+    bucket.added += a;
+    bucket.removed += r;
+    addNumstatPath(bucket.byCategory, parts[2], a, r);
   }
 
-  return days.map(day => byDate.get(day.date) ?? day);
+  return days.map(day => byDate.get(day.date) ?? cloneDailyStats(day));
 }
 
 export function parseDailyAllLog(output: string): GitDailyStats[] {
@@ -207,7 +253,7 @@ export function parseDailyAllLog(output: string): GitDailyStats[] {
     if (line.startsWith(DAILY_LOG_DATE_MARKER)) {
       currentDate = line.slice(DAILY_LOG_DATE_MARKER.length).trim();
       if (!currentDate) continue;
-      const bucket = byDate.get(currentDate) ?? { date: currentDate, commits: 0, added: 0, removed: 0 };
+      const bucket = byDate.get(currentDate) ?? { date: currentDate, commits: 0, added: 0, removed: 0, byCategory: emptyNetLinesByCategory() };
       bucket.commits += 1;
       byDate.set(currentDate, bucket);
       continue;
@@ -216,19 +262,20 @@ export function parseDailyAllLog(output: string): GitDailyStats[] {
     if (!currentDate) continue;
     const parts = line.split('\t');
     if (parts.length < 3) continue;
-    const a = parseInt(parts[0], 10);
-    const r = parseInt(parts[1], 10);
+    const a = parseNumstatCount(parts[0]);
+    const r = parseNumstatCount(parts[1]);
     const bucket = byDate.get(currentDate);
     if (!bucket) continue;
-    if (!isNaN(a)) bucket.added += a;
-    if (!isNaN(r)) bucket.removed += r;
+    bucket.added += a;
+    bucket.removed += r;
+    addNumstatPath(bucket.byCategory, parts[2], a, r);
   }
 
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function aggregateDailyStats(statsList: Array<{ daily7d?: GitDailyStats[] }>, days: GitDailyStats[] = buildDaily7dWindow()): GitDailyStats[] {
-  const byDate = new Map(days.map(day => [day.date, { ...day }]));
+  const byDate = new Map(days.map(day => [day.date, cloneDailyStats(day)]));
 
   for (const stats of statsList) {
     for (const day of stats.daily7d ?? []) {
@@ -237,10 +284,11 @@ export function aggregateDailyStats(statsList: Array<{ daily7d?: GitDailyStats[]
       bucket.commits += day.commits;
       bucket.added += day.added;
       bucket.removed += day.removed;
+      addCategoryLines(bucket.byCategory, day.byCategory);
     }
   }
 
-  return days.map(day => byDate.get(day.date) ?? day);
+  return days.map(day => byDate.get(day.date) ?? cloneDailyStats(day));
 }
 
 export function aggregateDailyAllStats(statsList: Array<{ dailyAll?: GitDailyStats[] }>): GitDailyStats[] {
@@ -248,10 +296,11 @@ export function aggregateDailyAllStats(statsList: Array<{ dailyAll?: GitDailySta
 
   for (const stats of statsList) {
     for (const day of stats.dailyAll ?? []) {
-      const bucket = byDate.get(day.date) ?? { date: day.date, commits: 0, added: 0, removed: 0 };
+      const bucket = byDate.get(day.date) ?? { date: day.date, commits: 0, added: 0, removed: 0, byCategory: emptyNetLinesByCategory() };
       bucket.commits += day.commits;
       bucket.added += day.added;
       bucket.removed += day.removed;
+      addCategoryLines(bucket.byCategory, day.byCategory);
       byDate.set(day.date, bucket);
     }
   }

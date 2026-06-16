@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('wmt', {
   getState:             () => ipcRenderer.invoke('state:get'),
   forceRefresh:         () => ipcRenderer.invoke('state:refresh'),
   rebuildLedger:        () => ipcRenderer.invoke('ledger:rebuild'),
+  getBreakdown:         (grain: string, bucketKey: string) => ipcRenderer.invoke('breakdown:get', grain, bucketKey),
   getSettings:          () => ipcRenderer.invoke('settings:get'),
   setSettings:          (p: Record<string, unknown>) => ipcRenderer.invoke('settings:set', p),
   getNotifications:     () => ipcRenderer.invoke('notifications:get'),

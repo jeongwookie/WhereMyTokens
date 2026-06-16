@@ -146,6 +146,32 @@ test('ledger extractor emits compact usage entries for Claude and Codex lines', 
   assert.equal(codex.entry.cacheReadTokens, 9);
 });
 
+test('extractCodexUsageLine surfaces reasoning_output_tokens as exact thinking subset', async () => {
+  const extractor = await import('../dist/main/jsonlUsageExtractor.js');
+  const line = JSON.stringify({
+    type: 'event_msg',
+    timestamp: '2026-06-10T10:00:00.000Z',
+    payload: {
+      type: 'token_count',
+      info: {
+        model: 'gpt-5-codex',
+        model_context_window: 200000,
+        last_token_usage: {
+          input_tokens: 1000,
+          cached_input_tokens: 0,
+          output_tokens: 347,
+          reasoning_output_tokens: 208,
+        },
+      },
+    },
+  });
+
+  const codex = extractor.extractCodexUsageLine('src', line, Date.now());
+
+  assert.equal(codex.entry.outputTokens, 347);
+  assert.equal(codex.reasoningOutputTokens, 208);
+});
+
 test('Codex rate-limit-only scan reads account windows without usage data', async () => {
   const dir = tempDir();
   const filePath = path.join(dir, 'codex-limits.jsonl');

@@ -67,6 +67,30 @@ class CountingUsageLedgerStore {
   }
 }
 
+function breakdownRow(firstSeenDate = '2026-05-25') {
+  return {
+    thinking: 5,
+    response: 15,
+    toolOutputRead: 0,
+    toolOutputEditWrite: 0,
+    toolOutputSearch: 0,
+    toolOutputGit: 0,
+    toolOutputBuildTest: 0,
+    toolOutputTerminal: 0,
+    toolOutputSubagents: 0,
+    toolOutputWeb: 0,
+    read: 0,
+    editWrite: 0,
+    search: 0,
+    git: 0,
+    buildTest: 0,
+    terminal: 0,
+    subagents: 0,
+    web: 0,
+    firstSeenDate,
+  };
+}
+
 function checkpoint(provider, overrides = {}) {
   return {
     provider,
@@ -223,6 +247,67 @@ test('all-time session count follows enabled providers for ledger checkpoints', 
 
   assert.equal(manager.canUseUsageLedger(snapshot, manager.getState().settings), true);
   assert.equal(manager.countAllTimeUsageSessions(manager.getState().settings), 3);
+});
+
+test('breakdown query respects excluded-project ledger guard', async () => {
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = {
+    ...emptyUsageAggregate(),
+    requestCount: 1,
+    inputTokens: 10,
+    outputTokens: 20,
+    totalTokens: 30,
+  };
+  snapshot.dailyBreakdown['2026-05-25|claude'] = breakdownRow();
+  snapshot.breakdownStartedDate = '2026-05-25';
+  const manager = new StateManager(makeStore({
+    enabledProviders: ['claude'],
+    excludedProjects: ['private-project'],
+  }), () => {});
+  manager.usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+
+  const result = await manager.getBreakdown('day', '2026-05-25');
+
+  assert.deepEqual(result.providers, []);
+  assert.equal(result.netLines, null);
+});
+
+test('breakdown query does not use all git ledger rows without a scoped repo', async () => {
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = {
+    ...emptyUsageAggregate(),
+    requestCount: 1,
+    inputTokens: 10,
+    outputTokens: 20,
+    totalTokens: 30,
+  };
+  snapshot.dailyBreakdown['2026-05-25|claude'] = breakdownRow();
+  snapshot.breakdownStartedDate = '2026-05-25';
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  manager.usageLedgerStore = new CountingUsageLedgerStore(snapshot);
+  manager.gitOutputLedgerStore = {
+    getSnapshot() {
+      return {
+        schemaVersion: 2,
+        dailyOutput: {
+          '2026-05-25|repo-a': {
+            date: '2026-05-25',
+            repoKey: 'repo-a',
+            commits: 1,
+            added: 100,
+            removed: 10,
+            netLines: 90,
+            byCategory: { product_code: { added: 100, removed: 10 } },
+          },
+        },
+      };
+    },
+  };
+
+  const result = await manager.getBreakdown('day', '2026-05-25');
+
+  assert.equal(result.providers.length, 1);
+  assert.equal(result.netLines, null);
 });
 
 test('provider changes refresh recent summaries without clearing the JSONL cache or forcing full history', () => {

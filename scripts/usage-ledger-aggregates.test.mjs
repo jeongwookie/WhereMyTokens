@@ -9,6 +9,7 @@ const {
   addUsageAggregate,
   subtractUsageAggregate,
   emptyUsageAggregate,
+  emptyDailyBreakdownRow,
   emptyUsageLedgerSnapshot,
   minuteKey,
   hourProviderKey,
@@ -18,6 +19,30 @@ const {
 } = aggregates;
 const { computeUsageFromLedger } = usageLedgerUsage;
 const { USAGE_LEDGER_SCHEMA_VERSION } = types;
+
+function breakdownDelta(overrides = {}) {
+  return {
+    thinking: 1,
+    response: 2,
+    toolOutputRead: 0,
+    toolOutputEditWrite: 0,
+    toolOutputSearch: 0,
+    toolOutputGit: 0,
+    toolOutputBuildTest: 0,
+    toolOutputTerminal: 0,
+    toolOutputSubagents: 0,
+    toolOutputWeb: 0,
+    read: 3,
+    editWrite: 4,
+    search: 5,
+    git: 6,
+    buildTest: 7,
+    terminal: 8,
+    subagents: 9,
+    web: 10,
+    ...overrides,
+  };
+}
 
 test('usage aggregate add and subtract preserve all token fields', () => {
   const target = emptyUsageAggregate();
@@ -51,6 +76,14 @@ test('usage aggregate add and subtract preserve all token fields', () => {
     costUSD: 1.0,
     cacheSavingsUSD: 0.65,
   });
+});
+
+test('empty daily breakdown row and snapshot use v5 tool output shape', () => {
+  const row = emptyDailyBreakdownRow('2026-06-16');
+  assert.equal(row.toolOutputRead, 0);
+  assert.equal(row.toolOutputEditWrite, 0);
+  assert.equal(row.toolOutputTerminal, 0);
+  assert.equal(emptyUsageLedgerSnapshot().schemaVersion, 5);
 });
 
 test('usage ledger key builders are stable strings', () => {
@@ -103,8 +136,9 @@ test('pace model quota targets populate duration bucket model windows', () => {
   assert.equal(usage.modelWindows.antigravity.windows.h5['Gemini 3 Pro'].totalTokens, 10_000);
 });
 
-test('compaction removes expired minute, request index, hourly, daily, and source repair rows', () => {
+test('compaction removes expired minute, request index, hourly, daily, breakdown, and source repair rows', () => {
   const now = Date.parse('2026-05-25T12:00:00Z');
+  const delta = breakdownDelta();
   const snapshot = {
     schemaVersion: USAGE_LEDGER_SCHEMA_VERSION,
     minuteRecent: {
@@ -124,6 +158,15 @@ test('compaction removes expired minute, request index, hourly, daily, and sourc
       '2026-05-25|claude|new': emptyUsageAggregate(),
     },
     monthlyModel: {},
+    dailyBreakdown: {
+      '2025-05-24|claude': emptyDailyBreakdownRow('2025-05-24'),
+      '2026-05-25|claude': emptyDailyBreakdownRow('2026-05-25'),
+    },
+    recentBreakdownIndex: {
+      'source|old': { dailyBreakdownKey: '2025-05-24|claude', delta },
+      'source|new': { dailyBreakdownKey: '2026-05-25|claude', delta },
+    },
+    breakdownStartedDate: '2026-05-20',
     sourceCheckpoints: {},
     sourceRepairRollup: {
       [`source|${hourProviderKey(now - 31 * 24 * 60 * 60 * 1000, 'claude')}|model`]: emptyUsageAggregate(),
@@ -136,6 +179,36 @@ test('compaction removes expired minute, request index, hourly, daily, and sourc
   assert.equal(Object.keys(compacted.recentRequestIndex).length, 1);
   assert.equal(Object.keys(compacted.hourlyActivity).length, 1);
   assert.equal(Object.keys(compacted.dailyModel).length, 1);
+  assert.deepEqual(Object.keys(compacted.dailyBreakdown), ['2026-05-25|claude']);
+  assert.deepEqual(Object.keys(compacted.recentBreakdownIndex), ['source|new']);
+  assert.equal(compacted.breakdownStartedDate, '2026-05-20');
   assert.equal(Object.keys(compacted.sourceRepairRollup).length, 1);
   assert.equal(compacted.lastCompactedAt, now);
+});
+
+test('compaction keeps breakdown index for retained daily breakdown rows', () => {
+  const now = Date.parse('2026-05-25T12:00:00Z');
+  const delta = breakdownDelta();
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    recentRequestIndex: {
+      'source|old-request': {
+        minuteKey: minuteKey(now - 9 * 24 * 60 * 60 * 1000, 'claude', 'old'),
+        aggregate: emptyUsageAggregate(),
+        lastSeenMs: now - 9 * 24 * 60 * 60 * 1000,
+      },
+    },
+    dailyBreakdown: {
+      '2026-05-10|claude': emptyDailyBreakdownRow('2026-05-10'),
+    },
+    recentBreakdownIndex: {
+      'source|old-request': { dailyBreakdownKey: '2026-05-10|claude', delta },
+    },
+  };
+
+  const compacted = compactUsageLedgerSnapshot(snapshot, now);
+
+  assert.deepEqual(Object.keys(compacted.recentRequestIndex), []);
+  assert.deepEqual(Object.keys(compacted.dailyBreakdown), ['2026-05-10|claude']);
+  assert.deepEqual(Object.keys(compacted.recentBreakdownIndex), ['source|old-request']);
 });

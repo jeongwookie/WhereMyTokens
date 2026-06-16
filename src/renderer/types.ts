@@ -1,4 +1,25 @@
 import type { MainSectionId } from './mainSections';
+import type {
+  BucketBreakdown,
+  BreakdownGrain,
+  ProviderBreakdown,
+  OutputComposition,
+  ToolCategory,
+  ToolActivity,
+  NetLinesByCategory,
+  PathCategory,
+} from '../shared/breakdownTypes';
+
+export type {
+  BucketBreakdown,
+  BreakdownGrain,
+  ProviderBreakdown,
+  OutputComposition,
+  ToolCategory,
+  ToolActivity,
+  NetLinesByCategory,
+  PathCategory,
+};
 
 export interface GitStats {
   branch: string | null;
@@ -148,6 +169,7 @@ export interface UsageTrendPoint {
   weekStart?: string;
   month?: string;
   tokens: number;
+  noCacheTokens: number;
   costUSD: number;
   requestCount: number;
 }
@@ -381,6 +403,7 @@ declare global {
       getState:           () => Promise<AppState>;
       forceRefresh:       () => Promise<AppState>;
       rebuildLedger:      () => Promise<AppState>;
+      getBreakdown:       (grain: BreakdownGrain, bucketKey: string) => Promise<BucketBreakdown>;
       getSettings:        () => Promise<AppSettings>;
       setSettings:        (p: Partial<AppSettings>) => Promise<AppSettings>;
       getNotifications:   () => Promise<HistoryItem[]>;

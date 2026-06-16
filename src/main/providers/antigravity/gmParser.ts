@@ -1,5 +1,6 @@
 import type { ActivityBreakdown } from '../../jsonlTypes';
 import { emptyActivityBreakdown } from '../../jsonlTypes';
+import type { ToolCategory } from '../../../shared/breakdownTypes';
 import { normalizeAntigravityModel } from './models';
 
 export interface AntigravityUsageCall {
@@ -210,6 +211,15 @@ export function mergeAntigravityCalls(
   return [...byKey.values()].sort((a, b) => a.timestampMs - b.timestampMs);
 }
 
+export function classifyAntigravityToolName(name: string): ToolCategory {
+  const lower = name.toLowerCase();
+  if (lower.includes('grep') || lower.includes('search') || lower.includes('list')) return 'search';
+  if (lower.includes('edit') || lower.includes('write') || lower.includes('replace') || lower.includes('code_action')) return 'editWrite';
+  if (lower.includes('view') || lower.includes('read')) return 'read';
+  if (lower.includes('command') || lower.includes('terminal')) return 'terminal';
+  return 'terminal';
+}
+
 export function activityBreakdownFromCalls(calls: AntigravityUsageCall[]): ActivityBreakdown {
   const breakdown = emptyActivityBreakdown();
 
@@ -219,12 +229,7 @@ export function activityBreakdownFromCalls(calls: AntigravityUsageCall[]): Activ
       ? call.responseTokens
       : Math.max(0, call.outputTokens - call.thinkingTokens);
     for (const tool of call.toolNames) {
-      const lower = tool.toLowerCase();
-      if (lower.includes('grep') || lower.includes('search') || lower.includes('list')) breakdown.search += 1;
-      else if (lower.includes('edit') || lower.includes('write') || lower.includes('code_action')) breakdown.editWrite += 1;
-      else if (lower.includes('view') || lower.includes('read')) breakdown.read += 1;
-      else if (lower.includes('command') || lower.includes('terminal')) breakdown.terminal += 1;
-      else breakdown.terminal += 1;
+      breakdown[classifyAntigravityToolName(tool)] += 1;
     }
   }
 

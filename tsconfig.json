@@ -11,6 +11,6 @@
     "rootDir": "./src",
     "resolveJsonModule": true
   },
-  "include": ["src/main/**/*", "src/bridge/**/*"],
+  "include": ["src/main/**/*", "src/bridge/**/*", "src/shared/**/*", "src/renderer/breakdownViewModel.ts", "src/renderer/trendSelection.ts"],
   "exclude": ["node_modules", "dist"]
 }
