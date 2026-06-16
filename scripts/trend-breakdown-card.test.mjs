@@ -145,8 +145,8 @@ test('TrendBreakdownCard leads with an on-bar input:output split and an output f
   assert.match(src, /<OutputFunnel inputPct=\{inputPct\} color=\{OUTPUT_COLOR\}/);
   assert.match(src, /points=\{`\$\{inputPct\},0 100,0 100,16 0,16`\}/);
   // Chosen palette B + the synthetic "Tool-call" aggregate row stays gone.
-  assert.match(src, /INPUT_COLOR = '#34C9BE'/);
-  assert.match(src, /OUTPUT_COLOR = '#6176DD'/);
+  assert.match(src, /INPUT_COLOR = '#0f766e'/);
+  assert.match(src, /OUTPUT_COLOR = '#4f46e5'/);
   assert.doesNotMatch(src, /label: 'Tool-call'/);
 });
 

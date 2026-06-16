@@ -106,7 +106,7 @@ test('startup snapshot normalizer marks recent snapshots as restored UI state', 
 });
 
 test('startup snapshot schema version is bumped for provider-keyed usage data', () => {
-  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 4);
+  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 5);
 });
 
 test('startup snapshot normalizer rejects stale and mismatched snapshots', () => {

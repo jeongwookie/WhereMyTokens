@@ -189,6 +189,21 @@ test('not partial when collection started before the bucket even if usage is spa
   assert.equal(b.partialSinceDate, undefined);
 });
 
+test('pre-boundary bucket surfaces breakdown availability date', () => {
+  const b = assembleBucketBreakdown(
+    'day',
+    '2026-06-08',
+    usageWith({}),
+    {},
+    emptyGit(),
+    [],
+    '2026-06-10',
+    allVisibleFilter(),
+  );
+  assert.equal(b.partialSinceDate, '2026-06-10');
+  assert.deepEqual(b.providers, []);
+});
+
 test('netLines is null when the bucket has no commits in range', () => {
   const b = assembleBucketBreakdown(
     'day',

@@ -10,6 +10,7 @@ interface StoreLike {
 }
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_KEY_RE = /^\d{4}-\d{2}$/;
 
 function objectRecord<T>(value: unknown): Record<string, T> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -23,6 +24,40 @@ function finiteNumber(value: unknown): number | null {
 
 function isProviderId(value: unknown): value is ProviderId {
   return value === 'claude' || value === 'codex' || value === 'antigravity';
+}
+
+function isUsageLedgerProviderId(value: unknown): boolean {
+  return isProviderId(value) || value === 'other';
+}
+
+function validDateKey(value: string): boolean {
+  if (!DATE_KEY_RE.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year
+    && date.getMonth() === month - 1
+    && date.getDate() === day;
+}
+
+function validMonthKey(value: string): boolean {
+  if (!MONTH_KEY_RE.test(value)) return false;
+  const month = Number(value.slice(5, 7));
+  return month >= 1 && month <= 12;
+}
+
+function validDailyModelKey(key: string): boolean {
+  const [date, provider, ...modelParts] = key.split('|');
+  return validDateKey(date) && isUsageLedgerProviderId(provider) && modelParts.join('|').length > 0;
+}
+
+function validMonthlyModelKey(key: string): boolean {
+  const [month, provider, ...modelParts] = key.split('|');
+  return validMonthKey(month) && isUsageLedgerProviderId(provider) && modelParts.join('|').length > 0;
+}
+
+function validDailyBreakdownKey(key: string): boolean {
+  const parts = key.split('|');
+  return parts.length === 2 && validDateKey(parts[0]) && isUsageLedgerProviderId(parts[1]);
 }
 
 function normalizeAggregate(value: unknown): UsageAggregate | null {
@@ -42,10 +77,14 @@ function normalizeAggregate(value: unknown): UsageAggregate | null {
   return { requestCount, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens, totalTokens, costUSD, cacheSavingsUSD };
 }
 
-function normalizeAggregateRecord(value: unknown): Record<string, UsageAggregate> {
+function normalizeAggregateRecord(
+  value: unknown,
+  keyValidator?: (key: string) => boolean,
+): Record<string, UsageAggregate> {
   const normalized: Record<string, UsageAggregate> = {};
   for (const [key, aggregate] of Object.entries(objectRecord<unknown>(value))) {
     const next = normalizeAggregate(aggregate);
+    if (next && keyValidator && !keyValidator(key)) throw new Error(`dirty aggregate key ${key}`);
     if (next) normalized[key] = next;
   }
   return normalized;
@@ -78,6 +117,7 @@ function normalizeDailyBreakdownRecord(value: unknown): Record<string, DailyBrea
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const normalized: Record<string, DailyBreakdownRow> = {};
   for (const [key, rowValue] of Object.entries(value as Record<string, unknown>)) {
+    if (!validDailyBreakdownKey(key)) throw new Error(`dirty dailyBreakdown key ${key}`);
     const raw = objectRecord<unknown>(rowValue);
     const delta = normalizeBreakdownDelta(raw);
     if (!delta) throw new Error(`dirty dailyBreakdown row ${key}`);
@@ -95,7 +135,9 @@ function normalizeRecentBreakdownIndex(value: unknown): UsageLedgerSnapshot['rec
     const raw = objectRecord<unknown>(entry);
     const delta = normalizeBreakdownDelta(raw.delta);
     if (!delta) throw new Error(`dirty recentBreakdownIndex delta ${key}`);
-    if (typeof raw.dailyBreakdownKey !== 'string') continue;
+    if (typeof raw.dailyBreakdownKey !== 'string' || !validDailyBreakdownKey(raw.dailyBreakdownKey)) {
+      throw new Error(`dirty recentBreakdownIndex key ${key}`);
+    }
     normalized[key] = { dailyBreakdownKey: raw.dailyBreakdownKey, delta };
   }
   return normalized;
@@ -145,8 +187,8 @@ function normalizeSnapshot(value: unknown): UsageLedgerSnapshot {
       minuteRecent: normalizeAggregateRecord(raw.minuteRecent),
       recentRequestIndex: normalizeRecentRequestIndex(raw.recentRequestIndex),
       hourlyActivity: normalizeAggregateRecord(raw.hourlyActivity),
-      dailyModel: normalizeAggregateRecord(raw.dailyModel),
-      monthlyModel: normalizeAggregateRecord(raw.monthlyModel),
+      dailyModel: normalizeAggregateRecord(raw.dailyModel, validDailyModelKey),
+      monthlyModel: normalizeAggregateRecord(raw.monthlyModel, validMonthlyModelKey),
       dailyBreakdown: normalizeDailyBreakdownRecord(raw.dailyBreakdown),
       recentBreakdownIndex: normalizeRecentBreakdownIndex(raw.recentBreakdownIndex),
       breakdownStartedDate: raw.breakdownStartedDate ?? null,

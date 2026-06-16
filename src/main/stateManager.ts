@@ -747,11 +747,23 @@ export class StateManager {
   }
 
   async getBreakdown(grain: BreakdownGrain, bucketKey: string): Promise<BucketBreakdown> {
+    const settings = this.getSettings();
     const usage = this.usageLedgerStore.getSnapshot();
-    const git = this.gitOutputLedgerStore.getSnapshot();
     const repoKeys = this.getCurrentLedgerRepoKeys();
-    const usageVisibilityFilter = buildUsageVisibilityFilter(this.getSettings());
-    return buildBreakdown(usage, git, repoKeys, usage.breakdownStartedDate, grain, bucketKey, usageVisibilityFilter);
+    const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
+    const canUseUsage = this.canUseUsageLedger(usage, settings);
+    const canUseGit = (settings.excludedProjects?.length ?? 0) === 0 && repoKeys.length > 0;
+    const scopedUsage = canUseUsage ? usage : { dailyBreakdown: {}, dailyModel: {} };
+    const scopedGit = canUseGit ? this.gitOutputLedgerStore.getSnapshot() : { dailyOutput: {} };
+    return buildBreakdown(
+      scopedUsage,
+      scopedGit,
+      repoKeys,
+      canUseUsage ? usage.breakdownStartedDate : null,
+      grain,
+      bucketKey,
+      usageVisibilityFilter,
+    );
   }
 
   private getPersistedValue(key: string, fallback: unknown = null): unknown {

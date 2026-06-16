@@ -185,3 +185,30 @@ test('compaction removes expired minute, request index, hourly, daily, breakdown
   assert.equal(Object.keys(compacted.sourceRepairRollup).length, 1);
   assert.equal(compacted.lastCompactedAt, now);
 });
+
+test('compaction keeps breakdown index for retained daily breakdown rows', () => {
+  const now = Date.parse('2026-05-25T12:00:00Z');
+  const delta = breakdownDelta();
+  const snapshot = {
+    ...emptyUsageLedgerSnapshot(),
+    recentRequestIndex: {
+      'source|old-request': {
+        minuteKey: minuteKey(now - 9 * 24 * 60 * 60 * 1000, 'claude', 'old'),
+        aggregate: emptyUsageAggregate(),
+        lastSeenMs: now - 9 * 24 * 60 * 60 * 1000,
+      },
+    },
+    dailyBreakdown: {
+      '2026-05-10|claude': emptyDailyBreakdownRow('2026-05-10'),
+    },
+    recentBreakdownIndex: {
+      'source|old-request': { dailyBreakdownKey: '2026-05-10|claude', delta },
+    },
+  };
+
+  const compacted = compactUsageLedgerSnapshot(snapshot, now);
+
+  assert.deepEqual(Object.keys(compacted.recentRequestIndex), []);
+  assert.deepEqual(Object.keys(compacted.dailyBreakdown), ['2026-05-10|claude']);
+  assert.deepEqual(Object.keys(compacted.recentBreakdownIndex), ['source|old-request']);
+});

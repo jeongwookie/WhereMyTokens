@@ -5,7 +5,7 @@ import Store from 'electron-store';
 import { AppState, DebugMemSnapshot } from './stateManager';
 import { getHistory, clearHistory } from './notificationHistory';
 import { isDebugInstrumentationEnabled } from './debugInstrumentation';
-import type { BreakdownGrain } from '../shared/bucketKey';
+import { isBreakdownGrain, isBucketKeyForGrain, type BreakdownGrain } from '../shared/bucketKey';
 import type { BucketBreakdown } from '../shared/breakdownTypes';
 import {
   disableIntegration,
@@ -303,8 +303,11 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
     if (rebuildUsageLedger) await rebuildUsageLedger();
     return getState();
   });
-  ipc.handle('breakdown:get', async (_e, grain: BreakdownGrain, bucketKey: string) => {
+  ipc.handle('breakdown:get', async (_e, grain: unknown, bucketKey: unknown) => {
     if (!getBreakdown) throw new Error('breakdown:get not wired');
+    if (!isBreakdownGrain(grain) || !isBucketKeyForGrain(grain, bucketKey)) {
+      throw new Error('invalid breakdown request');
+    }
     return getBreakdown(grain, bucketKey);
   });
 

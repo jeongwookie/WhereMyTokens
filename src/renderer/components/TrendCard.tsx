@@ -41,8 +41,8 @@ const GRAINS: Grain[] = ['day', 'week', 'month'];
 const METRICS: Metric[] = ['cost', 'tokens'];
 const CACHE_VIEWS: CacheView[] = ['work', 'billing'];
 const CACHE_VIEW_LABELS: Record<CacheView, string> = {
-  work: 'Off',
-  billing: 'On',
+  work: 'Work',
+  billing: 'Billing',
 };
 const TREND_COST_COLOR = 'gpt4';
 const CHART = { width: 330, height: 126, left: 12, right: 52, top: 12, bottom: 24 };
@@ -77,6 +77,17 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const activeIndex = Math.max(0, Math.min(rows.length - 1, hoverIndex === null ? rows.length - 1 : hoverIndex));
   const activeRow = rows[activeIndex] ?? rows[rows.length - 1];
   const selectedIndex = selectedKey === null ? -1 : rows.findIndex(row => row.key === selectedKey);
+  const selectedRow = selectedIndex >= 0 ? rows[selectedIndex] : null;
+  const selectedSignature = selectedRow
+    ? [
+        selectedRow.tokens,
+        selectedRow.noCacheTokens,
+        selectedRow.costUSD,
+        selectedRow.requestCount,
+        selectedRow.netLines,
+        selectedRow.commits,
+      ].join('|')
+    : '';
   const showHoverDetail = hoverIndex !== null;
   const primaryColor = metric === 'cost' ? C[TREND_COST_COLOR] : C.input;
   const outputColor = C.active;
@@ -93,7 +104,11 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const outputPaths = hasOutputSeries ? pathsForRows(rows, points, row => row.hasOutput, point => point.outputY) : [];
 
   useEffect(() => {
-    if (selectedKey === null) {
+    if (selectedKey !== null && selectedRow === null) {
+      setSelectedKey(null);
+      return;
+    }
+    if (selectedKey === null || selectedRow === null) {
       setBreakdown(null);
       setBreakdownError(null);
       setLoading(false);
@@ -119,7 +134,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [selectedKey, grain]);
+  }, [selectedKey, selectedRow, selectedSignature, grain]);
 
   function selectHoverIndex(nextIndex: number) {
     setHoverIndex(prev => prev === nextIndex ? prev : nextIndex);
@@ -141,6 +156,18 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
     const index = hoverIndexForX(rawX, rows.length, CHART.width);
     const row = rows[index];
     if (row) setSelectedKey(prev => nextSelection(prev, row.key));
+  }
+
+  function selectActiveBucket() {
+    if (rows.length === 0) return;
+    const row = rows[activeIndex] ?? rows[rows.length - 1];
+    if (row) setSelectedKey(prev => nextSelection(prev, row.key));
+  }
+
+  function handleChartKeyDown(e: React.KeyboardEvent<SVGSVGElement>) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    selectActiveBucket();
   }
 
   function handleMouseLeave() {
@@ -201,10 +228,14 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
             width={CHART.width}
             height={CHART.height}
             preserveAspectRatio="none"
-            role="img"
-            aria-label="Trend"
-            style={{ width: '100%', display: 'block', overflow: 'visible' }}
+            role="button"
+            aria-label="Trend bucket breakdown"
+            aria-pressed={selectedKey !== null}
+            tabIndex={0}
+            onKeyDown={handleChartKeyDown}
+            style={{ width: '100%', display: 'block', overflow: 'visible', cursor: rows.length > 0 ? 'pointer' : 'default' }}
           >
+            <title>Select a trend bucket for breakdown</title>
             {rows.length === 0 && (
               <text x={CHART.width / 2} y={CHART.height / 2} textAnchor="middle" fill={C.textMuted} fontSize={10} fontFamily={C.fontMono}>
                 No trend data yet
@@ -241,7 +272,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
               width={CHART.width}
               height={CHART.height - CHART.top - CHART.bottom}
               fill="transparent"
-              style={{ pointerEvents: 'all' }}
+              style={{ pointerEvents: 'all', cursor: rows.length > 0 ? 'pointer' : 'default' }}
               onMouseMove={handleMouseMove}
               onClick={handleChartClick}
             />
@@ -274,7 +305,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 3px 0', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, opacity: hasUsageSeries ? 1 : 0.45 }}>
             <span style={{ width: 16, height: 2, background: primaryColor, display: 'inline-block', borderRadius: 999 }} />
-            <span>{metric}</span>
+            <span>{metric === 'tokens' ? `${cacheView} tokens` : metric}</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, opacity: hasOutputSeries ? 1 : 0.45 }}>
             <span style={{ width: 16, height: 2, background: outputColor, display: 'inline-block', borderRadius: 999 }} />

@@ -153,7 +153,9 @@ export function compactUsageLedgerSnapshot(snapshot: UsageLedgerSnapshot, nowMs 
   const dailyBreakdown = keepByTimestamp(snapshot.dailyBreakdown, nowMs - DAILY_BREAKDOWN_RETENTION_MS);
   const recentBreakdownIndex: UsageLedgerSnapshot['recentBreakdownIndex'] = {};
   for (const [key, value] of Object.entries(snapshot.recentBreakdownIndex)) {
-    if (key in recentIndex) recentBreakdownIndex[key] = value;
+    if (Object.prototype.hasOwnProperty.call(dailyBreakdown, value.dailyBreakdownKey)) {
+      recentBreakdownIndex[key] = value;
+    }
   }
 
   return {

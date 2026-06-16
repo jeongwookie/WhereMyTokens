@@ -152,3 +152,30 @@ test('registerIpcHandlers wires breakdown:get to invoke through', async () => {
   assert.deepEqual(calls, [['week', '2026-06-08']]);
   assert.equal(result, expected);
 });
+
+test('registerIpcHandlers rejects invalid breakdown:get payloads', async () => {
+  const handlers = new Map();
+  const fakeIpc = {
+    handle: (channel, fn) => {
+      handlers.set(channel, fn);
+    },
+  };
+
+  registerIpcHandlers({
+    ipcMain: fakeIpc,
+    store: { store: {} },
+    getState: () => ({}),
+    forceRefresh: async () => {},
+    applySettingsChange: () => {},
+    getBreakdown: async () => ({ grain: 'day', bucketKey: '2026-06-08', providers: [], netLines: null }),
+  });
+
+  await assert.rejects(
+    () => handlers.get('breakdown:get')(null, 'wek', '2026-06-08'),
+    /invalid breakdown request/,
+  );
+  await assert.rejects(
+    () => handlers.get('breakdown:get')(null, 'month', '2026-99'),
+    /invalid breakdown request/,
+  );
+});

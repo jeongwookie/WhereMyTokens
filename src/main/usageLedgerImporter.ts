@@ -69,24 +69,42 @@ async function scanJsonlLines(filePath: string, onLine: (line: string, offsetAft
   let buffer = Buffer.alloc(0);
   let consumedBytes = 0;
   await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const fail = (error: unknown): void => {
+      if (settled) return;
+      settled = true;
+      stream.destroy();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+    const done = (): void => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
     stream.on('data', (chunk: Buffer | string) => {
-      const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      buffer = Buffer.concat([buffer, chunkBuffer]);
-      while (true) {
-        const newlineIndex = buffer.indexOf(0x0a);
-        if (newlineIndex < 0) break;
-        let lineBuffer = buffer.subarray(0, newlineIndex);
-        buffer = buffer.subarray(newlineIndex + 1);
-        consumedBytes += newlineIndex + 1;
-        if (lineBuffer.length > 0 && lineBuffer[lineBuffer.length - 1] === 0x0d) {
-          lineBuffer = lineBuffer.subarray(0, lineBuffer.length - 1);
+      if (settled) return;
+      try {
+        const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        buffer = Buffer.concat([buffer, chunkBuffer]);
+        while (true) {
+          const newlineIndex = buffer.indexOf(0x0a);
+          if (newlineIndex < 0) break;
+          let lineBuffer = buffer.subarray(0, newlineIndex);
+          buffer = buffer.subarray(newlineIndex + 1);
+          consumedBytes += newlineIndex + 1;
+          if (lineBuffer.length > 0 && lineBuffer[lineBuffer.length - 1] === 0x0d) {
+            lineBuffer = lineBuffer.subarray(0, lineBuffer.length - 1);
+          }
+          const line = lineBuffer.toString('utf8');
+          if (line.trim()) onLine(line, startOffset + consumedBytes);
         }
-        const line = lineBuffer.toString('utf8');
-        if (line.trim()) onLine(line, startOffset + consumedBytes);
+      } catch (error) {
+        fail(error);
       }
     });
-    stream.on('error', reject);
+    stream.on('error', fail);
     stream.on('end', () => {
+      if (settled) return;
       let trailingBuffer = buffer;
       if (trailingBuffer.length > 0 && trailingBuffer[trailingBuffer.length - 1] === 0x0d) {
         trailingBuffer = trailingBuffer.subarray(0, trailingBuffer.length - 1);
@@ -95,13 +113,20 @@ async function scanJsonlLines(filePath: string, onLine: (line: string, offsetAft
       if (trailing.trim()) {
         try {
           JSON.parse(trailing);
-          consumedBytes += buffer.length;
-          onLine(trailing, startOffset + consumedBytes);
         } catch {
           // Keep partial trailing JSONL out of the ledger until the next append completes it.
+          done();
+          return;
+        }
+        try {
+          onLine(trailing, startOffset + consumedBytes + buffer.length);
+          consumedBytes += buffer.length;
+        } catch (error) {
+          fail(error);
+          return;
         }
       }
-      resolve();
+      done();
     });
   });
   return startOffset + consumedBytes;

@@ -111,6 +111,32 @@ test('usage ledger store hard-cuts dirty daily breakdown rows on load', () => {
   assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
 });
 
+test('usage ledger store hard-cuts dirty daily model keys on load', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyModel: {
+      '2026-06-15|bogus|model': emptyUsageAggregate(),
+    },
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store hard-cuts dirty daily breakdown keys on load', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyBreakdown: {
+      '2026-06-15|bogus': validDailyBreakdownRow(),
+    },
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
 test('usage ledger store hard-cuts v5 daily breakdown rows with negative tool output on load', () => {
   const fake = new FakeStore();
   fake.state.ledger = {

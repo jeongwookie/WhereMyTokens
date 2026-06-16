@@ -257,6 +257,28 @@ test('Codex open turn is re-read on next import and attributed to closing token_
   assert.ok(second.sourceCheckpoints[sourceHash].byteOffset > 0);
 });
 
+test('Codex breakdown parser errors reject without advancing checkpoint', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'codex-breakdown-error.jsonl');
+  fs.writeFileSync(filePath, [
+    codexMetaLine(),
+    codexTokenLine({
+      timestamp: '2026-05-25T10:15:00.000Z',
+      output: 5,
+      reasoning: 10,
+    }),
+  ].join('\n'), 'utf8');
+
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.breakdownStartedDate = '2026-05-25';
+
+  await assert.rejects(
+    () => importUsageJsonlIntoSnapshot(snapshot, filePath, 'codex', Date.parse('2026-05-25T12:00:00.000Z')),
+    /exactThinkingTokens/,
+  );
+  assert.deepEqual(snapshot.sourceCheckpoints, {});
+});
+
 test('usage importer dedupes a Codex session imported from active and archive paths', async () => {
   const dir = tempDir();
   const activePath = path.join(dir, 'sessions', 'session.jsonl');

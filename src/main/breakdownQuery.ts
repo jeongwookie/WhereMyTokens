@@ -225,7 +225,7 @@ export function assembleBucketBreakdown(
   const categoryNetLines = buildCategoryNetLines(git as GitOutputLedgerSnapshot, repoKeys, startDate, endDate);
   const netLines = hasCommitsInRange(git, repoKeys, startDate, endDate) ? categoryNetLines : null;
   const partialSinceDate =
-    breakdownStartedDate !== null && startDate < breakdownStartedDate && breakdownStartedDate <= endDate
+    breakdownStartedDate !== null && startDate < breakdownStartedDate
       ? breakdownStartedDate
       : undefined;
 

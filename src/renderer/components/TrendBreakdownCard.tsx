@@ -17,8 +17,8 @@ interface Props {
   error?: unknown;
 }
 
-const INPUT_COLOR = '#34C9BE';  // level-1 input segment + label
-const OUTPUT_COLOR = '#6176DD'; // level-1 output segment + funnel + label
+const INPUT_COLOR = '#0f766e';  // level-1 input segment + label
+const OUTPUT_COLOR = '#4f46e5'; // level-1 output segment + funnel + label
 const THINKING_COLOR = '#2dd4bf';
 const RESPONSE_COLOR = '#94a3b8';
 // Pinned output rows always render even when small; the rest collapse behind a toggle.
@@ -61,6 +61,14 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
     );
   }
 
+  if (loading && !breakdown) {
+    return (
+      <div style={shellStyle(C)}>
+        <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>Loading breakdown...</div>
+      </div>
+    );
+  }
+
   return (
     <div style={shellStyle(C)}>
       {loading && <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, marginBottom: 8 }}>Loading breakdown...</div>}
@@ -69,7 +77,7 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {blocks.partialSinceDate && (
             <div style={{ fontSize: 10, color: C.waiting, fontFamily: C.fontMono }}>
-              Partial data since {blocks.partialSinceDate}
+              Breakdown data since {blocks.partialSinceDate}
             </div>
           )}
           {providerNames.length > 0 && (
@@ -84,7 +92,7 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
                   padding: '1px 5px',
                   fontFamily: C.fontMono,
                 }}>
-                  {provider}
+                  {providerLabel(provider)}
                 </span>
               ))}
             </div>
@@ -97,7 +105,7 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
             <OutputCompositionBlock providers={blocks.perProviderOutput} />
           )}
 
-          <SectionTitle title="Tool usage" unit="calls · ≈tok" />
+          <SectionTitle title={providerNames.length > 1 ? 'Tool usage · all providers' : 'Tool usage'} unit="calls · ≈tok" />
           <MergedToolBlock tools={blocks.toolMerged} />
         </div>
 
@@ -111,6 +119,13 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
 }
 
 export default React.memo(TrendBreakdownCard);
+
+function providerLabel(provider: string): string {
+  if (provider === 'claude') return 'Claude';
+  if (provider === 'codex') return 'Codex';
+  if (provider === 'antigravity') return 'Antigravity';
+  return provider;
+}
 
 function SectionTitle({ title, unit }: { title: string; unit: string }) {
   const C = useTheme();
@@ -167,7 +182,7 @@ function ProviderCompositionRows({ provider }: { provider: ProviderOutputBlock }
 
   return (
     <div>
-      <TotalLine value={fmtTokens(Math.round(provider.total))} label={provider.provider} />
+      <TotalLine value={fmtTokens(Math.round(provider.total))} label={providerLabel(provider.provider)} />
       {ioSegments.length > 0 && (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -377,7 +392,23 @@ function MetricRow({
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
         <span style={{ width: 7, height: 7, borderRadius: 2, background: color, flexShrink: 0 }} />
         <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{label}</span>
-        <span style={{ fontSize: 10, fontFamily: C.fontMono, color: mutedColor ?? C.textMuted, width: valueWidth, textAlign: 'right', flexShrink: 0 }}>{value}</span>
+        <span
+          title={value}
+          style={{
+            fontSize: 10,
+            fontFamily: C.fontMono,
+            color: mutedColor ?? C.textMuted,
+            width: valueWidth,
+            textAlign: 'right',
+            flexShrink: 0,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {value}
+        </span>
         {!hidePct && <span style={{ fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, width: 26, textAlign: 'right', flexShrink: 0 }}>{Math.round(pct)}%</span>}
       </div>
       {!hidePct && (

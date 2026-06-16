@@ -58,7 +58,7 @@ test('TrendCard uses Code Output-style fixed chart coordinates with CSS scaling'
   assert.match(trendCard, /viewBox=\{`0 0 \$\{CHART\.width\} \$\{CHART\.height\}`\}/);
   assert.match(trendCard, /width=\{CHART\.width\}/);
   assert.match(trendCard, /preserveAspectRatio="none"/);
-  assert.match(trendCard, /style=\{\{ width: '100%', display: 'block', overflow: 'visible' \}\}/);
+  assert.match(trendCard, /style=\{\{ width: '100%', display: 'block', overflow: 'visible', cursor: rows\.length > 0 \? 'pointer' : 'default' \}\}/);
   assert.match(trendCard, /xFor\(index, rows\.length, CHART\.width\)/);
   assert.match(trendCard, /function tooltipLeft\(index: number, count: number, chartWidth: number\): number \{[\s\S]*chartWidth - 6/);
 });
@@ -91,8 +91,8 @@ test('TrendCard offers work and billing cache views for token trends', () => {
   assert.match(trendCard, /'work'/);
   assert.match(trendCard, /'billing'/);
   assert.match(trendCard, /useState<CacheView>\('work'\)/);
-  assert.match(trendCard, /work: 'Off'/);
-  assert.match(trendCard, /billing: 'On'/);
+  assert.match(trendCard, /work: 'Work'/);
+  assert.match(trendCard, /billing: 'Billing'/);
   assert.match(trendCard, /labels=\{CACHE_VIEW_LABELS\}/);
   assert.match(trendCard, /cacheView === 'work' \? row\.noCacheTokens : row\.tokens/);
 });
@@ -108,12 +108,16 @@ test('TrendCard labels request count in English and subordinates cache controls 
   assert.match(trendCard, /metric === 'tokens' && \(/);
   assert.match(trendCard, /cacheModifier/);
   assert.match(trendCard, /CACHE_VIEWS/);
+  assert.match(trendCard, /work: 'Work'/);
+  assert.match(trendCard, /billing: 'Billing'/);
 });
 
 test('TrendCard wires click selection to the inline breakdown card', () => {
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(trendCard, /window\.wmt\.getBreakdown/);
   assert.match(trendCard, /<TrendBreakdownCard/);
+  assert.match(trendCard, /role="button"/);
+  assert.match(trendCard, /handleChartKeyDown/);
 });
 
 test('TrendCard does not draw missing usage or output buckets as zero-value trend lines', () => {
