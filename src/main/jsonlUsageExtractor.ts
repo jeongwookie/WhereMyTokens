@@ -4,6 +4,7 @@ export interface ExtractedUsageLine {
   entry: CompactRecentEntry;
   rawModel: string;
   contextMax?: number;
+  reasoningOutputTokens?: number;
   toolNames: string[];
 }
 
@@ -195,6 +196,7 @@ export function extractCodexUsageLine(
     const cachedInput = Math.min(rawInput, finiteToken(usage.cached_input_tokens));
     const inp = Math.max(0, rawInput - cachedInput);
     const out = finiteToken(usage.output_tokens);
+    const reasoningOutputTokens = finiteToken(usage.reasoning_output_tokens);
     const cr = cachedInput;
     if (inp + out + cr === 0) return null;
 
@@ -204,6 +206,7 @@ export function extractCodexUsageLine(
     return {
       rawModel,
       contextMax: asNumber(info?.model_context_window),
+      reasoningOutputTokens,
       entry: {
         requestId: codexEntryId(sourceKey, line, timestamp),
         timestampMs,

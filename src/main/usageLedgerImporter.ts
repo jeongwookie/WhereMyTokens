@@ -10,15 +10,26 @@ import {
   aggregateFromUsageEntry,
   cloneUsageLedgerSnapshot,
   importUsageEntriesIntoSnapshot,
+  type UsageLedgerIngestUsageEntry,
 } from './usageLedgerIngest';
 import { CompactRecentEntry } from './jsonlTypes';
+import { localDateKey } from './usageLedgerAggregates';
+import { claudeLedgerBreakdown, codexFunctionCallCategory } from './activityClassifier';
 import { extractClaudeUsageLine, extractCodexUsageLine } from './jsonlUsageExtractor';
+import { compositionToDelta, splitOutput } from './outputSplitter';
 import { readCodexSessionHeader } from './sessionMetadata';
+import {
+  emptyToolActivity,
+  emptyToolOutput,
+  TOOL_ACTIVITY_KEYS,
+  type ToolActivity,
+  type ToolCategory,
+} from '../shared/breakdownTypes';
 
 type ImportProvider = 'claude' | 'codex';
 
 interface SourceEntry {
-  entry: CompactRecentEntry & { provider: ImportProvider };
+  entry: UsageLedgerIngestUsageEntry & { provider: ImportProvider };
   aggregate: UsageAggregate;
 }
 
@@ -53,7 +64,7 @@ export function sourceHashForPath(filePath: string, provider: ImportProvider = '
   return sourceHashForIdentity(sourceIdentityForPath(filePath, provider));
 }
 
-async function scanJsonlLines(filePath: string, onLine: (line: string) => void, startOffset = 0): Promise<number> {
+async function scanJsonlLines(filePath: string, onLine: (line: string, offsetAfterLine: number) => void, startOffset = 0): Promise<number> {
   const stream = fs.createReadStream(filePath, { start: startOffset });
   let buffer = Buffer.alloc(0);
   let consumedBytes = 0;
@@ -71,7 +82,7 @@ async function scanJsonlLines(filePath: string, onLine: (line: string) => void, 
           lineBuffer = lineBuffer.subarray(0, lineBuffer.length - 1);
         }
         const line = lineBuffer.toString('utf8');
-        if (line.trim()) onLine(line);
+        if (line.trim()) onLine(line, startOffset + consumedBytes);
       }
     });
     stream.on('error', reject);
@@ -84,8 +95,8 @@ async function scanJsonlLines(filePath: string, onLine: (line: string) => void, 
       if (trailing.trim()) {
         try {
           JSON.parse(trailing);
-          onLine(trailing);
           consumedBytes += buffer.length;
+          onLine(trailing, startOffset + consumedBytes);
         } catch {
           // Keep partial trailing JSONL out of the ledger until the next append completes it.
         }
@@ -96,25 +107,41 @@ async function scanJsonlLines(filePath: string, onLine: (line: string) => void, 
   return startOffset + consumedBytes;
 }
 
-async function collectSourceEntries(
+export async function collectSourceEntries(
   filePath: string,
   provider: ImportProvider,
   nowMs: number,
   startOffset = 0,
   fallbackRawModel = '',
   sourceIdentity = normalizedSourcePath(filePath),
+  breakdownBoundary = localDateKey(nowMs),
 ): Promise<SourceScanResult> {
+  const onOrAfterBoundary = (timestampMs: number): boolean => localDateKey(timestampMs) >= breakdownBoundary;
+
   if (provider === 'claude') {
     const byRequest = new Map<string, SourceEntry>();
     const byteOffset = await scanJsonlLines(filePath, (line) => {
       const extracted = extractClaudeUsageLine(line, nowMs);
       if (!extracted || extracted.entry.provider !== 'claude') return;
       const entry = extracted.entry as CompactRecentEntry & { provider: 'claude' };
+      let breakdown: UsageLedgerIngestUsageEntry['breakdown'];
+      if (onOrAfterBoundary(entry.timestampMs)) {
+        let obj: Record<string, unknown> | null = null;
+        try {
+          obj = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          obj = null;
+        }
+        const message = obj?.message as Record<string, unknown> | undefined;
+        const content = message?.content as unknown[] | undefined;
+        breakdown = claudeLedgerBreakdown(content ?? [], entry.outputTokens);
+      }
+      const withBreakdown = { ...entry, breakdown };
       const current = byRequest.get(entry.requestId);
       if (current && current.entry.outputTokens >= entry.outputTokens) return;
       byRequest.set(entry.requestId, {
-        entry,
-        aggregate: aggregateFromUsageEntry(entry),
+        entry: withBreakdown,
+        aggregate: aggregateFromUsageEntry(withBreakdown),
       });
     }, startOffset);
     return { entries: [...byRequest.values()], byteOffset };
@@ -122,7 +149,24 @@ async function collectSourceEntries(
 
   const entries: SourceEntry[] = [];
   let rawModel = fallbackRawModel;
-  const byteOffset = await scanJsonlLines(filePath, (line) => {
+  let pendingTurn: {
+    responseChars: number;
+    toolChars: Record<ToolCategory, number>;
+    toolCounts: ToolActivity;
+  } = {
+    responseChars: 0,
+    toolChars: emptyToolOutput(),
+    toolCounts: emptyToolActivity(),
+  };
+  let lastCompleteTurnOffset = startOffset;
+  const resetPendingTurn = (): void => {
+    pendingTurn = {
+      responseChars: 0,
+      toolChars: emptyToolOutput(),
+      toolCounts: emptyToolActivity(),
+    };
+  };
+  await scanJsonlLines(filePath, (line, offsetAfterLine) => {
     let obj: Record<string, unknown>;
     try {
       obj = JSON.parse(line) as Record<string, unknown>;
@@ -142,13 +186,59 @@ async function collectSourceEntries(
       if (model) rawModel = model;
     }
 
+    if (payload?.type === 'function_call' && typeof payload.name === 'string') {
+      const timestamp = obj.timestamp as string | undefined;
+      const timestampMs = timestamp ? new Date(timestamp).getTime() : NaN;
+      if (Number.isFinite(timestampMs) && onOrAfterBoundary(timestampMs)) {
+        const args = String(payload.arguments ?? '');
+        const category = codexFunctionCallCategory(payload.name, args);
+        pendingTurn.toolChars[category] += args.length + payload.name.length;
+        pendingTurn.toolCounts[category] += 1;
+      }
+      return;
+    }
+
+    if (payload?.type === 'message' && payload.role === 'assistant') {
+      const timestamp = obj.timestamp as string | undefined;
+      const timestampMs = timestamp ? new Date(timestamp).getTime() : NaN;
+      if (Number.isFinite(timestampMs) && onOrAfterBoundary(timestampMs)) {
+        const content = payload.content as unknown;
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            const item = block as Record<string, unknown>;
+            if ((item.type === 'output_text' || item.type === 'text') && typeof item.text === 'string') {
+              pendingTurn.responseChars += item.text.length;
+            }
+          }
+        }
+      }
+      return;
+    }
+
     const extracted = extractCodexUsageLine(sourceIdentity, line, nowMs, rawModel);
     if (!extracted || extracted.entry.provider !== 'codex') return;
     if (!rawModel) rawModel = extracted.rawModel;
     const entry = extracted.entry as CompactRecentEntry & { provider: 'codex' };
-    entries.push({ entry, aggregate: aggregateFromUsageEntry(entry) });
+    let breakdown: UsageLedgerIngestUsageEntry['breakdown'];
+    if (onOrAfterBoundary(entry.timestampMs)) {
+      const composition = splitOutput(
+        {
+          thinkingChars: 0,
+          responseChars: pendingTurn.responseChars,
+          toolChars: pendingTurn.toolChars,
+        },
+        entry.outputTokens,
+        extracted.reasoningOutputTokens,
+      );
+      breakdown = compositionToDelta(composition);
+      for (const key of TOOL_ACTIVITY_KEYS) breakdown[key] = pendingTurn.toolCounts[key];
+    }
+    const withBreakdown = { ...entry, breakdown, countsAsUsage: true };
+    entries.push({ entry: withBreakdown, aggregate: aggregateFromUsageEntry(withBreakdown) });
+    resetPendingTurn();
+    lastCompleteTurnOffset = offsetAfterLine;
   }, startOffset);
-  return { entries, byteOffset, rawModel };
+  return { entries, byteOffset: lastCompleteTurnOffset, rawModel };
 }
 
 function markNeedsRebuild(checkpoint: SourceCheckpoint, nowMs: number, reason: string): SourceCheckpoint {
@@ -201,6 +291,7 @@ export async function importUsageJsonlIntoSnapshot(
     return next;
   }
 
+  const breakdownBoundary = snapshot.breakdownStartedDate ?? localDateKey(nowMs);
   const { entries, byteOffset, rawModel } = await collectSourceEntries(
     filePath,
     provider,
@@ -208,6 +299,7 @@ export async function importUsageJsonlIntoSnapshot(
     startOffset,
     currentCheckpoint?.rawModel ?? '',
     sourceIdentity,
+    breakdownBoundary,
   );
   return importUsageEntriesIntoSnapshot(snapshot, {
     provider,

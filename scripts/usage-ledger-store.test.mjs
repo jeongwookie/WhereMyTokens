@@ -3,10 +3,43 @@ import assert from 'node:assert/strict';
 
 import storeModule from '../dist/main/usageLedgerStore.js';
 import aggregates from '../dist/main/usageLedgerAggregates.js';
+import types from '../dist/main/usageLedgerTypes.js';
 
 const { UsageLedgerStore } = storeModule;
 const { emptyUsageLedgerSnapshot, emptyUsageAggregate, minuteKey } = aggregates;
-const EXPECTED_SCHEMA_VERSION = 3;
+const { USAGE_LEDGER_SCHEMA_VERSION } = types;
+const EXPECTED_SCHEMA_VERSION = USAGE_LEDGER_SCHEMA_VERSION;
+
+function validBreakdownDelta(overrides = {}) {
+  return {
+    thinking: 10,
+    response: 20,
+    toolOutputRead: 0,
+    toolOutputEditWrite: 0,
+    toolOutputSearch: 0,
+    toolOutputGit: 0,
+    toolOutputBuildTest: 0,
+    toolOutputTerminal: 0,
+    toolOutputSubagents: 0,
+    toolOutputWeb: 0,
+    read: 1,
+    editWrite: 2,
+    search: 3,
+    git: 4,
+    buildTest: 5,
+    terminal: 6,
+    subagents: 7,
+    web: 8,
+    ...overrides,
+  };
+}
+
+function validDailyBreakdownRow(firstSeenDate = '2026-06-15', overrides = {}) {
+  return {
+    ...validBreakdownDelta(overrides),
+    firstSeenDate,
+  };
+}
 
 class FakeStore {
   constructor() {
@@ -60,6 +93,126 @@ test('usage ledger store reset clears persisted ledger', () => {
   store.replaceSnapshot(snapshot);
   store.reset();
   assert.deepEqual(store.getSnapshot().minuteRecent, {});
+});
+
+test('usage ledger store hard-cuts dirty daily breakdown rows on load', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyBreakdown: {
+      '2026-06-15|claude': {
+        ...validDailyBreakdownRow(),
+        read: -1,
+      },
+    },
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store hard-cuts v5 daily breakdown rows with negative tool output on load', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyBreakdown: {
+      '2026-06-15|claude': validDailyBreakdownRow('2026-06-15', { toolOutputRead: -1 }),
+    },
+    minuteRecent: {
+      [minuteKey(Date.parse('2026-06-15T10:00:00Z'), 'claude', 'sonnet')]: emptyUsageAggregate(),
+    },
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store hard-cuts v5 daily breakdown rows missing a tool output field on load', () => {
+  const fake = new FakeStore();
+  const dirtyRow = validDailyBreakdownRow();
+  delete dirtyRow.toolOutputEditWrite;
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    dailyBreakdown: {
+      '2026-06-15|claude': dirtyRow,
+    },
+    minuteRecent: {
+      [minuteKey(Date.parse('2026-06-15T10:00:00Z'), 'claude', 'sonnet')]: emptyUsageAggregate(),
+    },
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store hard-cuts dirty recent breakdown index deltas on load', () => {
+  const fake = new FakeStore();
+  const dirtyDelta = validBreakdownDelta();
+  delete dirtyDelta.toolOutputEditWrite;
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    minuteRecent: {
+      [minuteKey(Date.parse('2026-06-15T10:00:00Z'), 'claude', 'sonnet')]: emptyUsageAggregate(),
+    },
+    recentBreakdownIndex: {
+      'source|request': {
+        dailyBreakdownKey: '2026-06-15|claude',
+        delta: dirtyDelta,
+      },
+    },
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store resets the whole snapshot for v4 persisted ledgers', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    schemaVersion: 4,
+    minuteRecent: {
+      [minuteKey(Date.parse('2026-06-15T10:00:00Z'), 'claude', 'sonnet')]: emptyUsageAggregate(),
+    },
+    dailyBreakdown: {
+      '2026-06-15|claude': validDailyBreakdownRow(),
+    },
+    recentBreakdownIndex: {
+      'source|request': {
+        dailyBreakdownKey: '2026-06-15|claude',
+        delta: validBreakdownDelta(),
+      },
+    },
+    breakdownStartedDate: '2026-06-15',
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store hard-cuts a malformed breakdownStartedDate on load', () => {
+  const fake = new FakeStore();
+  fake.state.ledger = {
+    ...emptyUsageLedgerSnapshot(),
+    breakdownStartedDate: '2026/06/15', // not YYYY-MM-DD
+  };
+
+  const snapshot = new UsageLedgerStore(fake).getSnapshot();
+  assert.deepEqual(snapshot, emptyUsageLedgerSnapshot());
+});
+
+test('usage ledger store round-trips valid daily breakdown fields', () => {
+  const fake = new FakeStore();
+  const store = new UsageLedgerStore(fake);
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.dailyBreakdown['2026-06-15|claude'] = validDailyBreakdownRow();
+  snapshot.breakdownStartedDate = '2026-06-15';
+
+  store.replaceSnapshot(snapshot);
+  const reloaded = new UsageLedgerStore(fake).getSnapshot();
+
+  assert.deepEqual(reloaded.dailyBreakdown, snapshot.dailyBreakdown);
+  assert.equal(reloaded.breakdownStartedDate, '2026-06-15');
 });
 
 test('usage ledger store drops path-bearing checkpoint fields', () => {

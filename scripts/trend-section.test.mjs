@@ -85,6 +85,37 @@ test('TrendCard labels title totals with the visible grain window', () => {
   assert.match(trendCard, /const limit = GRAIN_WINDOWS\[grain\]\.limit/);
 });
 
+test('TrendCard offers work and billing cache views for token trends', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /cacheView/);
+  assert.match(trendCard, /'work'/);
+  assert.match(trendCard, /'billing'/);
+  assert.match(trendCard, /useState<CacheView>\('work'\)/);
+  assert.match(trendCard, /work: 'Off'/);
+  assert.match(trendCard, /billing: 'On'/);
+  assert.match(trendCard, /labels=\{CACHE_VIEW_LABELS\}/);
+  assert.match(trendCard, /cacheView === 'work' \? row\.noCacheTokens : row\.tokens/);
+});
+
+test('TrendCard labels request count in English and subordinates cache controls to tokens', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /activeRow\.requestCount\} requests/);
+  const legacyRequestLabel = String.fromCharCode(35831, 27714);
+  assert.doesNotMatch(trendCard, new RegExp(`activeRow\\.requestCount\\} ${legacyRequestLabel}`));
+  assert.match(trendCard, /Metric/);
+  assert.match(trendCard, /Cache/);
+  assert.match(trendCard, /Range/);
+  assert.match(trendCard, /metric === 'tokens' && \(/);
+  assert.match(trendCard, /cacheModifier/);
+  assert.match(trendCard, /CACHE_VIEWS/);
+});
+
+test('TrendCard wires click selection to the inline breakdown card', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /window\.wmt\.getBreakdown/);
+  assert.match(trendCard, /<TrendBreakdownCard/);
+});
+
 test('TrendCard does not draw missing usage or output buckets as zero-value trend lines', () => {
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(trendCard, /const primaryValues = rows\.filter\(row => row\.hasUsage\)\.map/);

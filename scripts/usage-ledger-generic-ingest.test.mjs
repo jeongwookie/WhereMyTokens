@@ -5,7 +5,7 @@ import ingestModule from '../dist/main/usageLedgerIngest.js';
 import aggregates from '../dist/main/usageLedgerAggregates.js';
 
 const { importUsageEntriesIntoSnapshot } = ingestModule;
-const { emptyUsageLedgerSnapshot, dayModelKey, monthModelKey } = aggregates;
+const { emptyUsageLedgerSnapshot, dayModelKey, emptyDailyBreakdownRow, localDateKey, monthModelKey } = aggregates;
 
 function entry({
   id,
@@ -192,6 +192,12 @@ test('provider slice replacement is idempotent for Antigravity aggregates', asyn
     hourlyActivity: { [`${usageEntry.timestampMs - (usageEntry.timestampMs % 3600000)}|antigravity`]: aggregate },
     dailyModel: { [dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')]: aggregate },
     monthlyModel: { [monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')]: aggregate },
+    dailyBreakdown: {
+      '2026-06-01|antigravity': {
+        ...emptyDailyBreakdownRow('2026-06-01'),
+        thinking: 10,
+      },
+    },
     sourceCheckpoints: {
       'ag-cache-source': {
         provider: 'antigravity',
@@ -209,6 +215,7 @@ test('provider slice replacement is idempotent for Antigravity aggregates', asyn
 
   assert.equal(second.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].requestCount, 1);
   assert.equal(second.monthlyModel[monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].totalTokens, 305);
+  assert.equal(second.dailyBreakdown['2026-06-01|antigravity'].thinking, 10);
 });
 
 test('provider slice replacement preserves other providers', async () => {
@@ -237,6 +244,7 @@ test('provider slice replacement preserves other providers', async () => {
       },
     },
     monthlyModel: {},
+    dailyBreakdown: {},
     sourceCheckpoints: {},
     sourceRepairRollup: {},
   };
@@ -245,4 +253,88 @@ test('provider slice replacement preserves other providers', async () => {
 
   assert.equal(next.dailyModel[dayModelKey('2026-05-25', 'claude', 'Claude Sonnet')].requestCount, 1);
   assert.equal(next.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')].totalTokens, 10);
+});
+
+test('provider slice replacement preserves other providers dailyBreakdown and recentBreakdownIndex', async () => {
+  const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
+  const base = emptyUsageLedgerSnapshot();
+  base.breakdownStartedDate = '2026-06-01';
+  base.dailyBreakdown['2026-06-01|claude'] = {
+    ...emptyDailyBreakdownRow('2026-06-01'),
+    response: 7,
+  };
+  base.recentBreakdownIndex['claude-source|claude-1'] = {
+    dailyBreakdownKey: '2026-06-01|claude',
+    delta: {
+      thinking: 0,
+      response: 7,
+      read: 0,
+      editWrite: 0,
+      search: 0,
+      git: 0,
+      buildTest: 0,
+      terminal: 0,
+      subagents: 0,
+      web: 0,
+    },
+  };
+  const slice = {
+    provider: 'antigravity',
+    minuteRecent: {},
+    recentRequestIndex: {},
+    hourlyActivity: {},
+    dailyModel: {},
+    monthlyModel: {},
+    dailyBreakdown: {
+      '2026-06-01|antigravity': {
+        ...emptyDailyBreakdownRow('2026-06-01'),
+        thinking: 10,
+      },
+    },
+    sourceCheckpoints: {},
+    sourceRepairRollup: {},
+  };
+
+  const next = ingestModule.replaceProviderUsageSliceInSnapshot(base, slice, nowMs);
+
+  assert.equal(next.dailyBreakdown['2026-06-01|claude'].response, 7);
+  assert.equal(next.dailyBreakdown['2026-06-01|antigravity'].thinking, 10);
+  assert.equal(next.recentBreakdownIndex['claude-source|claude-1'].dailyBreakdownKey, '2026-06-01|claude');
+});
+
+test('R2-002 provider slice replacement gates only pre-boundary dailyBreakdown rows', () => {
+  const nowMs = Date.parse('2026-06-20T12:00:00.000Z');
+  const oldAggregate = aggregateFor(entry({ id: 'old', timestamp: '2026-06-10T10:00:00.000Z' }));
+  const newAggregate = aggregateFor(entry({ id: 'new', timestamp: '2026-06-20T10:00:00.000Z' }));
+  const slice = {
+    provider: 'antigravity',
+    minuteRecent: {},
+    recentRequestIndex: {},
+    hourlyActivity: {},
+    dailyModel: {
+      [dayModelKey('2026-06-10', 'antigravity', 'gemini')]: oldAggregate,
+      [dayModelKey('2026-06-20', 'antigravity', 'gemini')]: newAggregate,
+    },
+    monthlyModel: {},
+    dailyBreakdown: {
+      '2026-06-10|antigravity': {
+        ...emptyDailyBreakdownRow('2026-06-10'),
+        thinking: 5,
+      },
+      '2026-06-20|antigravity': {
+        ...emptyDailyBreakdownRow('2026-06-20'),
+        thinking: 9,
+      },
+    },
+    sourceCheckpoints: {},
+    sourceRepairRollup: {},
+  };
+
+  const snap = ingestModule.replaceProviderUsageSliceInSnapshot(emptyUsageLedgerSnapshot(), slice, nowMs);
+
+  assert.equal(snap.dailyBreakdown['2026-06-10|antigravity'], undefined);
+  assert.equal(snap.dailyBreakdown['2026-06-20|antigravity'].thinking, 9);
+  assert.ok(snap.dailyModel[dayModelKey('2026-06-10', 'antigravity', 'gemini')]);
+  assert.ok(snap.dailyModel[dayModelKey('2026-06-20', 'antigravity', 'gemini')]);
+  assert.equal(snap.breakdownStartedDate, localDateKey(nowMs));
 });

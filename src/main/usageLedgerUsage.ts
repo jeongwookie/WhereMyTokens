@@ -7,12 +7,14 @@ import {
 } from './usageVisibilityFilter';
 import { buildProviderWindowTargets, targetAcceptsModel } from './usageWindowTargets';
 import { cacheEfficiencyDenominator, cacheEfficiencyPct } from './cacheMetrics';
+import { weekKey } from '../shared/bucketKey';
 
 export interface UsageTrendPoint {
   date?: string;
   weekStart?: string;
   month?: string;
   tokens: number;
+  noCacheTokens: number;
   costUSD: number;
   requestCount: number;
 }
@@ -78,17 +80,12 @@ function parseDateMs(date: string): number {
 }
 
 function getWeekStartMs(nowMs: number): number {
-  const now = new Date(nowMs);
-  const day = now.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const start = new Date(now);
-  start.setDate(now.getDate() - diff);
-  start.setHours(0, 0, 0, 0);
-  return start.getTime();
+  // Monday-start rule lives once in shared weekKey (SPOT); derive ms from it.
+  return parseDateMs(weekKey(localDateKey(nowMs)));
 }
 
 function weekStartForDateMs(timestampMs: number): string {
-  return localDateKey(getWeekStartMs(timestampMs));
+  return weekKey(localDateKey(timestampMs));
 }
 
 function weekLabelFromStart(startMs: number): string {
@@ -135,7 +132,7 @@ function isUsageVisibilityFilter(filter: UsageLedgerVisibilityFilter | undefined
   return !!filter && 'providerScopes' in filter;
 }
 
-function modelMatchesFilter(provider: UsageLedgerProvider, _model: string, filter?: UsageLedgerVisibilityFilter): boolean {
+export function modelMatchesFilter(provider: UsageLedgerProvider, _model: string, filter?: UsageLedgerVisibilityFilter): boolean {
   if (!filter) return true;
   if (!isUsageVisibilityFilter(filter)) return filter.has(provider);
   return isProviderId(provider) && usageProviderVisible(filter, provider);
@@ -156,8 +153,9 @@ function addModelTotal(modelMap: Map<string, ModelUsage>, model: string, provide
 }
 
 function addTrendPoint(map: Map<string, UsageTrendPoint>, key: string, aggregate: UsageAggregate, field: 'date' | 'weekStart' | 'month'): void {
-  const current = map.get(key) ?? { [field]: key, tokens: 0, costUSD: 0, requestCount: 0 };
+  const current = map.get(key) ?? { [field]: key, tokens: 0, noCacheTokens: 0, costUSD: 0, requestCount: 0 };
   current.tokens += aggregate.totalTokens;
+  current.noCacheTokens += aggregate.inputTokens + aggregate.outputTokens;
   current.costUSD += aggregate.costUSD;
   current.requestCount += aggregate.requestCount;
   map.set(key, current);

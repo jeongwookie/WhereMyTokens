@@ -41,7 +41,7 @@ function codexMetaLine({ id = 'codex-session-a', model = 'gpt-5-codex' } = {}) {
   });
 }
 
-function codexTokenLine({ timestamp, input = 100, cached = 40, output = 20 }) {
+function codexTokenLine({ timestamp, input = 100, cached = 40, output = 20, reasoning = 0 }) {
   return JSON.stringify({
     type: 'event_msg',
     timestamp,
@@ -52,11 +52,41 @@ function codexTokenLine({ timestamp, input = 100, cached = 40, output = 20 }) {
           input_tokens: input,
           cached_input_tokens: cached,
           output_tokens: output,
+          reasoning_output_tokens: reasoning,
         },
         model_context_window: 200000,
       },
     },
   });
+}
+
+function codexFunctionCallLine({ timestamp, name = 'shell_command', args = JSON.stringify({ command: 'npm test' }) }) {
+  return JSON.stringify({
+    type: 'response_item',
+    timestamp,
+    payload: {
+      type: 'function_call',
+      name,
+      arguments: args,
+    },
+  });
+}
+
+function codexAssistantMessageLine({ timestamp, text = 'done', contentType = 'output_text' }) {
+  return JSON.stringify({
+    type: 'response_item',
+    timestamp,
+    payload: {
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: contentType, text }],
+    },
+  });
+}
+
+function toolOutputSum(row) {
+  return row.toolOutputRead + row.toolOutputEditWrite + row.toolOutputSearch + row.toolOutputGit
+    + row.toolOutputBuildTest + row.toolOutputTerminal + row.toolOutputSubagents + row.toolOutputWeb;
 }
 
 test('usage importer writes minute, hourly, daily, monthly, and checkpoint aggregates', async () => {
@@ -181,6 +211,50 @@ test('usage importer keeps Codex raw model across incremental appends', async ()
   assert.equal(row.requestCount, 2);
   assert.equal(row.outputTokens, 50);
   assert.equal(second.sourceCheckpoints[sourceHashForPath(filePath, 'codex')].rawModel, 'gpt-5-codex');
+});
+
+test('Codex open turn is re-read on next import and attributed to closing token_count', async () => {
+  const dir = tempDir();
+  const filePath = path.join(dir, 'codex-open-turn.jsonl');
+  fs.writeFileSync(filePath, [
+    codexMetaLine(),
+    codexFunctionCallLine({
+      timestamp: '2026-05-25T10:15:01.000Z',
+      name: 'apply_patch',
+      args: '*** Begin Patch\n*** Update File: app.ts\n+const x = 1;\n*** End Patch',
+    }),
+    codexAssistantMessageLine({
+      timestamp: '2026-05-25T10:15:02.000Z',
+      text: 'patched',
+    }),
+    '',
+  ].join('\n'), 'utf8');
+
+  const seed = emptyUsageLedgerSnapshot();
+  seed.breakdownStartedDate = '2026-05-25';
+  const first = await importUsageJsonlIntoSnapshot(seed, filePath, 'codex', Date.parse('2026-05-25T12:00:00.000Z'));
+  const sourceHash = sourceHashForPath(filePath, 'codex');
+  assert.equal(Object.keys(first.dailyBreakdown).length, 0);
+  assert.equal(Object.keys(first.dailyModel).length, 0);
+  assert.equal(first.sourceCheckpoints[sourceHash].byteOffset, 0);
+
+  fs.appendFileSync(filePath, `${codexTokenLine({
+    timestamp: '2026-05-25T10:15:03.000Z',
+    input: 1000,
+    cached: 0,
+    output: 347,
+    reasoning: 208,
+  })}\n`, 'utf8');
+
+  const second = await importUsageJsonlIntoSnapshot(first, filePath, 'codex', Date.parse('2026-05-25T12:01:00.000Z'));
+  const row = second.dailyBreakdown['2026-05-25|codex'];
+  assert.ok(row);
+  assert.equal(row.thinking, 208);
+  assert.equal(row.editWrite, 1);
+  assert.ok(row.toolOutputEditWrite > 0);
+  assert.equal(row.thinking + row.response + toolOutputSum(row), 347);
+  assert.equal(second.dailyModel[dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX')].outputTokens, 347);
+  assert.ok(second.sourceCheckpoints[sourceHash].byteOffset > 0);
 });
 
 test('usage importer dedupes a Codex session imported from active and archive paths', async () => {

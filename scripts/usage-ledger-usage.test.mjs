@@ -56,6 +56,24 @@ test('ledger trend query returns daily weekly and monthly rows', () => {
   assert.ok(trend.monthly.some(row => row.month === '2026-04' && row.costUSD === 3.5));
 });
 
+test('ledger trend query exposes no-cache tokens while preserving billing tokens', () => {
+  const now = Date.parse('2026-05-25T12:30:00.000Z');
+  const snapshot = emptyUsageLedgerSnapshot();
+  snapshot.dailyModel[dayModelKey('2026-05-25', 'claude', 'Sonnet')] = agg(9_150, 1.5, 1, {
+    inputTokens: 100,
+    outputTokens: 50,
+    cacheReadTokens: 9_000,
+    totalTokens: 9_150,
+  });
+
+  const trend = buildTrendDataFromLedger(snapshot, now);
+  const row = trend.daily.find(point => point.date === '2026-05-25');
+
+  assert.ok(row);
+  assert.equal(row.tokens, 9_150);
+  assert.equal(row.noCacheTokens, 150);
+});
+
 test('ledger all-time totals keep full monthly aggregates at daily retention boundaries', () => {
   const now = Date.parse('2026-05-25T12:30:00.000Z');
   const snapshot = emptyUsageLedgerSnapshot();
@@ -233,6 +251,7 @@ test('ledger trend query remains idempotent after replacing the Antigravity prov
     monthlyModel: {
       [monthModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')]: aggregate,
     },
+    dailyBreakdown: {},
     sourceCheckpoints: {
       'ag-cache-source': {
         provider: 'antigravity',

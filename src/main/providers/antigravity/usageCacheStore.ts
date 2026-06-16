@@ -1,5 +1,5 @@
 import Store from 'electron-store';
-import type { UsageAggregate } from '../../usageLedgerTypes';
+import type { DailyBreakdownRow, UsageAggregate } from '../../usageLedgerTypes';
 import {
   aggregateFromUsageEntry,
   type UsageLedgerProviderSlice,
@@ -7,16 +7,22 @@ import {
 import {
   addUsageAggregate,
   dayModelKey,
+  emptyDailyBreakdownRow,
   emptyUsageAggregate,
   hourProviderKey,
+  localDateKey,
   minuteKey,
   monthModelKey,
 } from '../../usageLedgerAggregates';
 import { sourceHashForIdentity } from '../../usageLedgerImporter';
+import { compositionToDelta, splitOutput } from '../../outputSplitter';
+import { BREAKDOWN_KEYS, emptyToolOutput, TOOL_CATEGORY_KEYS } from '../../../shared/breakdownTypes';
 import type { AntigravityUsageCall } from './gmParser';
 import {
+  activityBreakdownFromCalls,
   antigravityCallFingerprint,
   antigravityCallRequestId,
+  classifyAntigravityToolName,
 } from './gmParser';
 import { antigravityCascadeSummaryKey } from './serverIdentity';
 import { antigravityUsageEntryFromCall } from './summary';
@@ -171,6 +177,31 @@ function addToRecord(record: Record<string, UsageAggregate>, key: string, aggreg
   record[key] = current;
 }
 
+function addBreakdownToRecord(record: Record<string, DailyBreakdownRow>, call: CachedAntigravityCall): void {
+  const date = localDateKey(call.timestampMs);
+  const key = `${date}|antigravity`;
+  const row = record[key] ?? emptyDailyBreakdownRow(date);
+  const counts = activityBreakdownFromCalls([call]);
+  const toolChars = emptyToolOutput();
+  for (const name of call.toolNames) {
+    toolChars[classifyAntigravityToolName(name)] += 1;
+  }
+  const responseChars = call.responseTokens > 0 ? call.responseTokens : 1;
+  const composition = splitOutput({
+    thinkingChars: 0,
+    responseChars,
+    toolChars,
+  }, call.outputTokens, call.thinkingTokens);
+  const delta = compositionToDelta(composition);
+  for (const category of TOOL_CATEGORY_KEYS) {
+    delta[category] = counts[category];
+  }
+  for (const breakdownKey of BREAKDOWN_KEYS) {
+    row[breakdownKey] += delta[breakdownKey];
+  }
+  record[key] = row;
+}
+
 function cascadeSourceKey(ownerKey: string, cascadeId: string): string {
   return antigravityCascadeSummaryKey(ownerKey, cascadeId);
 }
@@ -256,6 +287,7 @@ export class AntigravityUsageCacheStore {
     const hourlyActivity: Record<string, UsageAggregate> = {};
     const dailyModel: Record<string, UsageAggregate> = {};
     const monthlyModel: Record<string, UsageAggregate> = {};
+    const dailyBreakdown: Record<string, DailyBreakdownRow> = {};
     const sourceCheckpoints: UsageLedgerProviderSlice['sourceCheckpoints'] = {};
     const sourceRepairRollup: Record<string, UsageAggregate> = {};
     const minuteCutoff = nowMs - MINUTE_RECENT_RETENTION_MS;
@@ -283,6 +315,7 @@ export class AntigravityUsageCacheStore {
         }
         addToRecord(dailyModel, dayModelKey(entry.timestampMs, 'antigravity', entry.model), aggregate);
         addToRecord(monthlyModel, monthModelKey(entry.timestampMs, 'antigravity', entry.model), aggregate);
+        addBreakdownToRecord(dailyBreakdown, call);
       }
       if (cascadeHasUsage) {
         sourceCheckpoints[sourceHash] = {
@@ -302,6 +335,7 @@ export class AntigravityUsageCacheStore {
       hourlyActivity,
       dailyModel,
       monthlyModel,
+      dailyBreakdown,
       sourceCheckpoints,
       sourceRepairRollup,
     };

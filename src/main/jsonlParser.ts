@@ -14,6 +14,7 @@ import {
   emptySessionSnapshot,
 } from './jsonlTypes';
 import { extractClaudeUsageLine, extractCodexUsageLine } from './jsonlUsageExtractor';
+import { claudeBlockBreakdown, codexFunctionCallCategory } from './activityClassifier';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_WINDOW_MS = 8 * DAY_MS;
@@ -85,57 +86,6 @@ function calcCost(model: string, inp: number, out: number, cw: number, cr: numbe
 function calcCacheSavings(model: string, cr: number): number {
   const p = getPrice(model);
   return Math.max(0, p.in - p.cr) * cr / 1_000_000;
-}
-
-function classifyToolUse(name: string, input: unknown): keyof ActivityBreakdown {
-  switch (name) {
-    case 'Read': return 'read';
-    case 'Edit':
-    case 'Write':
-    case 'MultiEdit':
-    case 'NotebookEdit':
-      return 'editWrite';
-    case 'Grep':
-    case 'Glob':
-    case 'LS':
-    case 'TodoRead':
-    case 'TodoWrite':
-      return 'search';
-    case 'Agent':
-      return 'subagents';
-    case 'WebFetch':
-    case 'WebSearch':
-      return 'web';
-    case 'Bash': {
-      const cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
-      if (/^git\b/.test(cmd)) return 'git';
-      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd)) {
-        return 'buildTest';
-      }
-      return 'terminal';
-    }
-    case 'shell_command': {
-      let cmd = '';
-      if (typeof input === 'string') {
-        try {
-          const parsed = JSON.parse(input) as Record<string, unknown>;
-          cmd = (parsed.command as string ?? '').trimStart();
-        } catch {
-          cmd = input.trimStart();
-        }
-      } else {
-        cmd = ((input as Record<string, unknown>)?.command as string ?? '').trimStart();
-      }
-      if (/^git\b/.test(cmd)) return 'git';
-      if (/\b(npm|yarn|pnpm|bun|tsc|tsx|ts-node|cargo|python|pytest|jest|vitest|make|cmake|gradle|mvn|dotnet|go\s+build|go\s+test)\b/.test(cmd)) {
-        return 'buildTest';
-      }
-      return 'terminal';
-    }
-    default:
-      if (name.startsWith('mcp__')) return 'terminal';
-      return 'terminal';
-  }
 }
 
 function cloneAggregate(aggregate: HistoricalAggregate): HistoricalAggregate {
@@ -503,31 +453,9 @@ function processClaudeLine(summary: FileUsageSummary, line: string, now: number)
       }
     }
 
-    if (out > 0) {
-      const blockData: Array<{ cat: keyof ActivityBreakdown; chars: number }> = [];
-      for (const block of content) {
-        const item = block as Record<string, unknown>;
-        let chars = 0;
-        let cat: keyof ActivityBreakdown = 'response';
-        if (item.type === 'thinking') {
-          chars = (item.thinking as string ?? '').length;
-          cat = 'thinking';
-        } else if (item.type === 'text') {
-          chars = (item.text as string ?? '').length;
-          cat = 'response';
-        } else if (item.type === 'tool_use' && typeof item.name === 'string') {
-          chars = JSON.stringify(item.input ?? {}).length + item.name.length;
-          cat = classifyToolUse(item.name, item.input);
-        }
-        if (chars > 0) blockData.push({ cat, chars });
-      }
-
-      const totalChars = blockData.reduce((sum, block) => sum + block.chars, 0);
-      if (totalChars > 0) {
-        for (const { cat, chars } of blockData) {
-          summary.sessionSnapshot.activityBreakdown[cat] += Math.round((chars / totalChars) * out);
-        }
-      }
+    const delta = claudeBlockBreakdown(content, out);
+    for (const [cat, value] of Object.entries(delta)) {
+      summary.sessionSnapshot.activityBreakdown[cat as keyof ActivityBreakdown] += value ?? 0;
     }
   }
 
@@ -570,7 +498,7 @@ function processCodexLine(summary: FileUsageSummary, filePath: string, line: str
     const name = payload.name as string | undefined;
     if (!name) return;
     summary.sessionSnapshot.toolCounts[name] = (summary.sessionSnapshot.toolCounts[name] ?? 0) + 1;
-    const cat = classifyToolUse(name, payload.arguments);
+    const cat = codexFunctionCallCategory(name, payload.arguments);
     summary.sessionSnapshot.activityBreakdown[cat] += 1;
     return;
   }

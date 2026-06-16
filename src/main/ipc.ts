@@ -5,6 +5,8 @@ import Store from 'electron-store';
 import { AppState, DebugMemSnapshot } from './stateManager';
 import { getHistory, clearHistory } from './notificationHistory';
 import { isDebugInstrumentationEnabled } from './debugInstrumentation';
+import type { BreakdownGrain } from '../shared/bucketKey';
+import type { BucketBreakdown } from '../shared/breakdownTypes';
 import {
   disableIntegration,
   getIntegrationStatus,
@@ -254,6 +256,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'auto',
 };
 
+type IpcMainHandle = {
+  handle: (channel: string, listener: (event: unknown, ...args: any[]) => unknown) => void;
+};
+
+export interface RegisterIpcHandlersOptions {
+  store: Store<AppSettings>;
+  getState: () => AppState;
+  forceRefresh: () => Promise<void>;
+  applySettingsChange: () => void;
+  rebuildUsageLedger?: () => Promise<void>;
+  getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>;
+  windowActions?: {
+    openDashboard: () => void;
+    openSettings: () => void;
+    hideCompactWidget: () => void;
+  };
+  getBreakdown?: (grain: BreakdownGrain, bucketKey: string) => Promise<BucketBreakdown>;
+  ipcMain?: IpcMainHandle;
+}
+
 function claudeSettingsPath(): string {
   return path.join(os.homedir(), '.claude', 'settings.json');
 }
@@ -262,29 +284,33 @@ function bridgeScriptPath(): string {
   return path.join(app.getAppPath(), '..', 'bridge', 'bridge.js');
 }
 
-export function registerIpcHandlers(
-  store: Store<AppSettings>,
-  getState: () => AppState,
-  forceRefresh: () => Promise<void>,
-  applySettingsChange: () => void,
-  rebuildUsageLedger?: () => Promise<void>,
-  getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>,
-  windowActions?: {
-    openDashboard: () => void;
-    openSettings: () => void;
-    hideCompactWidget: () => void;
-  },
-) {
-  ipcMain.handle('state:get', () => getState());
-  ipcMain.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
-  ipcMain.handle('ledger:rebuild', async () => {
+export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
+  const {
+    store,
+    getState,
+    forceRefresh,
+    applySettingsChange,
+    rebuildUsageLedger,
+    getDebugMemSnapshot,
+    windowActions,
+    getBreakdown,
+    ipcMain: ipc = ipcMain,
+  } = options;
+
+  ipc.handle('state:get', () => getState());
+  ipc.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
+  ipc.handle('ledger:rebuild', async () => {
     if (rebuildUsageLedger) await rebuildUsageLedger();
     return getState();
   });
+  ipc.handle('breakdown:get', async (_e, grain: BreakdownGrain, bucketKey: string) => {
+    if (!getBreakdown) throw new Error('breakdown:get not wired');
+    return getBreakdown(grain, bucketKey);
+  });
 
-  ipcMain.handle('settings:get', () => normalizeSettings(store.store));
+  ipc.handle('settings:get', () => normalizeSettings(store.store));
 
-  ipcMain.handle('settings:set', (_e, partial: unknown) => {
+  ipc.handle('settings:set', (_e, partial: unknown) => {
     const sanitized = normalizedSettingsPartial(partial);
     for (const [k, v] of Object.entries(sanitized)) {
       store.set(k as keyof AppSettings, v as AppSettings[keyof AppSettings]);
@@ -296,13 +322,13 @@ export function registerIpcHandlers(
     return normalizeSettings(store.store);
   });
 
-  ipcMain.handle('notifications:get', () => getHistory());
-  ipcMain.handle('notifications:clear', () => { clearHistory(); return []; });
-  ipcMain.handle('window:open-dashboard', () => windowActions?.openDashboard());
-  ipcMain.handle('window:open-settings', () => windowActions?.openSettings());
-  ipcMain.handle('window:hide-compact-widget', () => windowActions?.hideCompactWidget());
-  ipcMain.handle('debug-instrumentation-enabled', () => isDebugInstrumentationEnabled());
-  ipcMain.handle('debug-mem-snapshot', async () => {
+  ipc.handle('notifications:get', () => getHistory());
+  ipc.handle('notifications:clear', () => { clearHistory(); return []; });
+  ipc.handle('window:open-dashboard', () => windowActions?.openDashboard());
+  ipc.handle('window:open-settings', () => windowActions?.openSettings());
+  ipc.handle('window:hide-compact-widget', () => windowActions?.hideCompactWidget());
+  ipc.handle('debug-instrumentation-enabled', () => isDebugInstrumentationEnabled());
+  ipc.handle('debug-mem-snapshot', async () => {
     if (!isDebugInstrumentationEnabled()) return null;
     if (!getDebugMemSnapshot) return null;
     return getDebugMemSnapshot();
@@ -312,9 +338,9 @@ export function registerIpcHandlers(
   const handleIntegrationStatus = () => getIntegrationStatus(claudeSettingsPath(), bridgeScriptPath());
   const handleIntegrationDisable = () => disableIntegration(claudeSettingsPath(), bridgeScriptPath());
 
-  ipcMain.handle('integration-setup', handleIntegrationSetup);
-  ipcMain.handle('integration-status', handleIntegrationStatus);
-  ipcMain.handle('integration-disable', handleIntegrationDisable);
-  ipcMain.handle('integration:setup', handleIntegrationSetup);
-  ipcMain.handle('integration:status', handleIntegrationStatus);
+  ipc.handle('integration-setup', handleIntegrationSetup);
+  ipc.handle('integration-status', handleIntegrationStatus);
+  ipc.handle('integration-disable', handleIntegrationDisable);
+  ipc.handle('integration:setup', handleIntegrationSetup);
+  ipc.handle('integration:status', handleIntegrationStatus);
 }

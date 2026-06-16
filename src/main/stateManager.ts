@@ -12,7 +12,7 @@ import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGitStatsAsync, GitDailyStats, GitStats } from './gitStatsCollector';
-import { GitOutputLedgerStore, buildCodeOutputFromGitLedger } from './gitOutputLedger';
+import { GitOutputLedgerStore, buildCodeOutputFromGitLedger, type GitOutputLedgerSnapshot } from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
@@ -22,8 +22,11 @@ import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentat
 import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
 import { UsageLedgerStore } from './usageLedgerStore';
-import type { SourceCheckpoint } from './usageLedgerTypes';
-import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData } from './usageLedgerUsage';
+import type { SourceCheckpoint, UsageLedgerSnapshot } from './usageLedgerTypes';
+import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData, type UsageLedgerVisibilityFilter } from './usageLedgerUsage';
+import { assembleBucketBreakdown } from './breakdownQuery';
+import type { BreakdownGrain } from '../shared/bucketKey';
+import type { BucketBreakdown } from '../shared/breakdownTypes';
 import { makeStartupStateSnapshot, normalizeStartupStateSnapshot, StateFreshness } from './startupStateSnapshot';
 import { createProviderRegistry, ProviderRegistry } from './providers';
 import type {
@@ -573,6 +576,43 @@ export function resolveSessionRepoKeys(
   return scopedRepoKeys;
 }
 
+function currentLedgerRepoStats<T extends Pick<GitStats, 'gitCommonDir' | 'toplevel'>>(
+  sessions: Array<{ cwd: string; gitStats?: Pick<GitStats, 'gitCommonDir' | 'toplevel'> | null }>,
+  repoGitStats: Record<string, T>
+): T[] {
+  const scopedRepoKeys = resolveSessionRepoKeys(sessions, repoGitStats);
+  return Object.entries(repoGitStats)
+    .filter(([key, stats]) => {
+      if (scopedRepoKeys.size === 0) return true;
+      const repoKey = normalizeGitPathKey(key);
+      const topLevelKey = normalizeGitPathKey(stats.toplevel);
+      return (!!repoKey && scopedRepoKeys.has(repoKey)) || (!!topLevelKey && scopedRepoKeys.has(topLevelKey));
+    })
+    .map(([, stats]) => stats);
+}
+
+export function currentLedgerRepoKeys<T extends Pick<GitStats, 'gitCommonDir' | 'toplevel'>>(
+  sessions: Array<{ cwd: string; gitStats?: Pick<GitStats, 'gitCommonDir' | 'toplevel'> | null }>,
+  repoGitStats: Record<string, T>
+): string[] {
+  return currentLedgerRepoStats(sessions, repoGitStats)
+    .map(stats => repoKeyFromGitStats(stats) ?? normalizeGitPathKey(stats.toplevel))
+    .filter((key): key is string => !!key);
+}
+
+export function buildBreakdown(
+  usage: Pick<UsageLedgerSnapshot, 'dailyBreakdown' | 'dailyModel'>,
+  git: Pick<GitOutputLedgerSnapshot, 'dailyOutput'>,
+  repoKeys: string[],
+  breakdownStartedDate: string | null,
+  grain: BreakdownGrain,
+  bucketKey: string,
+  filter: UsageLedgerVisibilityFilter,
+): BucketBreakdown {
+  if (!filter) throw new Error('buildBreakdown: visibility filter is required');
+  return assembleBucketBreakdown(grain, bucketKey, usage, usage.dailyModel, git, repoKeys, breakdownStartedDate, filter);
+}
+
 export class StateManager {
   private store: Store<AppSettings>;
   private summaries = new Map<string, FileUsageSummary>();
@@ -704,6 +744,14 @@ export class StateManager {
       };
       this.publishState();
     });
+  }
+
+  async getBreakdown(grain: BreakdownGrain, bucketKey: string): Promise<BucketBreakdown> {
+    const usage = this.usageLedgerStore.getSnapshot();
+    const git = this.gitOutputLedgerStore.getSnapshot();
+    const repoKeys = this.getCurrentLedgerRepoKeys();
+    const usageVisibilityFilter = buildUsageVisibilityFilter(this.getSettings());
+    return buildBreakdown(usage, git, repoKeys, usage.breakdownStartedDate, grain, bucketKey, usageVisibilityFilter);
   }
 
   private getPersistedValue(key: string, fallback: unknown = null): unknown {
@@ -2902,17 +2950,16 @@ export class StateManager {
     return sessions.some(session => resolveSessionRepoKeys([session], repoGitStats).size === 0);
   }
 
+  private getCurrentLedgerRepoKeys(
+    sessions: SessionInfo[] = this.state.sessions,
+    repoGitStats: Record<string, GitStats> = this.state.repoGitStats,
+  ): string[] {
+    return currentLedgerRepoKeys(sessions, repoGitStats);
+  }
+
   private buildCodeOutputStats(sessions: SessionInfo[], repoGitStats: Record<string, GitStats>): CodeOutputStats {
     const today = { commits: 0, added: 0, removed: 0 };
-    const scopedRepoKeys = resolveSessionRepoKeys(sessions, repoGitStats);
-    const repoStats = Object.entries(repoGitStats)
-      .filter(([key, stats]) => {
-        if (scopedRepoKeys.size === 0) return true;
-        const repoKey = normalizeGitPathKey(key);
-        const topLevelKey = normalizeGitPathKey(stats.toplevel);
-        return (!!repoKey && scopedRepoKeys.has(repoKey)) || (!!topLevelKey && scopedRepoKeys.has(topLevelKey));
-      })
-      .map(([, stats]) => stats);
+    const repoStats = currentLedgerRepoStats(sessions, repoGitStats);
     let dailySources = repoStats;
     let repoCount = repoStats.length;
     let scopeLabel = repoStats.length > 0
@@ -2950,9 +2997,7 @@ export class StateManager {
       all.removed += stats.totalLinesRemoved ?? 0;
     }
 
-    const ledgerRepoKeys = repoStats
-      .map(stats => repoKeyFromGitStats(stats) ?? normalizeGitPathKey(stats.toplevel))
-      .filter((key): key is string => !!key);
+    const ledgerRepoKeys = this.getCurrentLedgerRepoKeys(sessions, repoGitStats);
     const ledgerStats = buildCodeOutputFromGitLedger(this.gitOutputLedgerStore.getSnapshot(), ledgerRepoKeys, undefined, scopeLabel);
     if (ledgerRepoKeys.length > 0 && ledgerStats.dailyAll.length > 0) {
       return { ...ledgerStats, repoCount, scopeLabel };
