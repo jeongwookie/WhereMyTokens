@@ -28,9 +28,17 @@
 <p align="center">
   <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe"><strong>下载 v1.18.2</strong></a>
   ·
+  <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
+  ·
   <a href="#功能特性">功能特性</a>
   ·
   <a href="#screenshots">截图</a>
+</p>
+
+<p align="center">
+  <strong>macOS 版现已公开:</strong>
+  <a href="https://github.com/jeongwookie/WhereMyTokens-mac">WhereMyTokens for macOS</a>
+  使用独立的 <code>mac-vX.Y.Z</code> release track，并提供 DMG/ZIP 打包。
 </p>
 
 <p align="center">
@@ -75,6 +83,9 @@
 ---
 
 ## 下载
+
+macOS 用户请使用单独的公开仓库:
+**[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
 **[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.18.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
