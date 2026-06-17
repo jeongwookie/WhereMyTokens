@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/source-icon.png" width="88" alt="WhereMyTokens icon" />
+  <img src="assets/readme-icon.svg" width="88" alt="WhereMyTokens icon" />
 </p>
 
 <h1 align="center">WhereMyTokens</h1>

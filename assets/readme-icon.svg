@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WhereMyTokens icon">
+  <defs>
+    <linearGradient id="bg" x1="70" y1="54" x2="442" y2="458" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#102338"/>
+      <stop offset="1" stop-color="#031019"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="92" y1="277" x2="420" y2="188" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#31dbe7"/>
+      <stop offset="0.58" stop-color="#12cbb8"/>
+      <stop offset="1" stop-color="#6ee7f9"/>
+    </linearGradient>
+  </defs>
+  <rect x="34" y="34" width="444" height="444" rx="104" fill="url(#bg)"/>
+  <rect x="34" y="34" width="444" height="444" rx="104" fill="none" stroke="#214159" stroke-width="12"/>
+  <path d="M94 276h66l34-92 58 190 58-245 45 147h63" fill="none" stroke="url(#pulse)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M94 276h66l34-92 58 190 58-245 45 147h63" fill="none" stroke="#9ffcff" stroke-opacity="0.22" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
