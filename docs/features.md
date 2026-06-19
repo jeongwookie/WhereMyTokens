@@ -6,6 +6,7 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 
 - Provider checkboxes for Claude Code, Codex, Antigravity, or any enabled combination.
 - Live session detection from local provider files and running Antigravity local RPC.
+- Optional WSL tracking for Claude/Codex logs from detected user distributions. Session paths are mapped for projects under the WSL home directory or mounted Windows drives.
 - Session grouping by project and git branch.
 - Context window warnings, tool usage summaries, and active/recent session focus.
 

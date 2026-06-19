@@ -1355,7 +1355,11 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
           </div>
         ))
         : sessions.length === 0
-          ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active {emptySessionLabel(settings.enabledProviders)} sessions</div>
+          ? (
+            <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>
+              No active {emptySessionLabel(settings.enabledProviders)} sessions. VS Code Remote WSL users can enable WSL tracking in Settings.
+            </div>
+          )
           : null
       }
 

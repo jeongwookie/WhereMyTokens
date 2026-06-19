@@ -13,6 +13,7 @@ WhereMyTokens is local-first. There is no cloud sync and no telemetry.
 | `~/.codex/archived_sessions/**/*.jsonl` | Archived Codex logs included in all-time totals. | No |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | Codex cleanup archives included in all-time totals. | No |
 | `~/.codex/auth.json` | ChatGPT/Codex OAuth material for live usage snapshots. | Direct to OpenAI/ChatGPT when Codex is enabled |
+| `\\wsl.localhost\<distro>\home\<user>\.claude` and `\\wsl.localhost\<distro>\home\<user>\.codex` | Optional WSL tracking for Claude/Codex logs when enabled in Settings. The app discovers user distros with `wsl.exe --list --quiet` and reads `$HOME` with `wsl.exe --exec printenv HOME`. | No |
 | Antigravity language server on `127.0.0.1` | Local cascade sessions, model quota percentages, reset times, and token metadata. | Loopback only |
 | `%APPDATA%\WhereMyTokens` | App settings, local caches, ledgers, notification history, and bridge state. | No |
 
@@ -25,6 +26,8 @@ If Claude's local access token expires, the app may refresh it through Anthropic
 ## Provider Controls
 
 Disabled providers are not scanned locally and do not make live usage requests.
+
+WSL tracking is off by default. When enabled, it scans only detected user WSL distributions for Claude/Codex logs and maps session paths under the distro home directory or mounted Windows drives. Docker internal WSL distributions are ignored.
 
 Claude usage polling runs with backoff. Codex live usage uses HTTPS-only requests with timeout, response-size cap, cache, and backoff. Antigravity support uses loopback local RPC only; it does not read Google OAuth credentials, refresh tokens, cloud usage endpoints, credits, or offline `state.vscdb` data.
 

@@ -73,7 +73,8 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 1. Install with `WhereMyTokens-Setup.exe`, or extract the portable ZIP and run `WhereMyTokens.exe`.
 2. Open the dashboard from the Windows tray.
 3. Enable the providers you use: Claude Code, Codex, Antigravity, or any combination.
-4. Optional: enable **Claude Code Integration** to register the `statusLine` bridge for live Claude context and fallback quota data.
+4. Optional for VS Code Remote WSL: enable **WSL tracking** in Settings -> Providers. It scans detected distro logs and maps session paths under the WSL home directory or mounted Windows drives.
+5. Optional: enable **Claude Code Integration** to register the `statusLine` bridge for live Claude context and fallback quota data.
 
 ## What's New
 

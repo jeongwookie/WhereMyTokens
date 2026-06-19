@@ -242,6 +242,7 @@ function ContentEN() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Tracking uses provider checkboxes. Disabled providers are not scanned locally and do not make live usage requests.</InfoRow>
+          <InfoRow label="WSL">If Claude Code or Codex runs inside VS Code Remote WSL, enable Settings → Providers → WSL tracking. It scans detected distro logs and maps session paths under the WSL home directory or mounted Windows drives.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display controls Rich, Simple, or hidden presentation per provider window or model target. It changes Plan Usage and the floating widget only.</InfoRow>
           <InfoRow label="Claude OAuth">Expired Claude access tokens may be refreshed through Anthropic for usage polling. WhereMyTokens does not keep a separate credential backup.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>

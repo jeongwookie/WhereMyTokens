@@ -176,6 +176,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
   const latestSettings = useMemo(() => normalizeSettingsDraft(settings), [settings]);
   const settingsToSave = useMemo(() => buildSettingsPatch(s, baseSettings, latestSettings), [s, baseSettings, latestSettings]);
   const quotaTargetOptions = useMemo(() => buildQuotaTargetSettingsOptions(s, providerQuotas), [s, providerQuotas]);
+  const wslProviderEnabled = enabledProvidersFromSettings(s).some(id => id === 'claude' || id === 'codex');
 
   const isDirty = useMemo(() => Object.keys(settingsToSave).length > 0, [settingsToSave]);
 
@@ -490,20 +491,26 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
             })}
           </div>
         </div>
-        <div style={row}>
-          <div>
-            <div style={labelStyle}>WSL tracking</div>
-            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Include Claude Code and Codex logs from detected WSL distributions
-            </div>
-          </div>
+        <label
+          style={row}
+          title={wslProviderEnabled ? undefined : 'Enable Claude or Codex first.'}
+        >
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <span style={labelStyle}>WSL tracking</span>
+            <span style={{ fontSize: 10, color: C.textMuted }}>
+              {wslProviderEnabled
+                ? 'For VS Code Remote WSL. Scans detected distros; session paths are mapped for WSL home and /mnt drives.'
+                : 'Enable Claude or Codex first. WSL tracking only scans those providers.'}
+            </span>
+          </span>
           <input
             type="checkbox"
             style={chk}
             checked={s.enableWslTracking}
+            disabled={!wslProviderEnabled}
             onChange={e => setS({ ...s, enableWslTracking: e.target.checked })}
           />
-        </div>
+        </label>
         {enabledProvidersFromSettings(s).includes('antigravity') && (
           <div style={row}>
             <div>
