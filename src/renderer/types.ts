@@ -289,6 +289,7 @@ export interface AppSettings {
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
   compactWidgetBounds: { x: number; y: number } | null;
+  enableWslTracking: boolean;
   theme: 'auto' | 'light' | 'dark';
 }
 

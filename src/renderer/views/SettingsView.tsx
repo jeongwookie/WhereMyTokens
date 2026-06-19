@@ -100,6 +100,7 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'antigravityQuotaDurationPaceEnabled',
   'compactWidgetEnabled',
   'compactWidgetWaitingAnimationEnabled',
+  'enableWslTracking',
   'theme',
 ];
 
@@ -110,6 +111,7 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
     antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
+    enableWslTracking: settings.enableWslTracking === true,
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
   };
@@ -487,6 +489,20 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
               );
             })}
           </div>
+        </div>
+        <div style={row}>
+          <div>
+            <div style={labelStyle}>WSL tracking</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Include Claude Code and Codex logs from detected WSL distributions
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            style={chk}
+            checked={s.enableWslTracking}
+            onChange={e => setS({ ...s, enableWslTracking: e.target.checked })}
+          />
         </div>
         {enabledProvidersFromSettings(s).includes('antigravity') && (
           <div style={row}>

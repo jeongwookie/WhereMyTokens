@@ -76,6 +76,7 @@ const DEFAULT_STATE: AppState = {
     quotaTargetOrder: [],
     antigravityQuotaDurationPaceEnabled: false,
     compactWidgetEnabled: false, compactWidgetWaitingAnimationEnabled: false, compactWidgetBounds: null,
+    enableWslTracking: false,
   },
   codexAccount: { serviceTier: null },
   stateFreshness: 'empty',
@@ -539,6 +540,7 @@ function normalizeState(next: AppState): AppState {
         && Number.isFinite(next.settings.compactWidgetBounds.y)
         ? next.settings.compactWidgetBounds
         : null,
+      enableWslTracking: next.settings?.enableWslTracking === true,
     },
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt

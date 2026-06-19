@@ -82,6 +82,14 @@ test('Antigravity quota duration pace setting defaults off and normalizes boolea
   assert.equal(normalizeSettings({ antigravityQuotaDurationPaceEnabled: 'true' }).antigravityQuotaDurationPaceEnabled, false);
 });
 
+test('WSL tracking setting defaults off and normalizes boolean values', () => {
+  assert.equal(DEFAULT_SETTINGS.enableWslTracking, false);
+  assert.equal(normalizeSettings({}).enableWslTracking, false);
+  assert.equal(normalizeSettings({ enableWslTracking: true }).enableWslTracking, true);
+  assert.equal(normalizeSettings({ enableWslTracking: false }).enableWslTracking, false);
+  assert.equal(normalizeSettings({ enableWslTracking: 'true' }).enableWslTracking, false);
+});
+
 test('renderer settings model exposes enabledProviders as editable state', () => {
   const types = fs.readFileSync('src/renderer/types.ts', 'utf8');
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
@@ -90,11 +98,14 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(types, /quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>/);
   assert.match(types, /quotaTargetOrder: string\[\]/);
   assert.match(types, /antigravityQuotaDurationPaceEnabled: boolean/);
+  assert.match(types, /enableWslTracking: boolean/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
   assert.match(settingsView, /'enabledProviders'/);
   assert.match(settingsView, /'quotaTargetModes'/);
   assert.match(settingsView, /'quotaTargetOrder'/);
   assert.match(settingsView, /'antigravityQuotaDurationPaceEnabled'/);
+  assert.match(settingsView, /'enableWslTracking'/);
+  assert.match(settingsView, /WSL tracking/);
   assert.match(settingsView, /Antigravity quota pace/);
   assert.doesNotMatch(settingsView, /'plan'/);
   assert.doesNotMatch(settingsView, /'provider'/);
@@ -185,7 +196,7 @@ test('Claude provider keeps agent JSONL files out of visible startup sessions', 
   const source = fs.readFileSync('src/main/providers/claude/sources.ts', 'utf8');
 
   assert.match(source, /function isClaudeAgentJsonlPath/);
-  assert.match(source, /path\.basename\(filePath\)\.startsWith\('agent-'\)/);
+  assert.match(source, /basenameForLogPath\(filePath\)\.startsWith\('agent-'\)/);
   assert.match(source, /if \(isClaudeAgentJsonlPath\(source\.filePath\)\) return null/);
 });
 

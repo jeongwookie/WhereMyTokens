@@ -47,6 +47,7 @@ export interface AppSettings {
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
   compactWidgetBounds: CompactWidgetBounds | null;
+  enableWslTracking: boolean;
   theme: 'auto' | 'light' | 'dark';
 }
 
@@ -212,6 +213,7 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
     const compactWidgetBounds = normalizeCompactWidgetBounds(record.compactWidgetBounds);
     if (compactWidgetBounds !== undefined) next.compactWidgetBounds = compactWidgetBounds;
   }
+  if (typeof record.enableWslTracking === 'boolean') next.enableWslTracking = record.enableWslTracking;
   if (record.theme === 'auto' || record.theme === 'light' || record.theme === 'dark') next.theme = record.theme;
 
   return next;
@@ -253,6 +255,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   compactWidgetEnabled: false,
   compactWidgetWaitingAnimationEnabled: false,
   compactWidgetBounds: null,
+  enableWslTracking: false,
   theme: 'auto',
 };
 
