@@ -5,13 +5,41 @@ import os from 'node:os';
 import path from 'node:path';
 
 import * as sessionMetadata from '../dist/main/sessionMetadata.js';
+import * as wslPaths from '../dist/main/wslPaths.js';
 
 const {
   clearSessionMetadataCache,
   getSessionMetadataCacheStats,
   invalidateSessionMetadataCache,
   readJsonlCwd,
+  readJsonlCwdForSource,
 } = sessionMetadata;
+const { mapCwdForSource } = wslPaths;
+
+function wslSource(distro = 'Ubuntu') {
+  const rootDir = `\\\\wsl$\\${distro}`;
+  const homeDir = `${rootDir}\\home\\example`;
+  const codexHomeDir = `${homeDir}\\.codex`;
+  const codexSessionsDir = `${codexHomeDir}\\sessions`;
+  const codexArchivedSessionsDir = `${codexHomeDir}\\archived_sessions`;
+  const codexSessionCleanupArchiveDir = `${codexHomeDir}\\session-cleanup-archive`;
+  return {
+    id: `wsl:${distro}`,
+    label: `WSL ${distro}`,
+    kind: 'wsl',
+    rootDir,
+    homeDir,
+    distro,
+    linuxHome: '/home/example',
+    claudeSessionsDir: `${homeDir}\\.claude\\sessions`,
+    claudeProjectsDir: `${homeDir}\\.claude\\projects`,
+    codexHomeDir,
+    codexSessionsDir,
+    codexArchivedSessionsDir,
+    codexSessionCleanupArchiveDir,
+    codexUsageDirs: [codexSessionsDir, codexArchivedSessionsDir, codexSessionCleanupArchiveDir],
+  };
+}
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-session-metadata-'));
@@ -102,6 +130,35 @@ test('Claude cwd is read from top-level cwd field', () => {
   ]);
 
   assert.equal(readJsonlCwd(filePath, 'claude'), cwd);
+});
+
+test('WSL Linux cwd values are mapped to Windows-readable paths', () => {
+  const source = wslSource();
+
+  assert.equal(
+    mapCwdForSource(source, '/home/example/my-project'),
+    '\\\\wsl$\\Ubuntu\\home\\example\\my-project',
+  );
+  assert.equal(
+    mapCwdForSource(source, '/mnt/c/dev/my-project'),
+    'C:\\dev\\my-project',
+  );
+  assert.equal(mapCwdForSource(source, 'relative/repo'), null);
+});
+
+test('Codex cwd can be read from a WSL log source', () => {
+  clearSessionMetadataCache();
+  const dir = tempDir();
+  const filePath = path.join(dir, 'codex-wsl.jsonl');
+
+  writeJsonl(filePath, [
+    JSON.stringify({ type: 'session_meta', payload: { cwd: '/home/example/example-repo' } }),
+  ]);
+
+  assert.equal(
+    readJsonlCwdForSource(filePath, 'codex', wslSource()),
+    '\\\\wsl$\\Ubuntu\\home\\example\\example-repo',
+  );
 });
 
 test('Cwd cache reuses unchanged files and refreshes after stat changes', () => {

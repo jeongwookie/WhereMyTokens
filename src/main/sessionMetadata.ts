@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSafeLocalCwd } from './pathSafety';
+import { mapCwdForSource, type UsageLogSource } from './wslPaths';
 
 export type JsonlProvider = 'claude' | 'codex';
 
@@ -86,8 +87,9 @@ function readFilePrefix(filePath: string, maxBytes: number): string | null {
   }
 }
 
-function safeCwd(value: unknown): string | null {
+function safeCwd(value: unknown, source?: UsageLogSource): string | null {
   if (typeof value !== 'string') return null;
+  if (source) return mapCwdForSource(source, value);
   return isSafeLocalCwd(value) ? value : null;
 }
 
@@ -95,6 +97,7 @@ function parseCodexHeaderLine(
   line: string,
   fallback: CodexSessionHeader | null,
   sessionMetaWithoutCwd: CodexSessionHeader | null,
+  source?: UsageLogSource,
 ): {
   resolved?: CodexSessionHeader;
   fallback: CodexSessionHeader | null;
@@ -108,10 +111,10 @@ function parseCodexHeaderLine(
     const timestamp = typeof obj.timestamp === 'string' ? obj.timestamp : null;
     if (obj.type === 'session_meta') {
       const header = { payload, timestamp };
-      if (safeCwd(payload.cwd)) return { resolved: header, fallback, sessionMetaWithoutCwd };
+      if (safeCwd(payload.cwd, source)) return { resolved: header, fallback, sessionMetaWithoutCwd };
       return { fallback, sessionMetaWithoutCwd: header };
     }
-    if (!fallback && obj.type === 'turn_context' && safeCwd(payload.cwd)) {
+    if (!fallback && obj.type === 'turn_context' && safeCwd(payload.cwd, source)) {
       return { fallback: { payload, timestamp }, sessionMetaWithoutCwd };
     }
   } catch {
@@ -124,12 +127,16 @@ export function readCodexSessionHeader(filePath: string): CodexSessionHeader | n
   return readCodexSessionHeaderResult(filePath).value;
 }
 
-function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<CodexSessionHeader | null> {
+export function readCodexSessionHeaderForSource(filePath: string, source?: UsageLogSource): CodexSessionHeader | null {
+  return readCodexSessionHeaderResult(filePath, source).value;
+}
+
+function readCodexSessionHeaderResult(filePath: string, source?: UsageLogSource): MetadataReadResult<CodexSessionHeader | null> {
   let stat: fs.Stats;
   try { stat = fs.statSync(filePath); }
   catch { return { ok: false, value: null }; }
 
-  const key = cacheKey(filePath, 'codex-header');
+  const key = cacheKey(filePath, `codex-header-${source?.id ?? 'default'}`);
   const cached = getCached(codexHeaderCache, key, stat);
   if (cached !== undefined) return { ok: true, value: cached };
 
@@ -153,7 +160,7 @@ function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<Code
       remaining = lines.pop() ?? '';
 
       for (const line of lines) {
-        const parsed = parseCodexHeaderLine(line, fallback, sessionMetaWithoutCwd);
+        const parsed = parseCodexHeaderLine(line, fallback, sessionMetaWithoutCwd, source);
         fallback = parsed.fallback;
         sessionMetaWithoutCwd = parsed.sessionMetaWithoutCwd;
         if (parsed.resolved) {
@@ -163,7 +170,7 @@ function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<Code
     }
 
     if (remaining.trim()) {
-      const parsed = parseCodexHeaderLine(remaining, fallback, sessionMetaWithoutCwd);
+      const parsed = parseCodexHeaderLine(remaining, fallback, sessionMetaWithoutCwd, source);
       fallback = parsed.fallback;
       sessionMetaWithoutCwd = parsed.sessionMetaWithoutCwd;
       if (parsed.resolved) {
@@ -182,18 +189,22 @@ function readCodexSessionHeaderResult(filePath: string): MetadataReadResult<Code
 }
 
 export function readJsonlCwd(filePath: string, provider: JsonlProvider): string | null {
+  return readJsonlCwdForSource(filePath, provider);
+}
+
+export function readJsonlCwdForSource(filePath: string, provider: JsonlProvider, source?: UsageLogSource): string | null {
   let stat: fs.Stats;
   try { stat = fs.statSync(filePath); }
   catch { return null; }
 
-  const key = cacheKey(filePath, `cwd-${provider}`);
+  const key = cacheKey(filePath, `cwd-${provider}-${source?.id ?? 'default'}`);
   const cached = getCached(cwdCache, key, stat);
   if (cached !== undefined) return cached;
 
   if (provider === 'codex') {
-    const headerResult = readCodexSessionHeaderResult(filePath);
+    const headerResult = readCodexSessionHeaderResult(filePath, source);
     if (!headerResult.ok) return null;
-    const cwd = safeCwd(headerResult.value?.payload.cwd);
+    const cwd = safeCwd(headerResult.value?.payload.cwd, source);
     return setCached(cwdCache, key, stat, cwd);
   }
 
@@ -203,7 +214,7 @@ export function readJsonlCwd(filePath: string, provider: JsonlProvider): string 
     if (!line.trim()) continue;
     try {
       const data = JSON.parse(line) as Record<string, unknown>;
-      const cwd = safeCwd(data.cwd);
+      const cwd = safeCwd(data.cwd, source);
       if (cwd) return setCached(cwdCache, key, stat, cwd);
     } catch {
       continue;
@@ -214,9 +225,13 @@ export function readJsonlCwd(filePath: string, provider: JsonlProvider): string 
 }
 
 export function invalidateSessionMetadataCache(filePath: string): void {
-  codexHeaderCache.delete(cacheKey(filePath, 'codex-header'));
-  cwdCache.delete(cacheKey(filePath, 'cwd-codex'));
-  cwdCache.delete(cacheKey(filePath, 'cwd-claude'));
+  const normalized = normalizedCacheKey(filePath);
+  for (const key of [...codexHeaderCache.keys()]) {
+    if (key.endsWith(`:${normalized}`)) codexHeaderCache.delete(key);
+  }
+  for (const key of [...cwdCache.keys()]) {
+    if (key.endsWith(`:${normalized}`)) cwdCache.delete(key);
+  }
 }
 
 export function clearSessionMetadataCache(): void {
