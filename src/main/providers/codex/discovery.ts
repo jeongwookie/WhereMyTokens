@@ -1,12 +1,19 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { isSafeLocalCwd } from '../../pathSafety';
-import { readCodexSessionHeader } from '../../sessionMetadata';
+import { readCodexSessionHeaderForSource } from '../../sessionMetadata';
 import type { DiscoveredSession, DiscoverSessionsOptions, ProviderContext } from '../types';
 import { calcState, entrypointToSource, sessionSortTime, trackedJsonlSet } from '../shared/session';
 import { describeRepoContext } from '../shared/repoContext';
 import { isSourcePathInside, normalizeSourcePath } from '../shared/sourceFiles';
-import { CODEX_SESSIONS_DIR } from './paths';
+import {
+  basenameForLogPath,
+  findUsageLogSourceForPath,
+  getUsageLogSources,
+  joinLogPath,
+  mapCwdForSource,
+  sourceLabel,
+  type UsageLogSource,
+} from '../../wslPaths';
 
 const DEFAULT_RECENT_CODEX_FILE_LIMIT = 96;
 
@@ -36,19 +43,19 @@ export function describeCodexSource(sourceRaw: unknown, originator: string | nul
   };
 }
 
-function listCodexJsonlFiles(dir: string): string[] {
+function listCodexJsonlFiles(dir: string, logSource?: UsageLogSource): string[] {
   const results: string[] = [];
   try {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) results.push(...listCodexJsonlFiles(fullPath));
+      const fullPath = joinLogPath(logSource, dir, entry.name);
+      if (entry.isDirectory()) results.push(...listCodexJsonlFiles(fullPath, logSource));
       else if (entry.isFile() && entry.name.endsWith('.jsonl')) results.push(fullPath);
     }
   } catch { /* ignore */ }
   return results;
 }
 
-function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>): string[] {
+function listRecentCodexJsonlFiles(ctx: ProviderContext, maxFiles: number, trackedPaths: Set<string>): string[] {
   const files: Array<{ filePath: string; mtimeMs: number }> = [];
   const seen = new Set<string>();
   const targetCount = maxFiles + trackedPaths.size + 1;
@@ -63,7 +70,8 @@ function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>):
   };
 
   for (const trackedPath of trackedPaths) {
-    if (!isSourcePathInside(CODEX_SESSIONS_DIR, trackedPath)) continue;
+    const logSource = findUsageLogSourceForPath('codex', trackedPath, ctx.settings.enableWslTracking);
+    if (!logSource || !isSourcePathInside(logSource.codexSessionsDir, trackedPath)) continue;
     pushFile(trackedPath);
   }
 
@@ -78,15 +86,17 @@ function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>):
   };
 
   const dayDirs: Array<{ dir: string; mtimeMs: number }> = [];
-  for (const year of readSubdirs(CODEX_SESSIONS_DIR)) {
-    const yearDir = path.join(CODEX_SESSIONS_DIR, year);
-    for (const month of readSubdirs(yearDir)) {
-      const monthDir = path.join(yearDir, month);
-      for (const day of readSubdirs(monthDir)) {
-        const dayDir = path.join(monthDir, day);
-        let mtimeMs = 0;
-        try { mtimeMs = fs.statSync(dayDir).mtimeMs; } catch { /* skip */ }
-        dayDirs.push({ dir: dayDir, mtimeMs });
+  for (const logSource of getUsageLogSources(ctx.settings.enableWslTracking)) {
+    for (const year of readSubdirs(logSource.codexSessionsDir)) {
+      const yearDir = joinLogPath(logSource, logSource.codexSessionsDir, year);
+      for (const month of readSubdirs(yearDir)) {
+        const monthDir = joinLogPath(logSource, yearDir, month);
+        for (const day of readSubdirs(monthDir)) {
+          const dayDir = joinLogPath(logSource, monthDir, day);
+          let mtimeMs = 0;
+          try { mtimeMs = fs.statSync(dayDir).mtimeMs; } catch { /* skip */ }
+          dayDirs.push({ dir: dayDir, mtimeMs });
+        }
       }
     }
   }
@@ -94,7 +104,8 @@ function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>):
   dayDirs.sort((a, b) => b.mtimeMs - a.mtimeMs);
   for (const dayDir of dayDirs) {
     if (files.length >= targetCount) break;
-    for (const filePath of listCodexJsonlFiles(dayDir.dir)) {
+    const logSource = findUsageLogSourceForPath('codex', dayDir.dir, ctx.settings.enableWslTracking);
+    for (const filePath of listCodexJsonlFiles(dayDir.dir, logSource)) {
       pushFile(filePath);
       if (files.length >= targetCount) break;
     }
@@ -106,28 +117,29 @@ function listRecentCodexJsonlFiles(maxFiles: number, trackedPaths: Set<string>):
     .map(entry => entry.filePath);
 }
 
-function collectCodexSessions(options: DiscoverSessionsOptions = {}): DiscoveredSession[] {
-  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return [];
-
+function collectCodexSessions(ctx: ProviderContext, options: DiscoverSessionsOptions = {}): DiscoveredSession[] {
   const results: DiscoveredSession[] = [];
   const scope = options.scope ?? 'recent-active';
   const tracked = trackedJsonlSet(options.trackedJsonlPaths);
   const files = scope === 'all'
-    ? listCodexJsonlFiles(CODEX_SESSIONS_DIR)
-    : listRecentCodexJsonlFiles(options.maxCodexFiles ?? DEFAULT_RECENT_CODEX_FILE_LIMIT, tracked);
+    ? getUsageLogSources(ctx.settings.enableWslTracking).flatMap(source => listCodexJsonlFiles(source.codexSessionsDir, source))
+    : listRecentCodexJsonlFiles(ctx, options.maxCodexFiles ?? DEFAULT_RECENT_CODEX_FILE_LIMIT, tracked);
 
   for (const filePath of files) {
     try {
-      const header = readCodexSessionHeader(filePath);
+      const logSource = findUsageLogSourceForPath('codex', filePath, ctx.settings.enableWslTracking);
+      const header = readCodexSessionHeaderForSource(filePath, logSource);
       const payload = header?.payload;
       if (!payload) continue;
 
-      const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+      const rawCwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+      if (!rawCwd) continue;
+      const cwd = mapCwdForSource(logSource, rawCwd);
       if (!cwd) continue;
       if (!isSafeLocalCwd(cwd)) continue;
 
       const stat = fs.statSync(filePath);
-      const sessionId = typeof payload.id === 'string' ? payload.id : path.basename(filePath, '.jsonl');
+      const sessionId = typeof payload.id === 'string' ? payload.id : basenameForLogPath(filePath).replace(/\.jsonl$/, '');
       const startedAtRaw = typeof payload.timestamp === 'string'
         ? payload.timestamp
         : (header.timestamp ?? '');
@@ -145,7 +157,7 @@ function collectCodexSessions(options: DiscoverSessionsOptions = {}): Discovered
         projectName: repoContext.projectName,
         startedAt,
         entrypoint,
-        source,
+        source: sourceLabel(logSource, source),
         state: calcState(null, stat.mtime),
         jsonlPath: filePath,
         lastModified: stat.mtime,
@@ -161,7 +173,7 @@ function collectCodexSessions(options: DiscoverSessionsOptions = {}): Discovered
 }
 
 export function discoverCodexSessions(ctx: ProviderContext): DiscoveredSession[] {
-  return collectCodexSessions({
+  return collectCodexSessions(ctx, {
     scope: ctx.includeFullHistory ? 'all' : 'recent-active',
     trackedJsonlPaths: [...ctx.prioritySourceIds],
   });

@@ -1,25 +1,34 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { isSafeLocalCwd } from '../../pathSafety';
 import { importUsageJsonlIntoSnapshot } from '../../usageLedgerImporter';
-import { readCodexSessionHeader, readJsonlCwd } from '../../sessionMetadata';
+import { readCodexSessionHeaderForSource, readJsonlCwdForSource } from '../../sessionMetadata';
 import { scanJsonlSummaryCached } from '../../jsonlParser';
 import { describeCodexSource } from './discovery';
 import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderLedgerSource, ProviderSource, ProviderSourceList } from '../types';
 import { describeRepoContext, projectKeysForCwd } from '../shared/repoContext';
 import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs, statMtimeMsOrNull } from '../shared/sourceFiles';
-import { CODEX_SESSIONS_DIR, CODEX_USAGE_DIRS } from './paths';
+import { CODEX_USAGE_DIRS } from './paths';
+import {
+  basenameForLogPath,
+  findUsageLogSourceForPath,
+  getUsageLogSources,
+  joinLogPath,
+  sourceLabel,
+  type UsageLogSource,
+} from '../../wslPaths';
 
-function sourceFromFile(filePath: string): ProviderSource {
+function sourceFromFile(filePath: string, logSource?: UsageLogSource): ProviderSource {
   return {
     provider: 'codex',
     sourceId: normalizeSourcePath(filePath),
     filePath,
+    logSource,
   };
 }
 
 export function ownsCodexPath(filePath: string): boolean {
-  return CODEX_USAGE_DIRS.some(root => isSourcePathInside(root, filePath));
+  return !!findUsageLogSourceForPath('codex', filePath, true)
+    || CODEX_USAGE_DIRS.some(root => isSourcePathInside(root, filePath));
 }
 
 function readSubdirs(dir: string): string[] {
@@ -32,18 +41,20 @@ function readSubdirs(dir: string): string[] {
   }
 }
 
-export function listRecentCodexSources(_ctx: ProviderContext, limit: number): ProviderSourceList {
+export function listRecentCodexSources(ctx: ProviderContext, limit: number): ProviderSourceList {
   const files: string[] = [];
   const targetCount = limit + 1;
   const dayDirs: Array<{ dir: string; mtimeMs: number }> = [];
 
-  for (const year of readSubdirs(CODEX_SESSIONS_DIR)) {
-    const yearDir = path.join(CODEX_SESSIONS_DIR, year);
-    for (const month of readSubdirs(yearDir)) {
-      const monthDir = path.join(yearDir, month);
-      for (const day of readSubdirs(monthDir)) {
-        const dayDir = path.join(monthDir, day);
-        dayDirs.push({ dir: dayDir, mtimeMs: statMtimeMs(dayDir) });
+  for (const logSource of getUsageLogSources(ctx.settings.enableWslTracking)) {
+    for (const year of readSubdirs(logSource.codexSessionsDir)) {
+      const yearDir = joinLogPath(logSource, logSource.codexSessionsDir, year);
+      for (const month of readSubdirs(yearDir)) {
+        const monthDir = joinLogPath(logSource, yearDir, month);
+        for (const day of readSubdirs(monthDir)) {
+          const dayDir = joinLogPath(logSource, monthDir, day);
+          dayDirs.push({ dir: dayDir, mtimeMs: statMtimeMs(dayDir) });
+        }
       }
     }
   }
@@ -61,47 +72,55 @@ export function listRecentCodexSources(_ctx: ProviderContext, limit: number): Pr
 
   const truncated = files.length > limit;
   if (truncated) files.length = limit;
-  return { sources: files.map(sourceFromFile), truncated };
+  return {
+    sources: files.map(filePath =>
+      sourceFromFile(filePath, findUsageLogSourceForPath('codex', filePath, ctx.settings.enableWslTracking))
+    ),
+    truncated,
+  };
 }
 
-function codexSessionDedupeKey(filePath: string): string {
-  const header = readCodexSessionHeader(filePath);
+function codexSessionDedupeKey(filePath: string, logSource?: UsageLogSource): string {
+  const header = readCodexSessionHeaderForSource(filePath, logSource);
   const sessionId = typeof header?.payload.id === 'string' && header.payload.id.trim()
     ? header.payload.id.trim()
-    : path.basename(filePath, '.jsonl');
-  return sessionId.toLowerCase();
+    : basenameForLogPath(filePath).replace(/\.jsonl$/, '');
+  return `${logSource?.id ?? 'windows'}:${sessionId.toLowerCase()}`;
 }
 
-function codexUsageRootRank(filePath: string): number | null {
-  const index = CODEX_USAGE_DIRS.findIndex(root => isSourcePathInside(root, filePath));
+function codexUsageRootRank(filePath: string, logSource?: UsageLogSource): number | null {
+  const roots = logSource?.codexUsageDirs ?? CODEX_USAGE_DIRS;
+  const index = roots.findIndex(root => isSourcePathInside(root, filePath));
   return index >= 0 ? index : null;
 }
 
-export function listAllCodexSources(): ProviderSourceList {
-  const deduped = new Map<string, { filePath: string; rank: number; mtimeMs: number }>();
+export function listAllCodexSources(ctx: ProviderContext): ProviderSourceList {
+  const deduped = new Map<string, { filePath: string; rank: number; mtimeMs: number; logSource?: UsageLogSource }>();
 
-  for (const root of CODEX_USAGE_DIRS) {
-    if (!fs.existsSync(root)) continue;
-    for (const filePath of listJsonlFiles(root, Number.POSITIVE_INFINITY, false)) {
-      const rank = codexUsageRootRank(filePath);
-      if (rank == null) continue;
-      const mtimeMs = statMtimeMsOrNull(filePath);
-      if (mtimeMs == null) continue;
-      const key = codexSessionDedupeKey(filePath);
-      const current = deduped.get(key);
-      if (!current
-        || rank < current.rank
-        || (rank === current.rank && mtimeMs > current.mtimeMs)
-        || (rank === current.rank && mtimeMs === current.mtimeMs && filePath.localeCompare(current.filePath) < 0)) {
-        deduped.set(key, { filePath, rank, mtimeMs });
+  for (const logSource of getUsageLogSources(ctx.settings.enableWslTracking)) {
+    for (const root of logSource.codexUsageDirs) {
+      if (!fs.existsSync(root)) continue;
+      for (const filePath of listJsonlFiles(root, Number.POSITIVE_INFINITY, false)) {
+        const rank = codexUsageRootRank(filePath, logSource);
+        if (rank == null) continue;
+        const mtimeMs = statMtimeMsOrNull(filePath);
+        if (mtimeMs == null) continue;
+        const key = codexSessionDedupeKey(filePath, logSource);
+        const current = deduped.get(key);
+        if (!current
+          || rank < current.rank
+          || (rank === current.rank && mtimeMs > current.mtimeMs)
+          || (rank === current.rank && mtimeMs === current.mtimeMs && filePath.localeCompare(current.filePath) < 0)) {
+          deduped.set(key, { filePath, rank, mtimeMs, logSource });
+        }
       }
     }
   }
 
-  const files = [...deduped.values()]
+  const sources = [...deduped.values()]
     .sort((a, b) => a.rank - b.rank || a.filePath.localeCompare(b.filePath))
-    .map(entry => entry.filePath);
-  return { sources: files.map(sourceFromFile), truncated: false };
+    .map(entry => sourceFromFile(entry.filePath, entry.logSource));
+  return { sources, truncated: false };
 }
 
 export async function scanCodexSourceSummary(ctx: ProviderContext, source: ProviderSource) {
@@ -121,12 +140,18 @@ export function buildCodexLedgerSource(_ctx: ProviderContext, source: ProviderSo
 }
 
 export function readCodexSourceCwd(source: ProviderSource): string | null {
-  return readJsonlCwd(source.filePath, 'codex');
+  return readJsonlCwdForSource(source.filePath, 'codex', source.logSource);
 }
 
-export function codexWatchTargets(_ctx: ProviderContext, mode: 'recent' | 'wide'): string[] {
-  if (mode !== 'wide' || !fs.existsSync(CODEX_SESSIONS_DIR)) return [];
-  return [CODEX_SESSIONS_DIR.replace(/\\/g, '/') + '/**/*.jsonl'];
+export function codexWatchTargets(ctx: ProviderContext, mode: 'recent' | 'wide'): string[] {
+  if (mode !== 'wide') return [];
+  const targets: string[] = [];
+  for (const logSource of getUsageLogSources(ctx.settings.enableWslTracking)) {
+    if (fs.existsSync(logSource.codexSessionsDir)) {
+      targets.push(logSource.codexSessionsDir.replace(/\\/g, '/') + '/**/*.jsonl');
+    }
+  }
+  return targets;
 }
 
 export function buildStartupCodexSession(_ctx: ProviderContext, source: ProviderSource): DiscoveredSession | null {
@@ -135,17 +160,17 @@ export function buildStartupCodexSession(_ctx: ProviderContext, source: Provider
 
   try {
     const stat = fs.statSync(source.filePath);
-    const header = readCodexSessionHeader(source.filePath);
+    const header = readCodexSessionHeaderForSource(source.filePath, source.logSource);
     const payload = header?.payload;
     const sessionId = typeof payload?.id === 'string' && payload.id.trim()
       ? payload.id.trim()
-      : path.basename(source.filePath, '.jsonl');
+      : basenameForLogPath(source.filePath).replace(/\.jsonl$/, '');
     const startedAtRaw = typeof payload?.timestamp === 'string'
       ? payload.timestamp
       : (header?.timestamp ?? '');
     const startedAt = startedAtRaw ? new Date(startedAtRaw) : stat.birthtime;
     const originator = typeof payload?.originator === 'string' ? payload.originator : null;
-    const { entrypoint, source: sourceLabel } = describeCodexSource(payload?.source, originator);
+    const { entrypoint, source: sourceName } = describeCodexSource(payload?.source, originator);
     const repoContext = describeRepoContext(cwd);
 
     return {
@@ -156,7 +181,7 @@ export function buildStartupCodexSession(_ctx: ProviderContext, source: Provider
       projectName: repoContext.projectName,
       startedAt,
       entrypoint,
-      source: sourceLabel,
+      source: sourceLabel(source.logSource, sourceName),
       state: sessionStateFromMtime(stat.mtime),
       jsonlPath: source.filePath,
       lastModified: stat.mtime,

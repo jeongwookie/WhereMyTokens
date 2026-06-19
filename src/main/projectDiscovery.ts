@@ -1,18 +1,16 @@
 import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { isSafeLocalCwd } from './pathSafety';
-import { readJsonlCwd } from './sessionMetadata';
+import { readJsonlCwdForSource } from './sessionMetadata';
 import type { ProviderId } from './providers/types';
+import { getUsageLogSources, joinLogPath, type UsageLogSource } from './wslPaths';
 
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
-
-export function discoverAllProjectCwds(providers: readonly ProviderId[] = ['claude', 'codex']): string[] {
+export function discoverAllProjectCwds(providers: readonly ProviderId[] = ['claude', 'codex'], enableWslTracking = false): string[] {
   const cwds = new Set<string>();
   const enabled = new Set(providers);
-  if (enabled.has('claude')) addClaudeProjectCwds(cwds);
-  if (enabled.has('codex')) addCodexProjectCwds(cwds);
+  for (const source of getUsageLogSources(enableWslTracking)) {
+    if (enabled.has('claude')) addClaudeProjectCwds(cwds, source);
+    if (enabled.has('codex')) addCodexProjectCwds(cwds, source);
+  }
 
   return [...cwds].filter(cwd => {
     if (!isSafeLocalCwd(cwd)) return false;
@@ -20,38 +18,38 @@ export function discoverAllProjectCwds(providers: readonly ProviderId[] = ['clau
   });
 }
 
-function addClaudeProjectCwds(cwds: Set<string>): void {
-  if (!fs.existsSync(PROJECTS_DIR)) return;
+function addClaudeProjectCwds(cwds: Set<string>, source: UsageLogSource): void {
+  if (!fs.existsSync(source.claudeProjectsDir)) return;
   try {
-    const dirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+    const dirs = fs.readdirSync(source.claudeProjectsDir, { withFileTypes: true })
       .filter(d => d.isDirectory());
     for (const dir of dirs) {
-      const dirPath = path.join(PROJECTS_DIR, dir.name);
+      const dirPath = joinLogPath(source, source.claudeProjectsDir, dir.name);
       try {
         const jsonlFiles = fs.readdirSync(dirPath)
           .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
         if (jsonlFiles.length === 0) continue;
-        const cwd = readJsonlCwd(path.join(dirPath, jsonlFiles[0]), 'claude');
+        const cwd = readJsonlCwdForSource(joinLogPath(source, dirPath, jsonlFiles[0]), 'claude', source);
         if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
       } catch { /* skip */ }
     }
   } catch { /* skip */ }
 }
 
-function addCodexProjectCwds(cwds: Set<string>): void {
-  if (!fs.existsSync(CODEX_SESSIONS_DIR)) return;
-  for (const filePath of listJsonlFiles(CODEX_SESSIONS_DIR)) {
-    const cwd = readJsonlCwd(filePath, 'codex');
+function addCodexProjectCwds(cwds: Set<string>, source: UsageLogSource): void {
+  if (!fs.existsSync(source.codexSessionsDir)) return;
+  for (const filePath of listJsonlFiles(source.codexSessionsDir, source)) {
+    const cwd = readJsonlCwdForSource(filePath, 'codex', source);
     if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
   }
 }
 
-function listJsonlFiles(dir: string): string[] {
+function listJsonlFiles(dir: string, source: UsageLogSource): string[] {
   const files: string[] = [];
   try {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) files.push(...listJsonlFiles(fullPath));
+      const fullPath = joinLogPath(source, dir, entry.name);
+      if (entry.isDirectory()) files.push(...listJsonlFiles(fullPath, source));
       else if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(fullPath);
     }
   } catch { /* skip */ }

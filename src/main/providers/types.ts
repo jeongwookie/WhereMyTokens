@@ -2,6 +2,7 @@ import type { AppSettings } from '../ipc';
 import type { JsonlCache } from '../jsonlCache';
 import type { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary } from '../jsonlTypes';
 import type { UsageLedgerSnapshot } from '../usageLedgerTypes';
+import type { UsageLogSource } from '../wslPaths';
 
 export type ProviderId = 'claude' | 'codex' | 'antigravity';
 
@@ -100,6 +101,7 @@ export interface ProviderSource {
   sourceId: string;
   filePath: string;
   priority?: boolean;
+  logSource?: UsageLogSource;
 }
 
 /**

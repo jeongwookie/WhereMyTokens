@@ -59,6 +59,7 @@ import {
   usageProviderVisible,
   type UsageVisibilityFilter,
 } from './usageVisibilityFilter';
+import { findUsageLogSourceForPath, refreshUsageLogSources } from './wslPaths';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -546,8 +547,14 @@ function makeExcludedMatcher(excludedProjects: readonly string[] = []): Excluded
 
 function isSameOrChildPath(parentPath: string | null, childPath: string | null): boolean {
   if (!parentPath || !childPath) return false;
-  const relative = path.relative(parentPath, childPath);
-  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  const parent = parentPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const child = childPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const fold = process.platform === 'win32'
+    ? (value: string) => value.toLowerCase()
+    : (value: string) => value;
+  const parentKey = fold(parent);
+  const childKey = fold(child);
+  return childKey === parentKey || childKey.startsWith(`${parentKey}/`);
 }
 
 export function resolveSessionRepoKeys(
@@ -853,6 +860,7 @@ export class StateManager {
   }
 
   private providerSelectionChanged(next: AppSettings, previous: AppSettings): boolean {
+    if (next.enableWslTracking !== previous.enableWslTracking) return true;
     const nextProviders = this.enabledProviderSet(next);
     const previousProviders = this.enabledProviderSet(previous);
     if (nextProviders.size !== previousProviders.size) return true;
@@ -893,6 +901,7 @@ export class StateManager {
       sourceId: normalizeFileKey(filePath),
       filePath,
       priority,
+      logSource: findUsageLogSourceForPath(provider.id, filePath, this.getSettings().enableWslTracking),
     };
   }
 
@@ -1909,7 +1918,18 @@ export class StateManager {
       return;
     }
 
-    this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
+    try {
+      this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
+    } catch {
+      this.watcher = null;
+      this.watcherProfile = 'off';
+      this.watcherTargetCount = 0;
+      this.logWatcherProfile(`${reason}:failed`);
+      return;
+    }
+    this.watcher.on('error', () => {
+      // WSL UNC watching may fail; scheduled refresh and manual refresh remain available.
+    });
     this.watcher.on('add', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) {
         this.debouncedFastRefresh(filePath);
@@ -2029,6 +2049,8 @@ export class StateManager {
       await this.logMemorySnapshot('heavyRefresh:start');
       const apiSample = this.beginPerfSample();
       const settingsForApi = this.getSettings();
+      await refreshUsageLogSources(settingsForApi.enableWslTracking, force);
+      if (settingsForApi.enableWslTracking) this.startWatcher('heavyRefresh:logSources');
       await this.refreshProviderQuotas(settingsForApi, force || forceProviderUsage);
       apiPerf = this.finishPerfSample(apiSample);
       const initialRefreshDone = this.startupFreshComplete;
