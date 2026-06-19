@@ -110,7 +110,7 @@ export function buildClaudeLedgerSource(_ctx: ProviderContext, source: ProviderS
     sourcePath,
     priority: priority || source.priority === true,
     importIntoSnapshot: (snapshot, nowMs) =>
-      importUsageJsonlIntoSnapshot(snapshot, source.filePath, 'claude', nowMs),
+      importUsageJsonlIntoSnapshot(snapshot, source.filePath, 'claude', nowMs, source.logSource),
   };
 }
 
@@ -152,6 +152,7 @@ export function buildStartupClaudeSession(_ctx: ProviderContext, source: Provide
       worktreeBranch: repoContext.worktreeBranch,
       gitBranch: repoContext.gitBranch,
       mainRepoName: repoContext.mainRepoName,
+      logSourceKind: source.logSource?.kind,
     };
   } catch {
     return null;

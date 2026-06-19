@@ -80,6 +80,7 @@ export interface SessionInfo {
   worktreeBranch?: string | null;
   gitBranch?: string | null;
   mainRepoName?: string | null;
+  logSourceKind?: 'windows' | 'wsl';
   gitStats?: GitStats | null;
   activityBreakdown?: {
     read: number; editWrite: number; search: number; git: number;

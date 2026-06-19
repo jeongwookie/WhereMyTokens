@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { isSafeLocalCwd } from './pathSafety';
 import { mapCwdForSource, type UsageLogSource } from './wslPaths';
 
 export type JsonlProvider = 'claude' | 'codex';
@@ -89,8 +88,7 @@ function readFilePrefix(filePath: string, maxBytes: number): string | null {
 
 function safeCwd(value: unknown, source?: UsageLogSource): string | null {
   if (typeof value !== 'string') return null;
-  if (source) return mapCwdForSource(source, value);
-  return isSafeLocalCwd(value) ? value : null;
+  return mapCwdForSource(source, value);
 }
 
 function parseCodexHeaderLine(

@@ -111,6 +111,15 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.doesNotMatch(settingsView, /'provider'/);
 });
 
+test('renderer preserves session log source kind from main state', () => {
+  const app = fs.readFileSync('src/renderer/App.tsx', 'utf8');
+  const types = fs.readFileSync('src/renderer/types.ts', 'utf8');
+
+  assert.match(types, /logSourceKind\?: 'windows' \| 'wsl'/);
+  assert.match(app, /logSourceKind: session\?\.logSourceKind === 'wsl'/);
+  assert.match(app, /&& a\.logSourceKind === b\.logSourceKind/);
+});
+
 test('renderer provider settings use provider checkboxes backed by enabledProviders', () => {
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
 

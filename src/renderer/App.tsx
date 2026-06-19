@@ -486,6 +486,7 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
     worktreeBranch: typeof session?.worktreeBranch === 'string' ? session.worktreeBranch : null,
     gitBranch: typeof session?.gitBranch === 'string' ? session.gitBranch : null,
     mainRepoName: typeof session?.mainRepoName === 'string' ? session.mainRepoName : null,
+    logSourceKind: session?.logSourceKind === 'wsl' ? 'wsl' : session?.logSourceKind === 'windows' ? 'windows' : undefined,
     gitStats: session?.gitStats ?? null,
     activityBreakdown: session?.activityBreakdown ? numberRecord(session.activityBreakdown) as AppState['sessions'][number]['activityBreakdown'] : null,
     activityBreakdownKind: session?.activityBreakdownKind === 'tokens' || session?.activityBreakdownKind === 'events'
@@ -637,6 +638,7 @@ function sameSession(a: AppState['sessions'][number], b: AppState['sessions'][nu
     && a.worktreeBranch === b.worktreeBranch
     && a.gitBranch === b.gitBranch
     && a.mainRepoName === b.mainRepoName
+    && a.logSourceKind === b.logSourceKind
     && a.activityBreakdownKind === b.activityBreakdownKind
     && sameNumberRecord(a.toolCounts, b.toolCounts)
     && sameNumberRecord(a.activityBreakdown as Record<string, number> | null | undefined, b.activityBreakdown as Record<string, number> | null | undefined)

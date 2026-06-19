@@ -63,8 +63,12 @@ function decodeWslOutput(buffer: Buffer): string {
   return decoded.replace(/\0/g, '').replace(/\r/g, '').trim();
 }
 
-function runWsl(args: string[], timeout = 2500): Promise<string | null> {
-  if (process.platform !== 'win32') return Promise.resolve(null);
+type WslCommandResult =
+  | { ok: true; text: string }
+  | { ok: false };
+
+function runWsl(args: string[], timeout = 2500): Promise<WslCommandResult> {
+  if (process.platform !== 'win32') return Promise.resolve({ ok: false });
   return new Promise((resolve) => {
     execFile('wsl.exe', args, {
       encoding: 'buffer',
@@ -72,18 +76,18 @@ function runWsl(args: string[], timeout = 2500): Promise<string | null> {
       windowsHide: true,
     }, (error, stdout) => {
       if (error) {
-        resolve(null);
+        resolve({ ok: false });
         return;
       }
       const text = decodeWslOutput(Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? ''));
-      resolve(text || null);
+      resolve({ ok: true, text });
     });
   });
 }
 
 function cleanDistroName(value: string): string | null {
   const name = value.trim();
-  if (!name || name.includes('\\') || name.includes('/')) return null;
+  if (!name || name === '.' || name === '..' || name.includes('\\') || name.includes('/')) return null;
   return name;
 }
 
@@ -92,11 +96,11 @@ function isUserDistro(name: string): boolean {
   return lower !== 'docker-desktop' && lower !== 'docker-desktop-data';
 }
 
-async function listWslDistros(): Promise<string[]> {
-  const output = await runWsl(['--list', '--quiet']);
-  if (!output) return [];
+async function listWslDistros(): Promise<string[] | null> {
+  const result = await runWsl(['--list', '--quiet']);
+  if (!result.ok) return null;
   const seen = new Set<string>();
-  for (const line of output.split('\n')) {
+  for (const line of result.text.split('\n')) {
     const distro = cleanDistroName(line);
     if (distro && isUserDistro(distro)) seen.add(distro);
   }
@@ -106,13 +110,24 @@ async function listWslDistros(): Promise<string[]> {
 function normalizeLinuxPath(value: string): string {
   const trimmed = value.trim();
   if (!trimmed.startsWith('/')) return '';
-  return trimmed.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+  const normalized = trimmed.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.some(part => part === '.' || part === '..')) return '';
+  return normalized;
 }
 
-async function getWslHome(distro: string): Promise<string | null> {
-  const home = await runWsl(['-d', distro, 'sh', '-lc', 'printf %s "$HOME"']);
-  if (!home) return null;
-  return normalizeLinuxPath(home);
+async function getWslHome(distro: string): Promise<string | null | undefined> {
+  const result = await runWsl(['-d', distro, '--exec', 'printenv', 'HOME']);
+  if (!result.ok) return undefined;
+  if (!result.text) return null;
+  return normalizeLinuxPath(result.text);
+}
+
+function isLinuxSameOrChildPath(parentPath: string | undefined, childPath: string): boolean {
+  if (!parentPath) return false;
+  const parent = normalizeLinuxPath(parentPath);
+  if (!parent || parent === '/') return false;
+  return childPath === parent || childPath.startsWith(`${parent}/`);
 }
 
 function uncPath(prefix: string, distro: string, linuxPath = '/'): string {
@@ -161,13 +176,22 @@ async function discoverWslSources(force = false): Promise<UsageLogSource[]> {
     return cachedWslSources.sources;
   }
 
+  const distros = await listWslDistros();
+  if (!distros) return cachedWslSources?.sources ?? [];
+
   const sources: UsageLogSource[] = [];
-  for (const distro of await listWslDistros()) {
+  let hadFailure = false;
+  for (const distro of distros) {
     const linuxHome = await getWslHome(distro);
+    if (linuxHome === undefined) {
+      hadFailure = true;
+      continue;
+    }
     if (!linuxHome) continue;
     sources.push(buildWslSource(distro, linuxHome));
   }
 
+  if (hadFailure && sources.length === 0) return cachedWslSources?.sources ?? [];
   cachedWslSources = { ts: now, sources };
   return sources;
 }
@@ -212,6 +236,10 @@ function isWindowsDriveCwd(value: string): boolean {
   return /^[a-z]:\\/i.test(value) && !value.includes('\0');
 }
 
+function isWslUncCwd(value: string): boolean {
+  return /^\\\\wsl(?:\.localhost|\$)\\/i.test(value.replace(/\//g, '\\'));
+}
+
 export function findUsageLogSourceForPath(
   provider: ProviderId,
   filePath: string,
@@ -232,9 +260,26 @@ export function basenameForLogPath(value: string): string {
   return value.includes('\\') ? path.win32.basename(value) : path.basename(value);
 }
 
+export function stableLogPathIdentity(source: UsageLogSource | undefined, filePath: string): string {
+  if (!source || source.kind !== 'wsl' || !source.distro) return filePath;
+  const normalizedRoot = source.rootDir.replace(/\//g, '\\').replace(/\\+$/, '');
+  const normalizedChild = filePath.replace(/\//g, '\\').replace(/\\+$/, '');
+  const root = comparablePath(normalizedRoot);
+  const child = comparablePath(normalizedChild);
+  if (child !== root && !child.startsWith(`${root}\\`)) return filePath;
+  const relativeParts = child === root
+    ? []
+    : normalizedChild.slice(normalizedRoot.length + 1).split('\\').filter(Boolean);
+  const linuxPath = `/${relativeParts.join('/')}`;
+  return `wsl:${source.distro}:${linuxPath}`;
+}
+
 export function mapCwdForSource(source: UsageLogSource | undefined, cwd: string): string | null {
   if (!cwd || cwd.includes('\0')) return null;
-  if (!source || source.kind === 'windows') return isSafeLocalCwd(cwd) ? cwd : null;
+  if (!source || source.kind === 'windows') {
+    if (isWslUncCwd(cwd)) return null;
+    return isSafeLocalCwd(cwd) ? cwd : null;
+  }
 
   const normalized = normalizeLinuxPath(cwd);
   if (!normalized) return null;
@@ -247,6 +292,7 @@ export function mapCwdForSource(source: UsageLogSource | undefined, cwd: string)
     return isWindowsDriveCwd(windowsPath) ? windowsPath : null;
   }
 
+  if (!isLinuxSameOrChildPath(source.linuxHome, normalized)) return null;
   const parts = normalized.split('/').filter(Boolean);
   const unc = path.win32.join(source.rootDir, ...parts);
   return isSafeLocalCwd(unc) ? unc : null;

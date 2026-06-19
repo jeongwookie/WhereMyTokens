@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import * as sessionMetadata from '../dist/main/sessionMetadata.js';
+import * as pathSafety from '../dist/main/pathSafety.js';
 import * as wslPaths from '../dist/main/wslPaths.js';
 
 const {
@@ -14,6 +15,7 @@ const {
   readJsonlCwd,
   readJsonlCwdForSource,
 } = sessionMetadata;
+const { isSafeLocalCwd } = pathSafety;
 const { mapCwdForSource } = wslPaths;
 
 function wslSource(distro = 'Ubuntu') {
@@ -144,6 +146,35 @@ test('WSL Linux cwd values are mapped to Windows-readable paths', () => {
     'C:\\dev\\my-project',
   );
   assert.equal(mapCwdForSource(source, 'relative/repo'), null);
+});
+
+test('Windows log sources cannot opt into WSL UNC cwd values', () => {
+  clearSessionMetadataCache();
+  const dir = tempDir();
+  const filePath = path.join(dir, 'windows-log-wsl-unc.jsonl');
+  const wslUnc = '\\\\wsl$\\Ubuntu\\home\\example\\repo';
+
+  assert.equal(mapCwdForSource(undefined, wslUnc), null);
+  writeJsonl(filePath, [
+    JSON.stringify({ type: 'session_meta', payload: { cwd: wslUnc } }),
+  ]);
+  assert.equal(readJsonlCwd(filePath, 'codex'), null);
+});
+
+test('WSL cwd mapping rejects traversal segments', () => {
+  const source = wslSource();
+
+  assert.equal(mapCwdForSource(source, '/home/example/../other-repo'), null);
+  assert.equal(mapCwdForSource(source, '/mnt/c/../Windows'), null);
+  assert.equal(isSafeLocalCwd('\\\\wsl$\\Ubuntu\\..\\Other\\repo'), false);
+});
+
+test('WSL cwd mapping keeps Linux paths inside the discovered home', () => {
+  const source = wslSource();
+
+  assert.equal(mapCwdForSource(source, '/home/example/repo'), '\\\\wsl$\\Ubuntu\\home\\example\\repo');
+  assert.equal(mapCwdForSource(source, '/home/other/repo'), null);
+  assert.equal(mapCwdForSource(source, '/tmp/repo'), null);
 });
 
 test('Codex cwd can be read from a WSL log source', () => {

@@ -510,8 +510,13 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function currentSessionState(provider: SessionInfo['provider'], pid: number | null, lastModified: Date | null): SessionState {
-  if (provider === 'claude' && pid != null && !isProcessAlive(pid)) return 'idle';
+function currentSessionState(
+  provider: SessionInfo['provider'],
+  pid: number | null,
+  lastModified: Date | null,
+  logSourceKind?: SessionInfo['logSourceKind'],
+): SessionState {
+  if (provider === 'claude' && logSourceKind !== 'wsl' && pid != null && !isProcessAlive(pid)) return 'idle';
   return approximateSessionState(lastModified);
 }
 
@@ -905,6 +910,22 @@ export class StateManager {
     };
   }
 
+  private providerOwnsPath(provider: SourceBackedProviderAdapter, filePath: string, settings: AppSettings): boolean {
+    if (!provider.ownsPath(filePath)) return false;
+    if (settings.enableWslTracking) return true;
+    return findUsageLogSourceForPath(provider.id, filePath, true)?.kind !== 'wsl';
+  }
+
+  private sessionLogSourceKind(session: Pick<SessionInfo, 'provider' | 'jsonlPath' | 'source' | 'logSourceKind'>): SessionInfo['logSourceKind'] {
+    if (session.logSourceKind) return session.logSourceKind;
+    if (session.jsonlPath && findUsageLogSourceForPath(session.provider, session.jsonlPath, true)?.kind === 'wsl') return 'wsl';
+    return session.source.startsWith('WSL ') ? 'wsl' : undefined;
+  }
+
+  private isWslSession(session: Pick<SessionInfo, 'provider' | 'jsonlPath' | 'source' | 'logSourceKind'>): boolean {
+    return this.sessionLogSourceKind(session) === 'wsl';
+  }
+
   private emptyState(): AppState {
     return {
       sessions: [],
@@ -1043,6 +1064,7 @@ export class StateManager {
       work.allowHiddenFullScan,
       work.changedFiles,
       work.includeFullHistory,
+      work.reasons.includes('manual'),
     );
   }
 
@@ -1688,7 +1710,8 @@ export class StateManager {
       && a.source === b.source
       && a.lastModified?.getTime() === b.lastModified?.getTime()
       && a.gitStats === b.gitStats
-      && JSON.stringify(a.toolCounts) === JSON.stringify(b.toolCounts);
+      && JSON.stringify(a.toolCounts) === JSON.stringify(b.toolCounts)
+      && a.logSourceKind === b.logSourceKind;
   }
 
   private sessionDebugExtras(nextSessions: SessionInfo[], extras: Partial<Omit<SessionBuildResult, 'sessions'>> = {}): Record<string, unknown> {
@@ -1928,7 +1951,16 @@ export class StateManager {
       return;
     }
     this.watcher.on('error', () => {
-      // WSL UNC watching may fail; scheduled refresh and manual refresh remain available.
+      void this.watcher?.close();
+      this.watcher = null;
+      this.watcherProfile = 'off';
+      this.watcherTargetCount = 0;
+      this.logWatcherProfile(`${reason}:error`);
+      void this.requestRefresh({
+        mode: 'heavy',
+        reason: 'watcher',
+        scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+      });
     });
     this.watcher.on('add', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) {
@@ -2038,6 +2070,7 @@ export class StateManager {
     allowHiddenFullScan = false,
     priorityFiles?: Set<string>,
     includeFullHistory = false,
+    forceLogSourceRefresh = false,
   ) {
     const totalPerf = this.beginPerfSample();
     let apiPerf: PerfMetrics | null = null;
@@ -2049,7 +2082,7 @@ export class StateManager {
       await this.logMemorySnapshot('heavyRefresh:start');
       const apiSample = this.beginPerfSample();
       const settingsForApi = this.getSettings();
-      await refreshUsageLogSources(settingsForApi.enableWslTracking, force);
+      await refreshUsageLogSources(settingsForApi.enableWslTracking, force || forceLogSourceRefresh);
       if (settingsForApi.enableWslTracking) this.startWatcher('heavyRefresh:logSources');
       await this.refreshProviderQuotas(settingsForApi, force || forceProviderUsage);
       apiPerf = this.finishPerfSample(apiSample);
@@ -2539,7 +2572,7 @@ export class StateManager {
     const sources: ProviderLedgerSource[] = [];
     for (const [filePath, summary] of summaries.entries()) {
       const provider = this.providerRegistry.get(summary.provider);
-      if (!provider || !isSourceBackedProvider(provider) || !provider.ownsPath(filePath)) continue;
+      if (!provider || !isSourceBackedProvider(provider) || !this.providerOwnsPath(provider, filePath, settings)) continue;
       const source = this.sourceForPath(provider, filePath, true);
       const ledgerSource = provider.ledgerSource?.(ctx, source, true);
       if (ledgerSource) sources.push(ledgerSource);
@@ -2633,7 +2666,7 @@ export class StateManager {
     const providers = this.sourceBackedProviders(settings);
 
     for (const filePath of prioritySourceIds) {
-      const provider = providers.find(candidate => candidate.ownsPath(filePath));
+      const provider = providers.find(candidate => this.providerOwnsPath(candidate, filePath, settings));
       if (provider) pushSource(provider, this.sourceForPath(provider, filePath, true), true);
     }
 
@@ -2815,7 +2848,7 @@ export class StateManager {
     for (const provider of this.sourceBackedProviders(settings)) {
       const sourcesByPath = new Map<string, ProviderSource>();
       for (const filePath of startupPriority) {
-        if (!provider.ownsPath(filePath)) continue;
+        if (!this.providerOwnsPath(provider, filePath, settings)) continue;
         const source = this.sourceForPath(provider, filePath, true);
         sourcesByPath.set(normalizeFileKey(source.filePath), source);
       }
@@ -2923,7 +2956,7 @@ export class StateManager {
 
   private providerForSourcePath(filePath: string, settings: AppSettings = this.getSettings()): SourceBackedProviderAdapter | null {
     const normalized = normalizeFileKey(filePath);
-    return this.sourceBackedProviders(settings).find(candidate => candidate.ownsPath(normalized)) ?? null;
+    return this.sourceBackedProviders(settings).find(candidate => this.providerOwnsPath(candidate, normalized, settings)) ?? null;
   }
 
   private getSummary(filePath: string): FileUsageSummary | null {
@@ -3185,10 +3218,13 @@ export class StateManager {
       }
 
       const lastModified = getJsonlMtime(session.jsonlPath) ?? session.lastModified;
-      const state = currentSessionState(session.provider, session.pid, lastModified);
-      if (lastModified?.getTime() !== session.lastModified?.getTime() || state !== session.state) {
+      const logSourceKind = this.sessionLogSourceKind(session);
+      const state = currentSessionState(session.provider, session.pid, lastModified, logSourceKind);
+      if (lastModified?.getTime() !== session.lastModified?.getTime()
+        || state !== session.state
+        || logSourceKind !== session.logSourceKind) {
         changed = true;
-        next.push({ ...session, lastModified, state });
+        next.push({ ...session, lastModified, state, logSourceKind });
       } else {
         next.push(session);
         reusedCount += 1;
@@ -3220,16 +3256,25 @@ export class StateManager {
     const settings = this.getSettings();
     const providerChanged = this.providerSelectionChanged(settings, this.state.settings);
     const quotaSettingsChanged = this.quotaAffectingSettingsChanged(settings, this.state.settings);
+    const wslTrackingChanged = settings.enableWslTracking !== this.state.settings.enableWslTracking;
+    const exclusionsCleared = (this.state.settings.excludedProjects?.length ?? 0) > 0
+      && (settings.excludedProjects?.length ?? 0) === 0;
     if (providerChanged) {
       this.summaries.clear();
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
+      if (this.state.settings.enableWslTracking && !settings.enableWslTracking) {
+        this.usageLedgerStore.reset();
+        this.usageLedgerImportFailed = (settings.excludedProjects?.length ?? 0) > 0;
+      }
       const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
       const enabled = this.enabledProviderSet(settings);
       const sessions = this.state.sessions.filter(session =>
         enabled.has(session.provider)
         && !isExcluded(this.sessionProjectKeys(session)),
+      ).filter(session =>
+        settings.enableWslTracking || !this.isWslSession(session)
       );
       const derived = this.computeDerivedUsage(settings);
       const usageTrend = this.buildUsageTrend();
@@ -3282,6 +3327,14 @@ export class StateManager {
       lastUpdated: Date.now(),
     };
     this.publishState();
+    if (exclusionsCleared && this.usageLedgerImportFailed) {
+      void this.requestRefresh({
+        mode: 'heavy',
+        reason: 'settings',
+        includeFullHistory: true,
+        scanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
+      });
+    }
     if (quotaSettingsChanged && this.enabledProviderSet(settings).has('antigravity')) {
       void this.requestRefresh({
         mode: 'heavy',

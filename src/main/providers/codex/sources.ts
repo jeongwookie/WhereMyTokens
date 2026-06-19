@@ -135,7 +135,7 @@ export function buildCodexLedgerSource(_ctx: ProviderContext, source: ProviderSo
     sourcePath,
     priority: priority || source.priority === true,
     importIntoSnapshot: (snapshot, nowMs) =>
-      importUsageJsonlIntoSnapshot(snapshot, source.filePath, 'codex', nowMs),
+      importUsageJsonlIntoSnapshot(snapshot, source.filePath, 'codex', nowMs, source.logSource),
   };
 }
 
@@ -189,6 +189,7 @@ export function buildStartupCodexSession(_ctx: ProviderContext, source: Provider
       worktreeBranch: repoContext.worktreeBranch,
       gitBranch: repoContext.gitBranch,
       mainRepoName: repoContext.mainRepoName,
+      logSourceKind: source.logSource?.kind,
     };
   } catch {
     return null;

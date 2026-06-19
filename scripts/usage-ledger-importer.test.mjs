@@ -7,9 +7,33 @@ import path from 'node:path';
 import importerModule from '../dist/main/usageLedgerImporter.js';
 import aggregates from '../dist/main/usageLedgerAggregates.js';
 
-const { importUsageJsonlIntoSnapshot, sourceHashForPath } = importerModule;
+const { importUsageJsonlIntoSnapshot, sourceHashForIdentity, sourceHashForPath } = importerModule;
 const { emptyUsageLedgerSnapshot, dayModelKey, monthModelKey } = aggregates;
 const MODEL = 'Sonnet';
+
+function wslSource(rootDir) {
+  const homeDir = `${rootDir}\\home\\example`;
+  const codexHomeDir = `${homeDir}\\.codex`;
+  const codexSessionsDir = `${codexHomeDir}\\sessions`;
+  const codexArchivedSessionsDir = `${codexHomeDir}\\archived_sessions`;
+  const codexSessionCleanupArchiveDir = `${codexHomeDir}\\session-cleanup-archive`;
+  return {
+    id: 'wsl:Ubuntu',
+    label: 'WSL Ubuntu',
+    kind: 'wsl',
+    rootDir,
+    homeDir,
+    distro: 'Ubuntu',
+    linuxHome: '/home/example',
+    claudeSessionsDir: `${homeDir}\\.claude\\sessions`,
+    claudeProjectsDir: `${homeDir}\\.claude\\projects`,
+    codexHomeDir,
+    codexSessionsDir,
+    codexArchivedSessionsDir,
+    codexSessionCleanupArchiveDir,
+    codexUsageDirs: [codexSessionsDir, codexArchivedSessionsDir, codexSessionCleanupArchiveDir],
+  };
+}
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-usage-ledger-importer-'));
@@ -299,6 +323,43 @@ test('usage importer dedupes a Codex session imported from active and archive pa
   const row = second.dailyModel[dayModelKey('2026-05-25', 'codex', 'GPT-5-CODEX')];
   assert.equal(row.requestCount, 1);
   assert.equal(Object.keys(second.sourceCheckpoints).length, 1);
+});
+
+test('WSL Claude source hash is stable across UNC aliases', () => {
+  const localhostSource = wslSource('\\\\wsl.localhost\\Ubuntu');
+  const legacySource = wslSource('\\\\wsl$\\Ubuntu');
+  const localhostPath = '\\\\wsl.localhost\\Ubuntu\\home\\example\\.claude\\projects\\repo\\session.jsonl';
+  const legacyPath = '\\\\wsl$\\Ubuntu\\home\\example\\.claude\\projects\\repo\\session.jsonl';
+
+  assert.equal(sourceHashForPath(localhostPath, 'claude', localhostSource), sourceHashForPath(legacyPath, 'claude', legacySource));
+});
+
+test('WSL Claude import reuses legacy path-based checkpoints', async () => {
+  const dir = tempDir();
+  const rootDir = path.join(dir, 'wsl-root');
+  const filePath = path.join(rootDir, 'home', 'example', '.claude', 'projects', 'repo', 'session.jsonl');
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, [
+    claudeLine({ id: 'legacy-wsl', timestamp: '2026-05-25T10:15:00.000Z', output: 20 }),
+    '',
+  ].join('\n'), 'utf8');
+
+  const source = wslSource(rootDir);
+  const legacyHash = sourceHashForIdentity(`claude:${path.resolve(filePath)}`);
+  const seed = emptyUsageLedgerSnapshot();
+  seed.sourceCheckpoints[legacyHash] = {
+    provider: 'claude',
+    sourceHash: legacyHash,
+    lastImportedAt: Date.parse('2026-05-25T09:00:00.000Z'),
+    byteOffset: 0,
+    size: 0,
+    mtimeMs: 0,
+  };
+
+  const next = await importUsageJsonlIntoSnapshot(seed, filePath, 'claude', Date.parse('2026-05-25T12:00:00.000Z'), source);
+
+  assert.ok(next.sourceCheckpoints[legacyHash]);
+  assert.equal(Object.keys(next.sourceCheckpoints).length, 1);
 });
 
 test('usage importer marks shrunken sources for rebuild instead of partially subtracting old rows', async () => {

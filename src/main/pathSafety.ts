@@ -5,7 +5,11 @@ function isWindowsDriveAbsolute(value: string): boolean {
 }
 
 function isWslUncPath(value: string): boolean {
-  return /^\\\\wsl(?:\.localhost|\$)\\[^\\]+\\/i.test(value);
+  const match = /^\\\\wsl(?:\.localhost|\$)\\([^\\]+)(?:\\|$)/i.exec(value);
+  if (!match) return false;
+  const distro = match[1].trim();
+  if (!distro || distro === '.' || distro === '..') return false;
+  return !value.split('\\').filter(Boolean).some(part => part === '.' || part === '..');
 }
 
 export function isSafeLocalCwd(cwd: string): boolean {

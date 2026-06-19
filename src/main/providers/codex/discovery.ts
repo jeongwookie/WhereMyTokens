@@ -165,6 +165,7 @@ function collectCodexSessions(ctx: ProviderContext, options: DiscoverSessionsOpt
         worktreeBranch: repoContext.worktreeBranch,
         gitBranch: repoContext.gitBranch,
         mainRepoName: repoContext.mainRepoName,
+        logSourceKind: logSource?.kind,
       });
     } catch { /* skip malformed */ }
   }

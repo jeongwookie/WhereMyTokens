@@ -34,6 +34,7 @@ export interface DiscoveredSession {
   worktreeBranch: string | null;
   gitBranch: string | null;
   mainRepoName: string | null;
+  logSourceKind?: UsageLogSource['kind'];
 }
 
 export type ProviderCapability =

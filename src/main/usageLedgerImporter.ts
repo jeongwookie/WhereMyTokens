@@ -17,7 +17,8 @@ import { localDateKey } from './usageLedgerAggregates';
 import { claudeLedgerBreakdown, codexFunctionCallCategory } from './activityClassifier';
 import { extractClaudeUsageLine, extractCodexUsageLine } from './jsonlUsageExtractor';
 import { compositionToDelta, splitOutput } from './outputSplitter';
-import { readCodexSessionHeader } from './sessionMetadata';
+import { readCodexSessionHeaderForSource } from './sessionMetadata';
+import { stableLogPathIdentity, type UsageLogSource } from './wslPaths';
 import {
   emptyToolActivity,
   emptyToolOutput,
@@ -44,24 +45,50 @@ export function normalizedSourcePath(filePath: string): string {
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-export function sourceIdentityForPath(filePath: string, provider: ImportProvider): string {
+export function sourceIdentityForPath(filePath: string, provider: ImportProvider, source?: UsageLogSource): string {
   if (provider === 'codex') {
-    const header = readCodexSessionHeader(filePath);
+    const header = readCodexSessionHeaderForSource(filePath, source);
     const headerId = typeof header?.payload.id === 'string' && header.payload.id.trim()
       ? header.payload.id.trim()
       : '';
     const fallbackId = path.basename(filePath, '.jsonl').trim();
     return `codex:${headerId || fallbackId || normalizedSourcePath(filePath)}`;
   }
-  return `claude:${normalizedSourcePath(filePath)}`;
+  return `claude:${source?.kind === 'wsl' ? stableLogPathIdentity(source, filePath) : normalizedSourcePath(filePath)}`;
 }
 
 export function sourceHashForIdentity(identity: string): string {
   return crypto.createHash('sha256').update(identity).digest('base64url');
 }
 
-export function sourceHashForPath(filePath: string, provider: ImportProvider = 'claude'): string {
-  return sourceHashForIdentity(sourceIdentityForPath(filePath, provider));
+export function sourceHashForPath(filePath: string, provider: ImportProvider = 'claude', source?: UsageLogSource): string {
+  return sourceHashForIdentity(sourceIdentityForPath(filePath, provider, source));
+}
+
+function wslLegacyClaudeSourceHashes(filePath: string, provider: ImportProvider, source?: UsageLogSource): string[] {
+  if (provider !== 'claude' || source?.kind !== 'wsl') return [];
+  const hashes = new Set<string>();
+  const pushIdentityPath = (candidate: string): void => {
+    hashes.add(sourceHashForIdentity(`claude:${normalizedSourcePath(candidate)}`));
+    if (candidate.replace(/\//g, '\\').startsWith('\\\\wsl')) {
+      hashes.add(sourceHashForIdentity(`claude:${path.win32.resolve(candidate).toLowerCase()}`));
+    }
+  };
+
+  pushIdentityPath(filePath);
+  if (!source.distro) return [...hashes];
+
+  const normalizedRoot = source.rootDir.replace(/\//g, '\\').replace(/\\+$/, '');
+  const normalizedPath = filePath.replace(/\//g, '\\').replace(/\\+$/, '');
+  const rootKey = normalizedRoot.toLowerCase();
+  const pathKey = normalizedPath.toLowerCase();
+  if (pathKey !== rootKey && !pathKey.startsWith(`${rootKey}\\`)) return [...hashes];
+
+  const relative = pathKey === rootKey ? '' : normalizedPath.slice(normalizedRoot.length + 1);
+  for (const root of [`\\\\wsl.localhost\\${source.distro}`, `\\\\wsl$\\${source.distro}`]) {
+    pushIdentityPath(relative ? path.win32.join(root, relative) : root);
+  }
+  return [...hashes];
 }
 
 async function scanJsonlLines(filePath: string, onLine: (line: string, offsetAfterLine: number) => void, startOffset = 0): Promise<number> {
@@ -288,6 +315,7 @@ export async function importUsageJsonlIntoSnapshot(
   filePath: string,
   provider: ImportProvider,
   nowMs = Date.now(),
+  source?: UsageLogSource,
 ): Promise<UsageLedgerSnapshot> {
   let stat: fs.Stats;
   try {
@@ -296,9 +324,18 @@ export async function importUsageJsonlIntoSnapshot(
     return snapshot;
   }
 
-  const sourceIdentity = sourceIdentityForPath(filePath, provider);
-  const sourceHash = sourceHashForIdentity(sourceIdentity);
-  const currentCheckpoint = snapshot.sourceCheckpoints[sourceHash];
+  const sourceIdentity = sourceIdentityForPath(filePath, provider, source);
+  let sourceHash = sourceHashForIdentity(sourceIdentity);
+  let currentCheckpoint = snapshot.sourceCheckpoints[sourceHash];
+  if (!currentCheckpoint) {
+    for (const legacyHash of wslLegacyClaudeSourceHashes(filePath, provider, source)) {
+      const legacyCheckpoint = snapshot.sourceCheckpoints[legacyHash];
+      if (!legacyCheckpoint) continue;
+      sourceHash = legacyHash;
+      currentCheckpoint = legacyCheckpoint;
+      break;
+    }
+  }
   if (currentCheckpoint && (typeof currentCheckpoint.byteOffset !== 'number' || !Number.isFinite(currentCheckpoint.byteOffset))) {
     if (currentCheckpoint.needsRebuild) return snapshot;
     const next = cloneUsageLedgerSnapshot(snapshot);
