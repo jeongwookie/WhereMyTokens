@@ -6,7 +6,7 @@ import {
 
 export const CALIB = 2.4;
 export const CALIB_MIN = 1.2;
-export const CALIB_MAX = 3.4;
+export const CALIB_MAX = 5.0; // 짧은 thinking 블록은 고정 signature 오버헤드 때문에 sig/text 비율이 더 높을 수 있다.
 
 export function signatureProxyThinkingChars(signatureLength: number): number {
   return signatureLength > 0 ? signatureLength / CALIB : 0;

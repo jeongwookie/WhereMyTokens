@@ -90,10 +90,11 @@ test('no char signal: non-thinking remainder goes entirely to response (determin
 });
 
 test('CALIB drift guard: observed-band ratios pass, scheme-change ratio throws', () => {
-  assertCalibInBand(150, 100); // 1.5 — spec observed min, in band
-  assertCalibInBand(265, 100); // 2.65 — spec observed max, in band
-  assert.throws(() => assertCalibInBand(1000, 100)); // 10x — out of band
-  assert.throws(() => assertCalibInBand(110, 100));  // 1.1 — below CALIB_MIN
+  assertCalibInBand(150, 100); // 1.5는 허용 범위 안이다.
+  assertCalibInBand(265, 100); // 2.65는 CALIB 중심값에 가깝다.
+  assertCalibInBand(379, 100); // 3.79는 짧은 블록에서 관측된 실제 outlier다.
+  assert.throws(() => assertCalibInBand(1000, 100)); // 10x는 허용 범위 밖이다.
+  assert.throws(() => assertCalibInBand(110, 100));  // 1.1은 CALIB_MIN 아래다.
 });
 
 test('compositionToDelta flattens nested toolOutput to flat row keys', () => {
