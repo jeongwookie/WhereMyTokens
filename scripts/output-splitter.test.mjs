@@ -90,8 +90,9 @@ test('no char signal: non-thinking remainder goes entirely to response (determin
 });
 
 test('CALIB drift guard: observed-band ratios pass, scheme-change ratio throws', () => {
-  assertCalibInBand(150, 100); // 1.5 — spec observed min, in band
-  assertCalibInBand(265, 100); // 2.65 — spec observed max, in band
+  assertCalibInBand(150, 100); // 1.5 — well within band
+  assertCalibInBand(265, 100); // 2.65 — near CALIB center
+  assertCalibInBand(379, 100); // 3.79 — short-block real-world outlier, within CALIB_MAX=5.0
   assert.throws(() => assertCalibInBand(1000, 100)); // 10x — out of band
   assert.throws(() => assertCalibInBand(110, 100));  // 1.1 — below CALIB_MIN
 });

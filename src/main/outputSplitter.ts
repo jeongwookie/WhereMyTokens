@@ -6,7 +6,7 @@ import {
 
 export const CALIB = 2.4;
 export const CALIB_MIN = 1.2;
-export const CALIB_MAX = 3.4;
+export const CALIB_MAX = 5.0; // widened from 3.4: short thinking blocks have naturally higher sig/text ratios due to fixed signature overhead
 
 export function signatureProxyThinkingChars(signatureLength: number): number {
   return signatureLength > 0 ? signatureLength / CALIB : 0;
