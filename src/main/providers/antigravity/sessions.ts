@@ -31,6 +31,7 @@ function summaryCwd(summary: AntigravityTrajectorySummary): string | null {
 }
 
 function isSafeAntigravityCwd(cwd: string): boolean {
+  if (!cwd || cwd.includes('\0')) return false;
   return isSafeLocalCwd(cwd) || /^[A-Za-z]:[\\/]/.test(cwd);
 }
 

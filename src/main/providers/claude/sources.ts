@@ -10,6 +10,12 @@ import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFr
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR } from './paths';
 import { isClaudeAgentJsonlName, isClaudeJsonlName } from './logFiles';
 
+interface ClaudeRecentFile {
+  filePath: string;
+  mtimeMs: number;
+  agentLog: boolean;
+}
+
 function sourceFromFile(filePath: string): ProviderSource {
   return {
     provider: 'claude',
@@ -27,40 +33,47 @@ export function ownsClaudePath(filePath: string): boolean {
 }
 
 export function listRecentClaudeSources(_ctx: ProviderContext, limit: number): ProviderSourceList {
-  const recentFiles: Array<{ filePath: string; mtimeMs: number }> = [];
-  const projectDirLimit = Math.max(limit, 12);
-  let truncated = false;
+  const recentFiles: ClaudeRecentFile[] = [];
 
   try {
     const projectDirs = fs.readdirSync(CLAUDE_PROJECTS_DIR, { withFileTypes: true })
       .filter(entry => entry.isDirectory())
-      .map(entry => {
-        const dirPath = path.join(CLAUDE_PROJECTS_DIR, entry.name);
-        return { dirPath, mtimeMs: statMtimeMs(dirPath) };
-      })
-      .sort((a, b) => b.mtimeMs - a.mtimeMs);
-
-    truncated = projectDirs.length > projectDirLimit;
-
-    for (const projectDir of projectDirs.slice(0, projectDirLimit)) {
+      .map(entry => path.join(CLAUDE_PROJECTS_DIR, entry.name));
+    for (const projectDir of projectDirs) {
       try {
-        const files = fs.readdirSync(projectDir.dirPath)
+        const files = fs.readdirSync(projectDir)
           .filter(isClaudeJsonlName);
         for (const file of files) {
-          const filePath = path.join(projectDir.dirPath, file);
-          recentFiles.push({ filePath, mtimeMs: statMtimeMs(filePath) });
+          const filePath = path.join(projectDir, file);
+          recentFiles.push({
+            filePath,
+            mtimeMs: statMtimeMs(filePath),
+            agentLog: isClaudeAgentJsonlName(file),
+          });
         }
       } catch { /* skip */ }
     }
   } catch { /* skip */ }
 
-  const files = recentFiles
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+  const byRecentMtime = (a: ClaudeRecentFile, b: ClaudeRecentFile) =>
+    b.mtimeMs - a.mtimeMs || a.filePath.localeCompare(b.filePath);
+  const sessionFiles = recentFiles
+    .filter(entry => !entry.agentLog)
+    .sort(byRecentMtime);
+  const agentFiles = recentFiles
+    .filter(entry => entry.agentLog)
+    .sort(byRecentMtime);
+  const selected = new Map<string, ClaudeRecentFile>();
+  for (const entry of sessionFiles.slice(0, limit)) selected.set(entry.filePath, entry);
+  for (const entry of agentFiles.slice(0, limit)) selected.set(entry.filePath, entry);
+
+  const files = [...selected.values()]
+    .sort((a, b) => Number(a.agentLog) - Number(b.agentLog) || byRecentMtime(a, b))
     .map(entry => entry.filePath);
 
   return {
-    sources: files.slice(0, limit).map(sourceFromFile),
-    truncated: truncated || files.length > limit,
+    sources: files.map(sourceFromFile),
+    truncated: sessionFiles.length > limit || agentFiles.length > limit,
   };
 }
 

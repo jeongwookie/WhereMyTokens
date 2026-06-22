@@ -72,7 +72,7 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
-| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL 발견을 수정해 agent 로그도 사용량 그래프에 포함하고, 프로젝트 발견이 단일 파일명에 의존하지 않도록 개선 |
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL 발견을 수정해 agent 로그도 사용량 그래프에 포함하되 agent 전용 세션 행은 추가하지 않도록 개선 |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | 클릭 가능한 Trend breakdown을 추가해 provider별 input/output, thinking/response/tool 사용량, work/billing 토큰, git 순 라인 카테고리를 확인 |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 긴 Rich quota card title이 Plan Usage 컬럼을 밀어내지 않도록 수정하고, ellipsis 단서와 tooltip fallback은 유지 |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 6/4 | Antigravity quota 선택과 pacing을 안정화하고, 시작 Partial History 루프를 방지하며, 계정 라벨 마스킹과 모델 token stats 표시를 보강 |

@@ -72,7 +72,7 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
-| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | 修复 Claude JSONL 发现，让 agent 日志计入使用量图表，并避免项目发现依赖单一文件名 |
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | 修复 Claude JSONL 发现，让 agent 日志计入使用量图表，同时不新增仅 agent 的会话行 |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | 新增可点击的 Trend breakdown，按 provider 展示 input/output、thinking/response/tool 用量、work/billing token 和 git 净行数分类 |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 修复长 Rich quota card title 撑开 Plan Usage 列的问题，同时保留 ellipsis 提示和 tooltip fallback |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 6/4 | 稳定 Antigravity quota 选择与 pacing，避免启动 Partial History 循环，强化账号 label masking 和 model token stats 显示 |

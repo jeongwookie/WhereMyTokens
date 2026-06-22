@@ -1879,7 +1879,7 @@ export class StateManager {
         ? StateManager.HIDDEN_CLAUDE_WATCH_LIMIT
         : StateManager.HIDDEN_CODEX_WATCH_LIMIT;
       for (const filePath of this.collectTrackedSessionFiles(provider.id, limit)) pushFile(filePath);
-      for (const source of provider.listRecentSources(ctx, limit).sources.slice(0, limit)) pushFile(source.filePath);
+      for (const source of provider.listRecentSources(ctx, limit).sources) pushFile(source.filePath);
     }
 
     return targets;

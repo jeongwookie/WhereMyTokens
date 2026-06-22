@@ -72,7 +72,7 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
-| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL discovery を修正し、agent log を usage graph に含め、project discovery が単一の file name に依存しないよう改善 |
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL discovery を修正し、agent log を usage graph に含めつつ agent 専用 session row は追加しないよう改善 |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | クリック可能な Trend breakdown を追加し、provider 別 input/output、thinking/response/tool 使用量、work/billing token、git net-line category を表示 |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 長い Rich quota card title でも Plan Usage の列が崩れないよう修正し、ellipsis の手がかりと tooltip fallback は維持 |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 6/4 | Antigravity quota 選択と pacing を安定化し、起動時の Partial History ループを防ぎ、アカウント label masking と model token stats 表示を強化 |

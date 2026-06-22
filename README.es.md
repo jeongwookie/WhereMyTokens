@@ -72,7 +72,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
-| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 22 jun | Corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso y no depender de un único nombre de archivo |
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 22 jun | Corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso sin añadir filas de sesión solo de agentes |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 17 jun | Añade breakdowns clicables en Trend con input/output por provider, thinking/response/tool usage, tokens work/billing y categorías de líneas netas git |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 5 jun | Corrige títulos largos en Rich quota cards para que las columnas de Plan Usage sigan alineadas, manteniendo ellipsis y tooltip fallback |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 4 jun | Estabiliza la selección y el pacing de quota de Antigravity, evita bucles de Partial History al inicio, enmascara labels de cuenta y conserva model token stats |

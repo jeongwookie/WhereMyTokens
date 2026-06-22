@@ -79,7 +79,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | Jun 22 | Fix Claude JSONL discovery so agent logs contribute to usage graphs and project discovery no longer depends on one filename |
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | Jun 22 | Fix Claude JSONL discovery so agent logs contribute to usage graphs without adding agent-only session rows |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | Jun 17 | Add clickable Trend breakdowns with provider input/output, thinking/response/tool usage, cache-aware work/billing tokens, and git net-line categories |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | Jun 5 | Fix long Rich quota card titles so Plan Usage columns stay aligned |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | Jun 4 | Stabilize Antigravity quota selection, startup warmup, account labels, and model token stats |

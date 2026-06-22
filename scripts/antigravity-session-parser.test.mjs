@@ -57,3 +57,12 @@ test('Antigravity session parser uses created time fallback and leaves unknown m
   assert.equal(unknownTime.state, 'idle');
   assert.equal(unknownTime.lastModified, null);
 });
+
+test('Antigravity session parser rejects encoded NUL workspace cwd', () => {
+  const session = trajectorySummaryToSession('antigravity:test-owner:cascade:nul-path', {
+    createdTime: '2026-06-01T12:00:00.000Z',
+    workspaces: [{ workspaceFolderAbsoluteUri: 'file:///C:/repo/%00app' }],
+  }, Date.parse('2026-06-01T12:00:00.000Z'));
+
+  assert.equal(session, null);
+});
