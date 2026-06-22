@@ -546,8 +546,14 @@ function makeExcludedMatcher(excludedProjects: readonly string[] = []): Excluded
 
 function isSameOrChildPath(parentPath: string | null, childPath: string | null): boolean {
   if (!parentPath || !childPath) return false;
-  const relative = path.relative(parentPath, childPath);
-  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  const parent = parentPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const child = childPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const fold = process.platform === 'win32'
+    ? (value: string) => value.toLowerCase()
+    : (value: string) => value;
+  const parentKey = fold(parent);
+  const childKey = fold(child);
+  return childKey === parentKey || childKey.startsWith(`${parentKey}/`);
 }
 
 export function resolveSessionRepoKeys(
@@ -1873,7 +1879,7 @@ export class StateManager {
         ? StateManager.HIDDEN_CLAUDE_WATCH_LIMIT
         : StateManager.HIDDEN_CODEX_WATCH_LIMIT;
       for (const filePath of this.collectTrackedSessionFiles(provider.id, limit)) pushFile(filePath);
-      for (const source of provider.listRecentSources(ctx, limit).sources.slice(0, limit)) pushFile(source.filePath);
+      for (const source of provider.listRecentSources(ctx, limit).sources) pushFile(source.filePath);
     }
 
     return targets;

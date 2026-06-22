@@ -1067,7 +1067,7 @@ test('session discovery keeps recent-active scope and tracked session hints in s
   assert.match(stateSource, /provider\.discoverSessions\(discoveryCtx\)/);
 });
 
-test('all-time usage scan includes archived Codex files and Claude agent logs without expanding recent sessions', () => {
+test('usage scans include Claude agent logs without expanding visible startup sessions', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const codexSource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'codex', 'sources.ts'), 'utf8');
   const claudeSource = fs.readFileSync(path.resolve('src', 'main', 'providers', 'claude', 'sources.ts'), 'utf8');
@@ -1090,7 +1090,8 @@ test('all-time usage scan includes archived Codex files and Claude agent logs wi
   assert.match(codexSource, /function codexUsageRootRank/);
   assert.match(codexSource, /CODEX_USAGE_DIRS/);
   assert.match(claudeSource, /listAllClaudeSources/);
-  assert.match(claudeSource, /!file\.startsWith\('agent-'\)/);
+  assert.match(claudeSource, /filter\(isClaudeJsonlName\)/);
+  assert.match(claudeSource, /if \(isClaudeAgentJsonlPath\(source\.filePath\)\) return null/);
   assert.doesNotMatch(loadBody, /settings\.provider === 'claude'/);
   assert.doesNotMatch(loadBody, /settings\.provider === 'codex'/);
   assert.doesNotMatch(claudeAllBody, /!\w+\.startsWith\('agent-'\)/);

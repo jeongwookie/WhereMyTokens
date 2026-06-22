@@ -6,7 +6,7 @@ export function fileUriToPath(uri: unknown): string | null {
     const parsed = new URL(uri);
     if (parsed.protocol !== 'file:') return null;
     let filePath = decodeURIComponent(parsed.pathname);
-    if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1);
+    if (/^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1);
     return filePath.replace(/\//g, path.sep);
   } catch {
     return null;

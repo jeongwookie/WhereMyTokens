@@ -4,6 +4,7 @@ import * as os from 'os';
 import { isSafeLocalCwd } from './pathSafety';
 import { readJsonlCwd } from './sessionMetadata';
 import type { ProviderId } from './providers/types';
+import { compareClaudeSessionJsonlNames, isClaudeJsonlName } from './providers/claude/logFiles';
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const CODEX_SESSIONS_DIR = path.join(os.homedir(), '.codex', 'sessions');
@@ -29,10 +30,16 @@ function addClaudeProjectCwds(cwds: Set<string>): void {
       const dirPath = path.join(PROJECTS_DIR, dir.name);
       try {
         const jsonlFiles = fs.readdirSync(dirPath)
-          .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'));
+          .filter(isClaudeJsonlName)
+          .sort(compareClaudeSessionJsonlNames);
         if (jsonlFiles.length === 0) continue;
-        const cwd = readJsonlCwd(path.join(dirPath, jsonlFiles[0]), 'claude');
-        if (cwd && isSafeLocalCwd(cwd)) cwds.add(cwd);
+        for (const fileName of jsonlFiles) {
+          const cwd = readJsonlCwd(path.join(dirPath, fileName), 'claude');
+          if (cwd && isSafeLocalCwd(cwd)) {
+            cwds.add(cwd);
+            break;
+          }
+        }
       } catch { /* skip */ }
     }
   } catch { /* skip */ }

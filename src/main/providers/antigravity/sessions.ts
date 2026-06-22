@@ -30,6 +30,11 @@ function summaryCwd(summary: AntigravityTrajectorySummary): string | null {
   return fileUriToPath(summary.workspaces?.[0]?.workspaceFolderAbsoluteUri);
 }
 
+function isSafeAntigravityCwd(cwd: string): boolean {
+  if (!cwd || cwd.includes('\0')) return false;
+  return isSafeLocalCwd(cwd) || /^[A-Za-z]:[\\/]/.test(cwd);
+}
+
 export function rankAntigravitySummaries(
   summaries: Record<string, AntigravityTrajectorySummary>,
   nowMs: number,
@@ -52,7 +57,7 @@ export function trajectorySummaryToSession(
   nowMs: number,
 ): DiscoveredSession | null {
   const cwd = summaryCwd(summary);
-  if (!cwd || !isSafeLocalCwd(cwd)) return null;
+  if (!cwd || !isSafeAntigravityCwd(cwd)) return null;
 
   const repoContext = describeRepoContext(cwd);
   const lastModifiedMs = parseTimestampMs(summary.lastModifiedTime ?? summary.createdTime, 0);

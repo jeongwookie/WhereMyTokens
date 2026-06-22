@@ -185,7 +185,7 @@ test('Claude provider keeps agent JSONL files out of visible startup sessions', 
   const source = fs.readFileSync('src/main/providers/claude/sources.ts', 'utf8');
 
   assert.match(source, /function isClaudeAgentJsonlPath/);
-  assert.match(source, /path\.basename\(filePath\)\.startsWith\('agent-'\)/);
+  assert.match(source, /isClaudeAgentJsonlName\(path\.basename\(filePath\)\)/);
   assert.match(source, /if \(isClaudeAgentJsonlPath\(source\.filePath\)\) return null/);
 });
 

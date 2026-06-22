@@ -123,6 +123,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.19.1 | 2026-06-22 | Fix Claude JSONL discovery so agent logs contribute to recent usage graphs while visible startup sessions still hide agent-only logs |
 | v1.19.0 | 2026-06-17 | Add clickable Trend bucket breakdowns with provider input/output, thinking/response/tool composition, cache-aware work/billing token views, git net-line categories, and hardened breakdown ledger/import validation |
 | v1.18.2 | 2026-06-05 | Fix Rich quota card title overflow so long provider/model period names no longer stretch Plan Usage columns while preserving ellipsis truncation and tooltip metadata |
 | v1.18.1 | 2026-06-04 | Stabilize Antigravity quota selection, pace display refresh, startup history warmup completion, account label masking, model quota token stats, and overlapping timed model window aggregation |
