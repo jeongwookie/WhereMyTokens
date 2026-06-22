@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.19.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.19.1</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.19.0 añade breakdowns clicables en Trend para ver a dónde fueron los tokens de cada bucket.</em>
+  <em>v1.19.1 corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 22 jun | Corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso y no depender de un único nombre de archivo |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 17 jun | Añade breakdowns clicables en Trend con input/output por provider, thinking/response/tool usage, tokens work/billing y categorías de líneas netas git |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 5 jun | Corrige títulos largos en Rich quota cards para que las columnas de Plan Usage sigan alineadas, manteniendo ellipsis y tooltip fallback |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 4 jun | Estabiliza la selección y el pacing de quota de Antigravity, evita bucles de Partial History al inicio, enmascara labels de cuenta y conserva model token stats |
 | **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | 2 jun | Añade soporte local-only para el provider Antigravity con detección de procesos, escaneo de quota/session por local RPC, caché persistente de uso e importación al provider ledger |
-| **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | 2 jun | Refactoriza Plan Usage sobre snapshots de provider quota, añade grupos de visualización Rich/Simple/None por target y endurece la restauración/migración de estado quota |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-v1.19.0-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-v1.19.1-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -99,7 +99,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.19.0-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.19.1-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

@@ -546,8 +546,14 @@ function makeExcludedMatcher(excludedProjects: readonly string[] = []): Excluded
 
 function isSameOrChildPath(parentPath: string | null, childPath: string | null): boolean {
   if (!parentPath || !childPath) return false;
-  const relative = path.relative(parentPath, childPath);
-  return relative === '' || (!!relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  const parent = parentPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const child = childPath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const fold = process.platform === 'win32'
+    ? (value: string) => value.toLowerCase()
+    : (value: string) => value;
+  const parentKey = fold(parent);
+  const childKey = fold(child);
+  return childKey === parentKey || childKey.startsWith(`${parentKey}/`);
 }
 
 export function resolveSessionRepoKeys(

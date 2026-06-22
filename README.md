@@ -17,7 +17,7 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0"><img alt="Release v1.19.0" src="https://img.shields.io/badge/release-v1.19.0-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1"><img alt="Release v1.19.1" src="https://img.shields.io/badge/release-v1.19.1-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
@@ -60,8 +60,8 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.0/WhereMyTokens-v1.19.0-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-v1.19.1-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.0.0)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -79,11 +79,11 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | Jun 22 | Fix Claude JSONL discovery so agent logs contribute to usage graphs and project discovery no longer depends on one filename |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | Jun 17 | Add clickable Trend breakdowns with provider input/output, thinking/response/tool usage, cache-aware work/billing tokens, and git net-line categories |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | Jun 5 | Fix long Rich quota card titles so Plan Usage columns stay aligned |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | Jun 4 | Stabilize Antigravity quota selection, startup warmup, account labels, and model token stats |
 | **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | Jun 2 | Add local-only Antigravity provider support with RPC quota/session scanning |
-| **[v1.17.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.17.0)** | Jun 2 | Refactor Plan Usage around provider quota snapshots and quota display groups |
 
 [Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -102,6 +102,8 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 ## Privacy
 
 WhereMyTokens reads local provider files and only calls provider usage endpoints for enabled providers. It does not upload session logs, run cloud sync, or ask you to paste API keys.
+
+Claude quota polling uses the Claude Code CLI credential file at `~/.claude/.credentials.json`; Claude Desktop or browser login does not automatically refresh that local CLI credential.
 
 Antigravity uses local RPC only. It does not use Google OAuth, refresh tokens, Google cloud usage endpoints, or offline database fallback.
 

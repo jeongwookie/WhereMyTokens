@@ -8,6 +8,7 @@ import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, Provid
 import { describeRepoContext, projectKeysForCwd } from '../shared/repoContext';
 import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs } from '../shared/sourceFiles';
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR } from './paths';
+import { isClaudeAgentJsonlName, isClaudeJsonlName } from './logFiles';
 
 function sourceFromFile(filePath: string): ProviderSource {
   return {
@@ -18,7 +19,7 @@ function sourceFromFile(filePath: string): ProviderSource {
 }
 
 function isClaudeAgentJsonlPath(filePath: string): boolean {
-  return path.basename(filePath).startsWith('agent-');
+  return isClaudeAgentJsonlName(path.basename(filePath));
 }
 
 export function ownsClaudePath(filePath: string): boolean {
@@ -44,7 +45,7 @@ export function listRecentClaudeSources(_ctx: ProviderContext, limit: number): P
     for (const projectDir of projectDirs.slice(0, projectDirLimit)) {
       try {
         const files = fs.readdirSync(projectDir.dirPath)
-          .filter(file => file.endsWith('.jsonl') && !file.startsWith('agent-'));
+          .filter(isClaudeJsonlName);
         for (const file of files) {
           const filePath = path.join(projectDir.dirPath, file);
           recentFiles.push({ filePath, mtimeMs: statMtimeMs(filePath) });
