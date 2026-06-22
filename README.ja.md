@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-Setup.exe"><strong>v1.19.1 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.2/WhereMyTokens-Setup.exe"><strong>v1.19.2 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.19.1 は Claude JSONL discovery を修正し、agent log も usage graph に反映します。</em>
+  <em>v1.19.2 は短い Claude thinking block でも Trend breakdown import が安定するよう補強します。</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 6/22 | 短い Claude thinking block で calibration guard が過剰に失敗しないよう調整し、Trend breakdown import を安定化 |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL discovery を修正し、agent log を usage graph に含めつつ agent 専用 session row は追加しないよう改善 |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | クリック可能な Trend breakdown を追加し、provider 別 input/output、thinking/response/tool 使用量、work/billing token、git net-line category を表示 |
 | **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 長い Rich quota card title でも Plan Usage の列が崩れないよう修正し、ellipsis の手がかりと tooltip fallback は維持 |
 | **[v1.18.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.1)** | 6/4 | Antigravity quota 選択と pacing を安定化し、起動時の Partial History ループを防ぎ、アカウント label masking と model token stats 表示を強化 |
-| **[v1.18.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.0)** | 6/2 | local-only Antigravity provider 対応を追加し、プロセス検出、local RPC quota/session scan、永続 usage cache、provider ledger import を含めました |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.1/WhereMyTokens-v1.19.1-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.19.2/WhereMyTokens-v1.19.2-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -99,7 +99,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.19.1-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.19.2-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
