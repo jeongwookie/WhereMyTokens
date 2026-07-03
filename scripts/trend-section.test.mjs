@@ -120,6 +120,33 @@ test('TrendCard wires click selection to the inline breakdown card', () => {
   assert.match(trendCard, /handleChartKeyDown/);
 });
 
+test('TrendCard breakdown effect uses stable selected bucket inputs', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /const selectedExists = selectedKey !== null && selectedIndex >= 0/);
+  assert.match(trendCard, /}, \[selectedKey, selectedSignature, grain, selectedExists\]\)/);
+  assert.doesNotMatch(trendCard, /}, \[[^\]]*selectedRow[^\]]*\]\)/);
+});
+
+test('TrendCard clears stale breakdown only when the selected bucket identity changes', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /useRef<string \| null>\(null\)/);
+  assert.match(trendCard, /breakdownRequestKeyRef\.current = null/);
+  assert.match(trendCard, /const requestKey = `\$\{grain\}\|\$\{selectedKey\}`/);
+  assert.match(trendCard, /const isNewRequestKey = breakdownRequestKeyRef\.current !== requestKey/);
+  assert.match(trendCard, /if \(isNewRequestKey\) \{\s*setBreakdown\(null\);\s*\}/);
+  assert.match(trendCard, /breakdownRequestKeyRef\.current = requestKey/);
+});
+
+test('TrendCard throttles same-bucket breakdown refreshes without showing loading', () => {
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(trendCard, /const BREAKDOWN_REFRESH_THROTTLE_MS = 30_000/);
+  assert.match(trendCard, /const breakdownRefreshDueAtRef = useRef\(0\)/);
+  assert.match(trendCard, /const isNewRequestKey = breakdownRequestKeyRef\.current !== requestKey/);
+  assert.match(trendCard, /if \(!isNewRequestKey && now < breakdownRefreshDueAtRef\.current\) return/);
+  assert.match(trendCard, /breakdownRefreshDueAtRef\.current = now \+ BREAKDOWN_REFRESH_THROTTLE_MS/);
+  assert.match(trendCard, /setLoading\(isNewRequestKey\)/);
+});
+
 test('TrendCard does not draw missing usage or output buckets as zero-value trend lines', () => {
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(trendCard, /const primaryValues = rows\.filter\(row => row\.hasUsage\)\.map/);
