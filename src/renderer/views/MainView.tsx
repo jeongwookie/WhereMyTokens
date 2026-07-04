@@ -1277,6 +1277,10 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
   // after every other provider's simple groups (§9.3 is the line's shape, §9.1 is its placement).
   const resetEntry = resetRow ?? resetSimpleRow;
   const lastCodexRichIdx = richRows.map(row => row.provider).lastIndexOf('codex');
+  // When Codex has no rich row (5H/1W set to simple/none), anchor the reset entry after the Codex
+  // SIMPLE group instead, so it still sits with the Codex group (§9.1) rather than after every
+  // other provider. Only if Codex has no group at all do we use the global fallback.
+  const lastCodexSimpleIdx = simpleGroups.map(group => group.provider).lastIndexOf('codex');
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
@@ -1325,13 +1329,16 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
           </React.Fragment>
         ))}
 
-        {/* Codex has no rich window rows to anchor after → render the reset entry after all rich rows. */}
-        {resetEntry && lastCodexRichIdx === -1 && resetEntry}
+        {/* Codex has no rich AND no simple group to anchor after → render after all rich rows. */}
+        {resetEntry && lastCodexRichIdx === -1 && lastCodexSimpleIdx === -1 && resetEntry}
 
         {simpleGroups.length > 0 && (
           <div style={{ display: 'grid', gap: 0, borderBottom: `1px solid ${C.border}` }}>
-            {simpleGroups.map(group => (
-              <SimpleQuotaGroupBlock key={group.id} group={group} />
+            {simpleGroups.map((group, sIdx) => (
+              <React.Fragment key={group.id}>
+                <SimpleQuotaGroupBlock group={group} />
+                {resetEntry && lastCodexRichIdx === -1 && sIdx === lastCodexSimpleIdx && resetEntry}
+              </React.Fragment>
             ))}
           </div>
         )}

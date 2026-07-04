@@ -2567,27 +2567,32 @@ export class StateManager {
     const raw = sanitizeProviderQuotaSnapshot('codex', this.providerQuotaSnapshots.get('codex'));
     const source = windows.h5.source ?? windows.week.source ?? raw?.source ?? (this.codexUsageConnected ? 'api' : 'localLog');
     const storedReset = this.codexResetCredits;
-    // (R3-1) Overlay the latest reset attempt status onto the cached list so a current-tick reset
-    // error surfaces (stale/cache/error) even though we kept the last-good credits. This yields the
-    // INTERNAL shape (status = CodexUsageStatus, credits carrying only source facts).
-    const internalReset = storedReset
-      ? activeCodexResetCredits(storedReset, now, this.codexUsageConnected, this.codexResetStatus)
-      // §8: no cached list, but the latest reset attempt errored (no-credentials / 401 / 403 /
-      // schema-changed / …) → emit an errored reset object so the card shows "Reset data unavailable"
-      // rather than vanishing. The renderer's mode gate still hides it when set to 'none'. A null
-      // status (never fetched yet) correctly yields no card.
-      : (this.codexResetStatus && this.codexResetStatus.code !== 'ok'
-          ? { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: this.codexResetCreditsStoredAt || now, countOnly: false, source: 'api' as const, status: this.codexResetStatus }
-          : null);
-    // (R4-3) CRITICAL: buildProviderQuotas assigns this rebuilt snapshot DIRECTLY to the public map
-    // WITHOUT re-running sanitizeProviderQuotaSnapshot — so the every-tick rebuild is the dominant
-    // main->renderer path and MUST emit the PUBLIC shape itself. Sanitize the whole resetCredits object
-    // here so its status becomes ProviderQuotaStatus and each credit is stripped to {idSuffix,status,expiresAtUtc}.
-    // (The `raw?.resetCredits` branch is already public — it came through sanitizeProviderQuotaSnapshot at
-    // apply time — but re-sanitizing is idempotent, so route both through the same call.)
-    const resetCredits = internalReset
-      ? sanitizeResetCredits(internalReset)
-      : sanitizeResetCredits(raw?.resetCredits ?? null);
+    // Reset freshness is INDEPENDENT of usage: a reset that last succeeded is fresh even when the
+    // usage fetch is down (the two requests fail independently). Fall back to usage connectivity only
+    // before any reset attempt has run this session.
+    const resetConnected = this.codexResetStatus ? this.codexResetStatus.code === 'ok' : this.codexUsageConnected;
+    const rawReset = (raw as ProviderQuotaSnapshot | undefined)?.resetCredits ?? null;
+    // (R4-3) buildProviderQuotas assigns this rebuilt snapshot DIRECTLY to the public map WITHOUT
+    // re-running sanitizeProviderQuotaSnapshot, so the rebuild MUST emit the PUBLIC shape itself.
+    // Pick the reset object for this tick, most-authoritative first:
+    //   1) the instance-stored last-good list — overlay the latest attempt status (R3-1) so a
+    //      current-tick reset error renders stale/error while the cached per-credit list still shows;
+    //   2) the apply-time snapshot's resetCredits — this is how the count-only 429/transient
+    //      fallback's N reaches the public snapshot THIS tick (plan §5.5 / Task 3), degrading next tick;
+    //   3) no list and no fallback but a real reset error (no-credentials / 401 / 403 / schema-changed)
+    //      → an errored object so the card shows "Reset data unavailable" (§8) instead of vanishing;
+    //      the renderer's mode gate still hides it when the resets group is 'none';
+    //   4) never attempted yet (null status) → null → no card.
+    let resetCredits: ProviderResetCreditsData | null;
+    if (storedReset) {
+      resetCredits = sanitizeResetCredits(activeCodexResetCredits(storedReset, now, resetConnected, this.codexResetStatus));
+    } else if (rawReset) {
+      resetCredits = sanitizeResetCredits(rawReset);
+    } else if (this.codexResetStatus && this.codexResetStatus.code !== 'ok') {
+      resetCredits = sanitizeResetCredits({ credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: this.codexResetCreditsStoredAt || now, countOnly: false, source: 'api', status: this.codexResetStatus });
+    } else {
+      resetCredits = null;
+    }
     return {
       ...raw,
       ...buildCodexQuotaDisplayMetadata(),

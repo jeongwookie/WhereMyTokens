@@ -492,3 +492,20 @@ test('count-only rate-limited fallback shows N available but tooltip reveals the
   assert.match(tip, /rate-limited/);                    // §8: the real status is visible in the tooltip
   assert.match(tip, /slow down/);                       // detail too
 });
+
+test('reset simple row anchors to the Codex simple group when Codex has no rich row (G5 edge)', async () => {
+  const mod = await mainView();
+  const accountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
+  const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
+  const props = {
+    usage: { byProvider: {}, modelWindows: {} },
+    providerQuotas: { codex: resetSnapshot() },
+    // Force the Codex 5H/1W (account) group to simple, so there is no codex rich row to anchor after.
+    settings: { enabledProviders: ['codex'], quotaTargetModes: { [accountId]: 'simple', [resetsId]: 'simple' }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
+    historyWarmupPending: false, historyWarmupStartsAt: null,
+  };
+  const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.PlanUsagePanel, props)));
+  const bodyStart = html.indexOf('data-testid="plan-usage-body"');
+  assert.notEqual(bodyStart, -1);
+  assert.match(html.slice(bodyStart), /data-testid="reset-simple-line"/, 'reset simple line still rendered when Codex account is simple');
+});

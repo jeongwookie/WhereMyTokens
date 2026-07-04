@@ -723,3 +723,30 @@ test('never-fetched reset (no status) yields no card (null resetCredits)', () =>
   const pub = mgr.buildCodexProviderQuota(Date.now());
   assert.equal(pub.resetCredits, null, 'no reset status yet -> no card');
 });
+
+// --- Closing-gate r2 (both vendors): the count-only 429 fallback's N must reach the public
+// rebuild THIS tick via the apply-time snapshot (plan §5.5) — not be shadowed to 0 by the
+// errored-emit, and not marked stale by usage connectivity (reset independence).
+
+test('count-only 429 fallback (no prior list) still shows N available in the public rebuild', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const countOnly = { credits: [], availableCount: 3, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: true, source: 'api', status: { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: countOnly }));
+  const pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.ok(pub.resetCredits, 'resetCredits present');
+  assert.equal(pub.resetCredits.availableCount, 3, 'fallback count N preserved (not shadowed to 0)');
+  assert.equal(pub.resetCredits.countOnly, true);
+  assert.equal(pub.resetCredits.status.code, 'rate-limited', 'real status surfaced');
+});
+
+test('reset fresh + usage disconnected: reset stays source api, not marked stale by usage (independence)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  mgr.codexUsageConnected = false;   // usage goes down; reset last succeeded (ok)
+  const pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits.source, 'api', 'reset freshness independent of usage connectivity');
+  assert.equal(pub.resetCredits.credits.length, 1);
+});
