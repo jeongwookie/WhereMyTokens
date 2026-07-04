@@ -468,3 +468,134 @@ test('cooldown-skip apply (resetCredits null) leaves stored data + timers untouc
   assert.equal(mgr.codexResetBackoffMs, backoffBefore, 'reset backoff not re-timed on skip');
   assert.equal(mgr.codexResetCredits.credits.length, 1, 'stored credits still available for the next public rebuild');
 });
+
+// --- Task 4: per-tick re-inject + expiry filter + status overlay + sanitizeResetCredits ---
+
+const { activeCodexResetCredits, sanitizeResetCredits } = stateManagerModule;
+
+test('activeCodexResetCredits drops expired credits and recomputes count', () => {
+  const now = Date.parse('2026-07-15T00:00:00Z');
+  const data = {
+    credits: [
+      { idSuffix: 'a', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z' }, // expired
+      { idSuffix: 'b', status: 'available', expiresAtUtc: '2026-07-20T00:00:00Z' }, // active
+      { idSuffix: 'c', status: 'available', expiresAtUtc: null },                    // no-expiry -> kept
+    ],
+    availableCount: 3, totalEarnedCount: 0, checkedAt: now, countOnly: false, source: 'api',
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  };
+  const active = activeCodexResetCredits(data, now, /*connected*/ false);
+  assert.equal(active.credits.length, 2);
+  assert.equal(active.availableCount, 2);      // list-derived when not countOnly
+  assert.equal(active.source, 'cache');        // disconnected -> cache
+});
+
+test('activeCodexResetCredits keeps availableCount for countOnly fallback', () => {
+  const now = Date.now();
+  const data = { credits: [], availableCount: 4, totalEarnedCount: 0, checkedAt: now, countOnly: true, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  const active = activeCodexResetCredits(data, now, true);
+  assert.equal(active.availableCount, 4);
+  assert.equal(active.credits.length, 0);
+});
+
+test('buildCodexProviderQuota re-injects active reset credits onto the PUBLIC snapshot each tick (F7)', () => {
+  // §5.6 is pipeline behavior, not just a helper. Seed instance-stored reset data and rebuild.
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const now = Date.parse('2026-07-15T00:00:00Z');
+  mgr.codexUsageConnected = true;
+  mgr.codexResetCreditsStoredAt = now - 1000;
+  mgr.codexResetCredits = {
+    credits: [
+      { idSuffix: 'x', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z' }, // expired vs now
+      { idSuffix: 'y', status: 'available', expiresAtUtc: '2026-07-20T00:00:00Z' }, // active
+    ],
+    availableCount: 2, totalEarnedCount: 3, checkedAt: now - 1000, countOnly: false, source: 'api',
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  };
+  const publicSnap = mgr.buildCodexProviderQuota(now);
+  assert.ok(publicSnap.resetCredits, 'resetCredits attached to the rebuilt public snapshot');
+  assert.equal(publicSnap.resetCredits.credits.length, 1, 'expired credit filtered at rebuild');
+  assert.equal(publicSnap.resetCredits.credits[0].idSuffix, 'y');
+  assert.equal(publicSnap.resetCredits.availableCount, 1);
+  // NOTE (R3-4): do NOT assert the `resets` group here — that group is added in Task 6, later in the
+  // task-by-task sequence, so asserting it in Task 4 would fail. Task 4 owns only the `resetCredits`
+  // FIELD, which buildCodexProviderQuota attaches independently of the groups array. Task 6 asserts the group.
+});
+
+test('cached-good list + current-tick reset error overlays stale/error status onto the rebuild (R3-1)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const now = Date.parse('2026-07-15T00:00:00Z');
+  mgr.codexUsageConnected = true;
+  // Last-good cached list (its own status is the OLD ok).
+  mgr.codexResetCredits = {
+    credits: [{ idSuffix: 'y', status: 'available', expiresAtUtc: '2026-07-20T00:00:00Z' }],
+    availableCount: 1, totalEarnedCount: 0, checkedAt: now - 60_000, countOnly: false, source: 'api',
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  };
+  mgr.codexResetCreditsStoredAt = now - 60_000;
+  // This tick's reset attempt 429'd (Task 3 kept the cache but captured the failing status).
+  mgr.codexResetStatus = { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 };
+
+  const publicSnap = mgr.buildCodexProviderQuota(now);
+  assert.equal(publicSnap.resetCredits.credits.length, 1, 'cached list is kept');
+  assert.equal(publicSnap.resetCredits.status.code, 'rate-limited', 'current-tick error overlaid, not the old ok');
+  assert.equal(publicSnap.resetCredits.source, 'cache', 'marked cache/stale');
+  assert.equal(publicSnap.resetCredits.checkedAt, now - 60_000, 'last successful update preserved for the tooltip');
+});
+
+test('rebuilt public snapshot emits the PUBLIC resetCredits shape, not the internal one (R4-3)', () => {
+  // buildProviderQuotas assigns buildCodexProviderQuota() directly without re-sanitizing, so the
+  // rebuild itself must emit the public shape. Seed a stored list whose status carries INTERNAL fields.
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const now = Date.parse('2026-07-15T00:00:00Z');
+  mgr.codexUsageConnected = true;
+  mgr.codexResetCredits = {
+    credits: [{ idSuffix: 'y', status: 'available', expiresAtUtc: '2026-07-20T00:00:00Z', profileUserId: 'leaky', title: 'leaky' }],
+    availableCount: 1, totalEarnedCount: 0, checkedAt: now - 1000, countOnly: false, source: 'api',
+    // internal CodexUsageStatus carries httpStatus / responseKeys that must NOT reach the renderer:
+    status: { code: 'ok', connected: true, label: '', detail: '', httpStatus: 200, responseKeys: ['credits'] },
+  };
+  mgr.codexResetCreditsStoredAt = now - 1000;
+  mgr.codexResetStatus = mgr.codexResetCredits.status;
+
+  const rc = mgr.buildCodexProviderQuota(now).resetCredits;
+  // status is the PUBLIC ProviderQuotaStatus: internal-only fields are gone.
+  assert.equal('httpStatus' in rc.status, false, 'internal httpStatus stripped');
+  assert.equal('responseKeys' in rc.status, false, 'internal responseKeys stripped');
+  // Every emitted status key must be a member of the public ProviderQuotaStatus shape (no internal leak).
+  const publicStatusKeys = ['code', 'connected', 'detail', 'label', 'severity'];
+  assert.ok(Object.keys(rc.status).every(k => publicStatusKeys.includes(k)), 'only public status keys emitted');
+  // credits carry ONLY the public source facts.
+  assert.deepEqual(Object.keys(rc.credits[0]).sort(), ['expiresAtUtc', 'idSuffix', 'status']);
+  assert.equal('profileUserId' in rc.credits[0], false);
+  assert.equal('title' in rc.credits[0], false);
+});
+
+test('sanitizeResetCredits validates shape and drops unknown fields', () => {
+  const out = sanitizeResetCredits({
+    credits: [
+      { idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z', secret: 'x' },
+      { idSuffix: 5, status: 'available', expiresAtUtc: null }, // idSuffix non-string -> null
+      'garbage',
+    ],
+    availableCount: 2, totalEarnedCount: 1, checkedAt: 123, countOnly: false, source: 'api',
+    status: { code: 'ok', connected: true, label: '', detail: '', httpStatus: 200 },
+    injected: 'nope',
+  });
+  assert.equal(out.credits.length, 2);
+  assert.equal(out.credits[0].idSuffix, 'aaa');
+  assert.equal('secret' in out.credits[0], false);
+  assert.equal(out.credits[1].idSuffix, null);
+  assert.equal(out.availableCount, 2);
+  assert.equal('injected' in out, false);
+  assert.equal(out.status.code, 'ok');
+  assert.equal('httpStatus' in out.status, false);   // public status shape only
+});
+
+test('sanitizeResetCredits rejects non-objects', () => {
+  assert.equal(sanitizeResetCredits(null), null);
+  assert.equal(sanitizeResetCredits('x'), null);
+});

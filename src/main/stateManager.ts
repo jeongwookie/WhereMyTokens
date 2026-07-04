@@ -43,6 +43,7 @@ import type {
   ProviderLedgerSource,
   ProviderQuotaSnapshot,
   ProviderQuotaStatus,
+  ProviderResetCreditsData,
   ProviderQuotaWindow,
   ProviderQuotaWindowDisplay,
   ProviderSource,
@@ -473,6 +474,54 @@ function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): Pr
     windowDisplay: sanitizeQuotaWindowDisplayMap(record.windowDisplay),
     credits: sanitizeProviderCredits(record.credits),
     status: sanitizeProviderQuotaStatus(record.status),
+  };
+}
+
+export function activeCodexResetCredits(
+  data: CodexResetCreditsData,
+  now: number,
+  connected: boolean,
+  latestStatus?: CodexUsageStatus | null,   // (R3-1) current-tick reset attempt status, if newer than the list
+): CodexResetCreditsData {
+  const credits = data.credits.filter(c => {
+    if (c.expiresAtUtc == null) return true;      // null-expiry credits never auto-expire
+    const ms = Date.parse(c.expiresAtUtc);
+    return !Number.isFinite(ms) || ms > now;
+  });
+  // If the latest reset ATTEMPT failed (non-ok), overlay that status onto the cached list and mark it
+  // cache/stale, so the VM's stale/errored/source reflect reality instead of the list's old ok status.
+  const attemptFailed = !!latestStatus && latestStatus.code !== 'ok';
+  const status = attemptFailed ? latestStatus! : data.status;
+  const source: 'api' | 'cache' = (!connected || attemptFailed) ? 'cache' : data.source;
+  return {
+    ...data,
+    credits,
+    availableCount: data.countOnly ? data.availableCount : credits.length,
+    status,
+    source,
+  };
+}
+
+export function sanitizeResetCredits(value: unknown): ProviderResetCreditsData | null {
+  const r = quotaRecord(value);
+  if (!r) return null;
+  const rawCredits = Array.isArray(r.credits) ? r.credits : [];
+  const credits = rawCredits
+    .map(quotaRecord)
+    .filter((c): c is Record<string, unknown> => !!c)
+    .map(c => ({
+      idSuffix: typeof c.idSuffix === 'string' ? c.idSuffix : null,
+      status: typeof c.status === 'string' ? c.status : 'available',
+      expiresAtUtc: typeof c.expiresAtUtc === 'string' ? c.expiresAtUtc : null,
+    }));
+  return {
+    credits,
+    availableCount: finiteQuotaNumber(r.availableCount) ?? credits.length,
+    totalEarnedCount: finiteQuotaNumber(r.totalEarnedCount) ?? 0,
+    checkedAt: finiteQuotaNumber(r.checkedAt) ?? 0,
+    countOnly: r.countOnly === true,
+    source: r.source === 'cache' ? 'cache' : 'api',
+    status: sanitizeProviderQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
   };
 }
 
@@ -2512,6 +2561,22 @@ export class StateManager {
     const windows = this.getCodexLimitWindows(now);
     const raw = sanitizeProviderQuotaSnapshot('codex', this.providerQuotaSnapshots.get('codex'));
     const source = windows.h5.source ?? windows.week.source ?? raw?.source ?? (this.codexUsageConnected ? 'api' : 'localLog');
+    const storedReset = this.codexResetCredits;
+    // (R3-1) Overlay the latest reset attempt status onto the cached list so a current-tick reset
+    // error surfaces (stale/cache/error) even though we kept the last-good credits. This yields the
+    // INTERNAL shape (status = CodexUsageStatus, credits carrying only source facts).
+    const internalReset = storedReset
+      ? activeCodexResetCredits(storedReset, now, this.codexUsageConnected, this.codexResetStatus)
+      : null;
+    // (R4-3) CRITICAL: buildProviderQuotas assigns this rebuilt snapshot DIRECTLY to the public map
+    // WITHOUT re-running sanitizeProviderQuotaSnapshot — so the every-tick rebuild is the dominant
+    // main->renderer path and MUST emit the PUBLIC shape itself. Sanitize the whole resetCredits object
+    // here so its status becomes ProviderQuotaStatus and each credit is stripped to {idSuffix,status,expiresAtUtc}.
+    // (The `raw?.resetCredits` branch is already public — it came through sanitizeProviderQuotaSnapshot at
+    // apply time — but re-sanitizing is idempotent, so route both through the same call.)
+    const resetCredits = internalReset
+      ? sanitizeResetCredits(internalReset)
+      : sanitizeResetCredits(raw?.resetCredits ?? null);
     return {
       ...raw,
       ...buildCodexQuotaDisplayMetadata(),
@@ -2520,6 +2585,7 @@ export class StateManager {
       capturedAt: now,
       planName: this.getAgedCodexUsagePct(now)?.plan || raw?.planName,
       windows,
+      resetCredits,
       status: raw?.status ?? {
         connected: this.codexUsageConnected,
         code: this.codexUsageConnected ? 'connected' : 'local-log',
