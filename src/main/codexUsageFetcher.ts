@@ -721,7 +721,10 @@ export function parseCodexResetCreditsPayload(payload: unknown, checkedAt: numbe
     availableCount,
     totalEarnedCount: earned != null ? Math.max(0, Math.round(earned)) : 0,
     checkedAt,
-    countOnly: false,
+    // A dedicated 200 with a numeric available_count but NO credits array is count-only: there is a
+    // count to show but no per-credit list. Mark it countOnly so the renderer/rebuild use
+    // availableCount (the source count) rather than recomputing 0 from the empty credits list.
+    countOnly: !hasCreditsArray,
     source: 'api',
     status: buildStatus('ok', true, '', ''),
   };

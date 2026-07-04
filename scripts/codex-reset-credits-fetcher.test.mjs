@@ -750,3 +750,22 @@ test('reset fresh + usage disconnected: reset stays source api, not marked stale
   assert.equal(pub.resetCredits.source, 'api', 'reset freshness independent of usage connectivity');
   assert.equal(pub.resetCredits.credits.length, 1);
 });
+
+// --- Closing-gate r3 (GPT): a dedicated 200 with available_count but NO credits array is
+// count-only, so the source count is shown (not recomputed to 0 from the empty list). §8.
+
+test('parse: dedicated 200 with only available_count is countOnly and keeps the source count', () => {
+  const now = Date.parse('2026-07-04T00:00:00Z');
+  const data = parseCodexResetCreditsPayload({ available_count: 3 }, now);
+  assert.notEqual(data, null);
+  assert.equal(data.availableCount, 3);
+  assert.equal(data.countOnly, true, 'no credits array -> countOnly so renderer uses availableCount, not 0');
+  assert.equal(data.credits.length, 0);
+});
+
+test('parse: 200 WITH a credits array stays countOnly:false (list-derived)', () => {
+  const now = Date.parse('2026-07-04T00:00:00Z');
+  const data = parseCodexResetCreditsPayload({ credits: [{ id: 'a', status: 'available', expires_at: '2026-07-12T00:00:00Z' }] }, now);
+  assert.equal(data.countOnly, false);
+  assert.equal(data.availableCount, 1);
+});
