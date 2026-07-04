@@ -469,6 +469,67 @@ test('cooldown-skip apply (resetCredits null) leaves stored data + timers untouc
   assert.equal(mgr.codexResetCredits.credits.length, 1, 'stored credits still available for the next public rebuild');
 });
 
+test('reset failure does not evict usage cache and vice-versa (independence)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const checkedAt = Date.parse('2026-07-04T00:00:00Z');
+  const readAt = Date.parse('2026-07-05T00:00:00Z');
+  const goodReset = {
+    credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }],
+    availableCount: 1,
+    totalEarnedCount: 2,
+    checkedAt,
+    countOnly: false,
+    source: 'api',
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  };
+
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: goodReset }));
+
+  const firstPublic = mgr.buildCodexProviderQuota(readAt);
+  assert.equal(firstPublic.resetCredits?.credits.length, 1, 'public snapshot carries active reset credits');
+  assert.equal(firstPublic.resetCredits?.credits[0].idSuffix, 'aaa');
+  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache written by the initial good usage apply');
+  assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache written by the initial good reset apply');
+
+  const reset401 = {
+    credits: [],
+    availableCount: 0,
+    totalEarnedCount: 0,
+    checkedAt: checkedAt + 1,
+    countOnly: false,
+    source: 'api',
+    status: { code: 'unauthorized', connected: false, label: 'auth failed', detail: 'rejected' },
+  };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: reset401 }));
+
+  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache survives reset 401');
+  assert.equal(mgr.codexUsagePct?.h5Pct, 5, 'in-memory usage remains intact after reset 401');
+  assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'reset cache evicted on reset 401');
+  assert.equal(mgr.codexResetCredits, null, 'in-memory reset cache evicted on reset 401');
+
+  const nextReset = {
+    credits: [{ idSuffix: 'bbb', status: 'available', expiresAtUtc: '2999-02-01T00:00:00Z' }],
+    availableCount: 1,
+    totalEarnedCount: 3,
+    checkedAt: checkedAt + 2,
+    countOnly: false,
+    source: 'api',
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+  };
+  const usage401 = {
+    ...codexSnapshot({ usage: false, reset: nextReset }),
+    status: { code: 'unauthorized', connected: false, label: 'auth failed', detail: 'usage rejected' },
+  };
+  applyCodex(mgr, usage401);
+
+  assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache survives usage 401');
+  assert.equal(mgr.codexResetCredits?.credits[0].idSuffix, 'bbb', 'in-memory reset cache remains after usage 401');
+  const secondPublic = mgr.buildCodexProviderQuota(readAt);
+  assert.equal(secondPublic.resetCredits?.credits.length, 1, 'public snapshot still carries reset credits after usage 401');
+  assert.equal(secondPublic.resetCredits?.credits[0].idSuffix, 'bbb');
+});
+
 // --- Task 4: per-tick re-inject + expiry filter + status overlay + sanitizeResetCredits ---
 
 const { activeCodexResetCredits, sanitizeResetCredits } = stateManagerModule;
