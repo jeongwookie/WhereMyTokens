@@ -581,6 +581,53 @@ export function normalizeStoredCodexUsagePct(
   };
 }
 
+export interface StoredCodexResetCredits {
+  schemaVersion: number;
+  storedAt: number;
+  authMtimeMs: number | null;
+  data: CodexResetCreditsData;
+}
+
+function normalizeStoredCredit(value: unknown): CodexResetCredit | null {
+  const r = asRecord(value);
+  if (!r) return null;
+  return {
+    idSuffix: typeof r.idSuffix === 'string' ? r.idSuffix : null,
+    status: typeof r.status === 'string' ? r.status : 'available',
+    expiresAtUtc: typeof r.expiresAtUtc === 'string' ? r.expiresAtUtc : null,
+  };
+}
+
+export function normalizeStoredCodexResetCredits(
+  value: unknown,
+  currentAuthMtimeMs: number | null = getCodexAuthMtimeMs(),
+): StoredCodexResetCredits | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  if (record.schemaVersion !== CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION) return null;
+  const storedAt = typeof record.storedAt === 'number' && Number.isFinite(record.storedAt) ? record.storedAt : null;
+  if (storedAt == null || storedAt <= 0 || storedAt > Date.now()) return null;
+  const authMtimeMs = typeof record.authMtimeMs === 'number' && Number.isFinite(record.authMtimeMs) ? record.authMtimeMs : null;
+  if (currentAuthMtimeMs == null || authMtimeMs == null || Math.abs(authMtimeMs - currentAuthMtimeMs) > 1) return null;
+  const data = asRecord(record.data);
+  if (!data) return null;
+  const credits = (Array.isArray(data.credits) ? data.credits : []).map(normalizeStoredCredit).filter((c): c is CodexResetCredit => !!c);
+  return {
+    schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+    storedAt,
+    authMtimeMs,
+    data: {
+      credits,
+      availableCount: numericValue(data.availableCount) ?? credits.length,
+      totalEarnedCount: numericValue(data.totalEarnedCount) ?? 0,
+      checkedAt: numericValue(data.checkedAt) ?? storedAt,
+      countOnly: data.countOnly === true,
+      source: 'cache',
+      status: buildStatus('ok', false, '', ''),
+    },
+  };
+}
+
 export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
   const credentials = readCredentials();
   if (!credentials) {

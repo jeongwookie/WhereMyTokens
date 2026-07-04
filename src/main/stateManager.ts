@@ -7,7 +7,7 @@ import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData, UsageWindowResetHints } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
-import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
+import { CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION, CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexResetCreditsData, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexResetCredits, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
@@ -53,7 +53,7 @@ import type {
 } from './providers/types';
 import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
 import { buildClaudeQuotaDisplayMetadata, isClaudeQuotaSnapshot } from './providers/claude/quota';
-import { buildCodexQuotaDisplayMetadata, isCodexQuotaSnapshot } from './providers/codex/quota';
+import { buildCodexQuotaDisplayMetadata, CodexProviderQuotaSnapshot, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
   buildUsageVisibilityFilter,
   usageProviderVisible,
@@ -646,6 +646,18 @@ export class StateManager {
   private lastCodexUsageCallMs = 0;
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
+  private codexResetCredits: CodexResetCreditsData | null = null;
+  private codexResetCreditsStoredAt = 0;
+  // Latest reset ATTEMPT status (F9/R3-1). Distinct from the cached list's own status: on a
+  // current-tick reset error we keep the cached list but must surface THIS status so the card
+  // renders stale/error, not fresh-ok. null once nothing has been attempted / after no-credentials.
+  private codexResetStatus: CodexUsageStatus | null = null;
+  // Reset-credit fetch has its OWN backoff timer + its own last-attempt clock (F1/R2-2). The reset
+  // GET is throttled INDEPENDENTLY of usage: beginCodexQuotaRequest still gates only on the usage
+  // backoff/interval, and when the reset cooldown is active we skip just the reset sub-request
+  // (ctx.skipCodexResetCredits) while usage keeps its 5-min cadence.
+  private codexResetBackoffMs = 0;
+  private lastCodexResetCallMs = 0;
   private providerQuotaRequestSeqs = new Map<ProviderId, number>();
   private providerQuotaSnapshots = new Map<ProviderId, ProviderQuotaSnapshot>();
   private lastManualProviderUsageForceMs = 0;
@@ -732,6 +744,15 @@ export class StateManager {
     if (cachedCodex && hasCodexUsageCredentials()) {
       this.codexUsagePctStoredAt = cachedCodex.storedAt;
       this.codexUsagePct = cachedCodex;
+    }
+    const cachedResetRaw = this.getPersistedValue('_cachedCodexResetCredits', null);
+    const cachedReset = normalizeStoredCodexResetCredits(cachedResetRaw, getCodexAuthMtimeMs());
+    if (cachedResetRaw && !cachedReset) {
+      this.deletePersistedValue('_cachedCodexResetCredits');
+    }
+    if (cachedReset && hasCodexUsageCredentials()) {
+      this.codexResetCreditsStoredAt = cachedReset.storedAt;
+      this.codexResetCredits = cachedReset.data;
     }
 
     this.bridgeWatcher = new BridgeWatcher((data) => {
@@ -1365,10 +1386,66 @@ export class StateManager {
     return 0;
   }
 
+  private codexBackoffForResetStatus(status: CodexUsageStatus): number {
+    if (status.code === 'ok') return 0;
+    if (status.code === 'rate-limited') {
+      return typeof status.retryAfterMs === 'number'
+        ? Math.min(CODEX_USAGE_MAX_BACKOFF_MS, Math.max(0, status.retryAfterMs))
+        : Math.min(this.codexResetBackoffMs === 0 ? 120_000 : this.codexResetBackoffMs * 2, CODEX_USAGE_MAX_BACKOFF_MS);
+    }
+    if (status.code === 'unauthorized' || status.code === 'forbidden' || status.code === 'schema-changed') {
+      return CODEX_USAGE_MAX_BACKOFF_MS;
+    }
+    if (status.code === 'timeout' || status.code === 'network' || status.code === 'http-error') {
+      return Math.min(this.codexResetBackoffMs === 0 ? 300_000 : this.codexResetBackoffMs * 2, CODEX_USAGE_MAX_BACKOFF_MS);
+    }
+    return 0;
+  }
+
+  private shouldSkipCodexResetCredits(now: number): boolean {
+    if (this.codexResetBackoffMs <= 0) return false;
+    return (now - this.lastCodexResetCallMs) < this.codexResetBackoffMs;
+  }
+
+  // Reset credits ride the same snapshot but persist under a SEPARATE key so a reset failure never
+  // evicts the usage cache and vice-versa. Runs independently of the usage branch (reset data can
+  // arrive without usage, and a usage-ok early return must not skip reset bookkeeping).
+  private applyCodexResetCredits(snapshot: CodexProviderQuotaSnapshot): void {
+    const reset = snapshot.resetCredits;
+    if (reset == null) {
+      // Cooldown skip (R2-2): the reset GET was not attempted this tick. Do NOT overwrite, evict, or
+      // re-time anything — leave the stored reset data + backoff exactly as they are.
+      return;
+    }
+    // A real reset attempt happened -> record its attempt clock + latest status, recompute backoff.
+    this.lastCodexResetCallMs = Date.now();
+    this.codexResetStatus = reset.status;   // (R3-1) always capture the latest attempt status
+    if (reset.status.code === 'ok') {
+      this.codexResetCredits = reset;
+      this.codexResetCreditsStoredAt = Date.now();
+      this.setPersistedValue('_cachedCodexResetCredits', {
+        schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+        storedAt: this.codexResetCreditsStoredAt,
+        authMtimeMs: snapshot.authMtimeMs,
+        data: reset,
+      });
+    } else if (reset.status.code === 'unauthorized' || reset.status.code === 'forbidden' || reset.status.code === 'schema-changed') {
+      this.codexResetCredits = null;
+      this.codexResetCreditsStoredAt = 0;
+      this.deletePersistedValue('_cachedCodexResetCredits');
+    }
+    // On other reset errors (network/timeout/rate-limited/http-error) keep the cached LIST but the
+    // captured codexResetStatus above is non-ok -> the rebuild overlays it so the card shows stale/error.
+
+    // Reset-specific backoff (F1): compute from the RESET status only, never from usage status.
+    this.codexResetBackoffMs = this.codexBackoffForResetStatus(reset.status);
+  }
+
   private applyCodexQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number): boolean {
     if (!isCodexQuotaSnapshot(snapshot)) return false;
     if (requestSeq !== this.codexUsageRequestSeq) return false;
     this.applyCodexStatus(snapshot.status);
+    this.applyCodexResetCredits(snapshot);
 
     if (snapshot.usage) {
       this.codexUsagePct = snapshot.usage;
@@ -1387,6 +1464,12 @@ export class StateManager {
       this.codexUsagePct = null;
       this.codexUsagePctStoredAt = 0;
       this.deletePersistedValue('_cachedCodexUsagePct');
+      this.codexResetCredits = null;
+      this.codexResetCreditsStoredAt = 0;
+      this.codexResetBackoffMs = 0;
+      this.lastCodexResetCallMs = 0;
+      this.codexResetStatus = null;
+      this.deletePersistedValue('_cachedCodexResetCredits');
     }
     this.codexUsageBackoffMs = this.codexBackoffForStatus(snapshot.status);
     if (snapshot.status.code === 'rate-limited' && this.codexUsageBackoffMs > 0) {
@@ -1421,7 +1504,11 @@ export class StateManager {
     const now = Date.now();
     const requestSeq = this.beginProviderQuotaRequest(provider.id, force, now);
     if (requestSeq == null) return false;
-    const snapshot = await fetchQuota(this.providerContext({ settings, force, nowMs: now }));
+    const baseCtx = { settings, force, nowMs: now };
+    const ctxOverrides = provider.id === 'codex'
+      ? { ...baseCtx, skipCodexResetCredits: this.shouldSkipCodexResetCredits(now) }
+      : baseCtx;
+    const snapshot = await fetchQuota(this.providerContext(ctxOverrides));
     if (!snapshot) return false;
     return this.applyProviderQuotaSnapshot(snapshot, requestSeq, now);
   }

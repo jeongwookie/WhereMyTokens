@@ -328,3 +328,143 @@ test('ctx.skipCodexResetCredits: dedicated reset GET is skipped, usage GET still
   assert.equal(hits.reset, 0, 'reset GET skipped during cooldown');
   assert.equal(snap.resetCredits, null, 'no overwrite -> StateManager keeps stored data');
 });
+
+// --- Step 1 (Task 3): cache normalizer ---
+
+const { normalizeStoredCodexResetCredits, CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION } = codexUsageFetcher;
+
+test('stored reset-credit cache rejected on auth mtime change or schema mismatch', () => {
+  const now = Date.now();
+  const stored = {
+    schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+    storedAt: now - 1000,
+    authMtimeMs: 123,
+    data: {
+      credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T11:46:00Z' }],
+      availableCount: 1, totalEarnedCount: 0, checkedAt: now - 1000, countOnly: false, source: 'api',
+      status: { code: 'ok', connected: true, label: '', detail: '' },
+    },
+  };
+  assert.equal(normalizeStoredCodexResetCredits(stored, 456), null);            // mtime mismatch
+  assert.equal(normalizeStoredCodexResetCredits({ ...stored, schemaVersion: 99 }, 123), null); // schema mismatch
+  const ok = normalizeStoredCodexResetCredits(stored, 123);
+  assert.equal(ok?.data.availableCount, 1);
+  assert.equal(ok?.data.credits[0].expiresAtUtc, '2026-07-12T11:46:00Z');
+});
+
+// --- Step 5b (Task 3): store-level apply path ---
+
+import stateManagerModule from '../dist/main/stateManager.js';
+const { StateManager } = stateManagerModule;
+
+function fakeStore() {
+  const map = new Map();
+  return {
+    map,
+    get: (k, fb = null) => (map.has(k) ? map.get(k) : fb),
+    set: (k, v) => { map.set(k, v); },
+    delete: (k) => { map.delete(k); },
+  };
+}
+
+function codexSnapshot({ usage = true, reset }) {
+  return {
+    provider: 'codex', source: 'api', capturedAt: Date.now(),
+    groups: [], windowDisplay: {},
+    windows: usage ? { h5: { pct: 5, resetMs: 3600000, source: 'api' } } : undefined,
+    usage: usage ? { h5Available: true, weekAvailable: false, h5Pct: 5, weekPct: 0, h5ResetMs: 3600000, weekResetMs: null, h5LimitReached: false, weekLimitReached: false, plan: 'pro', credits: null, limitReached: false, rateLimitReachedType: null } : null,
+    status: { code: 'ok', connected: true, label: '', detail: '' },
+    authMtimeMs: 111,
+    resetCredits: reset,
+  };
+}
+
+function applyCodex(mgr, snapshot) {
+  const seq = (mgr.codexUsageRequestSeq = (mgr.codexUsageRequestSeq ?? 0) + 1);
+  mgr.providerQuotaRequestSeqs?.set?.('codex', seq);
+  return mgr.applyProviderQuotaSnapshot(snapshot, seq, Date.now());
+}
+
+test('reset ok persists _cachedCodexResetCredits; usage cache written independently', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const reset = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset }));
+  assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache written');
+  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache written');
+});
+
+test('reset 401 evicts ONLY the reset cache; usage cache intact', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  assert.ok(store.map.get('_cachedCodexResetCredits'));
+  const reset401 = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'unauthorized', connected: false, label: 'auth failed', detail: 'rejected' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: reset401 }));
+  assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'reset cache evicted on 401');
+  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache untouched by reset 401');
+});
+
+test('reset schema-changed (e.g. a remapped 404) evicts ONLY the reset cache (R4-1)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  assert.ok(store.map.get('_cachedCodexResetCredits'));
+  const resetSchema = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'schema-changed', connected: false, label: 'schema changed', detail: 'endpoint 404', httpStatus: 404 } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: resetSchema }));
+  assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'reset cache evicted on schema-changed');
+  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache untouched');
+});
+
+test('no-credentials clears BOTH caches and zeroes reset backoff', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  const noCred = { ...codexSnapshot({ usage: false, reset: null }), status: { code: 'no-credentials', connected: false, label: 'local log', detail: '' } };
+  applyCodex(mgr, noCred);
+  assert.equal(store.map.has('_cachedCodexResetCredits'), false);
+  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
+  assert.equal(mgr.codexResetBackoffMs, 0);
+});
+
+test('reset 429 sets reset-specific backoff without touching usage backoff (F1)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  mgr.codexUsageBackoffMs = 0;
+  const reset429 = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: reset429 }));
+  assert.equal(mgr.codexResetBackoffMs, 90_000, 'reset backoff honors Retry-After');
+  assert.equal(mgr.codexUsageBackoffMs, 0, 'usage backoff untouched by reset 429');
+  assert.ok(store.map.get('_cachedCodexUsagePct'));
+});
+
+test('reset cooldown throttles ONLY the reset GET; usage scheduling is independent (R2-2)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const now = Date.now();
+  // Reset is in cooldown (backoff active, just called) but usage is NOT.
+  mgr.codexResetBackoffMs = 90_000;
+  mgr.lastCodexResetCallMs = now;
+  mgr.codexUsageBackoffMs = 0;
+  assert.equal(mgr.shouldSkipCodexResetCredits(now + 1000), true, 'reset skipped during its own cooldown');
+  // Usage interval gate must NOT be blocked by the reset backoff: seed lastCodexUsageCallMs older than the interval.
+  mgr.lastCodexUsageCallMs = now - (StateManager.CODEX_USAGE_MIN_INTERVAL_MS + 1000);
+  assert.notEqual(mgr.beginCodexQuotaRequest(false, now + 1000), null, 'usage request still admitted while reset is cooled down');
+});
+
+test('cooldown-skip apply (resetCredits null) leaves stored data + timers untouched (R2-2)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  const storedBefore = store.map.get('_cachedCodexResetCredits');
+  const backoffBefore = mgr.codexResetBackoffMs;
+  // Next tick skips the reset GET -> snapshot carries resetCredits: null.
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: null }));
+  assert.equal(store.map.get('_cachedCodexResetCredits'), storedBefore, 'reset cache not overwritten on skip');
+  assert.equal(mgr.codexResetBackoffMs, backoffBefore, 'reset backoff not re-timed on skip');
+  assert.equal(mgr.codexResetCredits.credits.length, 1, 'stored credits still available for the next public rebuild');
+});
