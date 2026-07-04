@@ -44,6 +44,13 @@ export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'g
         windowKeys: ['h5', 'week'],
         sortOrder: 0,
       },
+      {
+        key: 'resets',
+        label: 'Codex Resets',
+        defaultMode: 'simple',
+        windowKeys: [],
+        sortOrder: 1,
+      },
     ],
     windowDisplay: {
       h5: {

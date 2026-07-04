@@ -323,9 +323,11 @@ function hasGroupSignal(
   group: ProviderQuotaGroupSpec,
   rows: readonly QuotaDisplayRowViewModel[],
   settings: AppState['settings'],
+  hasResetCredits: boolean,
 ): boolean {
   const explicitMode = Object.prototype.hasOwnProperty.call(settings.quotaTargetModes ?? {}, groupId);
   return explicitMode
+    || (group.key === 'resets' && hasResetCredits)
     || group.windowKeys.length > 0
     || rows.some(row => row.pending || hasQuotaInput(row.quota) || row.stats.totalTokens > 0);
 }
@@ -338,7 +340,7 @@ function buildGroup(
 ): QuotaDisplayGroupViewModel | null {
   const id = quotaGroupId(provider, group.key);
   const rows = buildGroupRows(provider, id, group, quota, options);
-  if (!hasGroupSignal(id, group, rows, options.settings)) return null;
+  if (!hasGroupSignal(id, group, rows, options.settings, quota.resetCredits != null)) return null;
   return {
     id,
     provider,
