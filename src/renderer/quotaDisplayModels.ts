@@ -10,6 +10,7 @@ import {
   ProviderQuotaSnapshot,
   ProviderQuotaStatus,
   ProviderQuotaWindow,
+  ProviderResetCreditsData,
   QuotaDisplayMode,
   WindowStats,
 } from './types';
@@ -118,26 +119,10 @@ export function modelQuotaGroupKey(model: string): string {
 
 // --- Codex reset credits: render-time view model -----------------------------
 // Every human/relative/colored value is DERIVED HERE from raw ISO + counts + now.
-// Nothing derived is persisted (spec §4). Input shape is the public source-fact
-// contract carried on the snapshot (raw ISO expiry, counts, checkedAt, status).
-// NOTE: the renderer `./types` mirror of these input shapes lands in Task 7b; this
-// module is esbuild type-stripped and is not typechecked by `build:main`, so the
-// local declarations below are the working contract until 7b re-points them.
-export interface ProviderResetCredit {
-  idSuffix: string | null;
-  status: string;
-  expiresAtUtc: string | null;
-}
-
-export interface ProviderResetCreditsData {
-  credits: ProviderResetCredit[];
-  availableCount: number;
-  totalEarnedCount: number;
-  checkedAt: number;
-  countOnly: boolean;
-  source: 'api' | 'cache';
-  status: ProviderQuotaStatus;
-}
+// Nothing derived is persisted (spec §4). The public source-fact input shape
+// (raw ISO expiry, counts, checkedAt, status) lives in `./types` as the single
+// source of truth (ProviderResetCredit / ProviderResetCreditsData), mirrored from
+// the main public type and kept identical by the compile-time contract in Task 11.
 
 const CREDIT_HOUR_MS = 3600000;
 const CREDIT_DAY_MS = 86400000;
@@ -607,7 +592,7 @@ export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions)
   // row-signal filter (no dependence on rows.length / rowHasDisplaySignal / visibleTargets).
   const resetsGroupId = quotaGroupId('codex', 'resets');
   const resetMode = targetMode(options.settings, resetsGroupId, 'simple');
-  const resetData = (options.providerQuotas.codex?.resetCredits ?? null) as ProviderResetCreditsData | null;
+  const resetData = options.providerQuotas.codex?.resetCredits ?? null;
   const resetCredits = resetMode === 'none'
     ? null   // None hides the card; collection continues in main (data still fetched/cached)
     : buildResetCreditsViewModel(resetData, Date.now(), resetMode);

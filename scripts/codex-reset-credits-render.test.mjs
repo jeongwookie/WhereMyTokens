@@ -113,3 +113,42 @@ test('buildQuotaDisplayModels routes the reset card independently of row-signal 
   assert.equal(models.richGroups.some(g => g.label === 'Codex Resets'), false);
   assert.equal(models.simpleGroups.some(g => g.label === 'Codex Resets'), false);
 });
+
+// --- Task 7b: renderer IPC-state normalizer (anti-假接入 boundary, R7-1) ---
+
+// Shared esbuild helper: bundle a renderer .tsx/.ts entry, import it.
+// Task 8+ reuse this to render components; here it drives the real App.tsx normalizer.
+// `packages: 'external'` leaves every npm import (react, react-dom, lucide-react, …) for
+// node to resolve from node_modules — so react stays a singleton shared with
+// react-dom/server, and lucide-react loads its ESM build instead of esbuild inlining the
+// CJS build (whose module-eval `require('react')` throws under ESM). Only our own relative
+// source is bundled; App.tsx has no top-level render side effect, so importing it is safe.
+async function importComponent(entry, name) {
+  const outdir = fs.mkdtempSync(path.resolve(`.tmp-${name}-`));
+  const outfile = path.join(outdir, `${name}.mjs`);
+  await esbuild.build({ entryPoints: [entry], outfile, bundle: true, format: 'esm', platform: 'node', packages: 'external', logLevel: 'silent' });
+  const mod = await import(pathToFileURL(outfile).href);
+  fs.rmSync(outdir, { recursive: true, force: true });
+  return mod;
+}
+
+test('renderer normalizeProviderQuotas preserves resetCredits (R7-1 anti-假接入)', async () => {
+  const mod = await importComponent(path.resolve('src', 'renderer', 'App.tsx'), 'AppNormalize');
+  const { normalizeProviderQuotas } = mod;
+  const out = normalizeProviderQuotas({
+    codex: {
+      provider: 'codex', source: 'api', capturedAt: 1,
+      resetCredits: {
+        credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z', title: 'leak' }],
+        availableCount: 1, totalEarnedCount: 0, checkedAt: 123, countOnly: false, source: 'api',
+        status: { connected: true, code: 'ok', httpStatus: 200 },
+      },
+    },
+  });
+  assert.ok(out.codex.resetCredits, 'resetCredits survives renderer IPC normalization');
+  assert.equal(out.codex.resetCredits.credits.length, 1);
+  assert.deepEqual(Object.keys(out.codex.resetCredits.credits[0]).sort(), ['expiresAtUtc', 'idSuffix', 'status']);
+  assert.equal(out.codex.resetCredits.availableCount, 1);
+  assert.equal(out.codex.resetCredits.status.code, 'ok');
+  assert.equal('httpStatus' in out.codex.resetCredits.status, false); // public status shape only
+});
