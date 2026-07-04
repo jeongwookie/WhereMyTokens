@@ -685,3 +685,41 @@ test('sanitizeProviderQuotaSnapshot yields null resetCredits when absent', () =>
   const out = sanitizeProviderQuotaSnapshot('codex', { provider: 'codex', source: 'api', capturedAt: 1 });
   assert.equal(out.resetCredits, null);
 });
+
+// --- Closing-gate G1 (spec §8): errored/no-credentials must render an in-card "unavailable",
+// not vanish. The per-tick rebuild emits an errored resetCredits (empty list, error status) when
+// there is no cached list but the latest reset attempt failed. Renderer's mode gate still hides
+// it when the resets group is set to 'none'.
+
+test('no-credentials rebuild emits an errored resetCredits (card shows unavailable, not hidden)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  const noCred = { ...codexSnapshot({ usage: false, reset: null }), status: { code: 'no-credentials', connected: false, label: 'local log', detail: '' } };
+  applyCodex(mgr, noCred);
+  const pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.ok(pub.resetCredits, 'resetCredits is present (not null) so the card renders');
+  assert.equal(pub.resetCredits.status.code, 'no-credentials');
+  assert.equal(pub.resetCredits.status.connected, false);
+  assert.equal(pub.resetCredits.credits.length, 0);
+  assert.equal(pub.resetCredits.availableCount, 0);
+});
+
+test('reset 401 with no cached list rebuilds an errored resetCredits (unavailable)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const reset401 = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'unauthorized', connected: false, label: 'auth failed', detail: 'rejected' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: reset401 }));
+  const pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.ok(pub.resetCredits, 'errored resetCredits present');
+  assert.equal(pub.resetCredits.status.code, 'unauthorized');
+  assert.equal(pub.resetCredits.credits.length, 0);
+});
+
+test('never-fetched reset (no status) yields no card (null resetCredits)', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits, null, 'no reset status yet -> no card');
+});

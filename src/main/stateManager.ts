@@ -1518,7 +1518,11 @@ export class StateManager {
       this.codexResetCreditsStoredAt = 0;
       this.codexResetBackoffMs = 0;
       this.lastCodexResetCallMs = 0;
-      this.codexResetStatus = null;
+      // §8: keep a no-credentials reset status (do NOT null it) so the per-tick rebuild renders an
+      // in-card "Reset data unavailable" instead of hiding the card. The persisted cache is still
+      // cleared above — no stale credits survive a logout; this is render-state only, and the
+      // renderer still suppresses the card when the resets group mode is 'none'.
+      this.codexResetStatus = { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' };
       this.deletePersistedValue('_cachedCodexResetCredits');
     }
     this.codexUsageBackoffMs = this.codexBackoffForStatus(snapshot.status);
@@ -2568,7 +2572,13 @@ export class StateManager {
     // INTERNAL shape (status = CodexUsageStatus, credits carrying only source facts).
     const internalReset = storedReset
       ? activeCodexResetCredits(storedReset, now, this.codexUsageConnected, this.codexResetStatus)
-      : null;
+      // §8: no cached list, but the latest reset attempt errored (no-credentials / 401 / 403 /
+      // schema-changed / …) → emit an errored reset object so the card shows "Reset data unavailable"
+      // rather than vanishing. The renderer's mode gate still hides it when set to 'none'. A null
+      // status (never fetched yet) correctly yields no card.
+      : (this.codexResetStatus && this.codexResetStatus.code !== 'ok'
+          ? { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: this.codexResetCreditsStoredAt || now, countOnly: false, source: 'api' as const, status: this.codexResetStatus }
+          : null);
     // (R4-3) CRITICAL: buildProviderQuotas assigns this rebuilt snapshot DIRECTLY to the public map
     // WITHOUT re-running sanitizeProviderQuotaSnapshot — so the every-tick rebuild is the dominant
     // main->renderer path and MUST emit the PUBLIC shape itself. Sanitize the whole resetCredits object

@@ -461,3 +461,34 @@ test('SettingsView DOM: Codex Resets row renders with Rich/Simple/None buttons (
   assert.match(html, />Simple<\/button>/);
   assert.match(html, />None<\/button>/);
 });
+
+// --- Closing-gate fixes: G1 (errored card shown, not hidden) + G2 (non-ok status visible) ---
+
+test('simple row errored → "Reset data unavailable" + status code (G1)', async () => {
+  const mod = await mainView();
+  const vm = stateVM({ errored: true, urgency: 'muted', availableCount: 0, nextExpiryMs: null, credits: [],
+    countOnly: false, source: 'cache',
+    status: { connected: false, code: 'no-credentials', label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' } });
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsSimpleRow, { vm }));
+  const lineStart = html.indexOf('data-testid="reset-simple-line"');
+  const tipStart = html.indexOf('data-testid="reset-tooltip"');
+  const line = tipStart === -1 ? html.slice(lineStart) : html.slice(lineStart, tipStart);
+  assert.match(line, /reset data unavailable/i);
+  assert.match(line, /no-credentials/);
+});
+
+test('count-only rate-limited fallback shows N available but tooltip reveals the non-ok status (G2/§8)', async () => {
+  const mod = await mainView();
+  const vm = stateVM({ countOnly: true, availableCount: 3, credits: [], nextExpiryMs: null,
+    errored: false, stale: true, source: 'cache',
+    status: { connected: false, code: 'rate-limited', label: 'rate limited', detail: 'slow down' } });
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm }));
+  const bodyStart = html.indexOf('data-testid="reset-card-body"');
+  const tipStart = html.indexOf('data-testid="reset-tooltip"');
+  const body = html.slice(bodyStart, tipStart === -1 ? undefined : tipStart);
+  assert.match(body, /3/);                              // count still shown (fallback)
+  assert.match(body, /available/i);
+  const tip = html.slice(tipStart);
+  assert.match(tip, /rate-limited/);                    // §8: the real status is visible in the tooltip
+  assert.match(tip, /slow down/);                       // detail too
+});

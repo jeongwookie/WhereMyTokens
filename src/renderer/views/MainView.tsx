@@ -909,33 +909,37 @@ function resetSourceBadge(vm: ResetCreditsViewModel, C: ReturnType<typeof useThe
   };
 }
 
-export function ResetCreditsTooltip({ vm, visible = false }: { vm: ResetCreditsViewModel; visible?: boolean }) {
+export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm: ResetCreditsViewModel; visible?: boolean; anchor?: { left: number; top: number; width: number } | null }) {
   const C = useTheme();
   const updated = new Date(vm.checkedAt);
   const updatedLabel = Number.isFinite(updated.getTime()) ? updated.toLocaleTimeString() : 'unknown';
   const nextExpiryLabel = vm.nextExpiryMs == null ? '—' : formatCreditDuration(vm.nextExpiryMs);
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : 0;
+  // position:fixed escapes the Plan Usage panel's overflow:hidden (which would otherwise clip an
+  // absolutely-positioned tooltip when the reset row sits near the panel edge). Open upward from the
+  // anchor's top edge. Without an anchor (SSR / static render tests, no getBoundingClientRect) fall
+  // back to an in-flow absolute box so the element still renders in the subtree.
+  const positionStyle: React.CSSProperties = anchor
+    ? { position: 'fixed', left: anchor.left, width: anchor.width, bottom: Math.max(6, viewportH - anchor.top + 6), maxHeight: Math.max(96, anchor.top - 12), overflowY: 'auto' }
+    : { position: 'absolute', left: 12, right: 12, bottom: 'calc(100% + 6px)' };
+  const shellStyle: React.CSSProperties = {
+    ...positionStyle,
+    zIndex: 40,
+    opacity: visible ? 1 : 0,
+    pointerEvents: visible ? 'auto' : 'none',
+    transition: 'opacity 0.12s ease',
+    background: C.bgRow,
+    border: `1px solid ${C.border}`,
+    borderRadius: 8,
+    padding: '10px 12px',
+    fontSize: 11,
+    color: C.textMuted,
+    fontFamily: C.fontMono,
+    boxShadow: '0 8px 28px rgba(0,0,0,0.35)',
+  };
   if (vm.errored) {
     return (
-      <div
-        data-testid="reset-tooltip"
-        style={{
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 'calc(100% + 6px)',
-          zIndex: 30,
-          opacity: visible ? 1 : 0,
-          pointerEvents: visible ? 'auto' : 'none',
-          transition: 'opacity 0.12s ease',
-          background: C.bgRow,
-          border: `1px solid ${C.border}`,
-          borderRadius: 8,
-          padding: '10px 12px',
-          fontSize: 11,
-          color: C.textMuted,
-          fontFamily: C.fontMono,
-        }}
-      >
+      <div data-testid="reset-tooltip" style={shellStyle}>
         <div style={{ fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
           Codex reset credits
         </div>
@@ -949,29 +953,17 @@ export function ResetCreditsTooltip({ vm, visible = false }: { vm: ResetCreditsV
     );
   }
   return (
-    <div
-      data-testid="reset-tooltip"
-      style={{
-        position: 'absolute',
-        left: 12,
-        right: 12,
-        bottom: 'calc(100% + 6px)',
-        zIndex: 30,
-        opacity: visible ? 1 : 0,
-        pointerEvents: visible ? 'auto' : 'none',
-        transition: 'opacity 0.12s ease',
-        background: C.bgRow,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        padding: '10px 12px',
-        fontSize: 11,
-        color: C.textMuted,
-        fontFamily: C.fontMono,
-      }}
-    >
+    <div data-testid="reset-tooltip" style={shellStyle}>
       <div style={{ fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
         Codex reset credits
       </div>
+      {/* §8: surface the real reset status/detail whenever the last fetch was not ok — e.g. a 429
+          count-only fallback still shows N available but must reveal it is rate-limited/stale. */}
+      {vm.status.code !== 'ok' && (
+        <div style={{ marginBottom: 7, color: C.textMuted }}>
+          Status <b style={{ color: C.textMuted }}>{vm.status.code}</b>{vm.status.detail ? ` — ${vm.status.detail}` : ''}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 14, marginBottom: 8, flexWrap: 'wrap' }}>
         <div>Available<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{vm.availableCount}</b></div>
         <div>Next expires<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{nextExpiryLabel}</b></div>
@@ -1014,6 +1006,13 @@ export function ResetCreditsTooltip({ vm, visible = false }: { vm: ResetCreditsV
 export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
   const [hovered, setHovered] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
+  const onEnter = () => {
+    const r = anchorRef.current?.getBoundingClientRect();
+    if (r) setAnchor({ left: r.left, top: r.top, width: r.width });
+    setHovered(true);
+  };
   const source = resetSourceBadge(vm, C);
   const countColor = vm.errored || vm.availableCount === 0 ? C.textMuted : urgencyColor(vm.urgency, C);
   const chipCredits = vm.countOnly || vm.availableCount === 0 || vm.errored
@@ -1025,8 +1024,9 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
 
   return (
     <div
+      ref={anchorRef}
       style={{ position: 'relative', minWidth: 0 }}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={onEnter}
       onMouseLeave={() => setHovered(false)}
     >
       <div
@@ -1136,7 +1136,7 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
           </>
         )}
       </div>
-      <ResetCreditsTooltip vm={vm} visible={hovered} />
+      <ResetCreditsTooltip vm={vm} visible={hovered} anchor={anchor} />
     </div>
   );
 }
@@ -1144,11 +1144,19 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
 export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
   const [hovered, setHovered] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
+  const onEnter = () => {
+    const r = anchorRef.current?.getBoundingClientRect();
+    if (r) setAnchor({ left: r.left, top: r.top, width: r.width });
+    setHovered(true);
+  };
   const source = resetSourceBadge(vm, C);
   const countColor = vm.errored || vm.availableCount === 0 ? C.textMuted : urgencyColor(vm.urgency, C);
 
   return (
     <div
+      ref={anchorRef}
       data-testid="reset-simple-line"
       style={{
         position: 'relative',
@@ -1159,7 +1167,7 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
         padding: '7px 12px',
         borderBottom: `1px solid ${C.border}`,
       }}
-      onMouseEnter={() => setHovered(true)}
+      onMouseEnter={onEnter}
       onMouseLeave={() => setHovered(false)}
     >
       <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
@@ -1225,7 +1233,7 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
       >
         {source.label}
       </span>
-      <ResetCreditsTooltip vm={vm} visible={hovered} />
+      <ResetCreditsTooltip vm={vm} visible={hovered} anchor={anchor} />
     </div>
   );
 }
@@ -1264,6 +1272,10 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     </div>
   ) : null;
   const resetSimpleRow = resetCredits?.mode === 'simple' ? <ResetCreditsSimpleRow vm={resetCredits} /> : null;
+  // §9.1: the reset row (rich OR simple) is a Codex-group sibling — anchor BOTH after the last
+  // codex rich row so a simple reset line stays grouped with CODEX 5H/1W instead of being appended
+  // after every other provider's simple groups (§9.3 is the line's shape, §9.1 is its placement).
+  const resetEntry = resetRow ?? resetSimpleRow;
   const lastCodexRichIdx = richRows.map(row => row.provider).lastIndexOf('codex');
 
   return (
@@ -1309,12 +1321,12 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
               );
             })}
           </div>
-          {resetRow && rowIdx === lastCodexRichIdx && resetRow}
+          {resetEntry && rowIdx === lastCodexRichIdx && resetEntry}
           </React.Fragment>
         ))}
 
-        {/* Codex has no rich window rows to anchor after → render the reset card after all rich rows. */}
-        {resetRow && lastCodexRichIdx === -1 && resetRow}
+        {/* Codex has no rich window rows to anchor after → render the reset entry after all rich rows. */}
+        {resetEntry && lastCodexRichIdx === -1 && resetEntry}
 
         {simpleGroups.length > 0 && (
           <div style={{ display: 'grid', gap: 0, borderBottom: `1px solid ${C.border}` }}>
@@ -1323,8 +1335,6 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
             ))}
           </div>
         )}
-
-        {resetSimpleRow}
       </div>
 
       {showExtraUsage && extraUsage && (
