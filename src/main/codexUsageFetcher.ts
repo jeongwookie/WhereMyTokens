@@ -64,6 +64,8 @@ export interface CodexUsageFetchResult {
   usage: CodexUsagePct | null;
   status: CodexUsageStatus;
   authMtimeMs: number | null;
+  /** Parsed usage JSON, stored before parseUsagePayload so the reset count-only fallback is a free byproduct (no 2nd network call). */
+  rawPayload?: unknown;
 }
 
 interface CodexAuthCredentials {
@@ -605,11 +607,11 @@ export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
         responseKeys: responseKeys(parsed),
       });
       logStatus(status);
-      return { usage: null, status, authMtimeMs: credentials.authMtimeMs };
+      return { usage: null, status, authMtimeMs: credentials.authMtimeMs, rawPayload: parsed };
     }
     const status = buildStatus('ok', true, '', '', { responseKeys: responseKeys(parsed) });
     logStatus(status);
-    return { usage, status, authMtimeMs: credentials.authMtimeMs };
+    return { usage, status, authMtimeMs: credentials.authMtimeMs, rawPayload: parsed };
   } catch (error) {
     const status = classifyRuntimeError(error);
     logStatus(status);
@@ -710,4 +712,54 @@ export function resolveCodexResetCreditsUrl(baseUrl = configuredBaseUrl()): stri
   return base.includes('/backend-api')
     ? `${base}/wham/rate-limit-reset-credits`
     : `${base}/api/codex/rate-limit-reset-credits`;
+}
+
+export interface CodexResetCreditsFetchResult {
+  data: CodexResetCreditsData | null;
+  status: CodexUsageStatus;
+  authMtimeMs: number | null;
+}
+
+export async function fetchCodexResetCredits(): Promise<CodexResetCreditsFetchResult> {
+  const credentials = readCredentials();
+  if (!credentials) {
+    const status = buildStatus('no-credentials', false, 'local log', 'Codex auth.json with ChatGPT tokens was not found.');
+    logStatus(status);
+    return { data: null, status, authMtimeMs: getCodexAuthMtimeMs() };
+  }
+  // Reuse the EXACT header set fetchCodexUsagePct uses (L590-597). Do NOT add the checker's
+  // originator / OAI-Product-Sku / CodexDesktop UA headers — the plan/guardrails forbid them.
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${credentials.accessToken}`,
+    Accept: 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    'User-Agent': CODEX_USER_AGENT,
+  };
+  if (credentials.accountId) headers['ChatGPT-Account-Id'] = credentials.accountId;
+  try {
+    const body = await httpsGet(resolveCodexResetCreditsUrl(), headers);
+    const parsed = JSON.parse(body) as unknown;
+    const data = parseCodexResetCreditsPayload(parsed, Date.now());
+    if (!data) {
+      const status = buildStatus('schema-changed', false, 'schema changed', 'Codex reset-credits response is missing the expected credits list / count.', {
+        responseKeys: responseKeys(parsed),
+      });
+      logStatus(status);
+      return { data: null, status, authMtimeMs: credentials.authMtimeMs };
+    }
+    const status = buildStatus('ok', true, '', '', { responseKeys: responseKeys(parsed) });
+    logStatus(status);
+    return { data, status, authMtimeMs: credentials.authMtimeMs };
+  } catch (error) {
+    let status = classifyRuntimeError(error);
+    // R4-1 / spec §8: a 404 on the DEDICATED reset endpoint means it was removed/moved -> schema-changed
+    // (evict + "unavailable"), NOT the transient `http-error` the shared usage classifier assigns. Remap
+    // it HERE only — do not touch the shared classifier (usage keeps its own contract).
+    if (status.httpStatus === 404) {
+      status = buildStatus('schema-changed', false, 'schema changed', 'Codex reset-credits endpoint returned HTTP 404 (removed or moved).', { httpStatus: 404 });
+    }
+    logStatus(status);
+    return { data: null, status, authMtimeMs: credentials.authMtimeMs };
+  }
 }
