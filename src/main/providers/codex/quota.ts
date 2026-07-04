@@ -1,7 +1,10 @@
 import {
   CodexUsagePct,
   CodexUsageStatus,
+  CodexResetCreditsData,
   fetchCodexUsagePct,
+  fetchCodexResetCredits,
+  resetCreditsFromUsagePayload,
 } from '../../codexUsageFetcher';
 import type { ProviderContext, ProviderCreditBalance, ProviderQuotaSnapshot } from '../types';
 
@@ -13,6 +16,7 @@ export interface CodexProviderQuotaSnapshot extends ProviderQuotaSnapshot {
   status: CodexUsageStatus;
   usage: CodexUsagePct | null;
   authMtimeMs: number | null;
+  resetCredits: CodexResetCreditsData | null;
 }
 
 function quotaSource(status: CodexUsageStatus): ProviderQuotaSnapshot['source'] {
@@ -40,6 +44,13 @@ export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'g
         windowKeys: ['h5', 'week'],
         sortOrder: 0,
       },
+      {
+        key: 'resets',
+        label: 'Codex Resets',
+        defaultMode: 'simple',
+        windowKeys: [],
+        sortOrder: 1,
+      },
     ],
     windowDisplay: {
       h5: {
@@ -59,9 +70,44 @@ export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'g
 }
 
 export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProviderQuotaSnapshot> {
-  const result = await fetchCodexUsagePct();
+  // R2-2: reset has its OWN cooldown. When it is active the StateManager sets
+  // ctx.skipCodexResetCredits so we skip ONLY the dedicated reset GET (usage GET still fires,
+  // keeping its 5-min cadence). resetResult is null in that case and we leave stored data alone.
+  const [result, resetResult] = await Promise.all([
+    fetchCodexUsagePct(),
+    ctx.skipCodexResetCredits ? Promise.resolve(null) : fetchCodexResetCredits(),
+  ]);
   const source = quotaSource(result.status);
   const usage = result.usage;
+
+  // Reset credits: choose the object AND its status by the reset outcome class (R2-1).
+  let resetCredits: CodexResetCreditsData | null = null;
+  if (resetResult == null) {
+    // Cooldown skip: do not overwrite; leave stored data untouched (null => StateManager keeps cache).
+    resetCredits = null;
+  } else if (resetResult.data) {
+    resetCredits = resetResult.data;                       // dedicated endpoint succeeded
+  } else {
+    const rs: CodexUsageStatus = resetResult.status;
+    const hardReject = rs.code === 'unauthorized' || rs.code === 'forbidden' || rs.code === 'schema-changed';
+    const transientOrLimited = rs.code === 'rate-limited' || rs.code === 'network' || rs.code === 'timeout' || rs.code === 'http-error';
+    if (rs.code === 'no-credentials') {
+      resetCredits = null;                                  // no creds -> StateManager clears cache via status
+    } else if (hardReject) {
+      // 401/403/schema-changed: do NOT show a possibly-stale count from usage; surface the error and let
+      // Task 3 evict the reset cache. Carry the failing status, empty list.
+      resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    } else if (transientOrLimited && usage) {
+      // 429 / transient with usage OK: count-only fallback IS allowed, but it carries the REAL failing
+      // status (not a synthetic ok) so codexResetBackoffMs fires (429 Retry-After) and the card renders
+      // stale/error rather than fresh-ok. rawPayload is a free byproduct of the usage fetch.
+      resetCredits = resetCreditsFromUsagePayload(result.rawPayload, ctx.nowMs, rs)
+        ?? { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    } else {
+      // transient without usage, or anything else non-ok: carry the failing status, empty.
+      resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    }
+  }
 
   return {
     provider: 'codex',
@@ -97,6 +143,7 @@ export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProvid
     status: result.status,
     usage,
     authMtimeMs: result.authMtimeMs,
+    resetCredits,
   };
 }
 

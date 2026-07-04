@@ -49,6 +49,8 @@ export interface ProviderContext {
   prioritySourceIds: Set<string>;
   includeFullHistory: boolean;
   force: boolean;
+  /** When true, fetchCodexQuota skips the dedicated reset-credits GET (reset cooldown active); usage GET still runs. */
+  skipCodexResetCredits?: boolean;
 }
 
 export interface ProviderAdapter {
@@ -146,6 +148,23 @@ export interface ProviderQuotaSnapshot {
   windowDisplay?: Record<string, ProviderQuotaWindowDisplay>;
   credits?: Record<string, ProviderCreditBalance>;
   status?: ProviderQuotaStatus;
+  resetCredits?: ProviderResetCreditsData | null;
+}
+
+export interface ProviderResetCredit {
+  idSuffix: string | null;
+  status: string;
+  expiresAtUtc: string | null;
+}
+
+export interface ProviderResetCreditsData {
+  credits: ProviderResetCredit[];
+  availableCount: number;
+  totalEarnedCount: number;
+  checkedAt: number;
+  countOnly: boolean;
+  source: 'api' | 'cache';
+  status: ProviderQuotaStatus;   // public status shape (connected/code/label/detail)
 }
 
 export interface ProviderQuotaWindow {

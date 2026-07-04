@@ -7,7 +7,7 @@ import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData, UsageWindowResetHints } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
-import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
+import { CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION, CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexResetCreditsData, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexResetCredits, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
@@ -43,6 +43,7 @@ import type {
   ProviderLedgerSource,
   ProviderQuotaSnapshot,
   ProviderQuotaStatus,
+  ProviderResetCreditsData,
   ProviderQuotaWindow,
   ProviderQuotaWindowDisplay,
   ProviderSource,
@@ -53,7 +54,7 @@ import type {
 } from './providers/types';
 import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
 import { buildClaudeQuotaDisplayMetadata, isClaudeQuotaSnapshot } from './providers/claude/quota';
-import { buildCodexQuotaDisplayMetadata, isCodexQuotaSnapshot } from './providers/codex/quota';
+import { buildCodexQuotaDisplayMetadata, CodexProviderQuotaSnapshot, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
   buildUsageVisibilityFilter,
   usageProviderVisible,
@@ -456,7 +457,7 @@ function isProviderIdValue(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
 }
 
-function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
+export function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
   const record = quotaRecord(value);
   if (!record) return null;
   if (record.provider != null && record.provider !== provider) return null;
@@ -473,6 +474,55 @@ function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): Pr
     windowDisplay: sanitizeQuotaWindowDisplayMap(record.windowDisplay),
     credits: sanitizeProviderCredits(record.credits),
     status: sanitizeProviderQuotaStatus(record.status),
+    resetCredits: sanitizeResetCredits(record.resetCredits),
+  };
+}
+
+export function activeCodexResetCredits(
+  data: CodexResetCreditsData,
+  now: number,
+  connected: boolean,
+  latestStatus?: CodexUsageStatus | null,   // (R3-1) current-tick reset attempt status, if newer than the list
+): CodexResetCreditsData {
+  const credits = data.credits.filter(c => {
+    if (c.expiresAtUtc == null) return true;      // null-expiry credits never auto-expire
+    const ms = Date.parse(c.expiresAtUtc);
+    return !Number.isFinite(ms) || ms > now;
+  });
+  // If the latest reset ATTEMPT failed (non-ok), overlay that status onto the cached list and mark it
+  // cache/stale, so the VM's stale/errored/source reflect reality instead of the list's old ok status.
+  const attemptFailed = !!latestStatus && latestStatus.code !== 'ok';
+  const status = attemptFailed ? latestStatus! : data.status;
+  const source: 'api' | 'cache' = (!connected || attemptFailed) ? 'cache' : data.source;
+  return {
+    ...data,
+    credits,
+    availableCount: data.countOnly ? data.availableCount : credits.length,
+    status,
+    source,
+  };
+}
+
+export function sanitizeResetCredits(value: unknown): ProviderResetCreditsData | null {
+  const r = quotaRecord(value);
+  if (!r) return null;
+  const rawCredits = Array.isArray(r.credits) ? r.credits : [];
+  const credits = rawCredits
+    .map(quotaRecord)
+    .filter((c): c is Record<string, unknown> => !!c)
+    .map(c => ({
+      idSuffix: typeof c.idSuffix === 'string' ? c.idSuffix : null,
+      status: typeof c.status === 'string' ? c.status : 'available',
+      expiresAtUtc: typeof c.expiresAtUtc === 'string' ? c.expiresAtUtc : null,
+    }));
+  return {
+    credits,
+    availableCount: finiteQuotaNumber(r.availableCount) ?? credits.length,
+    totalEarnedCount: finiteQuotaNumber(r.totalEarnedCount) ?? 0,
+    checkedAt: finiteQuotaNumber(r.checkedAt) ?? 0,
+    countOnly: r.countOnly === true,
+    source: r.source === 'cache' ? 'cache' : 'api',
+    status: sanitizeProviderQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
   };
 }
 
@@ -646,6 +696,18 @@ export class StateManager {
   private lastCodexUsageCallMs = 0;
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
+  private codexResetCredits: CodexResetCreditsData | null = null;
+  private codexResetCreditsStoredAt = 0;
+  // Latest reset ATTEMPT status (F9/R3-1). Distinct from the cached list's own status: on a
+  // current-tick reset error we keep the cached list but must surface THIS status so the card
+  // renders stale/error, not fresh-ok. null once nothing has been attempted / after no-credentials.
+  private codexResetStatus: CodexUsageStatus | null = null;
+  // Reset-credit fetch has its OWN backoff timer + its own last-attempt clock (F1/R2-2). The reset
+  // GET is throttled INDEPENDENTLY of usage: beginCodexQuotaRequest still gates only on the usage
+  // backoff/interval, and when the reset cooldown is active we skip just the reset sub-request
+  // (ctx.skipCodexResetCredits) while usage keeps its 5-min cadence.
+  private codexResetBackoffMs = 0;
+  private lastCodexResetCallMs = 0;
   private providerQuotaRequestSeqs = new Map<ProviderId, number>();
   private providerQuotaSnapshots = new Map<ProviderId, ProviderQuotaSnapshot>();
   private lastManualProviderUsageForceMs = 0;
@@ -732,6 +794,15 @@ export class StateManager {
     if (cachedCodex && hasCodexUsageCredentials()) {
       this.codexUsagePctStoredAt = cachedCodex.storedAt;
       this.codexUsagePct = cachedCodex;
+    }
+    const cachedResetRaw = this.getPersistedValue('_cachedCodexResetCredits', null);
+    const cachedReset = normalizeStoredCodexResetCredits(cachedResetRaw, getCodexAuthMtimeMs());
+    if (cachedResetRaw && !cachedReset) {
+      this.deletePersistedValue('_cachedCodexResetCredits');
+    }
+    if (cachedReset && hasCodexUsageCredentials()) {
+      this.codexResetCreditsStoredAt = cachedReset.storedAt;
+      this.codexResetCredits = cachedReset.data;
     }
 
     this.bridgeWatcher = new BridgeWatcher((data) => {
@@ -1365,10 +1436,66 @@ export class StateManager {
     return 0;
   }
 
+  private codexBackoffForResetStatus(status: CodexUsageStatus): number {
+    if (status.code === 'ok') return 0;
+    if (status.code === 'rate-limited') {
+      return typeof status.retryAfterMs === 'number'
+        ? Math.min(CODEX_USAGE_MAX_BACKOFF_MS, Math.max(0, status.retryAfterMs))
+        : Math.min(this.codexResetBackoffMs === 0 ? 120_000 : this.codexResetBackoffMs * 2, CODEX_USAGE_MAX_BACKOFF_MS);
+    }
+    if (status.code === 'unauthorized' || status.code === 'forbidden' || status.code === 'schema-changed') {
+      return CODEX_USAGE_MAX_BACKOFF_MS;
+    }
+    if (status.code === 'timeout' || status.code === 'network' || status.code === 'http-error') {
+      return Math.min(this.codexResetBackoffMs === 0 ? 300_000 : this.codexResetBackoffMs * 2, CODEX_USAGE_MAX_BACKOFF_MS);
+    }
+    return 0;
+  }
+
+  private shouldSkipCodexResetCredits(now: number): boolean {
+    if (this.codexResetBackoffMs <= 0) return false;
+    return (now - this.lastCodexResetCallMs) < this.codexResetBackoffMs;
+  }
+
+  // Reset credits ride the same snapshot but persist under a SEPARATE key so a reset failure never
+  // evicts the usage cache and vice-versa. Runs independently of the usage branch (reset data can
+  // arrive without usage, and a usage-ok early return must not skip reset bookkeeping).
+  private applyCodexResetCredits(snapshot: CodexProviderQuotaSnapshot): void {
+    const reset = snapshot.resetCredits;
+    if (reset == null) {
+      // Cooldown skip (R2-2): the reset GET was not attempted this tick. Do NOT overwrite, evict, or
+      // re-time anything — leave the stored reset data + backoff exactly as they are.
+      return;
+    }
+    // A real reset attempt happened -> record its attempt clock + latest status, recompute backoff.
+    this.lastCodexResetCallMs = Date.now();
+    this.codexResetStatus = reset.status;   // (R3-1) always capture the latest attempt status
+    if (reset.status.code === 'ok') {
+      this.codexResetCredits = reset;
+      this.codexResetCreditsStoredAt = Date.now();
+      this.setPersistedValue('_cachedCodexResetCredits', {
+        schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+        storedAt: this.codexResetCreditsStoredAt,
+        authMtimeMs: snapshot.authMtimeMs,
+        data: reset,
+      });
+    } else if (reset.status.code === 'unauthorized' || reset.status.code === 'forbidden' || reset.status.code === 'schema-changed') {
+      this.codexResetCredits = null;
+      this.codexResetCreditsStoredAt = 0;
+      this.deletePersistedValue('_cachedCodexResetCredits');
+    }
+    // On other reset errors (network/timeout/rate-limited/http-error) keep the cached LIST but the
+    // captured codexResetStatus above is non-ok -> the rebuild overlays it so the card shows stale/error.
+
+    // Reset-specific backoff (F1): compute from the RESET status only, never from usage status.
+    this.codexResetBackoffMs = this.codexBackoffForResetStatus(reset.status);
+  }
+
   private applyCodexQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number): boolean {
     if (!isCodexQuotaSnapshot(snapshot)) return false;
     if (requestSeq !== this.codexUsageRequestSeq) return false;
     this.applyCodexStatus(snapshot.status);
+    this.applyCodexResetCredits(snapshot);
 
     if (snapshot.usage) {
       this.codexUsagePct = snapshot.usage;
@@ -1387,6 +1514,16 @@ export class StateManager {
       this.codexUsagePct = null;
       this.codexUsagePctStoredAt = 0;
       this.deletePersistedValue('_cachedCodexUsagePct');
+      this.codexResetCredits = null;
+      this.codexResetCreditsStoredAt = 0;
+      this.codexResetBackoffMs = 0;
+      this.lastCodexResetCallMs = 0;
+      // §8: keep a no-credentials reset status (do NOT null it) so the per-tick rebuild renders an
+      // in-card "Reset data unavailable" instead of hiding the card. The persisted cache is still
+      // cleared above — no stale credits survive a logout; this is render-state only, and the
+      // renderer still suppresses the card when the resets group mode is 'none'.
+      this.codexResetStatus = { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' };
+      this.deletePersistedValue('_cachedCodexResetCredits');
     }
     this.codexUsageBackoffMs = this.codexBackoffForStatus(snapshot.status);
     if (snapshot.status.code === 'rate-limited' && this.codexUsageBackoffMs > 0) {
@@ -1421,7 +1558,11 @@ export class StateManager {
     const now = Date.now();
     const requestSeq = this.beginProviderQuotaRequest(provider.id, force, now);
     if (requestSeq == null) return false;
-    const snapshot = await fetchQuota(this.providerContext({ settings, force, nowMs: now }));
+    const baseCtx = { settings, force, nowMs: now };
+    const ctxOverrides = provider.id === 'codex'
+      ? { ...baseCtx, skipCodexResetCredits: this.shouldSkipCodexResetCredits(now) }
+      : baseCtx;
+    const snapshot = await fetchQuota(this.providerContext(ctxOverrides));
     if (!snapshot) return false;
     return this.applyProviderQuotaSnapshot(snapshot, requestSeq, now);
   }
@@ -2425,6 +2566,33 @@ export class StateManager {
     const windows = this.getCodexLimitWindows(now);
     const raw = sanitizeProviderQuotaSnapshot('codex', this.providerQuotaSnapshots.get('codex'));
     const source = windows.h5.source ?? windows.week.source ?? raw?.source ?? (this.codexUsageConnected ? 'api' : 'localLog');
+    const storedReset = this.codexResetCredits;
+    // Reset freshness is INDEPENDENT of usage: a reset that last succeeded is fresh even when the
+    // usage fetch is down (the two requests fail independently). Fall back to usage connectivity only
+    // before any reset attempt has run this session.
+    const resetConnected = this.codexResetStatus ? this.codexResetStatus.code === 'ok' : this.codexUsageConnected;
+    const rawReset = (raw as ProviderQuotaSnapshot | undefined)?.resetCredits ?? null;
+    // (R4-3) buildProviderQuotas assigns this rebuilt snapshot DIRECTLY to the public map WITHOUT
+    // re-running sanitizeProviderQuotaSnapshot, so the rebuild MUST emit the PUBLIC shape itself.
+    // Pick the reset object for this tick, most-authoritative first:
+    //   1) the instance-stored last-good list — overlay the latest attempt status (R3-1) so a
+    //      current-tick reset error renders stale/error while the cached per-credit list still shows;
+    //   2) the apply-time snapshot's resetCredits — this is how the count-only 429/transient
+    //      fallback's N reaches the public snapshot THIS tick (plan §5.5 / Task 3), degrading next tick;
+    //   3) no list and no fallback but a real reset error (no-credentials / 401 / 403 / schema-changed)
+    //      → an errored object so the card shows "Reset data unavailable" (§8) instead of vanishing;
+    //      the renderer's mode gate still hides it when the resets group is 'none';
+    //   4) never attempted yet (null status) → null → no card.
+    let resetCredits: ProviderResetCreditsData | null;
+    if (storedReset) {
+      resetCredits = sanitizeResetCredits(activeCodexResetCredits(storedReset, now, resetConnected, this.codexResetStatus));
+    } else if (rawReset) {
+      resetCredits = sanitizeResetCredits(rawReset);
+    } else if (this.codexResetStatus && this.codexResetStatus.code !== 'ok') {
+      resetCredits = sanitizeResetCredits({ credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: this.codexResetCreditsStoredAt || now, countOnly: false, source: 'api', status: this.codexResetStatus });
+    } else {
+      resetCredits = null;
+    }
     return {
       ...raw,
       ...buildCodexQuotaDisplayMetadata(),
@@ -2433,6 +2601,7 @@ export class StateManager {
       capturedAt: now,
       planName: this.getAgedCodexUsagePct(now)?.plan || raw?.planName,
       windows,
+      resetCredits,
       status: raw?.status ?? {
         connected: this.codexUsageConnected,
         code: this.codexUsageConnected ? 'connected' : 'local-log',

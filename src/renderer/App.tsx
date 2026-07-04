@@ -14,6 +14,8 @@ import {
   ProviderQuotaStatus,
   ProviderQuotaWindow,
   ProviderQuotaWindowDisplay,
+  ProviderResetCredit,
+  ProviderResetCreditsData,
   ProviderWindowUsage,
   QuotaDisplayMode,
   WindowStats,
@@ -229,7 +231,12 @@ function normalizeQuotaGroupSpec(value: unknown): ProviderQuotaGroupSpec | null 
   const windowKeys = Array.isArray(record.windowKeys)
     ? record.windowKeys.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : [];
-  if (!key || !label || !isQuotaDisplayMode(record.defaultMode) || windowKeys.length === 0) return null;
+  // Empty windowKeys is now legitimate: a signal-carrying group like `resets` (CODEX RESETS)
+  // has no percentage windows. Do NOT reject it here — the renderer would otherwise drop the
+  // group on every IPC update and the settings row would vanish in production. Downstream
+  // hasGroupSignal (quotaDisplayModels.ts) gates whether an empty-windowKeys group renders,
+  // mirroring the main-side buildCodexQuotaDisplayMetadata which emits it with windowKeys: [].
+  if (!key || !label || !isQuotaDisplayMode(record.defaultMode)) return null;
   return {
     key,
     label,
@@ -301,6 +308,33 @@ function normalizeModelQuota(value: unknown): ProviderModelQuota | null {
   };
 }
 
+function normalizeResetCredit(value: unknown): ProviderResetCredit | null {
+  const r = recordOrNull(value);
+  if (!r) return null;
+  return {
+    idSuffix: typeof r.idSuffix === 'string' ? r.idSuffix : null,
+    status: typeof r.status === 'string' ? r.status : 'available',
+    expiresAtUtc: typeof r.expiresAtUtc === 'string' ? r.expiresAtUtc : null,
+  };
+}
+
+function normalizeResetCredits(value: unknown): ProviderResetCreditsData | null {
+  const r = recordOrNull(value);
+  if (!r) return null;
+  const credits = Array.isArray(r.credits)
+    ? r.credits.map(normalizeResetCredit).filter((c): c is ProviderResetCredit => !!c)
+    : [];
+  return {
+    credits,
+    availableCount: typeof r.availableCount === 'number' && Number.isFinite(r.availableCount) ? r.availableCount : credits.length,
+    totalEarnedCount: typeof r.totalEarnedCount === 'number' && Number.isFinite(r.totalEarnedCount) ? r.totalEarnedCount : 0,
+    checkedAt: typeof r.checkedAt === 'number' && Number.isFinite(r.checkedAt) ? r.checkedAt : 0,
+    countOnly: r.countOnly === true,
+    source: r.source === 'cache' ? 'cache' : 'api',
+    status: normalizeQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
+  };
+}
+
 function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
   const record = recordOrNull(value);
   if (!record) return null;
@@ -340,10 +374,11 @@ function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): P
     windowDisplay: normalizeQuotaWindowDisplayMap(record.windowDisplay),
     credits: Object.keys(credits).length > 0 ? credits : undefined,
     status: normalizeQuotaStatus(record.status),
+    resetCredits: normalizeResetCredits(record.resetCredits),
   };
 }
 
-function normalizeProviderQuotas(value: unknown): AppState['providerQuotas'] {
+export function normalizeProviderQuotas(value: unknown): AppState['providerQuotas'] {
   const record = recordOrNull(value);
   if (!record) return {};
   const providerQuotas: AppState['providerQuotas'] = {};
