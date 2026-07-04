@@ -178,6 +178,7 @@ async function loadRendererBundle() {
     `export { ThemeProvider } from '../src/renderer/ThemeContext';`,
     `export { DARK } from '../src/renderer/theme';`,
     `export * from '../src/renderer/views/MainView';`,
+    `export { default as SettingsView } from '../src/renderer/views/SettingsView';`,
     '',
   ].join('\n'));
   await esbuild.build({ entryPoints: [entry], outfile, bundle: true, format: 'esm', platform: 'node', packages: 'external', loader: { '.ts': 'ts', '.tsx': 'tsx' }, logLevel: 'silent' });
@@ -420,4 +421,43 @@ test('PlanUsagePanel renders the simple reset row when mode is simple (F5 integr
   assert.match(html.slice(bodyStart), /data-testid="reset-simple-line"/, 'simple reset row rendered inside the panel body');
   // simple mode must NOT also render the rich reset row
   assert.doesNotMatch(html.slice(bodyStart), /data-testid="reset-rich-row"/);
+});
+
+// --- Task 10: settings row (rich/simple/none) — zero-new-UI reuse (visual contract §9.6) ---
+
+test('settings quota list yields a Codex Resets target with rich/simple/none controls', async () => {
+  const M = await loadModels();
+  const options = M.buildQuotaTargetSettingsOptions(
+    { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
+    { codex: resetSnapshot() },
+  );
+  const row = options.find(o => o.label === 'Codex Resets');
+  assert.ok(row, 'Codex Resets settings row present');
+  assert.equal(row.defaultMode, 'simple');
+});
+
+test('mode none hides the reset card (models.resetCredits null) but the settings row stays', async () => {
+  const M = await loadModels();
+  const groupId = M.quotaGroupId('codex', 'resets');
+  const opts = baseOptions(resetSnapshot());
+  opts.settings = { ...opts.settings, quotaTargetModes: { [groupId]: 'none' } };
+  const hidden = M.buildQuotaDisplayModels(opts);
+  assert.equal(hidden.resetCredits, null, 'none nulls the rendered card');
+  assert.ok(hidden.settingsTargets.find(g => g.label === 'Codex Resets'), 'settings target survives so the user can re-enable');
+});
+
+test('SettingsView DOM: Codex Resets row renders with Rich/Simple/None buttons (F10)', async () => {
+  const mod = await mainView();
+  const SettingsView = mod.SettingsView;
+  assert.ok(SettingsView, 'SettingsView exported from the bundle');
+  const props = {
+    settings: { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
+    providerQuotas: { codex: resetSnapshot() },
+    onSave: () => {}, onBack: () => {},
+  };
+  const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(SettingsView, props)));
+  assert.match(html, /Codex Resets/, 'settings row label present');
+  assert.match(html, />Rich<\/button>/);
+  assert.match(html, />Simple<\/button>/);
+  assert.match(html, />None<\/button>/);
 });
