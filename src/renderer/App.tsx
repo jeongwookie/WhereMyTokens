@@ -231,7 +231,12 @@ function normalizeQuotaGroupSpec(value: unknown): ProviderQuotaGroupSpec | null 
   const windowKeys = Array.isArray(record.windowKeys)
     ? record.windowKeys.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : [];
-  if (!key || !label || !isQuotaDisplayMode(record.defaultMode) || windowKeys.length === 0) return null;
+  // Empty windowKeys is now legitimate: a signal-carrying group like `resets` (CODEX RESETS)
+  // has no percentage windows. Do NOT reject it here — the renderer would otherwise drop the
+  // group on every IPC update and the settings row would vanish in production. Downstream
+  // hasGroupSignal (quotaDisplayModels.ts) gates whether an empty-windowKeys group renders,
+  // mirroring the main-side buildCodexQuotaDisplayMetadata which emits it with windowKeys: [].
+  if (!key || !label || !isQuotaDisplayMode(record.defaultMode)) return null;
   return {
     key,
     label,

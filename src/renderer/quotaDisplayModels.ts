@@ -590,10 +590,14 @@ export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions)
   // The 'resets' group has empty windowKeys → zero rows → dropped by the rows.length > 0
   // filter above, so it cannot ride those arrays. Resolve it directly, independent of any
   // row-signal filter (no dependence on rows.length / rowHasDisplaySignal / visibleTargets).
+  // Gate on the same enabledProviders check every other group uses (buildQuotaDisplayGroups
+  // only iterates options.settings.enabledProviders): a stale codex snapshot must NOT render
+  // the reset card when the user has disabled Codex.
+  const codexEnabled = options.settings.enabledProviders.includes('codex');
   const resetsGroupId = quotaGroupId('codex', 'resets');
   const resetMode = targetMode(options.settings, resetsGroupId, 'simple');
-  const resetData = options.providerQuotas.codex?.resetCredits ?? null;
-  const resetCredits = resetMode === 'none'
+  const resetData = codexEnabled ? (options.providerQuotas.codex?.resetCredits ?? null) : null;
+  const resetCredits = !codexEnabled || resetMode === 'none'
     ? null   // None hides the card; collection continues in main (data still fetched/cached)
     : buildResetCreditsViewModel(resetData, Date.now(), resetMode);
 

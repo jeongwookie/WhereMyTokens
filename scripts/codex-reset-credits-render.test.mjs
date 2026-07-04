@@ -152,3 +152,30 @@ test('renderer normalizeProviderQuotas preserves resetCredits (R7-1 anti-假接�
   assert.equal(out.codex.resetCredits.status.code, 'ok');
   assert.equal('httpStatus' in out.codex.resetCredits.status, false); // public status shape only
 });
+
+// --- Task 7 xreview backfill: cross-phase integration bugs the unit tests missed ---
+
+// F1 (BLOCKER): the `resets` group has empty windowKeys; the renderer IPC normalizer must
+// NOT drop it, else the "Codex Resets" settings row is invisible in the running app. Drives
+// the REAL App.tsx normalizer (anti-假接入), unlike the Task 6 test which bypasses it.
+test('renderer normalizeProviderQuotas keeps the empty-windowKeys resets group (F1)', async () => {
+  const app = await importComponent(path.resolve('src', 'renderer', 'App.tsx'), 'AppGroupNorm');
+  const out = app.normalizeProviderQuotas({ codex: resetSnapshot() });
+  const groups = out.codex.groups ?? [];
+  const resets = groups.find(g => g.key === 'resets');
+  assert.ok(resets, 'resets group survives renderer IPC normalization');
+  assert.deepEqual(resets.windowKeys, [], 'resets keeps its empty windowKeys');
+  // End-to-end: the normalized snapshot must still surface the settings target.
+  const M = await loadModels();
+  const models = M.buildQuotaDisplayModels(baseOptions(out.codex));
+  assert.ok(models.settingsTargets.find(g => g.label === 'Codex Resets'), 'settings target present after real IPC normalization');
+});
+
+// F2 (MAJOR): reset card routing must respect the enabledProviders gate like every other group.
+test('reset card is null when codex is not an enabled provider (F2)', async () => {
+  const M = await loadModels();
+  const opts = baseOptions(resetSnapshot());
+  opts.settings = { ...opts.settings, enabledProviders: ['claude'] };  // codex NOT enabled
+  const models = M.buildQuotaDisplayModels(opts);
+  assert.equal(models.resetCredits, null, 'no reset card when codex disabled');
+});
