@@ -457,7 +457,7 @@ function isProviderIdValue(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
 }
 
-function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
+export function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
   const record = quotaRecord(value);
   if (!record) return null;
   if (record.provider != null && record.provider !== provider) return null;
@@ -474,6 +474,7 @@ function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): Pr
     windowDisplay: sanitizeQuotaWindowDisplayMap(record.windowDisplay),
     credits: sanitizeProviderCredits(record.credits),
     status: sanitizeProviderQuotaStatus(record.status),
+    resetCredits: sanitizeResetCredits(record.resetCredits),
   };
 }
 

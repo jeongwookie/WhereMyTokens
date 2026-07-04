@@ -599,3 +599,28 @@ test('sanitizeResetCredits rejects non-objects', () => {
   assert.equal(sanitizeResetCredits(null), null);
   assert.equal(sanitizeResetCredits('x'), null);
 });
+
+// --- Task 5: fresh-apply sanitizer whitelists a validated resetCredits ---
+
+const { sanitizeProviderQuotaSnapshot } = stateManagerModule;
+
+test('sanitizeProviderQuotaSnapshot whitelists a validated resetCredits (public shape)', () => {
+  const out = sanitizeProviderQuotaSnapshot('codex', {
+    provider: 'codex', source: 'api', capturedAt: 1,
+    resetCredits: {
+      credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z', title: 'leak' }],
+      availableCount: 1, totalEarnedCount: 0, checkedAt: 123, countOnly: false, source: 'api',
+      status: { code: 'ok', connected: true, label: '', detail: '', httpStatus: 200, responseKeys: ['credits'] },
+    },
+  });
+  assert.ok(out.resetCredits, 'resetCredits survives the whitelist');
+  assert.equal(out.resetCredits.credits.length, 1);
+  assert.deepEqual(Object.keys(out.resetCredits.credits[0]).sort(), ['expiresAtUtc', 'idSuffix', 'status']);
+  assert.equal('httpStatus' in out.resetCredits.status, false);   // internal fields stripped
+  assert.equal('responseKeys' in out.resetCredits.status, false);
+});
+
+test('sanitizeProviderQuotaSnapshot yields null resetCredits when absent', () => {
+  const out = sanitizeProviderQuotaSnapshot('codex', { provider: 'codex', source: 'api', capturedAt: 1 });
+  assert.equal(out.resetCredits, null);
+});
