@@ -51,3 +51,10 @@ test('resets group appears as a settings target when resetCredits present', asyn
   assert.ok(resets, 'Codex Resets target should exist');
   assert.equal(resets.provider, 'codex');
 });
+
+test('resets group is dropped when resetCredits is null', async () => {
+  const M = await loadModels();
+  const models = M.buildQuotaDisplayModels(baseOptions(resetSnapshot({ resetCredits: null })));
+  const resets = models.settingsTargets.find(g => g.label === 'Codex Resets');
+  assert.equal(resets, undefined, 'Codex Resets target should not exist without reset data');
+});
