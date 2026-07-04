@@ -252,7 +252,7 @@ function TokenStatsCard({
 
   if (hero && showLimitBar) {
     return (
-      <div style={{
+      <div data-testid="hero-card" style={{
         minWidth: 0,
         borderRight: borderRight ? `1px solid ${C.border}` : 'none',
         padding: '8px 12px 8px',

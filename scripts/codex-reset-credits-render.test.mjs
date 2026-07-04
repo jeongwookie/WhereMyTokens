@@ -153,6 +153,202 @@ test('renderer normalizeProviderQuotas preserves resetCredits (R7-1 anti-假接�
   assert.equal('httpStatus' in out.codex.resetCredits.status, false); // public status shape only
 });
 
+// --- Task 8: rich ResetCreditsCard + shared tooltip (visual contract §9.2/9.4/9.5) ---
+
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+// ONE bundle for the themed render tests: ThemeProvider + DARK + MainView's exports must share
+// a SINGLE ThemeContext instance so <ThemeProvider value={DARK}> actually reaches the tested
+// component's useTheme(). Two separate esbuild bundles would each embed their own ThemeContext
+// (distinct React context objects) → provider/consumer mismatch → useTheme falls back to LIGHT.
+// (This is why production ThemeContext stays a plain createContext — the dual-context problem is a
+// test-bundling artifact, not a production one; fix it here in the harness, not in prod code.)
+// packages:'external' leaves react/react-dom/lucide-react for node to resolve (shared singletons;
+// lucide-react's ESM build, not the CJS dynamic-require one).
+let _rendererBundle = null;
+async function loadRendererBundle() {
+  if (_rendererBundle) return _rendererBundle;
+  // mkdtemp lands directly under the repo root, so ../src reaches the source. Forward-slash
+  // relative specifiers only (no file:// URL, no backslashes — both break esbuild's import on Windows).
+  const outdir = fs.mkdtempSync(path.resolve('.tmp-harness-'));
+  const outfile = path.join(outdir, 'harness.mjs');
+  const entry = path.join(outdir, 'entry.mjs');
+  fs.writeFileSync(entry, [
+    `export { ThemeProvider } from '../src/renderer/ThemeContext';`,
+    `export { DARK } from '../src/renderer/theme';`,
+    `export * from '../src/renderer/views/MainView';`,
+    '',
+  ].join('\n'));
+  await esbuild.build({ entryPoints: [entry], outfile, bundle: true, format: 'esm', platform: 'node', packages: 'external', loader: { '.ts': 'ts', '.tsx': 'tsx' }, logLevel: 'silent' });
+  _rendererBundle = await import(pathToFileURL(outfile).href);
+  fs.rmSync(outdir, { recursive: true, force: true });
+  return _rendererBundle;
+}
+async function loadHarness() { return loadRendererBundle(); }
+const { ThemeProvider, DARK } = await loadHarness();
+
+const DAY = 86400000, HOUR = 3600000, MIN = 60000;
+
+function richVM() {
+  return {
+    provider: 'codex', mode: 'rich', source: 'api', stale: false,
+    availableCount: 4, countOnly: false, errored: false, urgency: 'ok', totalEarnedCount: 0,
+    nextExpiryMs: 7 * DAY + 23 * HOUR, checkedAt: Date.parse('2026-07-04T00:00:00Z'),
+    status: { connected: true, code: 'ok', label: 'API' },
+    credits: [
+      { idSuffix: 'a', status: 'available', expiresAtUtc: '2026-07-12T11:46:00Z', remainingMs: 7 * DAY + 23 * HOUR },
+      { idSuffix: 'b', status: 'available', expiresAtUtc: '2026-07-18T08:36:00Z', remainingMs: 13 * DAY + 20 * HOUR },
+      { idSuffix: 'c', status: 'available', expiresAtUtc: '2026-07-27T07:46:00Z', remainingMs: 22 * DAY + 23 * HOUR },
+      { idSuffix: 'd', status: 'available', expiresAtUtc: '2026-08-01T04:05:00Z', remainingMs: 27 * DAY + 16 * HOUR },
+    ],
+  };
+}
+
+function stateVM(over) {
+  return { ...richVM(), ...over };
+}
+
+async function mainView() {
+  // Same single bundle as loadHarness → ResetCreditsCard/PlanUsagePanel share the DARK ThemeContext.
+  return loadRendererBundle();
+}
+
+function bodyRegion(html) {
+  const b = html.indexOf('data-testid="reset-card-body"');
+  const t = html.indexOf('data-testid="reset-tooltip"');
+  return t === -1 ? html.slice(b) : html.slice(b, t);
+}
+
+test('rich ResetCreditsCard BODY: N available, next expiry, one chip per credit, NO earned line (F4)', async () => {
+  const mod = await mainView();
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm: richVM() }));
+  const bodyStart = html.indexOf('data-testid="reset-card-body"');
+  assert.notEqual(bodyStart, -1, 'card body region present');
+  const body = bodyRegion(html);
+  assert.match(body, /CODEX RESETS/i);
+  assert.match(body, /4/);
+  assert.match(body, /available/i);
+  assert.match(body, /next expires/i);
+  assert.match(body, /7d\s+23h/);
+  for (const rel of ['7d 23h', '13d 20h', '22d 23h', '27d 16h']) assert.match(body, new RegExp(rel.replace(/ /g, '\\s+')));
+  assert.doesNotMatch(body, /earned/i);            // Earned is TOOLTIP-only, never in the card body
+  assert.doesNotMatch(body, /2026-\d\d-\d\dT/);    // relative time only on the main surface
+});
+
+test('shared tooltip lists Earned + every credit + Updated/Source (F4)', async () => {
+  const mod = await mainView();
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm: richVM() }));
+  const tipStart = html.indexOf('data-testid="reset-tooltip"');
+  assert.notEqual(tipStart, -1, 'tooltip region present');
+  const tip = html.slice(tipStart);
+  assert.match(tip, /Available/i);
+  assert.match(tip, /Next expires/i);
+  assert.match(tip, /Earned/i);                    // Earned lives here (F4), not in the card body
+  for (const rel of ['7d 23h', '13d 20h', '22d 23h', '27d 16h']) assert.match(tip, new RegExp(rel.replace(/ /g, '\\s+')));
+  assert.match(tip, /Updated/i);
+  assert.match(tip, /Source/i);
+});
+
+test('rich card state colors: warn=waiting, red=barRed, 0=muted+No resets, errored=muted+unavailable (F4)', async () => {
+  const mod = await mainView();
+  const dark = (vm) => renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.ResetCreditsCard, { vm })));
+
+  const warn = bodyRegion(dark(stateVM({ urgency: 'warn', availableCount: 2, nextExpiryMs: 2 * DAY + 4 * HOUR,
+    credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2026-07-06T00:00:00Z', remainingMs: 2 * DAY + 4 * HOUR }] })));
+  assert.ok(warn.includes(DARK.waiting), 'warn count uses DARK.waiting');
+
+  const red = bodyRegion(dark(stateVM({ urgency: 'red', availableCount: 1, nextExpiryMs: 9 * HOUR + 3 * MIN,
+    credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2026-07-04T09:03:00Z', remainingMs: 9 * HOUR + 3 * MIN }] })));
+  assert.ok(red.includes(DARK.barRed), 'red count uses DARK.barRed');
+
+  const zero = bodyRegion(dark(stateVM({ urgency: 'muted', availableCount: 0, nextExpiryMs: null, credits: [] })));
+  assert.ok(zero.includes(DARK.textMuted), 'zero count uses DARK.textMuted');
+  assert.match(zero, /no resets available/i);
+
+  const errored = bodyRegion(dark(stateVM({ errored: true, urgency: 'muted', availableCount: 0, nextExpiryMs: null, credits: [],
+    source: 'cache', status: { connected: false, code: 'unauthorized', label: 'auth failed', detail: 'Codex rejected the saved login.' } })));
+  assert.ok(errored.includes(DARK.textMuted), 'errored uses DARK.textMuted');
+  assert.match(errored, /reset data unavailable/i);
+  assert.match(errored, /unauthorized/);          // error chip carries the status code
+});
+
+test('error-state tooltip shows status code + detail + last-successful-update time (F4)', async () => {
+  const mod = await mainView();
+  const vm = stateVM({ errored: true, urgency: 'muted', availableCount: 0, nextExpiryMs: null, credits: [],
+    source: 'cache', checkedAt: Date.parse('2026-07-04T01:12:00Z'),
+    status: { connected: false, code: 'unauthorized', label: 'auth failed', detail: 'Codex rejected the saved login.' } });
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm }));
+  const tipStart = html.indexOf('data-testid="reset-tooltip"');
+  assert.notEqual(tipStart, -1);
+  const tip = html.slice(tipStart);
+  assert.match(tip, /unauthorized/);
+  assert.match(tip, /Codex rejected the saved login\./);
+  assert.match(tip, /last update/i);
+});
+
+test('PlanUsagePanel renders CODEX RESETS as a sibling row AFTER 5H/1W, not nested (F6/R2-5)', async () => {
+  const mod = await mainView();
+  const groupId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
+  const props = {
+    usage: { byProvider: {}, modelWindows: {} },
+    providerQuotas: { codex: resetSnapshot() },
+    settings: { enabledProviders: ['codex'], quotaTargetModes: { [groupId]: 'rich' }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
+    historyWarmupPending: false, historyWarmupStartsAt: null,
+  };
+  const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.PlanUsagePanel, props)));
+
+  const TAG = /<div\b|<\/div>/g;
+  function closeFrom(h, openIdx) {
+    let depth = 0; TAG.lastIndex = openIdx; let m;
+    while ((m = TAG.exec(h))) {
+      if (m[0] === '</div>') { depth -= 1; if (depth === 0) return m.index + m[0].length; }
+      else { depth += 1; }
+    }
+    throw new Error('unbalanced div');
+  }
+  function openOf(h, marker) {
+    const mi = h.indexOf(marker);
+    assert.notEqual(mi, -1, `marker ${marker} present`);
+    const open = h.lastIndexOf('<div', mi);
+    assert.notEqual(open, -1, `opening <div> for ${marker}`);
+    return open;
+  }
+  function directChildDivs(h, parentOpen) {
+    const parentEnd = closeFrom(h, parentOpen);
+    const firstTagEnd = h.indexOf('>', parentOpen) + 1;
+    const children = [];
+    let cursor = firstTagEnd;
+    while (true) {
+      const nextOpen = h.indexOf('<div', cursor);
+      if (nextOpen === -1 || nextOpen >= parentEnd) break;
+      const childEnd = closeFrom(h, nextOpen);
+      children.push([nextOpen, childEnd]);
+      cursor = childEnd;
+    }
+    return { parentEnd, children };
+  }
+
+  const panelStart = openOf(html, 'data-testid="plan-usage-body"');
+  const { parentEnd: panelEnd, children } = directChildDivs(html, panelStart);
+  const rrStart = openOf(html, 'data-testid="reset-rich-row"');
+  const rrEnd = closeFrom(html, rrStart);
+  const heroRowStart = openOf(html, 'data-testid="plan-usage-rich-row"');
+
+  const isDirectChild = (start) => children.some(([s, e]) => s === start && e <= panelEnd);
+  assert.ok(rrStart > panelStart && rrEnd <= panelEnd, 'reset row is bounded inside the panel body');
+  assert.ok(isDirectChild(heroRowStart), 'plan-usage-rich-row is a DIRECT child of plan-usage-body');
+  assert.ok(isDirectChild(rrStart), 'reset-rich-row is a DIRECT child of plan-usage-body (sibling of the hero row)');
+  const heroIdx = children.findIndex(([s]) => s === heroRowStart);
+  const resetIdx = children.findIndex(([s]) => s === rrStart);
+  assert.ok(heroIdx !== -1 && resetIdx !== -1 && resetIdx > heroIdx, 'reset row is ordered AFTER the 5H/1W hero row');
+
+  const resetRowHtml = html.slice(rrStart, rrEnd);
+  assert.match(resetRowHtml, /data-testid="reset-card-body"/);
+  assert.doesNotMatch(resetRowHtml, /data-testid="hero-card"/);
+});
+
+
 // --- Task 7 xreview backfill: cross-phase integration bugs the unit tests missed ---
 
 // F1 (BLOCKER): the `resets` group has empty windowKeys; the renderer IPC normalizer must
