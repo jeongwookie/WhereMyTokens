@@ -8,6 +8,7 @@ import {
   ProviderQuotaGroupSpec,
   ProviderQuotaRowVisualKind,
   ProviderQuotaSnapshot,
+  ProviderQuotaStatus,
   ProviderQuotaWindow,
   QuotaDisplayMode,
   WindowStats,
@@ -66,6 +67,7 @@ export interface QuotaDisplayModels {
   widgetGroups: QuotaDisplayGroupViewModel[];
   settingsTargets: QuotaDisplayGroupViewModel[];
   extraUsage: ExtraUsage | null;
+  resetCredits: ResetCreditsViewModel | null;   // Codex reset card, routed independently of row-driven groups
 }
 
 export interface QuotaTargetSettingsOption {
@@ -112,6 +114,102 @@ export function quotaGroupId(provider: ProviderId, groupKey: string): string {
 
 export function modelQuotaGroupKey(model: string): string {
   return `model.${model}`;
+}
+
+// --- Codex reset credits: render-time view model -----------------------------
+// Every human/relative/colored value is DERIVED HERE from raw ISO + counts + now.
+// Nothing derived is persisted (spec §4). Input shape is the public source-fact
+// contract carried on the snapshot (raw ISO expiry, counts, checkedAt, status).
+// NOTE: the renderer `./types` mirror of these input shapes lands in Task 7b; this
+// module is esbuild type-stripped and is not typechecked by `build:main`, so the
+// local declarations below are the working contract until 7b re-points them.
+export interface ProviderResetCredit {
+  idSuffix: string | null;
+  status: string;
+  expiresAtUtc: string | null;
+}
+
+export interface ProviderResetCreditsData {
+  credits: ProviderResetCredit[];
+  availableCount: number;
+  totalEarnedCount: number;
+  checkedAt: number;
+  countOnly: boolean;
+  source: 'api' | 'cache';
+  status: ProviderQuotaStatus;
+}
+
+const CREDIT_HOUR_MS = 3600000;
+const CREDIT_DAY_MS = 86400000;
+
+export function formatCreditDuration(ms: number | null): string {
+  if (ms == null || !Number.isFinite(ms) || ms <= 0) return '0m';
+  const totalMin = Math.floor(ms / 60000);
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+export type CreditUrgency = 'ok' | 'warn' | 'red' | 'muted';
+export function creditUrgencyBucket(soonestRemainingMs: number | null): CreditUrgency {
+  if (soonestRemainingMs == null || soonestRemainingMs <= 0) return 'muted';
+  if (soonestRemainingMs < CREDIT_DAY_MS) return 'red';
+  if (soonestRemainingMs <= 7 * CREDIT_DAY_MS) return 'warn';
+  return 'ok';
+}
+
+export interface ResetCreditRowVM { idSuffix: string | null; status: string; expiresAtUtc: string | null; remainingMs: number | null; }
+export interface ResetCreditsViewModel {
+  provider: ProviderId;
+  mode: QuotaDisplayMode;         // resolved from quotaTargetModes for the 'resets' group ('rich'|'simple'|'none')
+  source: 'api' | 'cache';        // explicit; 'cache' when serving stale data while disconnected (F3/F9)
+  availableCount: number;         // credits.length for list data, availableCount for countOnly
+  credits: ResetCreditRowVM[];
+  nextExpiryMs: number | null;
+  totalEarnedCount: number;
+  urgency: CreditUrgency;
+  countOnly: boolean;
+  errored: boolean;
+  stale: boolean;                 // true when showing a cached list because the latest fetch did not refresh it (F9)
+  status: ProviderQuotaStatus;
+  checkedAt: number;              // epoch ms of the last SUCCESSFUL fetch (tooltip "last successful update")
+}
+
+export function buildResetCreditsViewModel(
+  data: ProviderResetCreditsData | null | undefined,
+  now: number,
+  mode: QuotaDisplayMode,
+): ResetCreditsViewModel | null {
+  if (!data) return null;
+  const errored = data.status?.code !== 'ok' && data.status?.connected === false && data.credits.length === 0 && data.availableCount === 0 && !data.countOnly;
+  const credits: ResetCreditRowVM[] = data.credits.map(c => {
+    const ms = c.expiresAtUtc == null ? null : Date.parse(c.expiresAtUtc);
+    return { idSuffix: c.idSuffix, status: c.status, expiresAtUtc: c.expiresAtUtc, remainingMs: ms == null || !Number.isFinite(ms) ? null : ms - now };
+  });
+  const nextExpiryMs = credits.length > 0 ? credits[0].remainingMs : null;
+  const availableCount = data.countOnly ? data.availableCount : credits.length;
+  const source: 'api' | 'cache' = data.source === 'cache' ? 'cache' : 'api';
+  return {
+    provider: 'codex',
+    mode,
+    source,
+    availableCount,
+    credits,
+    nextExpiryMs,
+    totalEarnedCount: data.totalEarnedCount,
+    urgency: errored || availableCount === 0 ? 'muted' : creditUrgencyBucket(nextExpiryMs),
+    countOnly: data.countOnly,
+    errored,
+    // Stale = we are rendering a cached list (source cache) rather than a fresh 'api' pull. The
+    // tooltip shows checkedAt ("last successful update") so a transient error that keeps the cache
+    // (per Task 4/Task 3) is still legible as "stale, last good at HH:MM" rather than silently fresh.
+    stale: source === 'cache',
+    status: data.status,
+    checkedAt: data.checkedAt,
+  };
 }
 
 function stableColorFromId(id: string): string {
@@ -502,6 +600,18 @@ export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions)
   const richGroups = visibleTargets.filter(group => group.mode === 'rich');
   const simpleGroups = visibleTargets.filter(group => group.mode === 'simple');
   const widgetGroups = visibleTargets.filter(group => group.mode === 'simple' || options.simpleIncludesRich === true);
+
+  // F3: the reset card is routed on a dedicated field, NOT through richGroups/simpleGroups.
+  // The 'resets' group has empty windowKeys → zero rows → dropped by the rows.length > 0
+  // filter above, so it cannot ride those arrays. Resolve it directly, independent of any
+  // row-signal filter (no dependence on rows.length / rowHasDisplaySignal / visibleTargets).
+  const resetsGroupId = quotaGroupId('codex', 'resets');
+  const resetMode = targetMode(options.settings, resetsGroupId, 'simple');
+  const resetData = (options.providerQuotas.codex?.resetCredits ?? null) as ProviderResetCreditsData | null;
+  const resetCredits = resetMode === 'none'
+    ? null   // None hides the card; collection continues in main (data still fetched/cached)
+    : buildResetCreditsViewModel(resetData, Date.now(), resetMode);
+
   return {
     targets,
     richGroups,
@@ -509,5 +619,6 @@ export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions)
     widgetGroups,
     settingsTargets: targets,
     extraUsage: firstExtraUsage(options.settings, options.providerQuotas),
+    resetCredits,
   };
 }
