@@ -375,3 +375,49 @@ test('reset card is null when codex is not an enabled provider (F2)', async () =
   const models = M.buildQuotaDisplayModels(opts);
   assert.equal(models.resetCredits, null, 'no reset card when codex disabled');
 });
+
+// --- Task 9: simple single-line ResetCreditsSimpleRow + shared tooltip (visual contract §9.3/9.4) ---
+
+test('simple main LINE is single-line count + next + badge with NO per-credit chips (F5)', async () => {
+  const mod = await mainView();
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsSimpleRow, { vm: richVM() }));
+  const lineStart = html.indexOf('data-testid="reset-simple-line"');
+  assert.notEqual(lineStart, -1, 'simple main line region present');
+  const tipStart = html.indexOf('data-testid="reset-tooltip"');
+  const line = tipStart === -1 ? html.slice(lineStart) : html.slice(lineStart, tipStart);
+  assert.match(line, /Codex Resets/i);
+  assert.match(line, /4/);
+  assert.match(line, /available/i);
+  assert.match(line, /next/i);
+  assert.match(line, /7d\s+23h/);                       // only the soonest (next) relative time on the line
+  assert.doesNotMatch(line, /13d 20h/);                 // no per-credit chips on the main line
+  assert.doesNotMatch(line, /22d 23h/);
+  assert.doesNotMatch(line, /2026-\d\d-\d\dT/);      // no ISO on the main surface
+});
+
+test('simple row shares the SAME tooltip listing every credit (F5)', async () => {
+  const mod = await mainView();
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsSimpleRow, { vm: richVM() }));
+  const tipStart = html.indexOf('data-testid="reset-tooltip"');
+  assert.notEqual(tipStart, -1, 'simple row carries the shared tooltip');
+  const tip = html.slice(tipStart);
+  for (const rel of ['7d 23h', '13d 20h', '22d 23h', '27d 16h']) assert.match(tip, new RegExp(rel.replace(/ /g, '\\s+')));
+  assert.match(tip, /Earned/i);
+});
+
+test('PlanUsagePanel renders the simple reset row when mode is simple (F5 integration — visible by default)', async () => {
+  const mod = await mainView();
+  const groupId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
+  const props = {
+    usage: { byProvider: {}, modelWindows: {} },
+    providerQuotas: { codex: resetSnapshot() },
+    settings: { enabledProviders: ['codex'], quotaTargetModes: { [groupId]: 'simple' }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
+    historyWarmupPending: false, historyWarmupStartsAt: null,
+  };
+  const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.PlanUsagePanel, props)));
+  const bodyStart = html.indexOf('data-testid="plan-usage-body"');
+  assert.notEqual(bodyStart, -1, 'plan-usage-body present');
+  assert.match(html.slice(bodyStart), /data-testid="reset-simple-line"/, 'simple reset row rendered inside the panel body');
+  // simple mode must NOT also render the rich reset row
+  assert.doesNotMatch(html.slice(bodyStart), /data-testid="reset-rich-row"/);
+});

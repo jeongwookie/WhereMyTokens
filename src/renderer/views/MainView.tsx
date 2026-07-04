@@ -1141,6 +1141,95 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
   );
 }
 
+export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
+  const C = useTheme();
+  const [hovered, setHovered] = useState(false);
+  const source = resetSourceBadge(vm, C);
+  const countColor = vm.errored || vm.availableCount === 0 ? C.textMuted : urgencyColor(vm.urgency, C);
+
+  return (
+    <div
+      data-testid="reset-simple-line"
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        minWidth: 0,
+        padding: '7px 12px',
+        borderBottom: `1px solid ${C.border}`,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
+        Codex Resets
+      </span>
+
+      {vm.errored ? (
+        <>
+          <span style={{ color: C.textMuted, fontSize: 11, fontFamily: C.fontMono, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Reset data unavailable
+          </span>
+          <span
+            title={vm.status.code}
+            style={{
+              marginLeft: 'auto',
+              background: C.bgRow,
+              color: C.textMuted,
+              border: `1px solid ${C.border}`,
+              borderRadius: 4,
+              padding: '1px 4px',
+              fontSize: 9,
+              fontWeight: 700,
+              fontFamily: C.fontMono,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {vm.status.code}
+          </span>
+        </>
+      ) : (
+        <>
+          <span style={{ fontSize: 11, fontFamily: C.fontMono, color: C.textDim, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {vm.availableCount === 0 ? (
+              <span style={{ color: C.textMuted }}>no resets available</span>
+            ) : (
+              <>
+                <b style={{ fontSize: 13, fontWeight: 800, color: countColor }}>{vm.availableCount}</b>{' '}available
+              </>
+            )}
+          </span>
+          {vm.nextExpiryMs != null && (
+            <span style={{ marginLeft: 'auto', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              next ↻{formatCreditDuration(vm.nextExpiryMs)}
+            </span>
+          )}
+        </>
+      )}
+
+      <span
+        title={source.title}
+        style={{
+          ...source.style,
+          marginLeft: !vm.errored && vm.nextExpiryMs == null ? 'auto' : 0,
+          borderRadius: 3,
+          padding: '1px 4px',
+          fontSize: 9,
+          fontWeight: 700,
+          fontFamily: C.fontMono,
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+      >
+        {source.label}
+      </span>
+      <ResetCreditsTooltip vm={vm} visible={hovered} />
+    </div>
+  );
+}
+
 export const PlanUsagePanel = React.memo(function PlanUsagePanel({
   usage,
   providerQuotas,
@@ -1174,6 +1263,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
       <ResetCreditsCard vm={resetCredits} />
     </div>
   ) : null;
+  const resetSimpleRow = resetCredits?.mode === 'simple' ? <ResetCreditsSimpleRow vm={resetCredits} /> : null;
   const lastCodexRichIdx = richRows.map(row => row.provider).lastIndexOf('codex');
 
   return (
@@ -1233,6 +1323,8 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
             ))}
           </div>
         )}
+
+        {resetSimpleRow}
       </div>
 
       {showExtraUsage && extraUsage && (
