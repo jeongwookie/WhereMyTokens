@@ -251,6 +251,35 @@ test('shared tooltip lists Earned + every credit + Updated/Source (F4)', async (
   assert.match(tip, /Source/i);
 });
 
+test('reset credits tooltip trigger is only the N available label and opens below it', async () => {
+  const mod = await mainView();
+  const richHtml = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm: richVM() }));
+  const richTriggerStart = richHtml.indexOf('data-testid="reset-available-trigger"');
+  assert.notEqual(richTriggerStart, -1, 'rich card exposes a narrow available trigger');
+  const richTriggerEnd = richHtml.indexOf('</div>', richTriggerStart);
+  const richTrigger = richHtml.slice(richTriggerStart, richTriggerEnd);
+  assert.match(richTrigger, /4/);
+  assert.match(richTrigger, /available/i);
+  assert.doesNotMatch(richTrigger, /next expires/i);
+  assert.doesNotMatch(richTrigger, /7d\s+23h/);
+  const richTip = richHtml.slice(richHtml.indexOf('data-testid="reset-tooltip"'));
+  assert.match(richTip, /top:calc\(100% \+ 6px\)/);
+  assert.doesNotMatch(richTip, /bottom:calc\(100% \+ 6px\)/);
+
+  const simpleHtml = renderToStaticMarkup(React.createElement(mod.ResetCreditsSimpleRow, { vm: richVM() }));
+  const simpleTriggerStart = simpleHtml.indexOf('data-testid="reset-available-trigger"');
+  assert.notEqual(simpleTriggerStart, -1, 'simple row exposes the same narrow available trigger');
+  const simpleTriggerEnd = simpleHtml.indexOf('</span>', simpleTriggerStart);
+  const simpleTrigger = simpleHtml.slice(simpleTriggerStart, simpleTriggerEnd);
+  assert.match(simpleTrigger, /4/);
+  assert.match(simpleTrigger, /available/i);
+  assert.doesNotMatch(simpleTrigger, /next/i);
+  assert.doesNotMatch(simpleTrigger, /7d\s+23h/);
+  const simpleTip = simpleHtml.slice(simpleHtml.indexOf('data-testid="reset-tooltip"'));
+  assert.match(simpleTip, /top:calc\(100% \+ 6px\)/);
+  assert.doesNotMatch(simpleTip, /bottom:calc\(100% \+ 6px\)/);
+});
+
 test('rich card state colors: warn=waiting, red=barRed, 0=muted+No resets, errored=muted+unavailable (F4)', async () => {
   const mod = await mainView();
   const dark = (vm) => renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.ResetCreditsCard, { vm })));

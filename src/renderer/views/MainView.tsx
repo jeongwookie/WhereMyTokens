@@ -909,19 +909,31 @@ function resetSourceBadge(vm: ResetCreditsViewModel, C: ReturnType<typeof useThe
   };
 }
 
-export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm: ResetCreditsViewModel; visible?: boolean; anchor?: { left: number; top: number; width: number } | null }) {
+type ResetTooltipAnchor = { left: number; top: number; width: number };
+
+function resetTooltipAnchorFromEvent(event: React.MouseEvent<HTMLElement>, frame: HTMLElement | null): ResetTooltipAnchor {
+  const trigger = event.currentTarget.getBoundingClientRect();
+  const container = frame?.getBoundingClientRect();
+  return {
+    left: container?.left ?? trigger.left,
+    top: event.clientY,
+    width: container?.width ?? trigger.width,
+  };
+}
+
+export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm: ResetCreditsViewModel; visible?: boolean; anchor?: ResetTooltipAnchor | null }) {
   const C = useTheme();
   const updated = new Date(vm.checkedAt);
   const updatedLabel = Number.isFinite(updated.getTime()) ? updated.toLocaleTimeString() : 'unknown';
   const nextExpiryLabel = vm.nextExpiryMs == null ? '—' : formatCreditDuration(vm.nextExpiryMs);
   const viewportH = typeof window !== 'undefined' ? window.innerHeight : 0;
   // position:fixed escapes the Plan Usage panel's overflow:hidden (which would otherwise clip an
-  // absolutely-positioned tooltip when the reset row sits near the panel edge). Open upward from the
-  // anchor's top edge. Without an anchor (SSR / static render tests, no getBoundingClientRect) fall
+  // absolutely-positioned tooltip when the reset row sits near the panel edge). Open below the
+  // pointer. Without an anchor (SSR / static render tests, no getBoundingClientRect) fall
   // back to an in-flow absolute box so the element still renders in the subtree.
   const positionStyle: React.CSSProperties = anchor
-    ? { position: 'fixed', left: anchor.left, width: anchor.width, bottom: Math.max(6, viewportH - anchor.top + 6), maxHeight: Math.max(96, anchor.top - 12), overflowY: 'auto' }
-    : { position: 'absolute', left: 12, right: 12, bottom: 'calc(100% + 6px)' };
+    ? { position: 'fixed', left: anchor.left, width: anchor.width, top: Math.max(6, anchor.top + 12), maxHeight: Math.max(96, viewportH - anchor.top - 18), overflowY: 'auto' }
+    : { position: 'absolute', left: 12, right: 12, top: 'calc(100% + 6px)' };
   const shellStyle: React.CSSProperties = {
     ...positionStyle,
     zIndex: 40,
@@ -1006,11 +1018,10 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm
 export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
   const [hovered, setHovered] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
-  const onEnter = () => {
-    const r = anchorRef.current?.getBoundingClientRect();
-    if (r) setAnchor({ left: r.left, top: r.top, width: r.width });
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<ResetTooltipAnchor | null>(null);
+  const showTooltip = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchor(resetTooltipAnchorFromEvent(event, frameRef.current));
     setHovered(true);
   };
   const source = resetSourceBadge(vm, C);
@@ -1024,10 +1035,8 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
 
   return (
     <div
-      ref={anchorRef}
+      ref={frameRef}
       style={{ position: 'relative', minWidth: 0 }}
-      onMouseEnter={onEnter}
-      onMouseLeave={() => setHovered(false)}
     >
       <div
         data-testid="reset-card-body"
@@ -1081,7 +1090,13 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-              <div style={{ fontSize: 30, fontWeight: 800, color: countColor, lineHeight: 1.1, fontFamily: C.fontMono }}>
+              <div
+                data-testid="reset-available-trigger"
+                style={{ fontSize: 30, fontWeight: 800, color: countColor, lineHeight: 1.1, fontFamily: C.fontMono, cursor: 'default' }}
+                onMouseEnter={showTooltip}
+                onMouseMove={showTooltip}
+                onMouseLeave={() => setHovered(false)}
+              >
                 {vm.availableCount}
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginLeft: 6 }}>
                   available
@@ -1144,11 +1159,10 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
 export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
   const [hovered, setHovered] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
-  const onEnter = () => {
-    const r = anchorRef.current?.getBoundingClientRect();
-    if (r) setAnchor({ left: r.left, top: r.top, width: r.width });
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<ResetTooltipAnchor | null>(null);
+  const showTooltip = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchor(resetTooltipAnchorFromEvent(event, frameRef.current));
     setHovered(true);
   };
   const source = resetSourceBadge(vm, C);
@@ -1156,7 +1170,7 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
 
   return (
     <div
-      ref={anchorRef}
+      ref={frameRef}
       data-testid="reset-simple-line"
       style={{
         position: 'relative',
@@ -1167,8 +1181,6 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
         padding: '7px 12px',
         borderBottom: `1px solid ${C.border}`,
       }}
-      onMouseEnter={onEnter}
-      onMouseLeave={() => setHovered(false)}
     >
       <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
         Codex Resets
@@ -1204,9 +1216,15 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
             {vm.availableCount === 0 ? (
               <span style={{ color: C.textMuted }}>no resets available</span>
             ) : (
-              <>
+              <span
+                data-testid="reset-available-trigger"
+                style={{ cursor: 'default' }}
+                onMouseEnter={showTooltip}
+                onMouseMove={showTooltip}
+                onMouseLeave={() => setHovered(false)}
+              >
                 <b style={{ fontSize: 13, fontWeight: 800, color: countColor }}>{vm.availableCount}</b>{' '}available
-              </>
+              </span>
             )}
           </span>
           {vm.nextExpiryMs != null && (
