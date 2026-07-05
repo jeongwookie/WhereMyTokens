@@ -94,6 +94,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 - Provider adapters live under `src/main/providers/` so future providers can join the same quota/session/usage shape.
 - Live Claude Code, Codex, and Antigravity quota cards with reset windows.
 - Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.
+- Optional draggable Windows taskbar mini display for fixed 5H and 1W quota rows with transparent, taskbar-background-aware rendering.
 - Active and recent session tracking from local provider data.
 - Today and all-time token, cost, cache, model, and call summaries.
 - Activity heatmaps, rhythm charts, model usage, and tool breakdowns.

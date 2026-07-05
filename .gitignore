@@ -1,6 +1,8 @@
 node_modules/
 dist/
 release/
+taskbar-helper/bin/
+taskbar-helper/obj/
 assets/screenshot.png
 assets/icon.png
 assets/icon-128.png

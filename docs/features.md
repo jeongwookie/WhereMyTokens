@@ -14,6 +14,7 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 - Provider quota cards for Claude, Codex, Antigravity, and future provider adapters.
 - Per-target quota display modes: Rich, Simple, or hidden.
 - Quota Pace compares usage percentage with elapsed reset-window time.
+- Optional draggable Windows taskbar mini quota display with fixed `5h` and `1w` rows, transparent background, and taskbar-background-aware text contrast.
 - Windows toast notifications for configurable usage thresholds.
 - Claude Code `statusLine` bridge support for live local context and fallback quota data.
 
@@ -38,6 +39,7 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 - USD or KRW display with configurable exchange rate.
 - Tray label modes for usage percentage, token count, or cost.
 - Floating Quota Pace widget with always-on-top support.
+- Windows-only draggable taskbar mini display for compact `5H` / `1W` quota rows with transparent, sampled-background-aware rendering.
 - Dashboard layout controls for hiding or reordering optional cards.
 - Project hide and exclude controls.
 - Optional start with Windows.

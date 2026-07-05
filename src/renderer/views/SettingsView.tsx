@@ -97,6 +97,8 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'excludedProjects',
   'quotaTargetModes',
   'quotaTargetOrder',
+  'taskbarQuotaEnabled',
+  'quotaTargetAbbreviations',
   'antigravityQuotaDurationPaceEnabled',
   'compactWidgetEnabled',
   'compactWidgetWaitingAnimationEnabled',
@@ -109,6 +111,8 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     ...settings,
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
+    taskbarQuotaEnabled: settings.taskbarQuotaEnabled === true,
+    quotaTargetAbbreviations: settings.quotaTargetAbbreviations ?? {},
     antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
@@ -139,6 +143,17 @@ function toggleProvider(settings: AppSettings, id: ProviderId): AppSettings {
     ...settings,
     enabledProviders,
   };
+}
+
+function normalizeQuotaTargetAbbreviationInput(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+}
+
+function defaultQuotaTargetAbbreviation(provider: ProviderId, label: string): string {
+  if (provider === 'claude') return 'C';
+  if (provider === 'codex') return 'X';
+  if (provider === 'antigravity') return 'A';
+  return label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? '?';
 }
 
 function settingValue(settings: AppSettings, key: EditableSettingKey): unknown {
@@ -191,6 +206,19 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         [targetId]: mode,
       },
     }));
+  };
+
+  const setQuotaTargetAbbreviation = (targetId: string, value: string) => {
+    const abbreviation = normalizeQuotaTargetAbbreviationInput(value);
+    setS(current => {
+      const next = { ...(current.quotaTargetAbbreviations ?? {}) };
+      if (abbreviation) next[targetId] = abbreviation;
+      else delete next[targetId];
+      return {
+        ...current,
+        quotaTargetAbbreviations: next,
+      };
+    });
   };
 
   function moveQuotaTarget(targetId: string, direction: -1 | 1) {
@@ -407,6 +435,15 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         </div>
         <div style={row}>
           <div>
+            <div style={labelStyle}>Taskbar mini quota display</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Shows fixed 5h / 1w quota rows inside the Windows taskbar when supported
+            </div>
+          </div>
+          <input type="checkbox" style={chk} checked={s.taskbarQuotaEnabled} onChange={e => setS({ ...s, taskbarQuotaEnabled: e.target.checked })} />
+        </div>
+        <div style={row}>
+          <div>
             <div style={labelStyle}>Waiting animation</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
               Animates floating-widget waiting bars when limit data is missing
@@ -541,6 +578,14 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <input
+                      aria-label={`Taskbar abbreviation for ${target.label}`}
+                      title={`Default: ${defaultQuotaTargetAbbreviation(target.provider, target.label)}`}
+                      placeholder={defaultQuotaTargetAbbreviation(target.provider, target.label)}
+                      value={s.quotaTargetAbbreviations?.[target.id] ?? ''}
+                      onChange={e => setQuotaTargetAbbreviation(target.id, e.target.value)}
+                      style={{ ...inp, width: 42, textTransform: 'uppercase', textAlign: 'center', fontFamily: C.fontMono }}
+                    />
                     <div style={{ display: 'flex', gap: 2 }}>
                       {(['rich', 'simple', 'none'] as const).map(mode => {
                         const active = target.mode === mode;
