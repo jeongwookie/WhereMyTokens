@@ -62,6 +62,11 @@ npm run dist
 
 성공하면 `release/` 아래 `.exe` 인스톨러와 portable `.exe` 생성.
 
+`npm run pack`/`npm run dist`는 항상 `dotnet publish`(taskbar helper)를 먼저 실행하고 그 결과물만 패키징한다 —
+release 빌드는 .NET SDK가 설치되어 있어야 하며, 없으면 여기서 바로 실패한다(오래된 helper 바이너리가
+조용히 재포장되는 사고를 막기 위한 의도적 설계). 일반 `npm run build`/`npm start`/`npm run dev`는 여전히
+.NET SDK 없이도 동작한다.
+
 빌드 후 인스톨러 파일명 변환:
 
 ```powershell

@@ -82,20 +82,99 @@ test('Antigravity quota duration pace setting defaults off and normalizes boolea
   assert.equal(normalizeSettings({ antigravityQuotaDurationPaceEnabled: 'true' }).antigravityQuotaDurationPaceEnabled, false);
 });
 
+test('taskbar quota settings default off and normalize abbreviation overrides', () => {
+  const settings = normalizeSettings({
+    taskbarQuotaEnabled: true,
+    quotaTargetAbbreviations: {
+      'claude.group.account': ' c ',
+      'codex.group.account': 'x1',
+      'antigravity.group.model.gemini-3-pro': 'ag3',
+      'codex.group.model.gpt-5.1': 'TOOLONG',
+      'claude.group.percent-family': '',
+      'claude.group.bad value': 'BAD',
+      'bogus.group.account': 'B',
+      'claude.group.account.duplicate': '@@',
+    },
+  });
+
+  assert.equal(DEFAULT_SETTINGS.taskbarQuotaEnabled, false);
+  assert.deepEqual(DEFAULT_SETTINGS.quotaTargetAbbreviations, {});
+  assert.equal(settings.taskbarQuotaEnabled, true);
+  assert.deepEqual(settings.quotaTargetAbbreviations, {
+    'claude.group.account': 'C',
+    'codex.group.account': 'X1',
+    'antigravity.group.model.gemini-3-pro': 'AG3',
+  });
+});
+
+test('settings:set persists taskbar quota settings through the explicit allowlist', () => {
+  const handlers = new Map();
+  const store = {
+    store: {},
+    set(key, value) {
+      this.store[key] = value;
+    },
+  };
+
+  ipcModule.registerIpcHandlers({
+    store,
+    getState: () => ({}),
+    forceRefresh: async () => {},
+    applySettingsChange: () => {},
+    ipcMain: {
+      handle(channel, listener) {
+        handlers.set(channel, listener);
+      },
+    },
+  });
+
+  const setSettings = handlers.get('settings:set');
+  assert.ok(setSettings);
+
+  let saved = setSettings(null, {
+    taskbarQuotaEnabled: true,
+    quotaTargetAbbreviations: {
+      'claude.group.account': ' cc ',
+      'codex.group.account': 'x',
+    },
+  });
+  assert.equal(saved.taskbarQuotaEnabled, true);
+  assert.deepEqual(saved.quotaTargetAbbreviations, {
+    'claude.group.account': 'CC',
+    'codex.group.account': 'X',
+  });
+  assert.equal(store.store.taskbarQuotaEnabled, true);
+
+  saved = setSettings(null, { taskbarQuotaEnabled: false });
+  assert.equal(saved.taskbarQuotaEnabled, false);
+  assert.equal(store.store.taskbarQuotaEnabled, false);
+
+  saved = setSettings(null, { taskbarQuotaEnabled: 'true' });
+  assert.equal(saved.taskbarQuotaEnabled, false);
+  assert.equal(store.store.taskbarQuotaEnabled, false);
+});
+
 test('renderer settings model exposes enabledProviders as editable state', () => {
   const types = fs.readFileSync('src/renderer/types.ts', 'utf8');
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
+  const app = fs.readFileSync('src/renderer/App.tsx', 'utf8');
 
   assert.match(types, /enabledProviders: Array<'claude' \| 'codex' \| 'antigravity'>/);
   assert.match(types, /quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>/);
   assert.match(types, /quotaTargetOrder: string\[\]/);
+  assert.match(types, /taskbarQuotaEnabled: boolean/);
+  assert.match(types, /quotaTargetAbbreviations: Partial<Record<string, string>>/);
   assert.match(types, /antigravityQuotaDurationPaceEnabled: boolean/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
   assert.match(settingsView, /'enabledProviders'/);
   assert.match(settingsView, /'quotaTargetModes'/);
   assert.match(settingsView, /'quotaTargetOrder'/);
+  assert.match(settingsView, /'taskbarQuotaEnabled'/);
+  assert.match(settingsView, /'quotaTargetAbbreviations'/);
   assert.match(settingsView, /'antigravityQuotaDurationPaceEnabled'/);
   assert.match(settingsView, /Antigravity quota pace/);
+  assert.match(app, /taskbarQuotaEnabled: false/);
+  assert.match(app, /quotaTargetAbbreviations: \{\}/);
   assert.doesNotMatch(settingsView, /'plan'/);
   assert.doesNotMatch(settingsView, /'provider'/);
 });
@@ -107,6 +186,10 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /<SectionHeader label="Providers" \/>/);
   assert.doesNotMatch(settingsView, /<SectionHeader label="Tracking" \/>/);
   assert.match(settingsView, /Quota display/);
+  assert.match(settingsView, /Taskbar mini quota display/);
+  assert.match(settingsView, /Shows fixed 5h \/ 1w quota rows inside the Windows taskbar when supported/);
+  assert.match(settingsView, /setQuotaTargetAbbreviation/);
+  assert.match(settingsView, /normalizeQuotaTargetAbbreviationInput/);
   assert.match(settingsView, /Rich/);
   assert.match(settingsView, /Simple/);
   assert.match(settingsView, /None/);
@@ -144,6 +227,8 @@ test('quota display target ordering controls are placed after display mode contr
 
   assert.notEqual(targetStart, -1);
   assert.notEqual(targetEnd, -1);
+  assert.ok(targetBody.indexOf('aria-label={`Taskbar abbreviation for ${target.label}`}') < targetBody.indexOf("(['rich', 'simple', 'none'] as const).map"));
+  assert.ok(targetBody.indexOf('value={s.quotaTargetAbbreviations?.[target.id] ?? \'\'}') < targetBody.indexOf("(['rich', 'simple', 'none'] as const).map"));
   assert.ok(targetBody.indexOf("(['rich', 'simple', 'none'] as const).map") < targetBody.indexOf('title="Move up"'));
   assert.ok(targetBody.indexOf('title="Move up"') < targetBody.indexOf('title="Move down"'));
 });

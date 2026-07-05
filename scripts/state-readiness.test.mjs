@@ -290,11 +290,16 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(mainSource, /widgetWindow\.setAlwaysOnTop\(true\)/);
   assert.match(appSource, /handleToggleCompactWidget/);
   assert.match(appSource, /compactWidgetEnabled: !state\.settings\.compactWidgetEnabled/);
+  assert.match(appSource, /handleToggleTaskbarQuota/);
+  assert.match(appSource, /taskbarQuotaEnabled: !state\.settings\.taskbarQuotaEnabled/);
   assert.match(appSource, /compactWidgetWaitingAnimationEnabled: next\.settings\?\.compactWidgetWaitingAnimationEnabled === true/);
   assert.match(appSource, /normalizeQuotaTargetOrder/);
   assert.match(mainViewSource, /PictureInPicture2/);
+  assert.match(mainViewSource, /PanelBottom/);
   assert.match(mainViewSource, /aria-pressed=\{compactWidgetEnabled\}/);
   assert.match(mainViewSource, /Show floating Quota Pace widget/);
+  assert.match(mainViewSource, /aria-pressed=\{taskbarQuotaEnabled\}/);
+  assert.match(mainViewSource, /Show taskbar mini quota display/);
   assert.match(mainViewSource, /quotaSourceBadgeToneStyle/);
   const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   assert.match(stateManagerSource, /return normalizeSettings\(this\.store\.store\)/);

@@ -92,6 +92,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 - `provider checkboxes` for Claude Code, Codex, Antigravity, or any combination.
 - Provider adapters live under `src/main/providers/` so future providers can join the same quota/session/usage shape.
 - Live Claude Code, Codex, and Antigravity quota cards with reset windows.
+- Optional draggable Windows taskbar mini display for fixed 5H and 1W quota rows with transparent, taskbar-background-aware rendering.
 - Active and recent session tracking from local provider data.
 - Today and all-time token, cost, cache, model, and call summaries.
 - Activity heatmaps, rhythm charts, model usage, and tool breakdowns.

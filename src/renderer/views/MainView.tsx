@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
-import { PictureInPicture2 } from 'lucide-react';
+import { PanelBottom, PictureInPicture2 } from 'lucide-react';
 import { AppState, ProviderQuotaSource, ProviderQuotaStatus, SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtRelative, modelColor, quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
@@ -27,6 +27,7 @@ interface Props {
   onRefresh: () => void;
   onScrollActivity: () => void;
   onToggleCompactWidget: () => void;
+  onToggleTaskbarQuota: () => void;
 }
 
 type NavView = 'settings' | 'notifications' | 'help';
@@ -477,10 +478,12 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   state,
   onQuit,
   onToggleCompactWidget,
+  onToggleTaskbarQuota,
 }: {
   state: AppState;
   onQuit: () => void;
   onToggleCompactWidget: () => void;
+  onToggleTaskbarQuota: () => void;
 }) {
   const C = useTheme();
   const {
@@ -496,6 +499,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   } = state;
   const { currency, usdToKrw } = settings;
   const compactWidgetEnabled = settings.compactWidgetEnabled === true;
+  const taskbarQuotaEnabled = settings.taskbarQuotaEnabled === true;
   const enabledProviderList = settings.enabledProviders;
   const enabledProviders = new Set(enabledProviderList);
   const showClaudeUsage = enabledProviders.has('claude');
@@ -595,6 +599,31 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
           >
             <PictureInPicture2 size={13} strokeWidth={2.1} aria-hidden="true" />
             {compactWidgetEnabled && (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  top: 3,
+                  right: 3,
+                  width: 4,
+                  height: 4,
+                  borderRadius: 999,
+                  background: C.active,
+                  boxShadow: `0 0 0 2px ${C.headerBg}`,
+                }}
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onToggleTaskbarQuota}
+            aria-label={taskbarQuotaEnabled ? 'Hide taskbar mini quota display' : 'Show taskbar mini quota display'}
+            aria-pressed={taskbarQuotaEnabled}
+            title={taskbarQuotaEnabled ? 'Hide taskbar mini quota display' : 'Show taskbar mini quota display'}
+            style={headerIconButtonStyle(taskbarQuotaEnabled, C)}
+          >
+            <PanelBottom size={13} strokeWidth={2.1} aria-hidden="true" />
+            {taskbarQuotaEnabled && (
               <span
                 aria-hidden="true"
                 style={{
@@ -1481,7 +1510,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
   );
 });
 
-export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActivity, onToggleCompactWidget }: Props) {
+export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActivity, onToggleCompactWidget, onToggleTaskbarQuota }: Props) {
   const C = useTheme();
   const { sessions, usage, settings } = state;
   const { currency, usdToKrw } = settings;
@@ -1577,7 +1606,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
       <RenderErrorBoundary label="Header Metrics">
-        <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} />
+        <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} onToggleTaskbarQuota={onToggleTaskbarQuota} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
         {state.usageLedgerNeedsRebuild && (

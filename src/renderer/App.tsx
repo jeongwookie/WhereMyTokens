@@ -74,6 +74,8 @@ const DEFAULT_STATE: AppState = {
     hiddenProjects: [], excludedProjects: [],
     quotaTargetModes: {},
     quotaTargetOrder: [],
+    taskbarQuotaEnabled: false,
+    quotaTargetAbbreviations: {},
     antigravityQuotaDurationPaceEnabled: false,
     compactWidgetEnabled: false, compactWidgetWaitingAnimationEnabled: false, compactWidgetBounds: null,
   },
@@ -378,6 +380,18 @@ function normalizeQuotaTargetOrder(value: unknown): AppState['settings']['quotaT
   return order;
 }
 
+function normalizeQuotaTargetAbbreviations(value: unknown): AppState['settings']['quotaTargetAbbreviations'] {
+  const record = recordOrNull(value);
+  if (!record) return {};
+  const abbreviations: AppState['settings']['quotaTargetAbbreviations'] = {};
+  for (const [targetId, abbreviation] of Object.entries(record)) {
+    if (!isQuotaTargetId(targetId) || typeof abbreviation !== 'string') continue;
+    const normalized = abbreviation.trim().toUpperCase();
+    if (/^[A-Z0-9]{1,3}$/.test(normalized)) abbreviations[targetId] = normalized;
+  }
+  return abbreviations;
+}
+
 function normalizeStateFreshness(value: unknown, initialRefreshComplete: boolean): AppState['stateFreshness'] {
   if (value === 'empty' || value === 'restored' || value === 'fresh') return value;
   return initialRefreshComplete ? 'fresh' : 'empty';
@@ -529,6 +543,8 @@ function normalizeState(next: AppState): AppState {
       excludedProjects: arrayOrEmpty(next.settings?.excludedProjects),
       quotaTargetModes: normalizeQuotaTargetModes(next.settings?.quotaTargetModes),
       quotaTargetOrder: normalizeQuotaTargetOrder(next.settings?.quotaTargetOrder),
+      taskbarQuotaEnabled: next.settings?.taskbarQuotaEnabled === true,
+      quotaTargetAbbreviations: normalizeQuotaTargetAbbreviations(next.settings?.quotaTargetAbbreviations),
       antigravityQuotaDurationPaceEnabled: next.settings?.antigravityQuotaDurationPaceEnabled === true,
       compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,
       compactWidgetWaitingAnimationEnabled: next.settings?.compactWidgetWaitingAnimationEnabled === true,
@@ -926,6 +942,11 @@ export default function App() {
     setState(prev => ({ ...prev, settings: updated }));
   }, [state.settings.compactWidgetEnabled]);
 
+  const handleToggleTaskbarQuota = useCallback(async () => {
+    const updated = await window.wmt.setSettings({ taskbarQuotaEnabled: !state.settings.taskbarQuotaEnabled });
+    setState(prev => ({ ...prev, settings: updated }));
+  }, [state.settings.taskbarQuotaEnabled]);
+
   const handleQuit = useCallback(() => {
     window.wmt.quit().catch(() => window.close());
   }, []);
@@ -1003,6 +1024,7 @@ export default function App() {
           onRefresh={refresh}
           onScrollActivity={handleScrollActivity}
           onToggleCompactWidget={handleToggleCompactWidget}
+          onToggleTaskbarQuota={handleToggleTaskbarQuota}
         />
       </RenderErrorBoundary>
     </ThemeProvider>

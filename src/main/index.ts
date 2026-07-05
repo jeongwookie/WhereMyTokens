@@ -9,6 +9,7 @@ import { initOAuthRefresh } from './oauthRefresh';
 import type { WindowStats } from './usageWindows';
 import type { ProviderId, ProviderQuotaWindow } from './providers/types';
 import { compactWidgetSize } from './compactWidgetSizing';
+import { createTaskbarQuotaHelperManager } from './taskbarQuotaHelper';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -35,6 +36,9 @@ type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
 const POPUP_MARGIN = 8;
+const taskbarQuotaHelper = createTaskbarQuotaHelperManager({
+  openDashboard: () => showPopup('main'),
+});
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
     { name: 'process', emitter: process },
@@ -631,6 +635,7 @@ function updateTray(state: AppState) {
 
   queueRendererStateUpdate(state);
   sendWidgetStateUpdate(state);
+  taskbarQuotaHelper.syncTaskbarQuotaHelper(state);
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
 }
 
@@ -693,6 +698,7 @@ app.whenReady().then(() => {
     applySettingsChange: () => {
       manager.applySettingsChange();
       applyRuntimeSettings();
+      taskbarQuotaHelper.syncTaskbarQuotaHelper(manager.getState());
     },
     rebuildUsageLedger: () => manager.rebuildUsageLedger(),
     getDebugMemSnapshot: () => manager.getDebugMemSnapshot('ipc'),
@@ -709,7 +715,10 @@ app.whenReady().then(() => {
   popupWindow = createPopupWindow();
   manager.start();
   syncCompactWidget();
-  app.once('before-quit', () => manager.stop());
+  app.once('before-quit', () => {
+    taskbarQuotaHelper.stopTaskbarQuotaHelper();
+    manager.stop();
+  });
 
   // Show popup on first launch (after renderer is ready)
   popupWindow.once('ready-to-show', () => showPopup());
@@ -773,4 +782,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => { /* tray app: do not quit */ });
 app.on('second-instance', () => showPopup());
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  taskbarQuotaHelper.stopTaskbarQuotaHelper();
+  globalShortcut.unregisterAll();
+});
