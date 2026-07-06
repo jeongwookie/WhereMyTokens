@@ -231,11 +231,6 @@ function normalizeQuotaGroupSpec(value: unknown): ProviderQuotaGroupSpec | null 
   const windowKeys = Array.isArray(record.windowKeys)
     ? record.windowKeys.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : [];
-  // Empty windowKeys is now legitimate: a signal-carrying group like `resets` (CODEX RESETS)
-  // has no percentage windows. Do NOT reject it here — the renderer would otherwise drop the
-  // group on every IPC update and the settings row would vanish in production. Downstream
-  // hasGroupSignal (quotaDisplayModels.ts) gates whether an empty-windowKeys group renders,
-  // mirroring the main-side buildCodexQuotaDisplayMetadata which emits it with windowKeys: [].
   if (!key || !label || !isQuotaDisplayMode(record.defaultMode)) return null;
   return {
     key,
@@ -311,10 +306,15 @@ function normalizeModelQuota(value: unknown): ProviderModelQuota | null {
 function normalizeResetCredit(value: unknown): ProviderResetCredit | null {
   const r = recordOrNull(value);
   if (!r) return null;
+  const hasExpiry = Object.prototype.hasOwnProperty.call(r, 'expiresAtUtc');
+  const expiresAtUtc = typeof r.expiresAtUtc === 'string' && Number.isFinite(Date.parse(r.expiresAtUtc))
+    ? r.expiresAtUtc
+    : hasExpiry && r.expiresAtUtc === null ? null : undefined;
+  if (expiresAtUtc === undefined) return null;
   return {
-    idSuffix: typeof r.idSuffix === 'string' ? r.idSuffix : null,
+    idSuffix: null,
     status: typeof r.status === 'string' ? r.status : 'available',
-    expiresAtUtc: typeof r.expiresAtUtc === 'string' ? r.expiresAtUtc : null,
+    expiresAtUtc,
   };
 }
 
@@ -324,13 +324,21 @@ function normalizeResetCredits(value: unknown): ProviderResetCreditsData | null 
   const credits = Array.isArray(r.credits)
     ? r.credits.map(normalizeResetCredit).filter((c): c is ProviderResetCredit => !!c)
     : [];
+  const availableCount = typeof r.availableCount === 'number' && Number.isFinite(r.availableCount)
+    ? Math.max(0, Math.round(r.availableCount))
+    : credits.length;
+  const countOnly = r.countOnly === true || availableCount !== credits.length;
+  const publicCredits = countOnly ? [] : credits;
+  const totalEarnedCount = typeof r.totalEarnedCount === 'number' && Number.isFinite(r.totalEarnedCount)
+    ? Math.max(0, Math.round(r.totalEarnedCount))
+    : 0;
   return {
-    credits,
-    availableCount: typeof r.availableCount === 'number' && Number.isFinite(r.availableCount) ? r.availableCount : credits.length,
-    totalEarnedCount: typeof r.totalEarnedCount === 'number' && Number.isFinite(r.totalEarnedCount) ? r.totalEarnedCount : 0,
+    credits: publicCredits,
+    availableCount: countOnly ? availableCount : publicCredits.length,
+    totalEarnedCount,
     checkedAt: typeof r.checkedAt === 'number' && Number.isFinite(r.checkedAt) ? r.checkedAt : 0,
-    countOnly: r.countOnly === true,
-    source: r.source === 'cache' ? 'cache' : 'api',
+    countOnly,
+    source: r.source === 'cache' ? 'cache' : r.source === 'usage' ? 'usage' : 'api',
     status: normalizeQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
   };
 }

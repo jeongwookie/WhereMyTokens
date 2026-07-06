@@ -282,7 +282,7 @@ export interface ProviderResetCreditsData {
   totalEarnedCount: number;
   checkedAt: number;
   countOnly: boolean;
-  source: 'api' | 'cache';
+  source: 'api' | 'cache' | 'usage';
   status: ProviderQuotaStatus;
 }
 

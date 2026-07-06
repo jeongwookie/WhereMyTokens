@@ -16,9 +16,11 @@ import { limitDataState, limitSourceDisplay } from '../limitDisplay';
 import {
   buildQuotaDisplayModels,
   buildRichCardRows,
+  quotaGroupId,
   creditUrgencyBucket,
   formatCreditDuration,
   CreditUrgency,
+  QuotaDisplayRichCardViewModel,
   QuotaDisplayGroupViewModel,
   QuotaDisplayRowViewModel,
   ResetCreditsViewModel,
@@ -37,6 +39,7 @@ type NavView = 'settings' | 'notifications' | 'help';
 type ProviderId = AppState['settings']['enabledProviders'][number];
 type HeaderStatusTone = 'warning' | 'danger';
 type HeaderStatus = { label: string; title: string; tone: HeaderStatusTone };
+const RESET_CREDITS_TOOLTIP_ID = 'codex-reset-credits-tooltip';
 type SessionListItem =
   | { type: 'session'; session: SessionInfo }
   | {
@@ -260,6 +263,8 @@ function buildCodexHeaderStatus(args: {
       return { label: 'Codex limited', title: codexError || 'Codex usage endpoint returned HTTP 429.', tone: 'warning' };
     case 'schema changed':
       return { label: 'Codex schema', title: codexError || 'Codex usage response changed shape.', tone: 'danger' };
+    case 'unsupported endpoint':
+      return { label: 'Codex endpoint', title: codexError || 'Custom Codex base URLs are not monitored for token safety.', tone: 'warning' };
     case 'local log':
       return { label: 'Codex local', title: codexError || 'Codex credentials were not found. Showing local log estimates only.', tone: 'warning' };
     case 'auth failed':
@@ -898,46 +903,146 @@ function urgencyColor(urgency: CreditUrgency, C: ReturnType<typeof useTheme>): s
 
 function resetSourceBadge(vm: ResetCreditsViewModel, C: ReturnType<typeof useTheme>) {
   const isApi = vm.source === 'api';
+  const isUsageCount = vm.source === 'usage';
+  const degraded = vm.stale || vm.errored || vm.status.code !== 'ok';
+  const warningColor = C.bgCard === '#ffffff' ? '#6f3d00' : C.waiting;
+  const color = degraded ? warningColor : isUsageCount ? C.accent : isApi ? C.accent : C.barGreen;
+  const label = vm.errored
+    ? 'Error'
+    : vm.status.code === 'rate-limited'
+      ? 'Limited'
+      : degraded
+        ? 'Stale'
+        : vm.countOnly
+          ? (isUsageCount ? 'Usage' : 'Partial')
+          : (isApi ? 'API' : 'Cache');
   return {
-    label: isApi ? 'API' : 'Cache',
-    title: isApi ? 'Reset credits from API' : 'Reset credits from cached data',
+    label,
+    title: vm.countOnly && !vm.errored
+      ? (isUsageCount ? 'Count from live usage; expiry list unavailable' : 'Count-only reset credits; expiry list unavailable')
+      : degraded
+      ? `Reset credits ${isApi ? 'from API' : 'from cached data'}; status: ${vm.status.code}`
+      : isApi ? 'Reset credits from API' : 'Reset credits from cached data',
     style: {
-      background: `${isApi ? C.accent : C.barGreen}18`,
-      color: isApi ? C.accent : C.barGreen,
-      border: `1px solid ${isApi ? C.accent : C.barGreen}3d`,
+      background: degraded && C.bgCard === '#ffffff' ? '#fff3cf' : `${color}18`,
+      color,
+      border: `1px solid ${color}55`,
     },
   };
 }
 
 type ResetTooltipAnchor = { left: number; top: number; width: number };
+type ResetCreditsTooltipProps = {
+  vm: ResetCreditsViewModel;
+  visible?: boolean;
+  anchor?: ResetTooltipAnchor | null;
+  onHoverChange?: (visible: boolean) => void;
+};
 
-function resetTooltipAnchorFromEvent(event: React.MouseEvent<HTMLElement>, frame: HTMLElement | null): ResetTooltipAnchor {
-  const trigger = event.currentTarget.getBoundingClientRect();
+function resetTooltipAnchorFromElement(trigger: HTMLElement, frame: HTMLElement | null): ResetTooltipAnchor {
+  const rect = trigger.getBoundingClientRect();
   const container = frame?.getBoundingClientRect();
   return {
-    left: container?.left ?? trigger.left,
-    top: event.clientY,
-    width: container?.width ?? trigger.width,
+    left: container?.left ?? rect.left,
+    top: rect.bottom,
+    width: container?.width ?? rect.width,
   };
 }
 
-export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm: ResetCreditsViewModel; visible?: boolean; anchor?: ResetTooltipAnchor | null }) {
+function resetTooltipAnchorFromEvent(event: React.MouseEvent<HTMLElement>, frame: HTMLElement | null): ResetTooltipAnchor {
+  return { ...resetTooltipAnchorFromElement(event.currentTarget, frame), top: event.clientY };
+}
+
+function resetStatusSummary(status: ProviderQuotaStatus): string {
+  if (status.label === 'unsupported endpoint') return 'Reset endpoint unsupported';
+  switch (status.code) {
+    case 'no-credentials': return 'Codex login required';
+    case 'unauthorized': return 'Codex login expired';
+    case 'forbidden': return 'Codex access denied';
+    case 'rate-limited': return 'Reset check limited';
+    case 'schema-changed': return 'Reset check changed';
+    case 'timeout':
+    case 'network':
+    case 'http-error':
+      return 'Reset check offline';
+    default:
+      return 'Reset data unavailable';
+  }
+}
+
+function useResetTooltipTrigger<T extends HTMLElement>(frameRef: React.RefObject<T | null>) {
+  const [hovered, setHovered] = useState(false);
+  const [anchor, setAnchor] = useState<ResetTooltipAnchor | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current == null || typeof window === 'undefined') return;
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  }, []);
+  const scheduleClose = useCallback(() => {
+    clearCloseTimer();
+    if (typeof window === 'undefined') {
+      setHovered(false);
+      return;
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      setHovered(false);
+      closeTimerRef.current = null;
+    }, 80);
+  }, [clearCloseTimer]);
+  const showTooltip = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    clearCloseTimer();
+    setAnchor(resetTooltipAnchorFromEvent(event, frameRef.current));
+    setHovered(true);
+  }, [clearCloseTimer, frameRef]);
+  const showTooltipFromFocus = useCallback((event: React.FocusEvent<HTMLElement>) => {
+    clearCloseTimer();
+    setAnchor(resetTooltipAnchorFromElement(event.currentTarget, frameRef.current));
+    setHovered(true);
+  }, [clearCloseTimer, frameRef]);
+  const handleTooltipHover = useCallback((visible: boolean) => {
+    if (visible) {
+      clearCloseTimer();
+      setHovered(true);
+    } else {
+      scheduleClose();
+    }
+  }, [clearCloseTimer, scheduleClose]);
+  useEffect(() => clearCloseTimer, [clearCloseTimer]);
+
+  return {
+    hovered,
+    anchor,
+    handleTooltipHover,
+    tooltipHandlers: {
+      onMouseEnter: showTooltip,
+      onMouseMove: showTooltip,
+      onMouseLeave: scheduleClose,
+      onFocus: showTooltipFromFocus,
+      onBlur: scheduleClose,
+      onClick: showTooltip,
+    },
+  };
+}
+
+export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHoverChange }: ResetCreditsTooltipProps) {
   const C = useTheme();
   const updated = new Date(vm.checkedAt);
-  const updatedLabel = Number.isFinite(updated.getTime()) ? updated.toLocaleTimeString() : 'unknown';
-  const nextExpiryLabel = vm.nextExpiryMs == null ? '—' : formatCreditDuration(vm.nextExpiryMs);
+  const updatedLabel = Number.isFinite(updated.getTime()) ? updated.toLocaleString() : 'unknown';
+  const nextExpiryLabel = vm.countOnly ? 'list unavailable' : vm.nextExpiryMs == null ? '-' : formatCreditDuration(vm.nextExpiryMs);
+  const sourceColor = vm.status.code !== 'ok' || vm.stale ? C.waiting : vm.source === 'api' ? C.accent : C.barGreen;
   const viewportH = typeof window !== 'undefined' ? window.innerHeight : 0;
-  // position:fixed escapes the Plan Usage panel's overflow:hidden (which would otherwise clip an
-  // absolutely-positioned tooltip when the reset row sits near the panel edge). Open below the
-  // pointer. Without an anchor (SSR / static render tests, no getBoundingClientRect) fall
-  // back to an in-flow absolute box so the element still renders in the subtree.
+  const anchoredTop = anchor
+    ? Math.min(Math.max(6, anchor.top + 12), Math.max(6, viewportH - 108))
+    : 0;
   const positionStyle: React.CSSProperties = anchor
-    ? { position: 'fixed', left: anchor.left, width: anchor.width, top: Math.max(6, anchor.top + 12), maxHeight: Math.max(96, viewportH - anchor.top - 18), overflowY: 'auto' }
+    ? { position: 'fixed', left: anchor.left, width: anchor.width, top: anchoredTop, maxHeight: Math.max(96, viewportH - anchoredTop - 8), overflowY: 'auto' }
     : { position: 'absolute', left: 12, right: 12, top: 'calc(100% + 6px)' };
   const shellStyle: React.CSSProperties = {
     ...positionStyle,
     zIndex: 40,
     opacity: visible ? 1 : 0,
+    visibility: visible ? 'visible' : 'hidden',
     pointerEvents: visible ? 'auto' : 'none',
     transition: 'opacity 0.12s ease',
     background: C.bgRow,
@@ -945,41 +1050,51 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm
     borderRadius: 8,
     padding: '10px 12px',
     fontSize: 11,
-    color: C.textMuted,
+    color: C.textDim,
     fontFamily: C.fontMono,
     boxShadow: '0 8px 28px rgba(0,0,0,0.35)',
   };
+  const hoverHandlers = {
+    onMouseEnter: () => onHoverChange?.(true),
+    onMouseLeave: () => onHoverChange?.(false),
+    onFocus: () => onHoverChange?.(true),
+    onBlur: () => onHoverChange?.(false),
+  };
   if (vm.errored) {
     return (
-      <div data-testid="reset-tooltip" style={shellStyle}>
-        <div style={{ fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
+      <div id={RESET_CREDITS_TOOLTIP_ID} role="tooltip" tabIndex={visible ? 0 : -1} aria-hidden={!visible} data-testid="reset-tooltip" style={shellStyle} {...hoverHandlers}>
+        <div style={{ fontWeight: 800, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
           Codex reset credits
         </div>
         <div style={{ display: 'grid', gap: 4 }}>
-          <div>Status <b style={{ color: C.textMuted }}>{vm.status.code}</b></div>
+          <div>Status <b style={{ color: C.text }}>{vm.status.code}</b> · {resetStatusSummary(vm.status)}</div>
           {vm.status.detail && <div>{vm.status.detail}</div>}
-          <div>last update <b style={{ color: C.textMuted }}>{updatedLabel}</b></div>
-          <div>Source <b style={{ color: vm.source === 'api' ? C.accent : C.barGreen }}>{vm.source}</b></div>
+          <div>last update <b style={{ color: C.text }}>{updatedLabel}</b></div>
+          <div>Source <b style={{ color: sourceColor }}>{vm.source}</b></div>
         </div>
       </div>
     );
   }
   return (
-    <div data-testid="reset-tooltip" style={shellStyle}>
-      <div style={{ fontWeight: 800, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
+    <div id={RESET_CREDITS_TOOLTIP_ID} role="tooltip" tabIndex={visible ? 0 : -1} aria-hidden={!visible} data-testid="reset-tooltip" style={shellStyle} {...hoverHandlers}>
+      <div style={{ fontWeight: 800, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
         Codex reset credits
       </div>
-      {/* §8: surface the real reset status/detail whenever the last fetch was not ok — e.g. a 429
-          count-only fallback still shows N available but must reveal it is rate-limited/stale. */}
+      {/* reset fetch가 실패한 count-only fallback도 실제 상태와 상세 사유를 함께 보여준다. */}
       {vm.status.code !== 'ok' && (
-        <div style={{ marginBottom: 7, color: C.textMuted }}>
-          Status <b style={{ color: C.textMuted }}>{vm.status.code}</b>{vm.status.detail ? ` — ${vm.status.detail}` : ''}
+        <div style={{ marginBottom: 7, color: C.textDim }}>
+          Status <b style={{ color: C.text }}>{vm.status.code}</b>{vm.status.detail ? ` - ${vm.status.detail}` : ''}
+        </div>
+      )}
+      {vm.countOnly && (
+        <div data-testid="reset-count-only-note" style={{ marginBottom: 7, color: C.textDim }}>
+          Count-only availability; expiry list unavailable.
         </div>
       )}
       <div style={{ display: 'flex', gap: 14, marginBottom: 8, flexWrap: 'wrap' }}>
         <div>Available<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{vm.availableCount}</b></div>
         <div>Next expires<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{nextExpiryLabel}</b></div>
-        <div>Earned<b style={{ display: 'block', color: C.textMuted, marginTop: 1 }}>{vm.totalEarnedCount}</b></div>
+        <div>Earned<b style={{ display: 'block', color: C.text, marginTop: 1 }}>{vm.totalEarnedCount}</b></div>
       </div>
       {vm.credits.length > 0 && (
         <div style={{ display: 'grid', gap: 4 }}>
@@ -1017,15 +1132,15 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null }: { vm
 
 export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
-  const [hovered, setHovered] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<ResetTooltipAnchor | null>(null);
-  const showTooltip = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchor(resetTooltipAnchorFromEvent(event, frameRef.current));
-    setHovered(true);
-  };
+  const { hovered, anchor, tooltipHandlers, handleTooltipHover } = useResetTooltipTrigger(frameRef);
   const source = resetSourceBadge(vm, C);
-  const countColor = vm.errored || vm.availableCount === 0 ? C.textMuted : urgencyColor(vm.urgency, C);
+  const countColor = vm.errored || vm.availableCount === 0
+    ? C.textMuted
+    : vm.countOnly
+      ? (vm.status.code !== 'ok' ? C.waiting : C.accent)
+      : vm.status.code !== 'ok' ? C.waiting : urgencyColor(vm.urgency, C);
+  const errorTextColor = C.textDim;
   const chipCredits = vm.countOnly || vm.availableCount === 0 || vm.errored
     ? []
     : vm.credits.length > 6
@@ -1036,6 +1151,10 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
   return (
     <div
       ref={frameRef}
+      {...tooltipHandlers}
+      tabIndex={0}
+      aria-label="Codex reset credits details"
+      aria-describedby={RESET_CREDITS_TOOLTIP_ID}
       style={{ position: 'relative', minWidth: 0 }}
     >
       <div
@@ -1067,15 +1186,18 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
         </div>
 
         {vm.errored ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-            <span style={{ color: C.textMuted, fontSize: 12, fontWeight: 800, fontFamily: C.fontMono }}>
-              Reset data unavailable
+          <div
+            data-testid="reset-error-trigger"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6, cursor: 'default' }}
+          >
+            <span style={{ color: errorTextColor, fontSize: 12, fontWeight: 800, fontFamily: C.fontMono }}>
+              {resetStatusSummary(vm.status)}
             </span>
             <span
               title={vm.status.code}
               style={{
                 background: C.bgRow,
-                color: C.textMuted,
+                color: errorTextColor,
                 border: `1px solid ${C.border}`,
                 borderRadius: 4,
                 padding: '2px 6px',
@@ -1093,9 +1215,6 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
               <div
                 data-testid="reset-available-trigger"
                 style={{ fontSize: 30, fontWeight: 800, color: countColor, lineHeight: 1.1, fontFamily: C.fontMono, cursor: 'default' }}
-                onMouseEnter={showTooltip}
-                onMouseMove={showTooltip}
-                onMouseLeave={() => setHovered(false)}
               >
                 {vm.availableCount}
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginLeft: 6 }}>
@@ -1147,31 +1266,39 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
                   </span>
                 )}
               </div>
+            ) : vm.countOnly ? (
+              <div data-testid="reset-count-only-note" style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, marginBottom: 4 }}>
+                Count only · expiry list unavailable
+              </div>
             ) : null}
           </>
         )}
       </div>
-      <ResetCreditsTooltip vm={vm} visible={hovered} anchor={anchor} />
+      <ResetCreditsTooltip vm={vm} visible={hovered} anchor={anchor} onHoverChange={handleTooltipHover} />
     </div>
   );
 }
 
 export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
-  const [hovered, setHovered] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
-  const [anchor, setAnchor] = useState<ResetTooltipAnchor | null>(null);
-  const showTooltip = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchor(resetTooltipAnchorFromEvent(event, frameRef.current));
-    setHovered(true);
-  };
+  const { hovered, anchor, tooltipHandlers, handleTooltipHover } = useResetTooltipTrigger(frameRef);
   const source = resetSourceBadge(vm, C);
-  const countColor = vm.errored || vm.availableCount === 0 ? C.textMuted : urgencyColor(vm.urgency, C);
+  const countColor = vm.errored || vm.availableCount === 0
+    ? C.textMuted
+    : vm.countOnly
+      ? (vm.status.code !== 'ok' ? C.waiting : C.accent)
+      : vm.status.code !== 'ok' ? C.waiting : urgencyColor(vm.urgency, C);
+  const errorTextColor = C.textDim;
 
   return (
     <div
       ref={frameRef}
       data-testid="reset-simple-line"
+      {...tooltipHandlers}
+      tabIndex={0}
+      aria-label="Codex reset credits details"
+      aria-describedby={RESET_CREDITS_TOOLTIP_ID}
       style={{
         position: 'relative',
         display: 'flex',
@@ -1188,15 +1315,18 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
 
       {vm.errored ? (
         <>
-          <span style={{ color: C.textMuted, fontSize: 11, fontFamily: C.fontMono, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Reset data unavailable
+          <span
+            data-testid="reset-error-trigger"
+            style={{ color: errorTextColor, fontSize: 11, fontFamily: C.fontMono, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'default' }}
+          >
+            {resetStatusSummary(vm.status)}
           </span>
           <span
             title={vm.status.code}
             style={{
               marginLeft: 'auto',
               background: C.bgRow,
-              color: C.textMuted,
+              color: errorTextColor,
               border: `1px solid ${C.border}`,
               borderRadius: 4,
               padding: '1px 4px',
@@ -1219,9 +1349,6 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
               <span
                 data-testid="reset-available-trigger"
                 style={{ cursor: 'default' }}
-                onMouseEnter={showTooltip}
-                onMouseMove={showTooltip}
-                onMouseLeave={() => setHovered(false)}
               >
                 <b style={{ fontSize: 13, fontWeight: 800, color: countColor }}>{vm.availableCount}</b>{' '}available
               </span>
@@ -1229,7 +1356,12 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
           </span>
           {vm.nextExpiryMs != null && (
             <span style={{ marginLeft: 'auto', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              next ↻{formatCreditDuration(vm.nextExpiryMs)}
+              next in {formatCreditDuration(vm.nextExpiryMs)}
+            </span>
+          )}
+          {vm.countOnly && vm.availableCount > 0 && (
+            <span data-testid="reset-count-only-note" title="Count-only availability; expiry list unavailable" style={{ marginLeft: vm.nextExpiryMs == null ? 'auto' : 0, fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              count only
             </span>
           )}
         </>
@@ -1251,7 +1383,7 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
       >
         {source.label}
       </span>
-      <ResetCreditsTooltip vm={vm} visible={hovered} anchor={anchor} />
+      <ResetCreditsTooltip vm={vm} visible={hovered} anchor={anchor} onHoverChange={handleTooltipHover} />
     </div>
   );
 }
@@ -1271,7 +1403,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
 }) {
   const C = useTheme();
   const { currency, usdToKrw } = settings;
-  const { richGroups, simpleGroups, extraUsage, resetCredits } = buildQuotaDisplayModels({
+  const { targets, richGroups, simpleGroups, extraUsage, resetCredits } = buildQuotaDisplayModels({
     usage,
     providerQuotas,
     settings,
@@ -1279,27 +1411,106 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     historyWarmupStartsAt,
     formatWarmupEta,
   });
-  const richRows = buildRichCardRows(richGroups);
   const showExtraUsage = !!extraUsage?.isEnabled;
-  // CODEX RESETS is the 3rd card of the Codex group (§9.1/§9.2), NOT the global rich tail — render
-  // it right after the LAST codex rich row so it stays grouped with CODEX 5H/1W even when another
-  // rich provider is present. If codex has no rich window rows, fall back to after all rich rows.
-  const resetRow = resetCredits?.mode === 'rich' ? (
-    <div data-testid="reset-rich-row" style={{ display: 'grid', gridTemplateColumns: '1fr', borderBottom: `1px solid ${C.border}` }}>
-      <ResetCreditsCard vm={resetCredits} />
+  const resetTargetId = quotaGroupId('codex', 'resets');
+  const visibleTargetIds = new Set([...richGroups.map(group => group.id), ...simpleGroups.map(group => group.id)]);
+  const orderedTargetIds = targets
+    .filter(group => group.id === resetTargetId || visibleTargetIds.has(group.id))
+    .map(group => group.id);
+  const richGroupById = new Map(richGroups.map(group => [group.id, group]));
+  const simpleGroupById = new Map(simpleGroups.map(group => [group.id, group]));
+  const richRows = buildRichCardRows(richGroups);
+  const richCards = richRows.map(row => row.cards).flat();
+  const richCardsByGroupId = new Map<string, QuotaDisplayRichCardViewModel[]>();
+  for (const card of richCards) {
+    const cards = richCardsByGroupId.get(card.group.id);
+    if (cards) {
+      cards.push(card);
+    } else {
+      richCardsByGroupId.set(card.group.id, [card]);
+    }
+  }
+  const renderResetEntry = (key: string): React.ReactNode => {
+    if (resetCredits?.mode === 'rich') {
+      return (
+        <div key={key} data-testid="reset-rich-row" style={{ display: 'grid', gridTemplateColumns: '1fr', borderBottom: `1px solid ${C.border}` }}>
+          <ResetCreditsCard vm={resetCredits} />
+        </div>
+      );
+    }
+    if (resetCredits?.mode === 'simple') {
+      return <ResetCreditsSimpleRow key={key} vm={resetCredits} />;
+    }
+    return null;
+  };
+  const renderRichRow = (cards: QuotaDisplayRichCardViewModel[], key: string): React.ReactNode => (
+    <div key={key} data-testid="plan-usage-rich-row" style={{ display: 'grid', gridTemplateColumns: cards.length === 1 ? '1fr' : '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
+      {cards.map((cardView, cardIndex) => {
+        const { group, row: card } = cardView;
+        const source = limitSourceDisplay(card.quota);
+        const accountTooltip = providerQuotas[cardView.provider]?.accountTooltip;
+        return (
+          <TokenStatsCard
+            key={cardView.key}
+            provider={group.label}
+            period={card.label}
+            stats={card.stats}
+            currency={currency}
+            usdToKrw={usdToKrw}
+            limitPct={card.quota.pct}
+            resetMs={card.visualKind === 'percentOnly' ? null : card.quota.resetMs}
+            resetLabel={card.visualKind === 'percentOnly' ? undefined : card.quota.resetLabel}
+            apiConnected={card.apiConnected}
+            limitSourceLabel={source.label}
+            limitSourceTitle={source.title}
+            limitSourceTone={source.tone}
+            limitDataState={limitDataState(card.quota, card.pending)}
+            pendingLimit={card.pending}
+            pendingLimitLabel="Syncing"
+            pendingLimitTitle={card.pendingTitle}
+            cacheMetricTitle={card.cacheMetricTitle}
+            durationMs={card.durationMs}
+            accountTooltip={accountTooltip}
+            hideCost={card.hideCost}
+            hero
+            borderRight={cards.length > 1 && cardIndex === 0}
+          />
+        );
+      })}
     </div>
-  ) : null;
-  const resetSimpleRow = resetCredits?.mode === 'simple' ? <ResetCreditsSimpleRow vm={resetCredits} /> : null;
-  // §9.1: the reset row (rich OR simple) is a Codex-group sibling — anchor BOTH after the last
-  // codex rich row so a simple reset line stays grouped with CODEX 5H/1W instead of being appended
-  // after every other provider's simple groups (§9.3 is the line's shape, §9.1 is its placement).
-  const resetEntry = resetRow ?? resetSimpleRow;
-  const lastCodexRichIdx = richRows.map(row => row.provider).lastIndexOf('codex');
-  // When Codex has no rich row (5H/1W set to simple/none), anchor the reset entry after the Codex
-  // SIMPLE group instead, so it still sits with the Codex group (§9.1) rather than after every
-  // other provider. Only if Codex has no group at all do we use the global fallback.
-  const lastCodexSimpleIdx = simpleGroups.map(group => group.provider).lastIndexOf('codex');
-
+  );
+  const orderedPlanEntries: React.ReactNode[] = [];
+  let pendingRichCards: QuotaDisplayRichCardViewModel[] = [];
+  let richRowIndex = 0;
+  const flushRichCards = () => {
+    while (pendingRichCards.length > 0) {
+      const rowCards = pendingRichCards.splice(0, 2);
+      orderedPlanEntries.push(renderRichRow(rowCards, `quota-rich-row-${richRowIndex++}`));
+    }
+  };
+  for (const targetId of orderedTargetIds) {
+    if (targetId === resetTargetId) {
+      flushRichCards();
+      const entry = renderResetEntry('codex-reset-target');
+      if (entry) orderedPlanEntries.push(entry);
+      continue;
+    }
+    const richGroup = richGroupById.get(targetId);
+    if (richGroup) {
+      pendingRichCards.push(...(richCardsByGroupId.get(richGroup.id) ?? []));
+      continue;
+    }
+    const simpleGroup = simpleGroupById.get(targetId);
+    if (simpleGroup) {
+      flushRichCards();
+      orderedPlanEntries.push(
+        <div key={`simple-${simpleGroup.id}`} data-testid="plan-usage-simple-group" style={{ display: 'grid', gap: 0, borderBottom: `1px solid ${C.border}` }}>
+          <SimpleQuotaGroupBlock group={simpleGroup} />
+        </div>,
+      );
+    }
+  }
+  flushRichCards();
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
@@ -1307,59 +1518,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
       </div>
 
       <div data-testid="plan-usage-body">
-        {richRows.map((richRow, rowIdx) => (
-          <React.Fragment key={`quota-rich-row-${richRow.key}`}>
-          <div data-testid="plan-usage-rich-row" style={{ display: 'grid', gridTemplateColumns: richRow.cards.length === 1 ? '1fr' : '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
-            {richRow.cards.map((cardView, cardIndex) => {
-              const { group, row: card } = cardView;
-              const source = limitSourceDisplay(card.quota);
-              const accountTooltip = providerQuotas[cardView.provider]?.accountTooltip;
-              return (
-                <TokenStatsCard
-                  key={cardView.key}
-                  provider={group.label}
-                  period={card.label}
-                  stats={card.stats}
-                  currency={currency}
-                  usdToKrw={usdToKrw}
-                  limitPct={card.quota.pct}
-                  resetMs={card.visualKind === 'percentOnly' ? null : card.quota.resetMs}
-                  resetLabel={card.visualKind === 'percentOnly' ? undefined : card.quota.resetLabel}
-                  apiConnected={card.apiConnected}
-                  limitSourceLabel={source.label}
-                  limitSourceTitle={source.title}
-                  limitSourceTone={source.tone}
-                  limitDataState={limitDataState(card.quota, card.pending)}
-                  pendingLimit={card.pending}
-                  pendingLimitLabel="Syncing"
-                  pendingLimitTitle={card.pendingTitle}
-                  cacheMetricTitle={card.cacheMetricTitle}
-                  durationMs={card.durationMs}
-                  accountTooltip={accountTooltip}
-                  hideCost={card.hideCost}
-                  hero
-                  borderRight={richRow.cards.length > 1 && cardIndex === 0}
-                />
-              );
-            })}
-          </div>
-          {resetEntry && rowIdx === lastCodexRichIdx && resetEntry}
-          </React.Fragment>
-        ))}
-
-        {/* Codex has no rich AND no simple group to anchor after → render after all rich rows. */}
-        {resetEntry && lastCodexRichIdx === -1 && lastCodexSimpleIdx === -1 && resetEntry}
-
-        {simpleGroups.length > 0 && (
-          <div style={{ display: 'grid', gap: 0, borderBottom: `1px solid ${C.border}` }}>
-            {simpleGroups.map((group, sIdx) => (
-              <React.Fragment key={group.id}>
-                <SimpleQuotaGroupBlock group={group} />
-                {resetEntry && lastCodexRichIdx === -1 && sIdx === lastCodexSimpleIdx && resetEntry}
-              </React.Fragment>
-            ))}
-          </div>
-        )}
+        {orderedPlanEntries}
       </div>
 
       {showExtraUsage && extraUsage && (

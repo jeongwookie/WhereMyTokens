@@ -79,6 +79,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **Unreleased** | TBD | Add Codex reset-credit availability in Plan Usage with Rich/Simple/None display modes, auth-bound cache handling, and clearer stale/error states |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | Jun 22 | Stabilize Trend breakdown imports for short Claude thinking blocks by widening the calibration guard |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | Jun 22 | Fix Claude JSONL discovery so agent logs contribute to usage graphs without adding agent-only session rows |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | Jun 17 | Add clickable Trend breakdowns with provider input/output, thinking/response/tool usage, cache-aware work/billing tokens, and git net-line categories |
@@ -92,6 +93,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 - `provider checkboxes` for Claude Code, Codex, Antigravity, or any combination.
 - Provider adapters live under `src/main/providers/` so future providers can join the same quota/session/usage shape.
 - Live Claude Code, Codex, and Antigravity quota cards with reset windows.
+- Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.
 - Active and recent session tracking from local provider data.
 - Today and all-time token, cost, cache, model, and call summaries.
 - Activity heatmaps, rhythm charts, model usage, and tool breakdowns.
@@ -104,6 +106,8 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 WhereMyTokens reads local provider files and only calls provider usage endpoints for enabled providers. It does not upload session logs, run cloud sync, or ask you to paste API keys.
 
 Claude quota polling uses the Claude Code CLI credential file at `~/.claude/.credentials.json`; Claude Desktop or browser login does not automatically refresh that local CLI credential.
+
+Codex live usage and reset-credit checks use `~/.codex/auth.json` only for direct OpenAI/ChatGPT requests when Codex is enabled. Reset-credit cache stores counts, expiry times, fetch status, source labels, a hashed auth marker, and the auth file modified time.
 
 Antigravity uses local RPC only. It does not use Google OAuth, refresh tokens, Google cloud usage endpoints, or offline database fallback.
 

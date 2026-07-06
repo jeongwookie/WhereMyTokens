@@ -9,11 +9,13 @@ import * as jsonlCacheModule from '../dist/main/jsonlCache.js';
 import rateLimitFetcherModule from '../dist/main/rateLimitFetcher.js';
 import codexUsageFetcherModule from '../dist/main/codexUsageFetcher.js';
 import oauthRefreshModule from '../dist/main/oauthRefresh.js';
+import * as usageLedgerAggregatesModule from '../dist/main/usageLedgerAggregates.js';
 
 const { StateManager } = stateManagerModule;
 const { JsonlCache } = jsonlCacheModule;
 const { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS } = rateLimitFetcherModule;
-const { CODEX_USAGE_CACHE_SCHEMA_VERSION } = codexUsageFetcherModule;
+const { CODEX_USAGE_CACHE_SCHEMA_VERSION, getCodexAuthIdentityHash } = codexUsageFetcherModule;
+const { emptyUsageLedgerSnapshot } = usageLedgerAggregatesModule;
 const originalFetchApiUsagePct = rateLimitFetcherModule.fetchApiUsagePct;
 const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 const originalCodexHome = process.env.CODEX_HOME;
@@ -35,6 +37,17 @@ function makeStore(overrides = {}) {
     },
   };
   return store;
+}
+
+function isolateUsageLedger(manager) {
+  const snapshot = emptyUsageLedgerSnapshot();
+  manager.usageLedgerStore = {
+    getSnapshot: () => snapshot,
+    replaceSnapshot: () => {},
+    compact: () => snapshot,
+    reset: () => {},
+  };
+  return manager;
 }
 
 function refreshClaudeQuota(manager, force = true) {
@@ -84,7 +97,10 @@ function withTempCodexAuth() {
     },
   }));
   process.env.CODEX_HOME = dir;
-  return fs.statSync(path.join(dir, 'auth.json')).mtimeMs;
+  return {
+    authMtimeMs: fs.statSync(path.join(dir, 'auth.json')).mtimeMs,
+    authIdentityHash: getCodexAuthIdentityHash(),
+  };
 }
 
 test.afterEach(() => {
@@ -373,10 +389,13 @@ test('malformed Codex local-log rate limits are clamped or dropped', () => {
 });
 
 test('Codex live usage overrides stale local-log rate limits', () => {
+  const { authMtimeMs, authIdentityHash } = withTempCodexAuth();
   const manager = new StateManager(makeStore(), () => {});
   const now = Date.now();
   manager.codexUsageConnected = true;
   manager.codexUsagePctStoredAt = now;
+  manager.codexUsageAuthMtimeMs = authMtimeMs;
+  manager.codexUsageAuthIdentityHash = authIdentityHash;
   manager.codexUsagePct = {
     h5Available: true,
     weekAvailable: true,
@@ -413,12 +432,13 @@ test('Codex live usage overrides stale local-log rate limits', () => {
 });
 
 test('cached Codex live usage is used before local logs and ages after startup', () => {
-  const authMtimeMs = withTempCodexAuth();
+  const { authMtimeMs, authIdentityHash } = withTempCodexAuth();
   const manager = new StateManager(makeStore({
     _cachedCodexUsagePct: {
       schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
       storedAt: Date.now() - 10_000,
       authMtimeMs,
+      authIdentityHash,
       h5Available: true,
       weekAvailable: true,
       h5Pct: 5,
@@ -444,12 +464,13 @@ test('cached Codex live usage is used before local logs and ages after startup',
 });
 
 test('legacy Codex live usage cache schema is discarded on startup', () => {
-  const authMtimeMs = withTempCodexAuth();
+  const { authMtimeMs, authIdentityHash } = withTempCodexAuth();
   const store = makeStore({
     _cachedCodexUsagePct: {
       schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION - 1,
       storedAt: Date.now() - 10_000,
       authMtimeMs,
+      authIdentityHash,
       h5Available: true,
       weekAvailable: true,
       h5Pct: 100,
@@ -506,7 +527,7 @@ test('expired Codex live cache falls back to fresh local-log windows', () => {
 });
 
 test('offline live fallback also drives Claude usage windows', () => {
-  const manager = new StateManager(makeStore(), () => {});
+  const manager = isolateUsageLedger(new StateManager(makeStore(), () => {}));
   const now = Date.now();
   manager.apiConnected = false;
   manager.apiUsagePct = {
@@ -1101,7 +1122,7 @@ test('usage scans include Claude agent logs without expanding visible startup se
 
 test('all-time session count comes from usage summaries instead of current UI rows', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
-  const manager = new StateManager(makeStore(), () => {});
+  const manager = isolateUsageLedger(new StateManager(makeStore(), () => {}));
   const now = Date.now();
   const aggregate = (requestCount) => ({
     requestCount,
@@ -1169,7 +1190,7 @@ test('all-time session count comes from usage summaries instead of current UI ro
 });
 
 test('all-time session count follows enabled providers for summary fallback', () => {
-  const manager = new StateManager(makeStore(), () => {});
+  const manager = isolateUsageLedger(new StateManager(makeStore(), () => {}));
   const settings = {
     ...manager.getState().settings,
     enabledProviders: ['claude'],

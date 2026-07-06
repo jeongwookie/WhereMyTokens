@@ -49,7 +49,9 @@ export interface ProviderContext {
   prioritySourceIds: Set<string>;
   includeFullHistory: boolean;
   force: boolean;
-  /** When true, fetchCodexQuota skips the dedicated reset-credits GET (reset cooldown active); usage GET still runs. */
+  /** true이면 Codex usage GET을 건너뛰고 reset credits만 갱신한다. */
+  skipCodexUsage?: boolean;
+  /** true이면 reset credits 전용 GET만 건너뛴다. usage GET은 계속 실행된다. */
   skipCodexResetCredits?: boolean;
 }
 
@@ -163,7 +165,7 @@ export interface ProviderResetCreditsData {
   totalEarnedCount: number;
   checkedAt: number;
   countOnly: boolean;
-  source: 'api' | 'cache';
+  source: 'api' | 'cache' | 'usage';
   status: ProviderQuotaStatus;   // public status shape (connected/code/label/detail)
 }
 

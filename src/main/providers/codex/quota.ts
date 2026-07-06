@@ -16,6 +16,10 @@ export interface CodexProviderQuotaSnapshot extends ProviderQuotaSnapshot {
   status: CodexUsageStatus;
   usage: CodexUsagePct | null;
   authMtimeMs: number | null;
+  authIdentityHash: string | null;
+  resetAuthMtimeMs: number | null;
+  resetAuthIdentityHash: string | null;
+  usageSkipped?: boolean;
   resetCredits: CodexResetCreditsData | null;
 }
 
@@ -70,41 +74,32 @@ export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'g
 }
 
 export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProviderQuotaSnapshot> {
-  // R2-2: reset has its OWN cooldown. When it is active the StateManager sets
-  // ctx.skipCodexResetCredits so we skip ONLY the dedicated reset GET (usage GET still fires,
-  // keeping its 5-min cadence). resetResult is null in that case and we leave stored data alone.
+  const usageSkipped = ctx.skipCodexUsage === true;
   const [result, resetResult] = await Promise.all([
-    fetchCodexUsagePct(),
+    usageSkipped ? Promise.resolve(null) : fetchCodexUsagePct(),
     ctx.skipCodexResetCredits ? Promise.resolve(null) : fetchCodexResetCredits(),
   ]);
-  const source = quotaSource(result.status);
-  const usage = result.usage;
+  const status: CodexUsageStatus = result?.status ?? { code: 'ok', connected: true, label: '', detail: '' };
+  const source = usageSkipped ? 'cache' : quotaSource(status);
+  const usage = result?.usage ?? null;
 
-  // Reset credits: choose the object AND its status by the reset outcome class (R2-1).
   let resetCredits: CodexResetCreditsData | null = null;
   if (resetResult == null) {
-    // Cooldown skip: do not overwrite; leave stored data untouched (null => StateManager keeps cache).
     resetCredits = null;
   } else if (resetResult.data) {
-    resetCredits = resetResult.data;                       // dedicated endpoint succeeded
+    resetCredits = resetResult.data;
   } else {
     const rs: CodexUsageStatus = resetResult.status;
     const hardReject = rs.code === 'unauthorized' || rs.code === 'forbidden' || rs.code === 'schema-changed';
     const transientOrLimited = rs.code === 'rate-limited' || rs.code === 'network' || rs.code === 'timeout' || rs.code === 'http-error';
     if (rs.code === 'no-credentials') {
-      resetCredits = null;                                  // no creds -> StateManager clears cache via status
+      resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
     } else if (hardReject) {
-      // 401/403/schema-changed: do NOT show a possibly-stale count from usage; surface the error and let
-      // Task 3 evict the reset cache. Carry the failing status, empty list.
       resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
     } else if (transientOrLimited && usage) {
-      // 429 / transient with usage OK: count-only fallback IS allowed, but it carries the REAL failing
-      // status (not a synthetic ok) so codexResetBackoffMs fires (429 Retry-After) and the card renders
-      // stale/error rather than fresh-ok. rawPayload is a free byproduct of the usage fetch.
-      resetCredits = resetCreditsFromUsagePayload(result.rawPayload, ctx.nowMs, rs)
+      resetCredits = resetCreditsFromUsagePayload(result?.rawPayload, ctx.nowMs, rs)
         ?? { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
     } else {
-      // transient without usage, or anything else non-ok: carry the failing status, empty.
       resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
     }
   }
@@ -140,9 +135,13 @@ export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProvid
         }
       : undefined,
     credits: codexCredits(usage),
-    status: result.status,
+    status,
     usage,
-    authMtimeMs: result.authMtimeMs,
+    authMtimeMs: result?.authMtimeMs ?? null,
+    authIdentityHash: result?.authIdentityHash ?? null,
+    resetAuthMtimeMs: resetResult?.authMtimeMs ?? null,
+    resetAuthIdentityHash: resetResult?.authIdentityHash ?? null,
+    usageSkipped,
     resetCredits,
   };
 }

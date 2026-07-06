@@ -103,6 +103,22 @@ test('buildResetCreditsViewModel marks cached data stale and preserves checkedAt
   assert.equal(vm.checkedAt, now - 3600000);   // last successful update reachable for the tooltip
 });
 
+test('buildResetCreditsViewModel treats list/count mismatch as count-only partial data', async () => {
+  const M = await loadModels();
+  const now = Date.parse('2026-07-04T00:00:00Z');
+  const data = {
+    ...resetSnapshot().resetCredits,
+    credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z' }],
+    availableCount: 9,
+    countOnly: false,
+  };
+  const vm = M.buildResetCreditsViewModel(data, now, 'rich');
+  assert.equal(vm.availableCount, 9);
+  assert.equal(vm.countOnly, true);
+  assert.equal(vm.credits.length, 0);
+  assert.equal(vm.nextExpiryMs, null);
+});
+
 test('buildQuotaDisplayModels routes the reset card independently of row-signal groups (F3)', async () => {
   const M = await loadModels();
   const models = M.buildQuotaDisplayModels(baseOptions(resetSnapshot()));
@@ -251,33 +267,51 @@ test('shared tooltip lists Earned + every credit + Updated/Source (F4)', async (
   assert.match(tip, /Source/i);
 });
 
-test('reset credits tooltip trigger is only the N available label and opens below it', async () => {
+test('reset credits tooltip can open from hover, focus, or click surfaces', async () => {
   const mod = await mainView();
   const richHtml = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm: richVM() }));
+  assert.match(richHtml, /tabIndex="0"|tabindex="0"/);
+  assert.match(richHtml, /aria-label="Codex reset credits details"/);
+  assert.match(richHtml, /aria-describedby="codex-reset-credits-tooltip"/);
+  assert.match(richHtml, /role="tooltip"/);
+  assert.match(richHtml, /aria-hidden="true"/);
+  assert.match(richHtml, /visibility:hidden/);
   const richTriggerStart = richHtml.indexOf('data-testid="reset-available-trigger"');
-  assert.notEqual(richTriggerStart, -1, 'rich card exposes a narrow available trigger');
+  assert.notEqual(richTriggerStart, -1, 'rich card still labels the visible count');
   const richTriggerEnd = richHtml.indexOf('</div>', richTriggerStart);
   const richTrigger = richHtml.slice(richTriggerStart, richTriggerEnd);
   assert.match(richTrigger, /4/);
   assert.match(richTrigger, /available/i);
-  assert.doesNotMatch(richTrigger, /next expires/i);
-  assert.doesNotMatch(richTrigger, /7d\s+23h/);
   const richTip = richHtml.slice(richHtml.indexOf('data-testid="reset-tooltip"'));
   assert.match(richTip, /top:calc\(100% \+ 6px\)/);
   assert.doesNotMatch(richTip, /bottom:calc\(100% \+ 6px\)/);
 
   const simpleHtml = renderToStaticMarkup(React.createElement(mod.ResetCreditsSimpleRow, { vm: richVM() }));
+  assert.match(simpleHtml, /tabIndex="0"|tabindex="0"/);
+  assert.match(simpleHtml, /aria-label="Codex reset credits details"/);
+  assert.match(simpleHtml, /aria-describedby="codex-reset-credits-tooltip"/);
   const simpleTriggerStart = simpleHtml.indexOf('data-testid="reset-available-trigger"');
-  assert.notEqual(simpleTriggerStart, -1, 'simple row exposes the same narrow available trigger');
+  assert.notEqual(simpleTriggerStart, -1, 'simple row still labels the visible count');
   const simpleTriggerEnd = simpleHtml.indexOf('</span>', simpleTriggerStart);
   const simpleTrigger = simpleHtml.slice(simpleTriggerStart, simpleTriggerEnd);
   assert.match(simpleTrigger, /4/);
   assert.match(simpleTrigger, /available/i);
-  assert.doesNotMatch(simpleTrigger, /next/i);
-  assert.doesNotMatch(simpleTrigger, /7d\s+23h/);
   const simpleTip = simpleHtml.slice(simpleHtml.indexOf('data-testid="reset-tooltip"'));
   assert.match(simpleTip, /top:calc\(100% \+ 6px\)/);
   assert.doesNotMatch(simpleTip, /bottom:calc\(100% \+ 6px\)/);
+});
+
+test('reset credits tooltip stays hoverable long enough to scroll', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  assert.match(source, /function useResetTooltipTrigger/);
+  assert.match(source, /closeTimerRef/);
+  assert.match(source, /window\.setTimeout\(\(\) => \{/);
+  assert.match(source, /onHoverChange=\{handleTooltipHover\}/);
+  assert.match(source, /onMouseEnter: \(\) => onHoverChange\?\.\(true\)/);
+  assert.match(source, /onMouseLeave: \(\) => onHoverChange\?\.\(false\)/);
+  assert.match(source, /onFocus: \(\) => onHoverChange\?\.\(true\)/);
+  assert.match(source, /onBlur: \(\) => onHoverChange\?\.\(false\)/);
+  assert.match(source, /tabIndex=\{visible \? 0 : -1\}/);
 });
 
 test('rich card state colors: warn=waiting, red=barRed, 0=muted+No resets, errored=muted+unavailable (F4)', async () => {
@@ -299,8 +333,9 @@ test('rich card state colors: warn=waiting, red=barRed, 0=muted+No resets, error
   const errored = bodyRegion(dark(stateVM({ errored: true, urgency: 'muted', availableCount: 0, nextExpiryMs: null, credits: [],
     source: 'cache', status: { connected: false, code: 'unauthorized', label: 'auth failed', detail: 'Codex rejected the saved login.' } })));
   assert.ok(errored.includes(DARK.textMuted), 'errored uses DARK.textMuted');
-  assert.match(errored, /reset data unavailable/i);
+  assert.match(errored, /Codex login expired/i);
   assert.match(errored, /unauthorized/);          // error chip carries the status code
+  assert.match(errored, /data-testid="reset-error-trigger"/);
 });
 
 test('error-state tooltip shows status code + detail + last-successful-update time (F4)', async () => {
@@ -311,10 +346,13 @@ test('error-state tooltip shows status code + detail + last-successful-update ti
   const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm }));
   const tipStart = html.indexOf('data-testid="reset-tooltip"');
   assert.notEqual(tipStart, -1);
+  assert.match(html.slice(0, tipStart), /data-testid="reset-error-trigger"/);
   const tip = html.slice(tipStart);
   assert.match(tip, /unauthorized/);
+  assert.match(tip, /Codex login expired/);
   assert.match(tip, /Codex rejected the saved login\./);
   assert.match(tip, /last update/i);
+  assert.match(tip, /2026/);
 });
 
 test('PlanUsagePanel renders CODEX RESETS as a sibling row AFTER 5H/1W, not nested (F6/R2-5)', async () => {
@@ -418,7 +456,7 @@ test('simple main LINE is single-line count + next + badge with NO per-credit ch
   assert.match(line, /Codex Resets/i);
   assert.match(line, /4/);
   assert.match(line, /available/i);
-  assert.match(line, /next/i);
+  assert.match(line, /next in/i);
   assert.match(line, /7d\s+23h/);                       // only the soonest (next) relative time on the line
   assert.doesNotMatch(line, /13d 20h/);                 // no per-credit chips on the main line
   assert.doesNotMatch(line, /22d 23h/);
@@ -463,6 +501,7 @@ test('settings quota list yields a Codex Resets target with rich/simple/none con
   const row = options.find(o => o.label === 'Codex Resets');
   assert.ok(row, 'Codex Resets settings row present');
   assert.equal(row.defaultMode, 'simple');
+  assert.equal(row.period, 'reset credits');
 });
 
 test('mode none hides the reset card (models.resetCredits null) but the settings row stays', async () => {
@@ -502,8 +541,9 @@ test('simple row errored → "Reset data unavailable" + status code (G1)', async
   const lineStart = html.indexOf('data-testid="reset-simple-line"');
   const tipStart = html.indexOf('data-testid="reset-tooltip"');
   const line = tipStart === -1 ? html.slice(lineStart) : html.slice(lineStart, tipStart);
-  assert.match(line, /reset data unavailable/i);
+  assert.match(line, /Codex login required/i);
   assert.match(line, /no-credentials/);
+  assert.match(line, /data-testid="reset-error-trigger"/);
 });
 
 test('count-only rate-limited fallback shows N available but tooltip reveals the non-ok status (G2/§8)', async () => {
@@ -517,9 +557,52 @@ test('count-only rate-limited fallback shows N available but tooltip reveals the
   const body = html.slice(bodyStart, tipStart === -1 ? undefined : tipStart);
   assert.match(body, /3/);                              // count still shown (fallback)
   assert.match(body, /available/i);
+  assert.match(body, /Limited/);
+  assert.match(body, /Count only/i);
+  assert.match(body, /expiry list unavailable/i);
   const tip = html.slice(tipStart);
   assert.match(tip, /rate-limited/);                    // §8: the real status is visible in the tooltip
   assert.match(tip, /slow down/);                       // detail too
+  assert.match(tip, /list unavailable/);
+  assert.match(tip, /Count-only availability/);
+});
+
+test('count-only usage fallback is visibly marked as Usage in card and simple row', async () => {
+  const mod = await mainView();
+  const vm = stateVM({ countOnly: true, availableCount: 3, credits: [], nextExpiryMs: null,
+    errored: false, stale: false, source: 'usage',
+    status: { connected: true, code: 'ok', label: '', detail: '' } });
+
+  const cardHtml = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.ResetCreditsCard, { vm })));
+  const cardBody = bodyRegion(cardHtml);
+  assert.match(cardBody, /Usage/);
+  assert.match(cardBody, /Count only/i);
+  assert.match(cardBody, /expiry list unavailable/i);
+  assert.ok(cardBody.includes(DARK.accent), 'count-only positive availability uses a visible active color');
+
+  const simpleHtml = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.ResetCreditsSimpleRow, { vm })));
+  const simpleTipStart = simpleHtml.indexOf('data-testid="reset-tooltip"');
+  const simpleLine = simpleTipStart === -1 ? simpleHtml : simpleHtml.slice(0, simpleTipStart);
+  assert.match(simpleLine, /Usage/);
+  assert.match(simpleLine, /count only/i);
+  assert.ok(simpleLine.includes(DARK.accent), 'simple count-only positive availability uses a visible active color');
+});
+
+test('unsupported Codex endpoint status has explicit UI copy', async () => {
+  const mod = await mainView();
+  const vm = stateVM({ errored: true, urgency: 'muted', availableCount: 0, nextExpiryMs: null, credits: [],
+    countOnly: false, source: 'api',
+    status: { connected: false, code: 'schema-changed', label: 'unsupported endpoint', detail: 'Custom Codex base URL is unsupported.' } });
+  const html = renderToStaticMarkup(React.createElement(mod.ResetCreditsCard, { vm }));
+  assert.match(bodyRegion(html), /Reset endpoint unsupported/);
+  assert.match(html, /Custom Codex base URL is unsupported/);
+});
+
+test('header status distinguishes unsupported Codex endpoint from generic schema/offline', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  assert.match(source, /case 'unsupported endpoint'/);
+  assert.match(source, /Codex endpoint/);
+  assert.match(source, /Custom Codex base URLs are not monitored/);
 });
 
 test('reset simple row anchors to the Codex simple group when Codex has no rich row (G5 edge)', async () => {
@@ -537,4 +620,56 @@ test('reset simple row anchors to the Codex simple group when Codex has no rich 
   const bodyStart = html.indexOf('data-testid="plan-usage-body"');
   assert.notEqual(bodyStart, -1);
   assert.match(html.slice(bodyStart), /data-testid="reset-simple-line"/, 'reset simple line still rendered when Codex account is simple');
+});
+
+test('PlanUsagePanel honors Codex Resets target order', async () => {
+  const mod = await mainView();
+  const accountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
+  const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
+  const props = {
+    usage: { byProvider: {}, modelWindows: {} },
+    providerQuotas: { codex: resetSnapshot() },
+    settings: { enabledProviders: ['codex'], quotaTargetModes: { [resetsId]: 'simple', [accountId]: 'rich' }, quotaTargetOrder: [resetsId, accountId], currency: 'USD', usdToKrw: 1300 },
+    historyWarmupPending: false, historyWarmupStartsAt: null,
+  };
+  const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.PlanUsagePanel, props)));
+  const bodyStart = html.indexOf('data-testid="plan-usage-body"');
+  const resetStart = html.indexOf('data-testid="reset-simple-line"', bodyStart);
+  const richStart = html.indexOf('data-testid="plan-usage-rich-row"', bodyStart);
+  assert.ok(resetStart !== -1 && richStart !== -1 && resetStart < richStart, 'reset row follows target order before account');
+});
+
+test('PlanUsagePanel honors mixed simple-reset-rich target order', async () => {
+  const mod = await mainView();
+  const codexAccountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
+  const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
+  const claudeAccountId = mod.quotaGroupId ? mod.quotaGroupId('claude', 'account') : 'claude.group.account';
+  const props = {
+    usage: { byProvider: {}, modelWindows: {} },
+    providerQuotas: {
+      codex: resetSnapshot(),
+      claude: {
+        provider: 'claude', source: 'api', capturedAt: Date.now(),
+        groups: [{ key: 'account', label: 'Claude', windowKeys: ['h5'], defaultMode: 'rich', sortOrder: 0 }],
+        windowDisplay: { h5: { label: '5h' } },
+        windows: { h5: { pct: 11, resetMs: 3600000, source: 'api' } },
+        status: { connected: true, code: 'ok' },
+      },
+    },
+    settings: {
+      enabledProviders: ['codex', 'claude'],
+      quotaTargetModes: { [codexAccountId]: 'simple', [resetsId]: 'simple', [claudeAccountId]: 'rich' },
+      quotaTargetOrder: [codexAccountId, resetsId, claudeAccountId],
+      currency: 'USD',
+      usdToKrw: 1300,
+    },
+    historyWarmupPending: false, historyWarmupStartsAt: null,
+  };
+  const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(mod.PlanUsagePanel, props)));
+  const bodyStart = html.indexOf('data-testid="plan-usage-body"');
+  const simpleStart = html.indexOf('data-testid="plan-usage-simple-group"', bodyStart);
+  const resetStart = html.indexOf('data-testid="reset-simple-line"', bodyStart);
+  const richStart = html.indexOf('data-testid="plan-usage-rich-row"', bodyStart);
+  assert.ok(simpleStart !== -1 && resetStart !== -1 && richStart !== -1);
+  assert.ok(simpleStart < resetStart && resetStart < richStart, 'mixed target order is simple group, reset row, then rich row');
 });

@@ -10,10 +10,13 @@ import codexUsageFetcher from '../dist/main/codexUsageFetcher.js';
 import codexQuota from '../dist/main/providers/codex/quota.js';
 
 const {
+  CODEX_USAGE_CACHE_SCHEMA_VERSION,
   resolveCodexResetCreditsUrl,
   parseCodexResetCreditsPayload,
   resetCreditsFromUsagePayload,
   fetchCodexResetCredits,
+  codexAuthPath,
+  getCodexAuthIdentityHash,
 } = codexUsageFetcher;
 const { fetchCodexQuota } = codexQuota;
 
@@ -87,6 +90,16 @@ function restoreMocks() {
   }
 }
 
+function ensureTempCodexAuth() {
+  if (!process.env.CODEX_HOME || !fs.existsSync(path.join(process.env.CODEX_HOME, 'auth.json'))) {
+    makeTempCodexHome({ tokens: { access_token: 'test-access-token', account_id: 'acct_test' } });
+  }
+  return {
+    authMtimeMs: fs.statSync(codexAuthPath()).mtimeMs,
+    authIdentityHash: getCodexAuthIdentityHash(),
+  };
+}
+
 test.afterEach(() => {
   restoreMocks();
 });
@@ -94,12 +107,11 @@ test.afterEach(() => {
 test('reset-credits URL follows the wham path style', () => {
   assert.equal(resolveCodexResetCreditsUrl('https://chatgpt.com'), 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits');
   assert.equal(resolveCodexResetCreditsUrl('https://chat.openai.com/'), 'https://chat.openai.com/backend-api/wham/rate-limit-reset-credits');
-  assert.equal(resolveCodexResetCreditsUrl('https://example.test'), 'https://example.test/api/codex/rate-limit-reset-credits');
-  // A user may set chatgpt_base_url to the FULL usage endpoint — PRESERVE its route family, never double-append:
+  assert.equal(resolveCodexResetCreditsUrl('https://example.test'), 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits');
   assert.equal(resolveCodexResetCreditsUrl('https://chatgpt.com/backend-api/wham/usage'), 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits');
-  assert.equal(resolveCodexResetCreditsUrl('https://example.test/api/codex/usage'), 'https://example.test/api/codex/rate-limit-reset-credits');
-  // Custom proxy on the /wham/ family WITHOUT /backend-api must stay on /wham/ (not be re-derived to /api/codex/):
-  assert.equal(resolveCodexResetCreditsUrl('https://myproxy.com/wham/usage'), 'https://myproxy.com/wham/rate-limit-reset-credits');
+  assert.equal(resolveCodexResetCreditsUrl('https://chatgpt.com/api/codex'), 'https://chatgpt.com/api/codex/rate-limit-reset-credits');
+  assert.equal(resolveCodexResetCreditsUrl('https://chatgpt.com/api/codex/usage'), 'https://chatgpt.com/api/codex/rate-limit-reset-credits');
+  assert.equal(resolveCodexResetCreditsUrl('https://myproxy.com/wham/usage'), 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits');
 });
 
 test('parses available credits sorted soonest-first, drops non-available', () => {
@@ -117,7 +129,7 @@ test('parses available credits sorted soonest-first, drops non-available', () =>
   assert.equal(data.credits[0].expiresAtUtc, '2026-07-12T11:46:00.000000Z');
   assert.equal(data.credits[1].expiresAtUtc, '2026-07-18T08:36:00.000000Z');
   assert.equal(data.credits[0].status, 'available');
-  assert.equal(data.credits[0].idSuffix, 'aaa');
+  assert.equal(data.credits[0].idSuffix, null);
   assert.equal(data.availableCount, 2);
   assert.equal(data.totalEarnedCount, 5);
   assert.equal(data.countOnly, false);
@@ -138,6 +150,22 @@ test('expires_at variants: trailing Z, explicit offset, and null all parse', () 
   assert.equal(data.credits.length, 3);
   assert.equal(data.credits[data.credits.length - 1].expiresAtUtc, null);
   assert.equal(data.credits[0].expiresAtUtc, '2026-07-10T00:00:00+02:00');
+});
+
+test('invalid expires_at marks the reset-credit payload as schema-changed', () => {
+  const now = Date.parse('2026-07-04T00:00:00Z');
+  assert.equal(parseCodexResetCreditsPayload({
+    available_count: 1,
+    credits: [{ id: 'bad', status: 'available', expires_at: 'not-a-date' }],
+  }, now), null);
+});
+
+test('missing expires_at marks the reset-credit payload as schema-changed', () => {
+  const now = Date.parse('2026-07-04T00:00:00Z');
+  assert.equal(parseCodexResetCreditsPayload({
+    available_count: 1,
+    credits: [{ id: 'missing', status: 'available' }],
+  }, now), null);
 });
 
 test('available_count absent is derived from the available list', () => {
@@ -161,7 +189,7 @@ test('usage-embedded fallback carries the REAL reset status, not a synthetic ok 
   assert.equal(data.credits.length, 0);
   assert.equal(data.status.code, 'rate-limited');       // NOT laundered to ok
   assert.equal(data.status.retryAfterMs, 90_000);
-  assert.equal(data.source, 'api');
+  assert.equal(data.source, 'usage');
 });
 
 test('usage payload without reset-credit field yields no fallback', () => {
@@ -227,6 +255,24 @@ test('fetchCodexResetCredits with no credentials makes no network call', async (
   assert.equal(lastRequestOptions, null);
 });
 
+test('fetchCodexResetCredits rejects non-OpenAI custom base URLs before sending auth headers', async () => {
+  makeTempCodexHome(
+    { tokens: { access_token: 'test-access-token', account_id: 'acct_test' } },
+    'chatgpt_base_url = "https://example.test"',
+  );
+  withHttpResponse(200, {
+    should_not: 'be requested',
+  });
+
+  const result = await fetchCodexResetCredits();
+
+  assert.equal(result.status.code, 'schema-changed');
+  assert.equal(result.status.label, 'unsupported endpoint');
+  assert.equal(result.data, null);
+  assert.equal(lastRequestOptions, null);
+  assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
+});
+
 test('fetchCodexResetCredits 401 classifies unauthorized without leaking token', async () => {
   makeTempCodexHome({ tokens: { access_token: 'test-access-token' } });
   withHttpResponse(401, { error: 'nope' });
@@ -252,6 +298,14 @@ test('fetchCodexResetCredits maps unexpected-shape 200 to schema-changed with re
   assert.equal(result.data, null);
   assert.deepEqual(result.status.responseKeys, ['shape', 'totally']);
   assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
+});
+
+test('fetchCodexResetCredits maps invalid JSON 200 to schema-changed', async () => {
+  makeTempCodexHome({ tokens: { access_token: 'test-access-token' } });
+  withHttpResponse(200, 'not json');
+  const result = await fetchCodexResetCredits();
+  assert.equal(result.status.code, 'schema-changed');
+  assert.equal(result.data, null);
 });
 
 test('fetchCodexResetCredits maps a 404 (endpoint removed/moved) to schema-changed, not http-error (R4-1)', async () => {
@@ -335,21 +389,45 @@ const { normalizeStoredCodexResetCredits, CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSI
 
 test('stored reset-credit cache rejected on auth mtime change or schema mismatch', () => {
   const now = Date.now();
+  const authIdentityHash = 'auth-hash-a';
   const stored = {
     schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
     storedAt: now - 1000,
     authMtimeMs: 123,
+    authIdentityHash,
     data: {
       credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T11:46:00Z' }],
       availableCount: 1, totalEarnedCount: 0, checkedAt: now - 1000, countOnly: false, source: 'api',
       status: { code: 'ok', connected: true, label: '', detail: '' },
     },
   };
-  assert.equal(normalizeStoredCodexResetCredits(stored, 456), null);            // mtime mismatch
-  assert.equal(normalizeStoredCodexResetCredits({ ...stored, schemaVersion: 99 }, 123), null); // schema mismatch
-  const ok = normalizeStoredCodexResetCredits(stored, 123);
+  assert.equal(normalizeStoredCodexResetCredits(stored, 456, authIdentityHash), null);            // mtime mismatch
+  assert.equal(normalizeStoredCodexResetCredits(stored, 123, 'auth-hash-b'), null);               // auth marker mismatch
+  assert.equal(normalizeStoredCodexResetCredits({ ...stored, schemaVersion: 99 }, 123, authIdentityHash), null); // schema mismatch
+  const ok = normalizeStoredCodexResetCredits(stored, 123, authIdentityHash);
   assert.equal(ok?.data.availableCount, 1);
+  assert.equal(ok?.data.credits[0].idSuffix, null);
   assert.equal(ok?.data.credits[0].expiresAtUtc, '2026-07-12T11:46:00Z');
+});
+
+test('stored reset-credit cache rejects count-only data and clamps counts', () => {
+  const now = Date.now();
+  const authIdentityHash = 'auth-hash-a';
+  const stored = {
+    schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+    storedAt: now - 1000,
+    authMtimeMs: 123,
+    authIdentityHash,
+    data: {
+      credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T11:46:00Z' }],
+      availableCount: -1.4, totalEarnedCount: 2.6, checkedAt: now - 1000, countOnly: false, source: 'api',
+      status: { code: 'ok', connected: true, label: '', detail: '' },
+    },
+  };
+  const normalized = normalizeStoredCodexResetCredits(stored, 123, authIdentityHash);
+  assert.equal(normalized?.data.availableCount, 0);
+  assert.equal(normalized?.data.totalEarnedCount, 3);
+  assert.equal(normalizeStoredCodexResetCredits({ ...stored, data: { ...stored.data, countOnly: true } }, 123, authIdentityHash), null);
 });
 
 // --- Step 5b (Task 3): store-level apply path ---
@@ -357,32 +435,75 @@ test('stored reset-credit cache rejected on auth mtime change or schema mismatch
 import stateManagerModule from '../dist/main/stateManager.js';
 const { StateManager } = stateManagerModule;
 
-function fakeStore() {
-  const map = new Map();
+function fakeStore(initial = {}) {
+  const map = new Map(Object.entries(initial));
   return {
     map,
+    store: initial,
     get: (k, fb = null) => (map.has(k) ? map.get(k) : fb),
-    set: (k, v) => { map.set(k, v); },
-    delete: (k) => { map.delete(k); },
+    set(k, v) {
+      map.set(k, v);
+      this.store[k] = v;
+    },
+    delete(k) {
+      map.delete(k);
+      delete this.store[k];
+    },
   };
 }
 
 function codexSnapshot({ usage = true, reset }) {
+  const { authMtimeMs, authIdentityHash } = ensureTempCodexAuth();
   return {
     provider: 'codex', source: 'api', capturedAt: Date.now(),
     groups: [], windowDisplay: {},
     windows: usage ? { h5: { pct: 5, resetMs: 3600000, source: 'api' } } : undefined,
     usage: usage ? { h5Available: true, weekAvailable: false, h5Pct: 5, weekPct: 0, h5ResetMs: 3600000, weekResetMs: null, h5LimitReached: false, weekLimitReached: false, plan: 'pro', credits: null, limitReached: false, rateLimitReachedType: null } : null,
     status: { code: 'ok', connected: true, label: '', detail: '' },
-    authMtimeMs: 111,
+    authMtimeMs,
+    authIdentityHash,
+    resetAuthMtimeMs: authMtimeMs,
+    resetAuthIdentityHash: authIdentityHash,
     resetCredits: reset,
   };
+}
+
+function noCredentialCodexSnapshot() {
+  return {
+    provider: 'codex', source: 'localLog', capturedAt: Date.now(),
+    groups: [], windowDisplay: {},
+    windows: undefined,
+    usage: null,
+    status: { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' },
+    authMtimeMs: null,
+    authIdentityHash: null,
+    resetAuthMtimeMs: null,
+    resetAuthIdentityHash: null,
+    resetCredits: null,
+  };
+}
+
+function seedResetAuth(mgr) {
+  const { authMtimeMs, authIdentityHash } = ensureTempCodexAuth();
+  mgr.codexResetAuthMtimeMs = authMtimeMs;
+  mgr.codexResetAuthIdentityHash = authIdentityHash;
+  mgr.codexResetAttemptAuthMtimeMs = authMtimeMs;
+  mgr.codexResetAttemptAuthIdentityHash = authIdentityHash;
+  return { authMtimeMs, authIdentityHash };
 }
 
 function applyCodex(mgr, snapshot) {
   const seq = (mgr.codexUsageRequestSeq = (mgr.codexUsageRequestSeq ?? 0) + 1);
   mgr.providerQuotaRequestSeqs?.set?.('codex', seq);
   return mgr.applyProviderQuotaSnapshot(snapshot, seq, Date.now());
+}
+
+function suppressSettingsSideEffects(mgr) {
+  mgr.publishState = () => {};
+  mgr.startWatcher = () => {};
+  mgr.clearHistoryWarmup = () => {};
+  mgr.clearGitWarmup = () => {};
+  mgr.requestRefresh = async () => {};
 }
 
 test('reset ok persists _cachedCodexResetCredits; usage cache written independently', () => {
@@ -392,6 +513,197 @@ test('reset ok persists _cachedCodexResetCredits; usage cache written independen
   applyCodex(mgr, codexSnapshot({ usage: true, reset }));
   assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache written');
   assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache written');
+});
+
+test('Codex-disabled startup does not expose or validate persisted Codex quota caches', () => {
+  const store = fakeStore({
+    enabledProviders: ['claude'],
+    _cachedCodexUsagePct: { schemaVersion: 999 },
+    _cachedCodexResetCredits: { schemaVersion: 999 },
+  });
+  const mgr = new StateManager(store, () => {});
+  const quotas = mgr.buildProviderQuotas(Date.now());
+  assert.equal(quotas.codex, undefined);
+  assert.equal(store.map.has('_cachedCodexUsagePct'), true);
+  assert.equal(store.map.has('_cachedCodexResetCredits'), true);
+});
+
+test('startup restored Codex provider quota is stripped until auth-bound cache validates', () => {
+  const resetCredits = {
+    credits: [{ idSuffix: null, status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }],
+    availableCount: 1,
+    totalEarnedCount: 0,
+    checkedAt: Date.now(),
+    countOnly: false,
+    source: 'cache',
+    status: { code: 'ok', connected: false },
+  };
+  const store = fakeStore({
+    enabledProviders: ['codex'],
+    _startupStateSnapshot: {
+      schemaVersion: 5,
+      savedAt: Date.now(),
+      state: {
+        providerQuotas: {
+          codex: {
+            provider: 'codex',
+            source: 'cache',
+            capturedAt: Date.now(),
+            windows: {},
+            resetCredits,
+          },
+        },
+        sessions: [],
+        repoGitStats: {},
+        initialRefreshComplete: true,
+        historyWarmupPending: false,
+        historyWarmupStartsAt: null,
+        codeOutputLoading: false,
+        lastUpdated: Date.now(),
+      },
+    },
+  });
+  const mgr = new StateManager(store, () => {});
+  assert.equal(mgr.getState().providerQuotas.codex, undefined);
+});
+
+test('startup valid auth-bound Codex caches are exposed in initial providerQuotas', () => {
+  makeTempCodexHome({ tokens: { access_token: 'test-access-token', account_id: 'acct_test' } });
+  const { authMtimeMs, authIdentityHash } = ensureTempCodexAuth();
+  const now = Date.now();
+  const store = fakeStore({
+    enabledProviders: ['codex'],
+    _cachedCodexUsagePct: {
+      schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
+      storedAt: now - 1000,
+      authMtimeMs,
+      authIdentityHash,
+      h5Available: true,
+      weekAvailable: false,
+      h5Pct: 12,
+      weekPct: 0,
+      h5ResetMs: 3_600_000,
+      weekResetMs: null,
+      h5LimitReached: false,
+      weekLimitReached: false,
+      plan: 'pro',
+      credits: null,
+      limitReached: false,
+      rateLimitReachedType: null,
+    },
+    _cachedCodexResetCredits: {
+      schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+      storedAt: now - 1000,
+      authMtimeMs,
+      authIdentityHash,
+      data: {
+        credits: [{ idSuffix: 'local', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }],
+        availableCount: 1,
+        totalEarnedCount: 0,
+        checkedAt: now - 1000,
+        countOnly: false,
+        source: 'api',
+        status: { code: 'ok', connected: true, label: '', detail: '' },
+      },
+    },
+  });
+
+  const mgr = new StateManager(store, () => {});
+  const quota = mgr.getState().providerQuotas.codex;
+
+  assert.ok(quota, 'Codex quota is visible before the first refresh');
+  assert.equal(quota.windows.h5.pct, 12);
+  assert.equal(quota.resetCredits.availableCount, 1);
+  assert.equal(quota.resetCredits.source, 'cache');
+  assert.equal(quota.resetCredits.credits[0].idSuffix, null);
+});
+
+test('Codex provider toggle clears usage and reset cooldown timers', () => {
+  const store = fakeStore({ enabledProviders: ['codex'] });
+  const mgr = new StateManager(store, () => {});
+  suppressSettingsSideEffects(mgr);
+  mgr.lastCodexUsageCallMs = Date.now();
+  mgr.lastCodexResetCallMs = Date.now();
+  mgr.codexUsageBackoffMs = 90_000;
+  mgr.codexResetBackoffMs = 90_000;
+
+  store.set('enabledProviders', ['claude']);
+  mgr.applySettingsChange();
+
+  assert.equal(mgr.lastCodexUsageCallMs, 0);
+  assert.equal(mgr.lastCodexResetCallMs, 0);
+  assert.equal(mgr.codexUsageBackoffMs, 0);
+  assert.equal(mgr.codexResetBackoffMs, 0);
+
+  mgr.lastCodexUsageCallMs = Date.now();
+  mgr.lastCodexResetCallMs = Date.now();
+  mgr.codexUsageBackoffMs = 90_000;
+  mgr.codexResetBackoffMs = 90_000;
+
+  store.set('enabledProviders', ['claude', 'codex']);
+  mgr.applySettingsChange();
+
+  assert.equal(mgr.lastCodexUsageCallMs, 0);
+  assert.equal(mgr.lastCodexResetCallMs, 0);
+  assert.equal(mgr.codexUsageBackoffMs, 0);
+  assert.equal(mgr.codexResetBackoffMs, 0);
+});
+
+test('Codex provider toggle preserves auth-bound caches and rehydrates them when re-enabled', () => {
+  makeTempCodexHome({ tokens: { access_token: 'test-access-token', account_id: 'acct_test' } });
+  const { authMtimeMs, authIdentityHash } = ensureTempCodexAuth();
+  const now = Date.now();
+  const store = fakeStore({
+    enabledProviders: ['codex'],
+    _cachedCodexUsagePct: {
+      schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
+      storedAt: now - 1000,
+      authMtimeMs,
+      authIdentityHash,
+      h5Available: true,
+      weekAvailable: false,
+      h5Pct: 22,
+      weekPct: 0,
+      h5ResetMs: 3_600_000,
+      weekResetMs: null,
+      h5LimitReached: false,
+      weekLimitReached: false,
+      plan: 'pro',
+      credits: null,
+      limitReached: false,
+      rateLimitReachedType: null,
+    },
+    _cachedCodexResetCredits: {
+      schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+      storedAt: now - 1000,
+      authMtimeMs,
+      authIdentityHash,
+      data: {
+        credits: [{ idSuffix: null, status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }],
+        availableCount: 1,
+        totalEarnedCount: 0,
+        checkedAt: now - 1000,
+        countOnly: false,
+        source: 'api',
+        status: { code: 'ok', connected: true, label: '', detail: '' },
+      },
+    },
+  });
+  const mgr = new StateManager(store, () => {});
+  suppressSettingsSideEffects(mgr);
+
+  store.set('enabledProviders', ['claude']);
+  mgr.applySettingsChange();
+  assert.ok(store.map.get('_cachedCodexUsagePct'), 'disabled provider does not delete auth-bound usage cache');
+  assert.ok(store.map.get('_cachedCodexResetCredits'), 'disabled provider does not delete auth-bound reset cache');
+  assert.equal(mgr.getState().providerQuotas.codex, undefined);
+
+  store.set('enabledProviders', ['claude', 'codex']);
+  mgr.applySettingsChange();
+  const quota = mgr.getState().providerQuotas.codex;
+  assert.ok(quota, 're-enabled Codex rehydrates trusted cache immediately');
+  assert.equal(quota.windows.h5.pct, 22);
+  assert.equal(quota.resetCredits.availableCount, 1);
 });
 
 test('reset 401 evicts ONLY the reset cache; usage cache intact', () => {
@@ -428,6 +740,59 @@ test('no-credentials clears BOTH caches and zeroes reset backoff', () => {
   assert.equal(store.map.has('_cachedCodexResetCredits'), false);
   assert.equal(store.map.has('_cachedCodexUsagePct'), false);
   assert.equal(mgr.codexResetBackoffMs, 0);
+  assert.equal(mgr.lastCodexUsageCallMs, 0);
+});
+
+test('Codex auth change clears failed-attempt usage and reset backoffs even without a cached sample', () => {
+  const store = fakeStore();
+  makeTempCodexHome({ tokens: { access_token: 'test-access-token-a', account_id: 'acct_a' } });
+  const mgr = new StateManager(store, () => {});
+  const now = Date.now();
+  const first = mgr.beginCodexQuotaRequest(false, now);
+  assert.ok(first);
+  mgr.providerQuotaRequestSeqs.set('codex', first.requestSeq);
+  const unauthorized = { code: 'unauthorized', connected: false, label: 'auth failed', detail: 'rejected' };
+  const reset401 = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: now, countOnly: false, source: 'api', status: unauthorized };
+  mgr.applyProviderQuotaSnapshot({
+    ...codexSnapshot({ usage: false, reset: reset401 }),
+    status: unauthorized,
+    usage: null,
+    windows: undefined,
+  }, first.requestSeq, now);
+
+  assert.equal(mgr.codexUsagePct, null);
+  assert.ok(mgr.codexUsageBackoffMs > 0);
+  assert.ok(mgr.codexResetBackoffMs > 0);
+
+  fs.writeFileSync(path.join(process.env.CODEX_HOME, 'auth.json'), JSON.stringify({ tokens: { access_token: 'test-access-token-b', account_id: 'acct_b' } }));
+  const second = mgr.beginCodexQuotaRequest(false, now + 1000);
+
+  assert.ok(second, 'new auth identity should bypass failed-attempt backoff and min interval');
+  assert.equal(second.skipCodexUsage, false);
+  assert.equal(second.skipCodexResetCredits, false);
+  assert.equal(mgr.codexUsageBackoffMs, 0);
+  assert.equal(mgr.codexResetBackoffMs, 0);
+});
+
+test('Codex auth appearing after no-credentials bypasses the usage min interval', () => {
+  const store = fakeStore();
+  const dir = makeTempCodexHome(null);
+  const mgr = new StateManager(store, () => {});
+  const now = Date.now();
+  const first = mgr.beginCodexQuotaRequest(false, now);
+  assert.ok(first);
+  mgr.providerQuotaRequestSeqs.set('codex', first.requestSeq);
+  mgr.applyProviderQuotaSnapshot(noCredentialCodexSnapshot(), first.requestSeq, now);
+
+  assert.equal(mgr.codexAuthMissingObserved, true);
+  assert.equal(mgr.lastCodexUsageCallMs, 0);
+
+  fs.writeFileSync(path.join(dir, 'auth.json'), JSON.stringify({ tokens: { access_token: 'test-access-token', account_id: 'acct_test' } }));
+  const second = mgr.beginCodexQuotaRequest(false, now + 1000);
+
+  assert.ok(second, 'newly present auth should be admitted immediately');
+  assert.equal(second.skipCodexUsage, false);
+  assert.equal(second.skipCodexResetCredits, false);
 });
 
 test('reset 429 sets reset-specific backoff without touching usage backoff (F1)', () => {
@@ -453,6 +818,30 @@ test('reset cooldown throttles ONLY the reset GET; usage scheduling is independe
   // Usage interval gate must NOT be blocked by the reset backoff: seed lastCodexUsageCallMs older than the interval.
   mgr.lastCodexUsageCallMs = now - (StateManager.CODEX_USAGE_MIN_INTERVAL_MS + 1000);
   assert.notEqual(mgr.beginCodexQuotaRequest(false, now + 1000), null, 'usage request still admitted while reset is cooled down');
+});
+
+test('reset request is admitted even when usage is inside its min interval', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const now = Date.now();
+  mgr.lastCodexUsageCallMs = now;
+  mgr.codexUsageBackoffMs = 0;
+  mgr.codexResetBackoffMs = 0;
+  mgr.lastCodexResetCallMs = 0;
+  const admission = mgr.beginCodexQuotaRequest(false, now + 1000);
+  assert.ok(admission, 'reset-only request admitted');
+  assert.equal(admission.skipCodexUsage, true);
+  assert.equal(admission.skipCodexResetCredits, false);
+});
+
+test('successful reset refreshes are throttled during the reset min interval', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const now = Date.now();
+  const first = mgr.beginCodexQuotaRequest(false, now);
+  assert.ok(first);
+  const second = mgr.beginCodexQuotaRequest(false, now + 1000);
+  assert.equal(second, null, 'usage and reset are both throttled after a fresh reset request');
 });
 
 test('cooldown-skip apply (resetCredits null) leaves stored data + timers untouched (R2-2)', () => {
@@ -488,7 +877,7 @@ test('reset failure does not evict usage cache and vice-versa (independence)', (
 
   const firstPublic = mgr.buildCodexProviderQuota(readAt);
   assert.equal(firstPublic.resetCredits?.credits.length, 1, 'public snapshot carries active reset credits');
-  assert.equal(firstPublic.resetCredits?.credits[0].idSuffix, 'aaa');
+  assert.equal(firstPublic.resetCredits?.credits[0].idSuffix, null);
   assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache written by the initial good usage apply');
   assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache written by the initial good reset apply');
 
@@ -524,10 +913,10 @@ test('reset failure does not evict usage cache and vice-versa (independence)', (
   applyCodex(mgr, usage401);
 
   assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache survives usage 401');
-  assert.equal(mgr.codexResetCredits?.credits[0].idSuffix, 'bbb', 'in-memory reset cache remains after usage 401');
+  assert.equal(mgr.codexResetCredits?.credits[0].idSuffix, null, 'in-memory reset cache remains after usage 401');
   const secondPublic = mgr.buildCodexProviderQuota(readAt);
   assert.equal(secondPublic.resetCredits?.credits.length, 1, 'public snapshot still carries reset credits after usage 401');
-  assert.equal(secondPublic.resetCredits?.credits[0].idSuffix, 'bbb');
+  assert.equal(secondPublic.resetCredits?.credits[0].idSuffix, null);
 });
 
 // --- Task 4: per-tick re-inject + expiry filter + status overlay + sanitizeResetCredits ---
@@ -565,6 +954,7 @@ test('buildCodexProviderQuota re-injects active reset credits onto the PUBLIC sn
   const mgr = new StateManager(store, () => {});
   const now = Date.parse('2026-07-15T00:00:00Z');
   mgr.codexUsageConnected = true;
+  seedResetAuth(mgr);
   mgr.codexResetCreditsStoredAt = now - 1000;
   mgr.codexResetCredits = {
     credits: [
@@ -577,7 +967,7 @@ test('buildCodexProviderQuota re-injects active reset credits onto the PUBLIC sn
   const publicSnap = mgr.buildCodexProviderQuota(now);
   assert.ok(publicSnap.resetCredits, 'resetCredits attached to the rebuilt public snapshot');
   assert.equal(publicSnap.resetCredits.credits.length, 1, 'expired credit filtered at rebuild');
-  assert.equal(publicSnap.resetCredits.credits[0].idSuffix, 'y');
+  assert.equal(publicSnap.resetCredits.credits[0].idSuffix, null);
   assert.equal(publicSnap.resetCredits.availableCount, 1);
   // NOTE (R3-4): do NOT assert the `resets` group here — that group is added in Task 6, later in the
   // task-by-task sequence, so asserting it in Task 4 would fail. Task 4 owns only the `resetCredits`
@@ -589,6 +979,7 @@ test('cached-good list + current-tick reset error overlays stale/error status on
   const mgr = new StateManager(store, () => {});
   const now = Date.parse('2026-07-15T00:00:00Z');
   mgr.codexUsageConnected = true;
+  seedResetAuth(mgr);
   // Last-good cached list (its own status is the OLD ok).
   mgr.codexResetCredits = {
     credits: [{ idSuffix: 'y', status: 'available', expiresAtUtc: '2026-07-20T00:00:00Z' }],
@@ -613,6 +1004,7 @@ test('rebuilt public snapshot emits the PUBLIC resetCredits shape, not the inter
   const mgr = new StateManager(store, () => {});
   const now = Date.parse('2026-07-15T00:00:00Z');
   mgr.codexUsageConnected = true;
+  seedResetAuth(mgr);
   mgr.codexResetCredits = {
     credits: [{ idSuffix: 'y', status: 'available', expiresAtUtc: '2026-07-20T00:00:00Z', profileUserId: 'leaky', title: 'leaky' }],
     availableCount: 1, totalEarnedCount: 0, checkedAt: now - 1000, countOnly: false, source: 'api',
@@ -647,7 +1039,7 @@ test('sanitizeResetCredits validates shape and drops unknown fields', () => {
     injected: 'nope',
   });
   assert.equal(out.credits.length, 2);
-  assert.equal(out.credits[0].idSuffix, 'aaa');
+  assert.equal(out.credits[0].idSuffix, null);
   assert.equal('secret' in out.credits[0], false);
   assert.equal(out.credits[1].idSuffix, null);
   assert.equal(out.availableCount, 2);
@@ -659,6 +1051,116 @@ test('sanitizeResetCredits validates shape and drops unknown fields', () => {
 test('sanitizeResetCredits rejects non-objects', () => {
   assert.equal(sanitizeResetCredits(null), null);
   assert.equal(sanitizeResetCredits('x'), null);
+});
+
+test('reset-only no-credentials clears stale usage cache immediately', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  assert.ok(store.map.get('_cachedCodexUsagePct'));
+
+  const resetNoCred = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' } };
+  applyCodex(mgr, { ...codexSnapshot({ usage: false, reset: resetNoCred }), usageSkipped: true, source: 'cache' });
+
+  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
+  assert.equal(mgr.codexUsagePct, null);
+  assert.equal(mgr.codexUsageConnected, false);
+});
+
+test('reset-only schema-changed clears stale usage cache immediately', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  assert.ok(store.map.get('_cachedCodexUsagePct'));
+
+  const resetSchema = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'schema-changed', connected: false, label: 'unsupported endpoint', detail: 'Custom endpoint unsupported.' } };
+  applyCodex(mgr, { ...codexSnapshot({ usage: false, reset: resetSchema }), usageSkipped: true, source: 'cache' });
+
+  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
+  assert.equal(mgr.codexUsagePct, null);
+  assert.equal(mgr.codexUsageConnected, false);
+});
+
+test('in-memory Codex usage is discarded when auth identity changes', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
+  assert.ok(mgr.getAgedCodexUsagePct(Date.now()), 'usage sample is initially visible');
+
+  fs.writeFileSync(path.join(process.env.CODEX_HOME, 'auth.json'), JSON.stringify({ tokens: { access_token: 'test-access-token-b', account_id: 'acct_b' } }));
+
+  assert.equal(mgr.getAgedCodexUsagePct(Date.now()), null);
+  assert.equal(mgr.codexUsagePct, null);
+  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
+});
+
+test('fresh count-only fallback wins over older reset list and survives reset-skipped usage ticks', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const goodList = { credits: [{ idSuffix: 'old', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now() - 120_000, countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: goodList }));
+
+  const countOnly = { credits: [], availableCount: 3, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: true, source: 'cache', status: { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow down' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: countOnly }));
+  let pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits?.availableCount, 3);
+  assert.equal(pub.resetCredits?.countOnly, true);
+  assert.equal(pub.resetCredits?.status.code, 'rate-limited');
+
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: null }));
+  pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits?.availableCount, 3);
+  assert.equal(pub.resetCredits?.countOnly, true);
+});
+
+test('successful count-only reset survives later reset-skipped usage ticks', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const countOnly = { credits: [], availableCount: 3, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: true, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: countOnly }));
+  let pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits?.availableCount, 3);
+  assert.equal(pub.resetCredits?.countOnly, true);
+  assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'count-only success is not persisted as a detailed list');
+
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: null }));
+  pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits?.availableCount, 3);
+  assert.equal(pub.resetCredits?.countOnly, true);
+  assert.equal(pub.resetCredits?.status.code, 'ok');
+});
+
+test('fresh count-only fallback keeps count but overlays later reset failure status', () => {
+  const store = fakeStore();
+  const mgr = new StateManager(store, () => {});
+  const countOnly = { credits: [], availableCount: 3, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: true, source: 'usage', status: { code: 'ok', connected: true, label: '', detail: '' } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: countOnly }));
+
+  const reset429 = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now() + 1, countOnly: false, source: 'api', status: { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 } };
+  applyCodex(mgr, codexSnapshot({ usage: true, reset: reset429 }));
+
+  const pub = mgr.buildCodexProviderQuota(Date.now());
+  assert.equal(pub.resetCredits?.availableCount, 3);
+  assert.equal(pub.resetCredits?.countOnly, true);
+  assert.equal(pub.resetCredits?.status.code, 'rate-limited');
+  assert.equal(pub.resetCredits?.source, 'usage');
+});
+
+test('sanitizeResetCredits clamps persisted or IPC count values', () => {
+  const out = sanitizeResetCredits({
+    credits: [],
+    availableCount: -3.2,
+    totalEarnedCount: 4.6,
+    checkedAt: 123,
+    countOnly: true,
+    source: 'cache',
+    status: { code: 'ok', connected: true },
+  });
+  assert.equal(out.availableCount, 0);
+  assert.equal(out.totalEarnedCount, 5);
 });
 
 // --- Task 5: fresh-apply sanitizer whitelists a validated resetCredits ---
@@ -731,7 +1233,7 @@ test('never-fetched reset (no status) yields no card (null resetCredits)', () =>
 test('count-only 429 fallback (no prior list) still shows N available in the public rebuild', () => {
   const store = fakeStore();
   const mgr = new StateManager(store, () => {});
-  const countOnly = { credits: [], availableCount: 3, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: true, source: 'api', status: { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 } };
+  const countOnly = { credits: [], availableCount: 3, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: true, source: 'cache', status: { code: 'rate-limited', connected: false, label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: countOnly }));
   const pub = mgr.buildCodexProviderQuota(Date.now());
   assert.ok(pub.resetCredits, 'resetCredits present');
@@ -768,4 +1270,22 @@ test('parse: 200 WITH a credits array stays countOnly:false (list-derived)', () 
   const data = parseCodexResetCreditsPayload({ credits: [{ id: 'a', status: 'available', expires_at: '2026-07-12T00:00:00Z' }] }, now);
   assert.equal(data.countOnly, false);
   assert.equal(data.availableCount, 1);
+});
+
+test('parse: mismatched credits list and available_count uses the source count as countOnly', () => {
+  const now = Date.parse('2026-07-04T00:00:00Z');
+  const data = parseCodexResetCreditsPayload({
+    available_count: 9,
+    credits: [{ id: 'a', status: 'available', expires_at: '2026-07-12T00:00:00Z' }],
+  }, now);
+  assert.equal(data.countOnly, true);
+  assert.equal(data.availableCount, 9);
+  assert.equal(data.credits.length, 0);
+});
+
+test('privacy docs disclose Codex config read and unsupported custom endpoints', () => {
+  const docs = fs.readFileSync(path.resolve('docs', 'privacy-security.md'), 'utf8');
+  assert.match(docs, /~\/\.codex\/config\.toml/);
+  assert.match(docs, /chatgpt_base_url/);
+  assert.match(docs, /does not send Codex auth tokens to non-OpenAI hosts/);
 });

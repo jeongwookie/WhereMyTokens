@@ -68,7 +68,7 @@ export interface QuotaDisplayModels {
   widgetGroups: QuotaDisplayGroupViewModel[];
   settingsTargets: QuotaDisplayGroupViewModel[];
   extraUsage: ExtraUsage | null;
-  resetCredits: ResetCreditsViewModel | null;   // Codex reset card, routed independently of row-driven groups
+  resetCredits: ResetCreditsViewModel | null;
 }
 
 export interface QuotaTargetSettingsOption {
@@ -117,13 +117,6 @@ export function modelQuotaGroupKey(model: string): string {
   return `model.${model}`;
 }
 
-// --- Codex reset credits: render-time view model -----------------------------
-// Every human/relative/colored value is DERIVED HERE from raw ISO + counts + now.
-// Nothing derived is persisted (spec §4). The public source-fact input shape
-// (raw ISO expiry, counts, checkedAt, status) lives in `./types` as the single
-// source of truth (ProviderResetCredit / ProviderResetCreditsData), mirrored from
-// the main public type and kept identical by the compile-time contract in Task 11.
-
 const CREDIT_HOUR_MS = 3600000;
 const CREDIT_DAY_MS = 86400000;
 
@@ -149,18 +142,18 @@ export function creditUrgencyBucket(soonestRemainingMs: number | null): CreditUr
 export interface ResetCreditRowVM { idSuffix: string | null; status: string; expiresAtUtc: string | null; remainingMs: number | null; }
 export interface ResetCreditsViewModel {
   provider: ProviderId;
-  mode: QuotaDisplayMode;         // resolved from quotaTargetModes for the 'resets' group ('rich'|'simple'|'none')
-  source: 'api' | 'cache';        // explicit; 'cache' when serving stale data while disconnected (F3/F9)
-  availableCount: number;         // credits.length for list data, availableCount for countOnly
+  mode: QuotaDisplayMode;
+  source: 'api' | 'cache' | 'usage';
+  availableCount: number;
   credits: ResetCreditRowVM[];
   nextExpiryMs: number | null;
   totalEarnedCount: number;
   urgency: CreditUrgency;
   countOnly: boolean;
   errored: boolean;
-  stale: boolean;                 // true when showing a cached list because the latest fetch did not refresh it (F9)
+  stale: boolean;
   status: ProviderQuotaStatus;
-  checkedAt: number;              // epoch ms of the last SUCCESSFUL fetch (tooltip "last successful update")
+  checkedAt: number;
 }
 
 export function buildResetCreditsViewModel(
@@ -172,26 +165,28 @@ export function buildResetCreditsViewModel(
   const errored = data.status?.code !== 'ok' && data.status?.connected === false && data.credits.length === 0 && data.availableCount === 0 && !data.countOnly;
   const credits: ResetCreditRowVM[] = data.credits.map(c => {
     const ms = c.expiresAtUtc == null ? null : Date.parse(c.expiresAtUtc);
+    if (c.expiresAtUtc != null && !Number.isFinite(ms)) return null;
     return { idSuffix: c.idSuffix, status: c.status, expiresAtUtc: c.expiresAtUtc, remainingMs: ms == null || !Number.isFinite(ms) ? null : ms - now };
-  });
-  const nextExpiryMs = credits.length > 0 ? credits[0].remainingMs : null;
-  const availableCount = data.countOnly ? data.availableCount : credits.length;
-  const source: 'api' | 'cache' = data.source === 'cache' ? 'cache' : 'api';
+  }).filter((c): c is ResetCreditRowVM => !!c);
+  const sourceAvailableCount = Math.max(0, Math.round(data.availableCount));
+  const countOnly = data.countOnly || sourceAvailableCount !== credits.length;
+  const displayCredits = countOnly ? [] : credits;
+  const nextExpiryMs = displayCredits.length > 0 ? displayCredits[0].remainingMs : null;
+  const availableCount = countOnly ? sourceAvailableCount : displayCredits.length;
+  const source: 'api' | 'cache' | 'usage' = data.source === 'cache' ? 'cache' : data.source === 'usage' ? 'usage' : 'api';
+  const stale = source === 'cache' || data.status?.code !== 'ok';
   return {
     provider: 'codex',
     mode,
     source,
     availableCount,
-    credits,
+    credits: displayCredits,
     nextExpiryMs,
-    totalEarnedCount: data.totalEarnedCount,
+    totalEarnedCount: Math.max(0, Math.round(data.totalEarnedCount)),
     urgency: errored || availableCount === 0 ? 'muted' : creditUrgencyBucket(nextExpiryMs),
-    countOnly: data.countOnly,
+    countOnly,
     errored,
-    // Stale = we are rendering a cached list (source cache) rather than a fresh 'api' pull. The
-    // tooltip shows checkedAt ("last successful update") so a transient error that keeps the cache
-    // (per Task 4/Task 3) is still legible as "stale, last good at HH:MM" rather than silently fresh.
-    stale: source === 'cache',
+    stale,
     status: data.status,
     checkedAt: data.checkedAt,
   };
@@ -564,16 +559,20 @@ export function buildQuotaTargetSettingsOptions(
     formatWarmupEta: () => '',
     simpleIncludesRich: true,
   });
-  return models.settingsTargets.map(group => ({
-    id: group.id,
-    provider: group.provider,
-    label: group.label,
-    period: group.rows.map(row => row.label).join(' / '),
-    mode: group.mode,
-    defaultMode: group.defaultMode,
-    badges: group.badges,
-    rowCount: group.rows.length,
-  }));
+  return models.settingsTargets.map(group => {
+    const period = group.rows.map(row => row.label).join(' / ')
+      || (group.id === quotaGroupId('codex', 'resets') ? 'reset credits' : '');
+    return {
+      id: group.id,
+      provider: group.provider,
+      label: group.label,
+      period,
+      mode: group.mode,
+      defaultMode: group.defaultMode,
+      badges: group.badges,
+      rowCount: group.rows.length,
+    };
+  });
 }
 
 export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions): QuotaDisplayModels {
@@ -586,19 +585,12 @@ export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions)
   const simpleGroups = visibleTargets.filter(group => group.mode === 'simple');
   const widgetGroups = visibleTargets.filter(group => group.mode === 'simple' || options.simpleIncludesRich === true);
 
-  // F3: the reset card is routed on a dedicated field, NOT through richGroups/simpleGroups.
-  // The 'resets' group has empty windowKeys → zero rows → dropped by the rows.length > 0
-  // filter above, so it cannot ride those arrays. Resolve it directly, independent of any
-  // row-signal filter (no dependence on rows.length / rowHasDisplaySignal / visibleTargets).
-  // Gate on the same enabledProviders check every other group uses (buildQuotaDisplayGroups
-  // only iterates options.settings.enabledProviders): a stale codex snapshot must NOT render
-  // the reset card when the user has disabled Codex.
   const codexEnabled = options.settings.enabledProviders.includes('codex');
   const resetsGroupId = quotaGroupId('codex', 'resets');
   const resetMode = targetMode(options.settings, resetsGroupId, 'simple');
   const resetData = codexEnabled ? (options.providerQuotas.codex?.resetCredits ?? null) : null;
   const resetCredits = !codexEnabled || resetMode === 'none'
-    ? null   // None hides the card; collection continues in main (data still fetched/cached)
+    ? null
     : buildResetCreditsViewModel(resetData, Date.now(), resetMode);
 
   return {
