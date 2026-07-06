@@ -57,8 +57,9 @@ function accountQuota(provider, label, h5Pct = 40, weekPct = 30) {
 
 test('resolves taskbar abbreviations from overrides, provider defaults, and target label fallback', () => {
   assert.equal(resolveQuotaAbbreviation('claude.group.account', 'claude', 'Claude', settings()), 'C');
-  assert.equal(resolveQuotaAbbreviation('codex.group.account', 'codex', 'Codex', settings()), 'X');
-  assert.equal(resolveQuotaAbbreviation('antigravity.group.model.foo', 'antigravity', 'Gemini 3 Pro', settings()), 'A');
+  assert.equal(resolveQuotaAbbreviation('claude.group.sonnet', 'claude', 'Sonnet', settings()), 'S');
+  assert.equal(resolveQuotaAbbreviation('codex.group.account', 'codex', 'Codex', settings()), 'CX');
+  assert.equal(resolveQuotaAbbreviation('antigravity.group.model.foo', 'antigravity', 'Gemini 3 Pro', settings()), 'G3P');
   assert.equal(
     resolveQuotaAbbreviation(
       'codex.group.account',
@@ -87,10 +88,17 @@ test('builds exactly fixed 5h and 1w rows with provider default abbreviations an
 
   assert.equal(snapshot.theme, 'dark');
   assert.deepEqual(snapshot.rows.map(row => row.period), ['5h', '1w']);
-  assert.deepEqual(snapshot.rows[0].blocks.map(block => block.abbreviation), ['C', 'X']);
-  assert.deepEqual(snapshot.rows[1].blocks.map(block => block.abbreviation), ['C', 'X']);
+  assert.deepEqual(snapshot.rows[0].blocks.map(block => block.abbreviation), ['C', 'CX']);
+  assert.deepEqual(snapshot.rows[1].blocks.map(block => block.abbreviation), ['CX', 'C']);
+  assert.deepEqual(snapshot.rows[0].blocks.map(block => block.sourceLabel), [null, null]);
   assert.equal(snapshot.rows[0].blocks[0].elapsedPct, 50);
   assert.match(snapshot.rows[0].blocks[0].resetLabel, /^\d+h/);
+});
+
+test('uses resolved display theme for taskbar snapshot when app theme is auto', () => {
+  assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'auto' }), 'light').theme, 'light');
+  assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'auto' }), 'dark').theme, 'dark');
+  assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'dark' }), 'light').theme, 'dark');
 });
 
 test('formats reset labels with only the largest remaining unit', () => {
@@ -138,6 +146,46 @@ test('orders by configured quota order before risk, then natural target order', 
     'antigravity.group.model.gemini-3-pro',
   ]);
   assert.equal(h5.hiddenCount, 0);
+});
+
+test('orders unconfigured targets by quota risk before truncating rows', () => {
+  const snapshot = buildTaskbarQuotaSnapshot(state({}, {
+    claude: accountQuota('claude', 'Claude', 20, 20),
+    codex: accountQuota('codex', 'Codex', 30, 30),
+    antigravity: {
+      provider: 'antigravity',
+      source: 'localRpc',
+      capturedAt: 1000,
+      models: [
+        {
+          model: 'gemini-low',
+          label: 'Gemini Low',
+          remainingPct: 60,
+          resetMs: H5 / 2,
+          durationMs: H5,
+          defaultMode: 'simple',
+          visualKind: 'pace',
+        },
+        {
+          model: 'gemini-danger',
+          label: 'Gemini Danger',
+          remainingPct: 5,
+          resetMs: H5 / 2,
+          durationMs: H5,
+          defaultMode: 'simple',
+          visualKind: 'pace',
+        },
+      ],
+      status: { connected: true, code: 'ok' },
+    },
+  }));
+
+  assert.deepEqual(snapshot.rows[0].blocks.map(block => block.targetId), [
+    'antigravity.group.model.gemini-danger',
+    'antigravity.group.model.gemini-low',
+    'codex.group.account',
+  ]);
+  assert.equal(snapshot.rows[0].hiddenCount, 1);
 });
 
 test('excludes none mode and percent-only Antigravity models without 5h or 1w period', () => {
@@ -201,4 +249,103 @@ test('formats unknown quota signals as nullable fields and uses severity boundar
   assert.equal(unknownElapsed?.resetLabel, null);
   assert.equal(unknownElapsed?.severity, 'unknown');
   assert.equal(dangerAt90.severity, 'danger');
+});
+
+test('labels fallback taskbar sources without marking live API or local RPC data', () => {
+  const codex = accountQuota('codex', 'Codex', 60, 50);
+  codex.source = 'localLog';
+  codex.windows.h5.source = 'localLog';
+  codex.windows.week.source = 'cache';
+  const claude = accountQuota('claude', 'Claude', 20, 20);
+  claude.source = 'statusLine';
+  claude.windows.h5.source = 'statusLine';
+
+  const snapshot = buildTaskbarQuotaSnapshot(state({}, {
+    codex,
+    claude,
+    antigravity: {
+      provider: 'antigravity',
+      source: 'localRpc',
+      capturedAt: 1000,
+      models: [
+        {
+          model: 'gemini-3-pro',
+          label: 'Gemini 3 Pro',
+          remainingPct: 40,
+          resetMs: H5 / 2,
+          durationMs: H5,
+          defaultMode: 'simple',
+          visualKind: 'pace',
+        },
+      ],
+      status: { connected: true, code: 'ok' },
+    },
+  }));
+
+  const h5Sources = Object.fromEntries(snapshot.rows[0].blocks.map(block => [block.targetId, block.sourceLabel]));
+  const weekSources = Object.fromEntries(snapshot.rows[1].blocks.map(block => [block.targetId, block.sourceLabel]));
+  assert.equal(h5Sources['codex.group.account'], 'log');
+  assert.equal(h5Sources['claude.group.account'], 'bridge');
+  assert.equal(h5Sources['antigravity.group.model.gemini-3-pro'], null);
+  assert.equal(weekSources['codex.group.account'], 'cache');
+});
+
+test('drops non-finite reset values from taskbar labels and pacing', () => {
+  const quota = accountQuota('claude', 'Claude', 60, 50);
+  quota.source = 'statusLine';
+  quota.windows.h5 = { pct: 60, resetMs: Number.NaN, source: 'statusLine' };
+
+  const snapshot = buildTaskbarQuotaSnapshot(state({}, { claude: quota }));
+  const block = snapshot.rows[0].blocks.find(item => item.targetId === 'claude.group.account');
+
+  assert.equal(block.resetLabel, null);
+  assert.equal(block.elapsedPct, null);
+  assert.equal(block.severity, 'unknown');
+  assert.equal(block.sourceLabel, 'bridge');
+});
+
+test('labels empty taskbar rows as waiting, offline, or no data', () => {
+  const waiting = buildTaskbarQuotaSnapshot({
+    ...state(),
+    initialRefreshComplete: false,
+  });
+  assert.equal(waiting.rows[0].statusLabel, 'waiting');
+
+  const offline = buildTaskbarQuotaSnapshot(state({}, {
+    claude: {
+      provider: 'claude',
+      source: 'cache',
+      capturedAt: 1000,
+      groups: [
+        {
+          key: 'account',
+          label: 'Claude',
+          windowKeys: ['h5', 'week'],
+          defaultMode: 'rich',
+        },
+      ],
+      windowDisplay: {
+        h5: { label: '5h', visualKind: 'pace', durationMs: H5 },
+        week: { label: '1w', visualKind: 'pace', durationMs: WEEK },
+      },
+      status: { connected: false, code: 'offline' },
+    },
+  }));
+  assert.deepEqual(offline.rows[0].blocks, []);
+  assert.equal(offline.rows[0].statusLabel, 'offline');
+
+  const noData = buildTaskbarQuotaSnapshot(state());
+  assert.equal(noData.rows[0].statusLabel, 'no data');
+});
+
+test('labels empty taskbar rows as hidden when all eligible targets are set to none', () => {
+  const hidden = buildTaskbarQuotaSnapshot(state({
+    quotaTargetModes: { 'codex.group.account': 'none' },
+  }, {
+    codex: accountQuota('codex', 'Codex', 80, 70),
+  }));
+
+  assert.deepEqual(hidden.rows[0].blocks, []);
+  assert.equal(hidden.rows[0].statusLabel, 'hidden');
+  assert.equal(hidden.rows[1].statusLabel, 'hidden');
 });

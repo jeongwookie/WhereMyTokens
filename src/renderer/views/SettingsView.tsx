@@ -150,10 +150,24 @@ function normalizeQuotaTargetAbbreviationInput(value: string): string {
 }
 
 function defaultQuotaTargetAbbreviation(provider: ProviderId, label: string): string {
-  if (provider === 'claude') return 'C';
-  if (provider === 'codex') return 'X';
-  if (provider === 'antigravity') return 'A';
+  const normalizedLabel = label.trim().toLowerCase();
+  if (provider === 'claude') return normalizedLabel.includes('sonnet') ? 'S' : 'C';
+  if (provider === 'codex') return 'CX';
+  if (provider === 'antigravity') return shortQuotaLabelCode(label, 'AG');
   return label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? '?';
+}
+
+function shortQuotaLabelCode(label: string, fallback: string): string {
+  const words = label.toUpperCase().match(/[A-Z0-9]+/g) ?? [];
+  const initials = words.map(word => word[0]).join('');
+  if (initials.length >= 2) return initials.slice(0, 3);
+  const compact = words.join('');
+  if (compact.length >= 2) return compact.slice(0, 3);
+  return initials || compact || fallback;
+}
+
+function isTaskbarEligibleQuotaTarget(target: { taskbarEligible: boolean; rowCount: number }): boolean {
+  return target.rowCount > 0 && target.taskbarEligible;
 }
 
 function settingValue(settings: AppSettings, key: EditableSettingKey): unknown {
@@ -544,6 +558,11 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         {quotaTargetOptions.length > 0 && (
           <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
             <div style={{ ...labelStyle, marginBottom: 6 }}>Quota display</div>
+            {s.taskbarQuotaEnabled && (
+              <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 7 }}>
+                The small text box customizes the taskbar label for 5h / 1w targets.
+              </div>
+            )}
             <div style={{ display: 'grid', gap: 6 }}>
               {quotaTargetOptions.map((target, index) => (
                 <div key={target.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 8 }}>
@@ -578,14 +597,16 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <input
-                      aria-label={`Taskbar abbreviation for ${target.label}`}
-                      title={`Default: ${defaultQuotaTargetAbbreviation(target.provider, target.label)}`}
-                      placeholder={defaultQuotaTargetAbbreviation(target.provider, target.label)}
-                      value={s.quotaTargetAbbreviations?.[target.id] ?? ''}
-                      onChange={e => setQuotaTargetAbbreviation(target.id, e.target.value)}
-                      style={{ ...inp, width: 42, textTransform: 'uppercase', textAlign: 'center', fontFamily: C.fontMono }}
-                    />
+                    {s.taskbarQuotaEnabled && isTaskbarEligibleQuotaTarget(target) && (
+                      <input
+                        aria-label={`Taskbar abbreviation for ${target.label}`}
+                        title={`Default: ${defaultQuotaTargetAbbreviation(target.provider, target.label)}`}
+                        placeholder={defaultQuotaTargetAbbreviation(target.provider, target.label)}
+                        value={s.quotaTargetAbbreviations?.[target.id] ?? ''}
+                        onChange={e => setQuotaTargetAbbreviation(target.id, e.target.value)}
+                        style={{ ...inp, width: 42, textTransform: 'uppercase', textAlign: 'center', fontFamily: C.fontMono }}
+                      />
+                    )}
                     <div style={{ display: 'flex', gap: 2 }}>
                       {(['rich', 'simple', 'none'] as const).map(mode => {
                         const active = target.mode === mode;

@@ -72,6 +72,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **Unreleased** | TBD | Añade Codex reset credits como target de Plan Usage y un taskbar mini quota display self-contained y arrastrable con filas 5H/1W |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 22 jun | Estabiliza el import de Trend breakdown para bloques cortos de thinking de Claude ajustando el calibration guard |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 22 jun | Corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso sin añadir filas de sesión solo de agentes |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 17 jun | Añade breakdowns clicables en Trend con input/output por provider, thinking/response/tool usage, tokens work/billing y categorías de líneas netas git |
@@ -116,8 +117,8 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de provider quota** — Claude, Codex, Antigravity y futuros providers publican snapshots efectivos por `providerQuotas`; Claude usa Anthropic API/statusLine/cache, Codex usa live usage/cache/local-log, y Antigravity lee quota por modelo desde 127.0.0.1 local RPC cuando el IDE está en ejecución
-- **Visualización quota por target** — cada provider window o model target puede mostrarse como Rich, Simple u oculto desde Settings; esto solo afecta Plan Usage y el widget flotante
+- **Barras de provider quota** — Claude, Codex, Antigravity y futuros providers publican snapshots efectivos por `providerQuotas`; Claude usa Anthropic API/statusLine/cache, Codex usa live usage 5h/1sem con fallback local-log y reset-credit endpoint con cache ligada al auth, y Antigravity lee quota por modelo desde 127.0.0.1 local RPC cuando el IDE está en ejecución
+- **Visualización quota por target** — cada provider window y model target puede mostrarse como Rich, Simple u oculto desde Settings; también afecta el orden y la visibilidad en Plan Usage, el widget flotante y el taskbar mini. Codex Resets es exclusivo de Plan Usage
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
@@ -133,6 +134,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
 - **Desglose por modelo** — tokens y costos de los modelos principales con barras de gradiente
 - **Activity Breakdown** — Claude se analiza por output tokens; Codex por tool events en 10 categorías (Thinking, Edit/Write, Read, Search, Git, etc.)
+- **Codex reset credits** — muestra el conteo disponible y el vencimiento más cercano en Plan Usage; si el reset endpoint falla, muestra estado stale/error con badge y tooltip
 
 ### Producción de Código y Productividad
 - **Métricas basadas en Git** — commits, líneas netas cambiadas, **$/100 Added** (costo por 100 líneas añadidas)
@@ -188,10 +190,10 @@ WhereMyTokens es una app de bandeja Electron local-first. El renderer no lee arc
 | Puente Claude | stdin de Claude Code `statusLine` | `%APPDATA%\WhereMyTokens\live-session.json` | No |
 | Límites de uso Claude | OAuth token en `~/.claude/.credentials.json` | Anthropic `/api/oauth/usage` | Sí, directo a Anthropic |
 | Sesiones Codex | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
-| Límites de uso Codex | OAuth token en `~/.codex/auth.json` | ChatGPT/Codex usage endpoint | Sí, directo a OpenAI/ChatGPT |
+| Límites de uso Codex y reset credits | OAuth token en `~/.codex/auth.json` | ChatGPT/Codex usage endpoint y reset-credit endpoint | Sí, directo a OpenAI/ChatGPT |
 | Sesiones/quota Antigravity | Language server de Antigravity en ejecución | 127.0.0.1 local RPC, luego renderer state | No |
 
-La prioridad de quota depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; Codex usa primero live usage y luego eventos locales `rate_limits` de los logs JSONL; Antigravity usa solo 127.0.0.1 local RPC del IDE en ejecución. El último valor correcto se conserva solo hasta quedar stale.
+La prioridad de quota depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; los límites 5h/1sem de Codex usan primero live usage y pueden caer a cache/eventos locales `rate_limits` de los logs JSONL; los reset credits de Codex usan primero el reset-credit endpoint y solo caen a cache ligada al auth o a valores count-only del live usage payload; Antigravity usa solo 127.0.0.1 local RPC del IDE en ejecución. El último valor correcto se conserva solo hasta quedar stale.
 
 ---
 
@@ -207,14 +209,16 @@ WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicit
 | `~/.codex/sessions/**/*.jsonl` | Logs actuales de sesión Codex para tokens, cached input, modelos, eventos rate-limit y actividad de herramientas. |
 | `~/.codex/archived_sessions/**/*.jsonl` | Logs archivados de Codex incluidos en el uso all-time. |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | Logs de cleanup archive de Codex incluidos en el uso all-time. |
-| `~/.codex/auth.json` | Material OAuth de ChatGPT usado solo para snapshots de uso de Codex; no se copia al storage de la app ni se registra en logs. |
+| `~/.codex/auth.json` | Material OAuth de ChatGPT usado solo para snapshots de uso de Codex y consultas de reset credits; no se copia al storage de la app ni se registra en logs. El reset-credit cache guarda solo counts, vencimientos, fetch status, source labels, un hashed auth marker y el modified time del archivo auth. |
 | Antigravity local RPC | Lee sesiones, quota por modelo y generator metadata desde el language server del IDE Antigravity en ejecución. No usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Snapshot local escrito por el bridge `statusLine` de Claude Code. |
+| Taskbar mini helper stdin | Cuando el taskbar mini está habilitado, el main process envía datos resumidos de quota 5H/1W y el resolved light/dark theme fallback al native helper. El helper samplea localmente el fondo visible de la barra de tareas para contraste, pero no guarda ni transmite píxeles; tampoco lee credentials, logs ni llama provider APIs directamente. |
+| `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Guarda solo la posición del taskbar mini relativa a la barra de tareas. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | Ajustes de la app, cachés locales, historial de notificaciones y estado del bridge. |
 
 El manejo de credenciales es deliberadamente estrecho: WhereMyTokens lee los archivos locales oficiales de la CLI, no pide pegar API keys, no guarda una copia de respaldo de credenciales y oculta detalles de credenciales en la salida de estado. Si el access token de Claude expira, la app puede refrescarlo con Anthropic y escribir las credentials actualizadas de forma atómica en `~/.claude/.credentials.json`.
 
-El acceso de red se limita a los usage endpoints de los providers habilitados y al loopback local. El polling de Claude usage corre como máximo cada 5 minutos y aplica backoff para 429. Codex live usage usa solicitudes HTTPS-only con timeout, límite de tamaño de respuesta, caché y backoff. Antigravity usa solo 127.0.0.1 local RPC y no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. El parseo local de JSONL, el RPC local de Antigravity y el bridge `statusLine` no envían contenido de sesiones fuera del equipo.
+El acceso de red se limita a los usage endpoints de los providers habilitados y al loopback local. El polling de Claude usage corre como máximo cada 5 minutos y aplica backoff para 429. Codex live usage y reset-credit checks usan solicitudes HTTPS-only con timeout, límite de tamaño de respuesta, caché y backoff separado. Antigravity usa solo 127.0.0.1 local RPC y no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. El parseo local de JSONL, el RPC local de Antigravity y el bridge `statusLine` no envían contenido de sesiones fuera del equipo.
 
 Para desactivar el bridge de Claude Code, abre **Settings -> Claude Code Integration -> Disable**. La app elimina la entrada `statusLine` solo cuando pertenece al comando bridge de WhereMyTokens; no sobrescribe ni borra otro `statusLine` custom. También puedes quitar manualmente la entrada `statusLine` de WhereMyTokens en `~/.claude/settings.json` y reiniciar Claude Code.
 
@@ -243,6 +247,7 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 - Uso por modelo GPT/Codex y estimaciones de costo equivalentes a API
 - Tokens input, cached input y output, ahorro por caché y totales por modelo
 - Porcentajes y tiempos de reset de Codex 5h/1sem desde live Codex usage cuando está disponible, con fallback a caché/eventos locales `rate_limits`
+- Reset credits disponibles, próximo vencimiento y estados stale/error cuando el reset endpoint no está disponible
 - Activity Breakdown basado en tool events, porque los logs de Codex exponen llamadas a herramientas, no output tokens por herramienta
 
 ### Seguimiento de Antigravity

@@ -73,8 +73,10 @@ test.afterEach(() => {
 test('Codex usage URL follows official path style', () => {
   assert.equal(resolveCodexUsageUrl('https://chatgpt.com'), 'https://chatgpt.com/backend-api/wham/usage');
   assert.equal(resolveCodexUsageUrl('https://chat.openai.com/'), 'https://chat.openai.com/backend-api/wham/usage');
-  assert.equal(resolveCodexUsageUrl('https://example.test'), 'https://example.test/api/codex/usage');
-  assert.equal(resolveCodexUsageUrl('https://example.test/api/codex/usage'), 'https://example.test/api/codex/usage');
+  assert.equal(resolveCodexUsageUrl('https://chatgpt.com/api/codex'), 'https://chatgpt.com/api/codex/usage');
+  assert.equal(resolveCodexUsageUrl('https://chatgpt.com/api/codex/usage'), 'https://chatgpt.com/api/codex/usage');
+  assert.equal(resolveCodexUsageUrl('https://example.test'), 'https://chatgpt.com/backend-api/wham/usage');
+  assert.equal(resolveCodexUsageUrl('http://chatgpt.com'), 'https://chatgpt.com/backend-api/wham/usage');
 });
 
 test('Codex live usage reads auth.json, sends safe headers, and parses windows', async () => {
@@ -111,6 +113,26 @@ test('Codex live usage reads auth.json, sends safe headers, and parses windows',
   assert.equal(lastRequestOptions.headers.Authorization, 'Bearer test-access-token');
   assert.equal(lastRequestOptions.headers['ChatGPT-Account-Id'], 'acct_test');
   assert.equal(lastRequestOptions.headers.Accept, 'application/json');
+  assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
+});
+
+test('Codex live usage rejects non-OpenAI custom base URLs before sending auth headers', async () => {
+  makeTempCodexHome({
+    tokens: {
+      access_token: 'test-access-token',
+      account_id: 'acct_test',
+    },
+  }, 'chatgpt_base_url = "https://example.test"');
+  withHttpResponse(200, {
+    should_not: 'be requested',
+  });
+
+  const result = await fetchCodexUsagePct();
+
+  assert.equal(result.status.code, 'schema-changed');
+  assert.equal(result.status.label, 'unsupported endpoint');
+  assert.equal(result.usage, null);
+  assert.equal(lastRequestOptions, null);
   assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
 });
 
@@ -239,10 +261,12 @@ test('Codex usage fetcher respects Retry-After on 429 without storing response b
 
 test('stored Codex usage cache is rejected after auth file changes', () => {
   const now = Date.now();
+  const authIdentityHash = 'auth-hash-a';
   const cached = {
     schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
     storedAt: now - 1000,
     authMtimeMs: 123,
+    authIdentityHash,
     h5Available: true,
     weekAvailable: true,
     h5Pct: 5,
@@ -257,8 +281,9 @@ test('stored Codex usage cache is rejected after auth file changes', () => {
     rateLimitReachedType: null,
   };
 
-  assert.equal(normalizeStoredCodexUsagePct(cached, 456), null);
-  const normalized = normalizeStoredCodexUsagePct(cached, 123);
+  assert.equal(normalizeStoredCodexUsagePct(cached, 456, authIdentityHash), null);
+  assert.equal(normalizeStoredCodexUsagePct(cached, 123, 'auth-hash-b'), null);
+  const normalized = normalizeStoredCodexUsagePct(cached, 123, authIdentityHash);
   assert.equal(normalized?.h5Pct, 5);
   assert.equal(normalized?.weekPct, 17);
   assert.equal(normalized?.h5LimitReached, false);

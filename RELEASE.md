@@ -62,10 +62,9 @@ npm run dist
 
 성공하면 `release/` 아래 `.exe` 인스톨러와 portable `.exe` 생성.
 
-`npm run pack`/`npm run dist`는 항상 `dotnet publish`(taskbar helper)를 먼저 실행하고 그 결과물만 패키징한다 —
-release 빌드는 .NET SDK가 설치되어 있어야 하며, 없으면 여기서 바로 실패한다(오래된 helper 바이너리가
-조용히 재포장되는 사고를 막기 위한 의도적 설계). 일반 `npm run build`/`npm start`/`npm run dev`는 여전히
-.NET SDK 없이도 동작한다.
+`npm run pack`/`npm run dist`는 항상 `dotnet publish`로 taskbar helper를 self-contained single-file EXE로 먼저
+빌드하고 그 EXE만 패키징한다. Release 빌드 머신에는 .NET SDK가 필요하지만, 설치 사용자에게 별도 .NET Desktop
+Runtime을 요구하지 않는다. 일반 `npm run build`/`npm start`/`npm run dev`는 여전히 .NET SDK 없이도 동작한다.
 
 빌드 후 인스톨러 파일명 변환:
 
@@ -128,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| Unreleased | TBD | Add Codex reset-credit availability to Plan Usage and a self-contained draggable Windows taskbar mini quota display with 5H/1W rows, overflow indicators, runtime-disable safeguards, and privacy docs |
 | v1.19.2 | 2026-06-22 | Stabilize Trend breakdown imports for short Claude thinking blocks by widening the CALIB guard while still failing on clear encoding drift |
 | v1.19.1 | 2026-06-22 | Fix Claude JSONL discovery so agent logs contribute to recent usage graphs while visible startup sessions still hide agent-only logs |
 | v1.19.0 | 2026-06-17 | Add clickable Trend bucket breakdowns with provider input/output, thinking/response/tool composition, cache-aware work/billing token views, git net-line categories, and hardened breakdown ledger/import validation |

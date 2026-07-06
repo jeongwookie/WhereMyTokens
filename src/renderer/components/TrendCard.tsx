@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BucketBreakdown, CodeOutputStats, GitDailyStats, UsageTrendData, UsageTrendPoint } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtCost, fmtTokens } from '../theme';
@@ -13,6 +13,7 @@ type CacheView = 'work' | 'billing';
 interface Props {
   usageTrend: UsageTrendData;
   codeOutputStats: CodeOutputStats;
+  lastUpdated: number;
   currency: string;
   usdToKrw: number;
 }
@@ -46,13 +47,14 @@ const CACHE_VIEW_LABELS: Record<CacheView, string> = {
 };
 const TREND_COST_COLOR = 'gpt4';
 const CHART = { width: 330, height: 126, left: 12, right: 52, top: 12, bottom: 24 };
+const BREAKDOWN_REFRESH_THROTTLE_MS = 30_000;
 const GRAIN_WINDOWS: Record<Grain, { limit: number; label: string }> = {
   day: { limit: 14, label: '14d' },
   week: { limit: 12, label: '12w' },
   month: { limit: 12, label: '12m' },
 };
 
-function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
+function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKrw }: Props) {
   const C = useTheme();
   const [grain, setGrain] = useState<Grain>('day');
   const [metric, setMetric] = useState<Metric>('cost');
@@ -62,6 +64,11 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const [breakdown, setBreakdown] = useState<BucketBreakdown | null>(null);
   const [breakdownError, setBreakdownError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
+  const breakdownRef = useRef<BucketBreakdown | null>(null);
+  const breakdownRequestKeyRef = useRef<string | null>(null);
+  const breakdownRefreshDueAtRef = useRef(0);
+  const breakdownTrailingTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const breakdownRequestSeqRef = useRef(0);
 
   const rows = useMemo(
     () => buildTrendRows(usageTrend, codeOutputStats.dailyAll ?? [], grain),
@@ -77,6 +84,7 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const activeIndex = Math.max(0, Math.min(rows.length - 1, hoverIndex === null ? rows.length - 1 : hoverIndex));
   const activeRow = rows[activeIndex] ?? rows[rows.length - 1];
   const selectedIndex = selectedKey === null ? -1 : rows.findIndex(row => row.key === selectedKey);
+  const selectedExists = selectedKey !== null && selectedIndex >= 0;
   const selectedRow = selectedIndex >= 0 ? rows[selectedIndex] : null;
   const selectedSignature = selectedRow
     ? [
@@ -104,37 +112,76 @@ function TrendCard({ usageTrend, codeOutputStats, currency, usdToKrw }: Props) {
   const outputPaths = hasOutputSeries ? pathsForRows(rows, points, row => row.hasOutput, point => point.outputY) : [];
 
   useEffect(() => {
-    if (selectedKey !== null && selectedRow === null) {
+    const clearTrailingRefresh = () => {
+      if (breakdownTrailingTimerRef.current !== null) {
+        window.clearTimeout(breakdownTrailingTimerRef.current);
+        breakdownTrailingTimerRef.current = null;
+      }
+    };
+    const refreshBreakdown = (requestKey: string, bucketKey: string, showLoading: boolean) => {
+      clearTrailingRefresh();
+      breakdownRequestKeyRef.current = requestKey;
+      breakdownRefreshDueAtRef.current = Date.now() + BREAKDOWN_REFRESH_THROTTLE_MS;
+      const requestSeq = ++breakdownRequestSeqRef.current;
+      setLoading(showLoading);
+      setBreakdownError(null);
+      window.wmt.getBreakdown(grain, bucketKey)
+        .then(nextBreakdown => {
+          if (breakdownRequestSeqRef.current === requestSeq) {
+            breakdownRef.current = nextBreakdown;
+            setBreakdown(nextBreakdown);
+          }
+        })
+        .catch(err => {
+          // Surface a fail-loud query error (e.g. dirty-state throw) rather than masking it as an empty state.
+          if (breakdownRequestSeqRef.current === requestSeq) {
+            breakdownRef.current = null;
+            setBreakdown(null);
+            setBreakdownError(err);
+          }
+        })
+        .finally(() => {
+          if (breakdownRequestSeqRef.current === requestSeq) setLoading(false);
+        });
+    };
+
+    if (selectedKey !== null && !selectedExists) {
       setSelectedKey(null);
       return;
     }
-    if (selectedKey === null || selectedRow === null) {
+    if (selectedKey === null) {
+      clearTrailingRefresh();
+      breakdownRequestKeyRef.current = null;
+      breakdownRefreshDueAtRef.current = 0;
+      breakdownRequestSeqRef.current += 1;
+      breakdownRef.current = null;
       setBreakdown(null);
       setBreakdownError(null);
       setLoading(false);
       return;
     }
 
-    let cancelled = false;
-    setLoading(true);
-    setBreakdown(null);
-    setBreakdownError(null);
-    window.wmt.getBreakdown(grain, selectedKey)
-      .then(nextBreakdown => {
-        if (!cancelled) setBreakdown(nextBreakdown);
-      })
-      .catch(err => {
-        // Surface a fail-loud query error (e.g. dirty-state throw) rather than masking it as an empty state.
-        if (!cancelled) { setBreakdown(null); setBreakdownError(err); }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const requestKey = `${grain}|${selectedKey}`;
+    const isNewRequestKey = breakdownRequestKeyRef.current !== requestKey;
+    const now = Date.now();
+    const showLoading = isNewRequestKey || breakdown === null;
+    if (!isNewRequestKey && now < breakdownRefreshDueAtRef.current) {
+      const delayMs = Math.max(0, breakdownRefreshDueAtRef.current - now);
+      clearTrailingRefresh();
+      breakdownTrailingTimerRef.current = window.setTimeout(() => {
+        breakdownTrailingTimerRef.current = null;
+        refreshBreakdown(requestKey, selectedKey, breakdownRef.current === null);
+      }, delayMs);
+      return clearTrailingRefresh;
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedKey, selectedRow, selectedSignature, grain]);
+    if (isNewRequestKey) {
+      breakdownRef.current = null;
+      setBreakdown(null);
+    }
+    refreshBreakdown(requestKey, selectedKey, showLoading);
+    return clearTrailingRefresh;
+  }, [selectedKey, selectedSignature, grain, selectedExists, lastUpdated]);
 
   function selectHoverIndex(nextIndex: number) {
     setHoverIndex(prev => prev === nextIndex ? prev : nextIndex);

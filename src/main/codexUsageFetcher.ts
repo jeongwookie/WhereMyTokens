@@ -2,11 +2,13 @@ import * as fs from 'fs';
 import * as https from 'https';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
-export const CODEX_USAGE_CACHE_SCHEMA_VERSION = 2;
+export const CODEX_USAGE_CACHE_SCHEMA_VERSION = 3;
 export const CODEX_USAGE_MAX_BACKOFF_MS = 600_000;
 
 const CODEX_DEFAULT_BASE_URL = 'https://chatgpt.com/backend-api';
+const CODEX_ALLOWED_USAGE_HOSTS = new Set(['chatgpt.com', 'chat.openai.com']);
 const CODEX_USER_AGENT = 'codex-cli';
 const MAX_CODEX_USAGE_RESPONSE_BYTES = 128 * 1024;
 
@@ -48,6 +50,7 @@ export interface StoredCodexUsagePct extends CodexUsagePct {
   storedAt: number;
   schemaVersion: number;
   authMtimeMs: number | null;
+  authIdentityHash: string | null;
 }
 
 export interface CodexUsageStatus {
@@ -64,12 +67,15 @@ export interface CodexUsageFetchResult {
   usage: CodexUsagePct | null;
   status: CodexUsageStatus;
   authMtimeMs: number | null;
+  authIdentityHash: string | null;
+  rawPayload?: unknown;
 }
 
 interface CodexAuthCredentials {
   accessToken: string;
   accountId: string | null;
   authMtimeMs: number | null;
+  authIdentityHash: string | null;
 }
 
 interface ParsedUsageWindow {
@@ -119,6 +125,15 @@ export function getCodexAuthMtimeMs(): number | null {
   }
 }
 
+function codexAuthIdentityHash(accessToken: string, accountId: string | null): string {
+  const material = accountId ? `account:${accountId}` : `token:${accessToken}`;
+  return crypto.createHash('sha256').update(material).digest('hex').slice(0, 32);
+}
+
+export function getCodexAuthIdentityHash(): string | null {
+  return readCredentials()?.authIdentityHash ?? null;
+}
+
 function parseJwtPayload(token: string | null): Record<string, unknown> | null {
   if (!token) return null;
   const parts = token.split('.');
@@ -150,7 +165,7 @@ function readCredentials(): CodexAuthCredentials | null {
     const accountId = stringValue(tokens, 'account_id')
       || stringValue(root, 'account_id')
       || accountIdFromIdToken(stringValue(tokens, 'id_token'));
-    return { accessToken, accountId, authMtimeMs: stat.mtimeMs };
+    return { accessToken, accountId, authMtimeMs: stat.mtimeMs, authIdentityHash: codexAuthIdentityHash(accessToken, accountId) };
   } catch {
     return null;
   }
@@ -175,21 +190,56 @@ function parseChatGptBaseUrlFromConfig(contents: string): string | null {
   return null;
 }
 
-function configuredBaseUrl(): string {
+function configuredBaseUrlInfo(): { baseUrl: string; customConfigured: boolean } {
   try {
     const configPath = path.join(codexHomePath(), 'config.toml');
     const parsed = parseChatGptBaseUrlFromConfig(fs.readFileSync(configPath, 'utf-8'));
-    return parsed || CODEX_DEFAULT_BASE_URL;
+    return { baseUrl: parsed || CODEX_DEFAULT_BASE_URL, customConfigured: !!parsed };
   } catch {
-    return CODEX_DEFAULT_BASE_URL;
+    return { baseUrl: CODEX_DEFAULT_BASE_URL, customConfigured: false };
   }
+}
+
+function configuredBaseUrl(): string {
+  return configuredBaseUrlInfo().baseUrl;
+}
+
+function isAllowedCodexUsageBaseUrl(baseUrl: string): boolean {
+  try {
+    const parsed = new URL(baseUrl.trim());
+    return parsed.protocol === 'https:' && CODEX_ALLOWED_USAGE_HOSTS.has(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+function unsupportedCustomBaseUrlStatus(): CodexUsageStatus | null {
+  const { baseUrl, customConfigured } = configuredBaseUrlInfo();
+  if (!customConfigured || isAllowedCodexUsageBaseUrl(baseUrl)) return null;
+  return buildStatus(
+    'schema-changed',
+    false,
+    'unsupported endpoint',
+    'Codex custom chatgpt_base_url must use chatgpt.com or chat.openai.com; custom proxies are not used for token safety.',
+  );
 }
 
 export function normalizeCodexUsageBaseUrl(baseUrl: string): string {
   let base = baseUrl.trim();
   while (base.endsWith('/')) base = base.slice(0, -1);
   if (!base) base = CODEX_DEFAULT_BASE_URL;
-  if ((base.startsWith('https://chatgpt.com') || base.startsWith('https://chat.openai.com')) && !base.includes('/backend-api')) {
+  let parsed: URL;
+  try {
+    parsed = new URL(base);
+  } catch {
+    base = CODEX_DEFAULT_BASE_URL;
+    parsed = new URL(base);
+  }
+  if (parsed.protocol !== 'https:' || !CODEX_ALLOWED_USAGE_HOSTS.has(parsed.hostname.toLowerCase())) {
+    base = CODEX_DEFAULT_BASE_URL;
+    parsed = new URL(base);
+  }
+  if (CODEX_ALLOWED_USAGE_HOSTS.has(parsed.hostname.toLowerCase()) && !parsed.pathname.includes('/backend-api') && !parsed.pathname.includes('/api/codex')) {
     base += '/backend-api';
   }
   return base;
@@ -198,6 +248,7 @@ export function normalizeCodexUsageBaseUrl(baseUrl: string): string {
 export function resolveCodexUsageUrl(baseUrl = configuredBaseUrl()): string {
   const base = normalizeCodexUsageBaseUrl(baseUrl);
   if (base.endsWith('/wham/usage') || base.endsWith('/api/codex/usage')) return base;
+  if (base.endsWith('/api/codex')) return `${base}/usage`;
   return base.includes('/backend-api') ? `${base}/wham/usage` : `${base}/api/codex/usage`;
 }
 
@@ -342,6 +393,20 @@ function normalizeResetValue(value: unknown): CodexResetMs {
 function numericValue(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return value;
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  const numberValue = numericValue(value);
+  return numberValue == null ? null : Math.max(0, Math.round(numberValue));
+}
+
+function validIsoOrNull(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return Number.isFinite(Date.parse(trimmed)) ? trimmed : undefined;
 }
 
 function pctFromWindow(window: Record<string, unknown>): number | null {
@@ -547,6 +612,7 @@ function normalizeCredits(value: unknown): CodexCreditsSnapshot | null {
 export function normalizeStoredCodexUsagePct(
   value: unknown,
   currentAuthMtimeMs: number | null = getCodexAuthMtimeMs(),
+  currentAuthIdentityHash: string | null = getCodexAuthIdentityHash(),
 ): StoredCodexUsagePct | null {
   const record = asRecord(value);
   if (!record) return null;
@@ -559,11 +625,14 @@ export function normalizeStoredCodexUsagePct(
     ? record.authMtimeMs
     : null;
   if (currentAuthMtimeMs == null || authMtimeMs == null || Math.abs(authMtimeMs - currentAuthMtimeMs) > 1) return null;
+  const authIdentityHash = typeof record.authIdentityHash === 'string' && record.authIdentityHash ? record.authIdentityHash : null;
+  if (!authIdentityHash || !currentAuthIdentityHash || authIdentityHash !== currentAuthIdentityHash) return null;
 
   return {
     schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
     storedAt,
     authMtimeMs,
+    authIdentityHash,
     h5Available: record.h5Available === true,
     weekAvailable: record.weekAvailable === true,
     h5Pct: normalizePct(record.h5Pct),
@@ -579,12 +648,74 @@ export function normalizeStoredCodexUsagePct(
   };
 }
 
+export interface StoredCodexResetCredits {
+  schemaVersion: number;
+  storedAt: number;
+  authMtimeMs: number | null;
+  authIdentityHash: string | null;
+  data: CodexResetCreditsData;
+}
+
+function normalizeStoredCredit(value: unknown): CodexResetCredit | null {
+  const r = asRecord(value);
+  if (!r) return null;
+  const expiresAtUtc = validIsoOrNull(r.expiresAtUtc);
+  if (expiresAtUtc === undefined) return null;
+  return {
+    idSuffix: null,
+    status: typeof r.status === 'string' ? r.status : 'available',
+    expiresAtUtc,
+  };
+}
+
+export function normalizeStoredCodexResetCredits(
+  value: unknown,
+  currentAuthMtimeMs: number | null = getCodexAuthMtimeMs(),
+  currentAuthIdentityHash: string | null = getCodexAuthIdentityHash(),
+): StoredCodexResetCredits | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  if (record.schemaVersion !== CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION) return null;
+  const storedAt = typeof record.storedAt === 'number' && Number.isFinite(record.storedAt) ? record.storedAt : null;
+  if (storedAt == null || storedAt <= 0 || storedAt > Date.now()) return null;
+  const authMtimeMs = typeof record.authMtimeMs === 'number' && Number.isFinite(record.authMtimeMs) ? record.authMtimeMs : null;
+  if (currentAuthMtimeMs == null || authMtimeMs == null || Math.abs(authMtimeMs - currentAuthMtimeMs) > 1) return null;
+  const authIdentityHash = typeof record.authIdentityHash === 'string' && record.authIdentityHash ? record.authIdentityHash : null;
+  if (!authIdentityHash || !currentAuthIdentityHash || authIdentityHash !== currentAuthIdentityHash) return null;
+  const data = asRecord(record.data);
+  if (!data) return null;
+  if (data.countOnly === true) return null;
+  const credits = (Array.isArray(data.credits) ? data.credits : []).map(normalizeStoredCredit).filter((c): c is CodexResetCredit => !!c);
+  const availableCount = nonNegativeInteger(data.availableCount);
+  const totalEarnedCount = nonNegativeInteger(data.totalEarnedCount);
+  return {
+    schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+    storedAt,
+    authMtimeMs,
+    authIdentityHash,
+    data: {
+      credits,
+      availableCount: availableCount ?? credits.length,
+      totalEarnedCount: totalEarnedCount ?? 0,
+      checkedAt: numericValue(data.checkedAt) ?? storedAt,
+      countOnly: data.countOnly === true,
+      source: 'cache',
+      status: buildStatus('ok', false, '', ''),
+    },
+  };
+}
+
 export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
   const credentials = readCredentials();
   if (!credentials) {
     const status = buildStatus('no-credentials', false, 'local log', 'Codex auth.json with ChatGPT tokens was not found.');
     logStatus(status);
-    return { usage: null, status, authMtimeMs: getCodexAuthMtimeMs() };
+    return { usage: null, status, authMtimeMs: getCodexAuthMtimeMs(), authIdentityHash: getCodexAuthIdentityHash() };
+  }
+  const unsupportedStatus = unsupportedCustomBaseUrlStatus();
+  if (unsupportedStatus) {
+    logStatus(unsupportedStatus);
+    return { usage: null, status: unsupportedStatus, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
   }
 
   const headers: Record<string, string> = {
@@ -605,14 +736,162 @@ export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
         responseKeys: responseKeys(parsed),
       });
       logStatus(status);
-      return { usage: null, status, authMtimeMs: credentials.authMtimeMs };
+      return { usage: null, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash, rawPayload: parsed };
     }
     const status = buildStatus('ok', true, '', '', { responseKeys: responseKeys(parsed) });
     logStatus(status);
-    return { usage, status, authMtimeMs: credentials.authMtimeMs };
+    return { usage, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash, rawPayload: parsed };
   } catch (error) {
     const status = classifyRuntimeError(error);
     logStatus(status);
-    return { usage: null, status, authMtimeMs: credentials.authMtimeMs };
+    return { usage: null, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
+  }
+}
+
+export const CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION = 2;
+
+export interface CodexResetCredit {
+  idSuffix: string | null;
+  status: string;
+  expiresAtUtc: string | null;
+}
+
+export interface CodexResetCreditsData {
+  credits: CodexResetCredit[];
+  availableCount: number;
+  totalEarnedCount: number;
+  checkedAt: number;
+  countOnly: boolean;
+  source: 'api' | 'cache' | 'usage';
+  status: CodexUsageStatus;
+}
+
+function expiresSortKey(value: string | null): number {
+  if (value == null) return Number.POSITIVE_INFINITY;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
+}
+
+export function parseCodexResetCreditsPayload(payload: unknown, checkedAt: number): CodexResetCreditsData | null {
+  const root = asRecord(payload);
+  const hasCreditsArray = Array.isArray(root?.credits);
+  const hasCount = numericValue(root?.available_count) != null;
+  if (!hasCreditsArray && !hasCount) return null;
+  const rawCredits = hasCreditsArray ? (root!.credits as unknown[]) : [];
+  const availableRecords = rawCredits
+    .map(asRecord)
+    .filter((c): c is Record<string, unknown> => !!c && stringValue(c, 'status') === 'available');
+  const credits: CodexResetCredit[] = [];
+  for (const c of availableRecords) {
+    const expiresAtUtc = validIsoOrNull(c.expires_at);
+    if (expiresAtUtc === undefined) return null;
+    credits.push({
+      idSuffix: null,
+      status: stringValue(c, 'status') || 'available',
+      expiresAtUtc,
+    });
+  }
+  credits.sort((a, b) => expiresSortKey(a.expiresAtUtc) - expiresSortKey(b.expiresAtUtc));
+  const declaredCount = nonNegativeInteger(root?.available_count);
+  const availableCount = declaredCount != null ? declaredCount : credits.length;
+  const countOnly = !hasCreditsArray || (declaredCount != null && declaredCount !== credits.length);
+  const publicCredits = countOnly ? [] : credits;
+  const earned = nonNegativeInteger(root?.total_earned_count);
+  return {
+    credits: publicCredits,
+    availableCount,
+    totalEarnedCount: earned ?? 0,
+    checkedAt,
+    countOnly,
+    source: 'api',
+    status: buildStatus('ok', true, '', ''),
+  };
+}
+
+export function resetCreditsFromUsagePayload(
+  payload: unknown,
+  checkedAt: number,
+  status: CodexUsageStatus,
+): CodexResetCreditsData | null {
+  const root = asRecord(payload);
+  const embedded = asRecord(root?.rate_limit_reset_credits);
+  const count = numericValue(embedded?.available_count);
+  if (count == null) return null;
+  return {
+    credits: [],
+    availableCount: Math.max(0, Math.round(count)),
+    totalEarnedCount: 0,
+    checkedAt,
+    countOnly: true,
+    source: 'usage',
+    status,
+  };
+}
+
+export function resolveCodexResetCreditsUrl(baseUrl = configuredBaseUrl()): string {
+  const base = normalizeCodexUsageBaseUrl(baseUrl);
+  if (base.endsWith('/wham/usage')) return base.replace(/\/wham\/usage$/, '/wham/rate-limit-reset-credits');
+  if (base.endsWith('/api/codex/usage')) return base.replace(/\/api\/codex\/usage$/, '/api/codex/rate-limit-reset-credits');
+  if (base.endsWith('/api/codex')) return `${base}/rate-limit-reset-credits`;
+  return base.includes('/backend-api')
+    ? `${base}/wham/rate-limit-reset-credits`
+    : `${base}/api/codex/rate-limit-reset-credits`;
+}
+
+export interface CodexResetCreditsFetchResult {
+  data: CodexResetCreditsData | null;
+  status: CodexUsageStatus;
+  authMtimeMs: number | null;
+  authIdentityHash: string | null;
+}
+
+export async function fetchCodexResetCredits(): Promise<CodexResetCreditsFetchResult> {
+  const credentials = readCredentials();
+  if (!credentials) {
+    const status = buildStatus('no-credentials', false, 'local log', 'Codex auth.json with ChatGPT tokens was not found.');
+    logStatus(status);
+    return { data: null, status, authMtimeMs: getCodexAuthMtimeMs(), authIdentityHash: getCodexAuthIdentityHash() };
+  }
+  const unsupportedStatus = unsupportedCustomBaseUrlStatus();
+  if (unsupportedStatus) {
+    logStatus(unsupportedStatus);
+    return { data: null, status: unsupportedStatus, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
+  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${credentials.accessToken}`,
+    Accept: 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    'User-Agent': CODEX_USER_AGENT,
+  };
+  if (credentials.accountId) headers['ChatGPT-Account-Id'] = credentials.accountId;
+  try {
+    const body = await httpsGet(resolveCodexResetCreditsUrl(), headers);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body) as unknown;
+    } catch {
+      const status = buildStatus('schema-changed', false, 'schema changed', 'Codex reset-credits response was not valid JSON.');
+      logStatus(status);
+      return { data: null, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
+    }
+    const data = parseCodexResetCreditsPayload(parsed, Date.now());
+    if (!data) {
+      const status = buildStatus('schema-changed', false, 'schema changed', 'Codex reset-credits response is missing the expected credits list / count.', {
+        responseKeys: responseKeys(parsed),
+      });
+      logStatus(status);
+      return { data: null, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
+    }
+    const status = buildStatus('ok', true, '', '', { responseKeys: responseKeys(parsed) });
+    logStatus(status);
+    return { data, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
+  } catch (error) {
+    let status = classifyRuntimeError(error);
+    if (status.httpStatus === 404) {
+      status = buildStatus('schema-changed', false, 'schema changed', 'Codex reset-credits endpoint returned HTTP 404 (removed or moved).', { httpStatus: 404 });
+    }
+    logStatus(status);
+    return { data: null, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash };
   }
 }

@@ -195,8 +195,10 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /None/);
   assert.match(settingsView, /setQuotaTargetMode/);
   assert.match(settingsView, /target\.period/);
+  assert.match(settingsView, /target\.taskbarEligible/);
   assert.match(settingsView, /target\.badges/);
   assert.match(settingsView, /target\.rowCount/);
+  assert.match(settingsView, /s\.taskbarQuotaEnabled && isTaskbarEligibleQuotaTarget\(target\)/);
   assert.match(settingsView, /moveQuotaTarget/);
   assert.match(settingsView, /quotaTargetOrder/);
   assert.match(settingsView, /Move up/);

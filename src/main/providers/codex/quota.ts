@@ -1,7 +1,10 @@
 import {
   CodexUsagePct,
   CodexUsageStatus,
+  CodexResetCreditsData,
   fetchCodexUsagePct,
+  fetchCodexResetCredits,
+  resetCreditsFromUsagePayload,
 } from '../../codexUsageFetcher';
 import type { ProviderContext, ProviderCreditBalance, ProviderQuotaSnapshot } from '../types';
 
@@ -13,6 +16,11 @@ export interface CodexProviderQuotaSnapshot extends ProviderQuotaSnapshot {
   status: CodexUsageStatus;
   usage: CodexUsagePct | null;
   authMtimeMs: number | null;
+  authIdentityHash: string | null;
+  resetAuthMtimeMs: number | null;
+  resetAuthIdentityHash: string | null;
+  usageSkipped?: boolean;
+  resetCredits: CodexResetCreditsData | null;
 }
 
 function quotaSource(status: CodexUsageStatus): ProviderQuotaSnapshot['source'] {
@@ -40,6 +48,13 @@ export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'g
         windowKeys: ['h5', 'week'],
         sortOrder: 0,
       },
+      {
+        key: 'resets',
+        label: 'Codex Resets',
+        defaultMode: 'simple',
+        windowKeys: [],
+        sortOrder: 1,
+      },
     ],
     windowDisplay: {
       h5: {
@@ -59,9 +74,35 @@ export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'g
 }
 
 export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProviderQuotaSnapshot> {
-  const result = await fetchCodexUsagePct();
-  const source = quotaSource(result.status);
-  const usage = result.usage;
+  const usageSkipped = ctx.skipCodexUsage === true;
+  const [result, resetResult] = await Promise.all([
+    usageSkipped ? Promise.resolve(null) : fetchCodexUsagePct(),
+    ctx.skipCodexResetCredits ? Promise.resolve(null) : fetchCodexResetCredits(),
+  ]);
+  const status: CodexUsageStatus = result?.status ?? { code: 'ok', connected: true, label: '', detail: '' };
+  const source = usageSkipped ? 'cache' : quotaSource(status);
+  const usage = result?.usage ?? null;
+
+  let resetCredits: CodexResetCreditsData | null = null;
+  if (resetResult == null) {
+    resetCredits = null;
+  } else if (resetResult.data) {
+    resetCredits = resetResult.data;
+  } else {
+    const rs: CodexUsageStatus = resetResult.status;
+    const hardReject = rs.code === 'unauthorized' || rs.code === 'forbidden' || rs.code === 'schema-changed';
+    const transientOrLimited = rs.code === 'rate-limited' || rs.code === 'network' || rs.code === 'timeout' || rs.code === 'http-error';
+    if (rs.code === 'no-credentials') {
+      resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    } else if (hardReject) {
+      resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    } else if (transientOrLimited && usage) {
+      resetCredits = resetCreditsFromUsagePayload(result?.rawPayload, ctx.nowMs, rs)
+        ?? { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    } else {
+      resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: ctx.nowMs, countOnly: false, source: 'api', status: rs };
+    }
+  }
 
   return {
     provider: 'codex',
@@ -94,9 +135,14 @@ export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProvid
         }
       : undefined,
     credits: codexCredits(usage),
-    status: result.status,
+    status,
     usage,
-    authMtimeMs: result.authMtimeMs,
+    authMtimeMs: result?.authMtimeMs ?? null,
+    authIdentityHash: result?.authIdentityHash ?? null,
+    resetAuthMtimeMs: resetResult?.authMtimeMs ?? null,
+    resetAuthIdentityHash: resetResult?.authIdentityHash ?? null,
+    usageSkipped,
+    resetCredits,
   };
 }
 

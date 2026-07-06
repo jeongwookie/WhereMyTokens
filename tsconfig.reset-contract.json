@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2020"
+  },
+  "files": ["scripts/reset-credits-type-contract.ts"]
+}

@@ -25,3 +25,6 @@ TODO.md
 .codex/
 .playwright-mcp/
 .mcp.json
+
+# 로컬 에이전트 워크플로우 스크래치 문서 (spec/plan/review, 커밋 제외)
+docs/superpowers/

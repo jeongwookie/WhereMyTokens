@@ -197,19 +197,49 @@ test('StateManager sanitizes restored provider quota snapshots', () => {
     },
   }, now);
 
-  const manager = new StateManager(makeStore({ _startupStateSnapshot: snapshot }), () => {});
+  const store = makeStore({ _startupStateSnapshot: snapshot });
+  store.store = { enabledProviders: ['codex', 'antigravity'] };
+  const manager = new StateManager(store, () => {});
   const codexQuota = manager.getState().providerQuotas.codex;
 
-  assert.ok(codexQuota);
-  assert.equal(codexQuota.windows.h5.pct, 25);
-  assert.equal(codexQuota.groups, undefined);
-  assert.equal(codexQuota.models, undefined);
-  assert.equal('usage' in codexQuota, false);
-  assert.equal('authMtimeMs' in codexQuota, false);
+  assert.equal(codexQuota, undefined);
   const antigravityQuota = manager.getState().providerQuotas.antigravity;
   assert.equal(antigravityQuota.accountTooltip, 'pe***@example.com');
   assert.equal(antigravityQuota.models[0].usageModel, 'Gemini 3 Pro');
   assert.equal(antigravityQuota.models[0].statsWindowKey, 'model.MODEL_GEMINI_3_PRO');
+});
+
+test('startup snapshot writer drops Codex quota snapshots but keeps other providers', () => {
+  const now = Date.now();
+  const snapshot = makeStartupStateSnapshot({
+    ...BASE_STATE,
+    providerQuotas: {
+      codex: {
+        provider: 'codex',
+        source: 'api',
+        capturedAt: now,
+        windows: { h5: { pct: 25, resetMs: 60_000, source: 'api' } },
+        resetCredits: {
+          credits: [{ idSuffix: null, status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }],
+          availableCount: 1,
+          totalEarnedCount: 0,
+          checkedAt: now,
+          countOnly: false,
+          source: 'api',
+          status: { code: 'ok', connected: true },
+        },
+      },
+      antigravity: {
+        provider: 'antigravity',
+        source: 'localRpc',
+        capturedAt: now,
+        windows: {},
+      },
+    },
+  }, now);
+
+  assert.equal(snapshot.state.providerQuotas.codex, undefined);
+  assert.equal(snapshot.state.providerQuotas.antigravity.provider, 'antigravity');
 });
 
 test('startup snapshot normalizer rejects malformed session lists', () => {

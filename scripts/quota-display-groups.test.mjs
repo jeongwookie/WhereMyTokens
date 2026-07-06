@@ -262,7 +262,7 @@ test('antigravity snapshots with models and no groups render model fallback grou
 });
 
 test('model fallback rich cards use a generic quota row and preserve provider quota source', async () => {
-  const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
+  const { buildQuotaDisplayModels, buildQuotaTargetSettingsOptions } = await loadQuotaDisplayModels();
   const options = baseOptions({
     enabledProviders: ['antigravity'],
   });
@@ -273,18 +273,22 @@ test('model fallback rich cards use a generic quota row and preserve provider qu
       capturedAt: Date.now(),
       status: { connected: true, code: 'connected' },
       models: [
-        { model: 'MODEL_GEMINI_3_PRO', label: 'Gemini 3 Pro', remainingPct: 42, defaultMode: 'rich', visualKind: 'percentOnly', hideCost: true },
+        { model: 'MODEL_GEMINI_3_PRO', label: 'Gemini 3 Pro', remainingPct: 42, resetMs: 90_000, durationMs: 5 * 60 * 60 * 1000, defaultMode: 'rich', visualKind: 'pace', hideCost: true },
       ],
     },
   };
 
   const models = buildQuotaDisplayModels(options);
   const group = models.richGroups[0];
+  const settingsTargets = buildQuotaTargetSettingsOptions(options.settings, options.providerQuotas);
+  const settingsTarget = settingsTargets.find(target => target.label === 'Gemini 3 Pro');
 
   assert.equal(group.label, 'Gemini 3 Pro');
   assert.equal(group.rows[0].label, 'Quota');
   assert.equal(group.rows[0].quota.source, 'localRpc');
   assert.equal(group.badges.some(badge => badge.label === 'RPC'), true);
+  assert.equal(settingsTarget.period, '5h');
+  assert.equal(settingsTarget.taskbarEligible, true);
 });
 
 test('model fallback quota rows attach matching model usage stats', async () => {

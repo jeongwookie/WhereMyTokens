@@ -43,6 +43,9 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.match(source, /MeasureBlockWidth/);
   assert.match(source, /BlockGap/);
   assert.match(source, /MaximumBlockWidth/);
+  assert.match(source, /FitBlockWidths/);
+  assert.match(source, /MeasureContentWidth\(widths\)\s*<=\s*contentWidth/);
+  assert.match(source, /NonBlockWidthForBlockCount/);
   const minimumBlockWidth = Number(source.match(/MinimumBlockWidth\s*=\s*(\d+)/)?.[1]);
   const minimumMaximumBlockWidth = Number(source.match(/MinimumMaximumBlockWidth\s*=\s*(\d+)/)?.[1]);
   assert.ok(minimumBlockWidth > 0 && minimumBlockWidth <= 150);
@@ -54,14 +57,47 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.match(source, /BlockTwoColumn/);
   assert.match(source, /BlockThreeColumn/);
   assert.doesNotMatch(source, /ExtraColumn/);
-  assert.doesNotMatch(source, /\$"\+\{row\.HiddenCount\}"/);
   assert.doesNotMatch(source, /usableWidth\s*\/\s*2/);
+});
+
+test('taskbar helper shows overflow count when taskbar rows hide extra targets', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /HiddenCount\s*>\s*0/);
+  assert.match(source, /DrawOverflowBadge/);
+  assert.match(source, /\$"\+\{hiddenCount\}"/);
+});
+
+test('taskbar helper renders row status text when no quota blocks are available', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /StatusLabel/);
+  assert.match(source, /row\.Blocks\.Length\s*==\s*0/);
+  assert.match(source, /row\.StatusLabel\s*\?\?\s*"--"/);
+  assert.match(source, /MeasureStatusWidth/);
+  assert.match(source, /blockIndex\s*==\s*0[\s\S]*?StatusLabel/);
+});
+
+test('taskbar helper validates semantic snapshot arrays before rendering', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /IsValidSnapshot\(snapshot\)/);
+  assert.match(source, /WriteEvent\("snapshot-rejected"\)/);
+  assert.match(source, /WriteEvent\("snapshot-rendered"\)/);
+  assert.match(source, /snapshot\.Rows is not \{ Length: 2 \}/);
+  assert.match(source, /snapshot\.Rows\[0\]\?\.Period,\s*"5h"/);
+  assert.match(source, /snapshot\.Rows\[1\]\?\.Period,\s*"1w"/);
+  assert.match(source, /ValidTaskbarPeriods\.Contains\(row\.Period\)/);
+  assert.match(source, /row\.Blocks is null/);
+  assert.match(source, /row\.Blocks\.Length > 3/);
+  assert.match(source, /row\.HiddenCount < 0/);
+  assert.match(source, /string\.IsNullOrWhiteSpace\(block\.TargetId\)/);
+  assert.match(source, /ValidQuotaSeverities\.Contains\(block\.Severity\)/);
 });
 
 test('taskbar helper sizes its host window from measured quota content', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
   assert.match(source, /MeasurePreferredWidth/);
   assert.match(source, /ResizeToSnapshot/);
+  assert.match(source, /RefreshTaskbarMetrics/);
+  assert.match(source, /private void ResizeToSnapshot[\s\S]*?!RefreshTaskbarMetrics\(\)/);
   assert.match(source, /PreferredWidthForTaskbar\(taskbarWidth,\s*preferredContentWidth\)/);
   assert.doesNotMatch(source, /MinimumReadableWidth\s*=\s*780/);
 });
@@ -95,9 +131,8 @@ test('taskbar helper uses transparent background and sampled-background base tex
 
 test('taskbar helper keys transparency to a color close to the real taskbar background, not a saturated color', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  // Color.FromArgb(255, 0, 255) (magenta) is far from any real taskbar background, so antialiased
-  // glyph edges blending with it read as a visible tinted fringe. Keying close to the real dark/light
-  // taskbar background instead makes that same residual blend visually disappear into the backdrop.
+  // 실제 taskbar 배경과 거리가 먼 magenta key는 글자 가장자리에 색 띠를 남길 수 있다.
+  // 배경에 가까운 key를 써서 안티앨리어싱 잔여 색이 자연스럽게 묻히도록 한다.
   assert.doesNotMatch(source, /Color\.FromArgb\(255,\s*0,\s*255\)/);
   assert.match(source, /DarkTransparentKey/);
   assert.match(source, /LightTransparentKey/);
@@ -106,17 +141,20 @@ test('taskbar helper keys transparency to a color close to the real taskbar back
 
 test('taskbar helper project declares per-monitor-v2 dpi awareness', () => {
   const csproj = fs.readFileSync(path.resolve('taskbar-helper', 'WhereMyTokens.Taskbar.csproj'), 'utf8');
-  // Without this, GetDpiForWindow always returns 96 for an unaware process, silently defeating
-  // the helper's own DPI-scaled layout math (Scaled()).
+  // DPI 인식이 없으면 GetDpiForWindow가 96에 고정되어 Scaled() 기반 layout 계산이 무력화된다.
   assert.match(csproj, /<ApplicationHighDpiMode>PerMonitorV2<\/ApplicationHighDpiMode>/);
+});
+
+test('taskbar helper packaging is self-contained and single-file', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+  assert.match(pkg.scripts['build:taskbar-helper'], /--self-contained true/);
+  assert.match(pkg.scripts['build:taskbar-helper'], /PublishSingleFile=true/);
+  assert.ok(pkg.build.files.includes('!dist/taskbar-helper/**/*'));
 });
 
 test('taskbar helper sets high dpi mode explicitly in code, not only via the msbuild property', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  // `dotnet publish -r win-x64` (what build:taskbar-helper / packaging actually runs) has been
-  // observed to drop the <ApplicationHighDpiMode> MSBuild property before ApplicationConfiguration
-  // .Initialize() is generated, silently leaving the published helper DPI-unaware. An explicit
-  // Application.SetHighDpiMode call is not subject to that RID-specific property-propagation gap.
+  // RID 지정 publish에서 MSBuild DPI 속성이 누락될 수 있으므로 API 직접 호출을 함께 유지한다.
   assert.match(source, /Application\.SetHighDpiMode\(HighDpiMode\.PerMonitorV2\)/);
   assert.match(source, /Application\.SetHighDpiMode[\s\S]*?ApplicationConfiguration\.Initialize/);
 });
@@ -166,6 +204,9 @@ test('taskbar helper renders uppercase periods, percent pairs, and largest-unit 
   assert.match(source, /PctText/);
   assert.match(source, /%"/);
   assert.match(source, /ResetText/);
+  assert.match(source, /SourceLabel/);
+  assert.match(source, /SourceText/);
+  assert.match(source, /BlockDetailText\(TaskbarQuotaBlock block\)\s*=>\s*\$"\{QuotaPairText\(block\)\}\{ResetText\(block\)\}\{SourceText\(block\)\}"/);
 });
 
 test('taskbar helper measures owner-drawn text with the same API it uses to draw it', () => {

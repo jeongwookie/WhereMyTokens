@@ -9,16 +9,14 @@ namespace WhereMyTokens.Taskbar;
 
 internal static class Program
 {
+    private static readonly HashSet<string> ValidTaskbarPeriods = new(StringComparer.Ordinal) { "5h", "1w" };
+    private static readonly HashSet<string> ValidQuotaSeverities = new(StringComparer.Ordinal) { "normal", "warning", "danger", "unknown" };
+
     [STAThread]
     private static void Main()
     {
-        // Explicit call, not just the <ApplicationHighDpiMode> MSBuild property: verified via the
-        // SDK-generated GeneratedMSBuildEditorConfig that `dotnet publish -r win-x64` (what
-        // build:taskbar-helper / the packaging pipeline actually runs) drops ApplicationHighDpiMode
-        // to empty, while a plain `dotnet build` without a RID keeps it — so ApplicationConfiguration
-        // .Initialize() silently never applies PerMonitorV2 in the real published artifact, and
-        // GetDpiForWindow stays stuck at 96 for every real user. This call is unconditional at the
-        // API level and cannot be dropped by that RID-specific property propagation gap.
+        // RID 지정 publish에서 MSBuild DPI 속성이 빠질 수 있어, 실제 배포 산출물에서도
+        // PerMonitorV2가 확실히 적용되도록 API를 직접 호출한다.
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         ApplicationConfiguration.Initialize();
         using var form = new TaskbarQuotaForm();
@@ -40,12 +38,17 @@ internal static class Program
             try
             {
                 var snapshot = JsonSerializer.Deserialize<TaskbarQuotaSnapshot>(line, JsonOptions.Value);
-                if (snapshot is null) continue;
+                if (snapshot is null || !IsValidSnapshot(snapshot))
+                {
+                    WriteEvent("snapshot-rejected");
+                    continue;
+                }
                 form.BeginInvoke(() =>
                 {
                     try
                     {
                         form.Render(snapshot);
+                        WriteEvent("snapshot-rendered");
                     }
                     catch
                     {
@@ -56,11 +59,56 @@ internal static class Program
             }
             catch
             {
-                // Invalid input should not crash WMT. Ignore the bad line and wait for the next snapshot.
+                WriteEvent("snapshot-rejected");
+                // 잘못된 입력은 WMT를 죽이지 않고 다음 snapshot을 기다린다.
             }
         }
 
         form.BeginInvoke(Application.Exit);
+    }
+
+    private static bool IsValidSnapshot(TaskbarQuotaSnapshot snapshot)
+    {
+        if (snapshot.Rows is not { Length: 2 }) return false;
+        if (!string.Equals(snapshot.Rows[0]?.Period, "5h", StringComparison.Ordinal)) return false;
+        if (!string.Equals(snapshot.Rows[1]?.Period, "1w", StringComparison.Ordinal)) return false;
+        foreach (var row in snapshot.Rows)
+        {
+            if (row is null
+                || !ValidTaskbarPeriods.Contains(row.Period)
+                || row.Blocks is null
+                || row.Blocks.Length > 3
+                || row.HiddenCount < 0)
+            {
+                return false;
+            }
+            foreach (var block in row.Blocks)
+            {
+                if (block is null
+                    || string.IsNullOrWhiteSpace(block.TargetId)
+                    || string.IsNullOrWhiteSpace(block.Provider)
+                    || string.IsNullOrWhiteSpace(block.Abbreviation)
+                    || string.IsNullOrWhiteSpace(block.Label)
+                    || !ValidQuotaSeverities.Contains(block.Severity))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    internal static void WriteEvent(string type)
+    {
+        try
+        {
+            Console.Out.WriteLine($"{{\"type\":\"{type}\"}}");
+            Console.Out.Flush();
+        }
+        catch
+        {
+            // stdout 보고 실패는 helper 렌더링 자체를 막지 않는다.
+        }
     }
 }
 
@@ -72,12 +120,8 @@ internal sealed class TaskbarQuotaForm : Form
     private const int HorizontalHeightPadding = 4;
     private const int VerticalWidthPadding = 8;
     private const int DefaultRightReserve = 620;
-    // Chosen close to typical real taskbar backgrounds (Windows dark/light taskbar), rather than a
-    // saturated color far from anything real. TransparencyKey compositing only punches out pixels
-    // that exactly equal the key; antialiased glyph edges (TextRenderingHint.AntiAliasGridFit) blend
-    // text color with the key and stay opaque, so a key far from the real backdrop shows as a visible
-    // tinted fringe/ring around text. A key close to the actual backdrop makes that same residual
-    // blended fringe visually disappear into the real background instead.
+    // TransparencyKey는 정확히 일치하는 픽셀만 뚫기 때문에, 실제 taskbar 배경에 가까운 색을 키로 잡아
+    // 안티앨리어싱된 글자 가장자리의 잔여 색이 배경에 자연스럽게 묻히도록 한다.
     private static readonly Color DarkTransparentKey = Color.FromArgb(16, 16, 18);
     private static readonly Color LightTransparentKey = Color.FromArgb(248, 248, 249);
     private static readonly string LayoutStatePath = Path.Combine(
@@ -136,6 +180,21 @@ internal sealed class TaskbarQuotaForm : Form
 
     public bool AttachToTaskbar()
     {
+        if (!RefreshTaskbarMetrics()) return false;
+
+        var bounds = LayoutBounds(
+            _taskbarClientSize.Width,
+            _taskbarClientSize.Height,
+            LoadLayoutState(),
+            PreferredWidthForTaskbar(_taskbarClientSize.Width, Scaled(DefaultPreferredWidth)));
+
+        Native.MoveWindow(Handle, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
+        Show();
+        return true;
+    }
+
+    private bool RefreshTaskbarMetrics()
+    {
         var taskbar = Native.FindWindow("Shell_TrayWnd", null);
         if (taskbar == IntPtr.Zero) return false;
         if (!Native.GetClientRect(taskbar, out var rect)) return false;
@@ -149,20 +208,10 @@ internal sealed class TaskbarQuotaForm : Form
         var taskbarWidth = rect.Right - rect.Left;
         var taskbarHeight = rect.Bottom - rect.Top;
         _taskbarClientSize = new Size(taskbarWidth, taskbarHeight);
-        var bounds = LayoutBounds(
-            taskbarWidth,
-            taskbarHeight,
-            LoadLayoutState(),
-            PreferredWidthForTaskbar(taskbarWidth, Scaled(DefaultPreferredWidth)));
-
-        Native.MoveWindow(Handle, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
-        Show();
         return true;
     }
 
-    // Every raw pixel budget below is a "logical" (96-DPI) value; Scaled() converts it to
-    // device pixels for the taskbar's actual monitor so the window/columns don't shrink
-    // relative to system-drawn taskbar content (icons, clock) on higher-DPI displays.
+    // 아래 pixel budget은 96-DPI 기준 논리값이며, Scaled()가 taskbar monitor DPI에 맞춰 장치 pixel로 변환한다.
     private int Scaled(int value) => Math.Max(0, (int)Math.Round(value * _dpiScale));
 
     private Rectangle LayoutBounds(int taskbarWidth, int taskbarHeight, LayoutState? saved, int preferredWidth)
@@ -200,6 +249,7 @@ internal sealed class TaskbarQuotaForm : Form
 
     private void ResizeToSnapshot(TaskbarQuotaSnapshot snapshot)
     {
+        if (!RefreshTaskbarMetrics()) return;
         if (_taskbarClientSize.IsEmpty) return;
 
         var taskbarWidth = _taskbarClientSize.Width;
@@ -266,8 +316,7 @@ internal sealed class TaskbarQuotaForm : Form
             _suppressNextClick = false;
             return;
         }
-        Console.Out.WriteLine("{\"type\":\"open-dashboard\"}");
-        Console.Out.Flush();
+        Program.WriteEvent("open-dashboard");
     }
 
     private static Point ClampLocation(Point point, Size formSize, Size taskbarSize)
@@ -342,7 +391,7 @@ internal sealed class TaskbarQuotaForm : Form
         }
         catch
         {
-            // Layout persistence is best-effort and must not affect the WMT helper path.
+            // 위치 저장 실패는 taskbar helper 동작에 영향을 주지 않아야 한다.
         }
     }
 }
@@ -357,7 +406,7 @@ internal static class JsonOptions
 }
 
 internal sealed record TaskbarQuotaSnapshot(long UpdatedAt, string? Theme, TaskbarQuotaPeriodRow[] Rows);
-internal sealed record TaskbarQuotaPeriodRow(string Period, TaskbarQuotaBlock[] Blocks, int HiddenCount);
+internal sealed record TaskbarQuotaPeriodRow(string Period, TaskbarQuotaBlock[] Blocks, int HiddenCount, string? StatusLabel = null);
 internal sealed record LayoutState(int X, int Y);
 internal sealed record TaskbarQuotaBlock(
     string TargetId,
@@ -367,6 +416,7 @@ internal sealed record TaskbarQuotaBlock(
     double? QuotaPct,
     double? ElapsedPct,
     string? ResetLabel,
+    string? SourceLabel,
     string Severity);
 
 internal sealed class TaskbarQuotaCanvas : Control
@@ -381,6 +431,7 @@ internal sealed class TaskbarQuotaCanvas : Control
     private const int VerticalPadding = 2;
     private const int PeriodWidth = 36;
     private const int BlockHorizontalPadding = 4;
+    private const int OverflowBadgeWidth = 30;
     private const int MinimumBlockWidth = 140;
     private const int MinimumMaximumBlockWidth = 160;
     private const int MaximumMaximumBlockWidth = 300;
@@ -391,12 +442,12 @@ internal sealed class TaskbarQuotaCanvas : Control
 
     public bool BackgroundIsLight { get; private set; }
 
-    /// <summary>Device-pixel scale for the taskbar's monitor (1f = 96 DPI), set by the owning form.</summary>
+    /// <summary>소유 form이 설정하는 taskbar monitor의 장치 pixel 배율(1f = 96 DPI).</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     [System.ComponentModel.Browsable(false)]
     public float DpiScale { get; set; } = 1f;
 
-    /// <summary>Current color-key value, kept in sync with the owning form's TransparencyKey/BackColor.</summary>
+    /// <summary>소유 form의 TransparencyKey/BackColor와 동기화되는 현재 color-key 값.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     [System.ComponentModel.Browsable(false)]
     public Color TransparentKey { get; set; } = Color.FromArgb(16, 16, 18);
@@ -481,7 +532,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         var period = new Rectangle(content.Left, content.Top, Scaled(PeriodWidth), content.Height);
         var periodDivider = new Rectangle(period.Right, content.Top, Scaled(DividerWidth), content.Height);
 
-        var blockWidths = MeasureColumnWidths(graphics, snapshot, MaximumBlockWidth);
+        var blockWidths = FitBlockWidths(MeasureColumnWidths(graphics, snapshot, MaximumBlockWidth), content.Width);
         var blockOneWidth = blockWidths[0];
         var blockTwoWidth = blockWidths[1];
         var blockThreeWidth = blockWidths[2];
@@ -509,6 +560,40 @@ internal sealed class TaskbarQuotaCanvas : Control
             MeasureColumnWidth(graphics, snapshot, 2, maxBlockWidth),
         };
 
+    private int[] FitBlockWidths(IReadOnlyList<int> measured, int contentWidth)
+    {
+        var widths = measured.Take(3).ToArray();
+        if (MeasureContentWidth(widths) <= contentWidth) return widths;
+
+        var visibleCount = 0;
+        for (var index = 0; index < widths.Length; index++)
+        {
+            if (widths[index] <= 0) break;
+            visibleCount += 1;
+        }
+        if (visibleCount == 0) return widths;
+
+        var availableForBlocks = Math.Max(0, contentWidth - NonBlockWidthForBlockCount(visibleCount));
+        var fittedWidth = availableForBlocks / visibleCount;
+        for (var index = 0; index < visibleCount; index++)
+        {
+            widths[index] = Math.Min(widths[index], fittedWidth);
+        }
+        return widths;
+    }
+
+    private int NonBlockWidthForBlockCount(int blockCount)
+    {
+        var width = Scaled(PeriodWidth) + Scaled(DividerWidth);
+        if (blockCount <= 0) return width;
+        width += Scaled(BlockGap);
+        for (var index = 1; index < blockCount; index++)
+        {
+            width += (Scaled(BlockGap) / 2) + Scaled(DividerWidth) + Scaled(BlockGap);
+        }
+        return width;
+    }
+
     private int MeasureColumnWidth(Graphics graphics, TaskbarQuotaSnapshot snapshot, int blockIndex, int maxBlockWidth)
     {
         var width = 0;
@@ -520,8 +605,23 @@ internal sealed class TaskbarQuotaCanvas : Control
             hasBlock = true;
             width = Math.Max(width, MeasureBlockWidth(graphics, block, maxBlockWidth));
         }
+        if (!hasBlock && blockIndex == 0 && snapshot.Rows.Take(2).Any(row => row.Blocks.Length == 0 && !string.IsNullOrWhiteSpace(row.StatusLabel)))
+        {
+            return Math.Min(maxBlockWidth, Math.Max(Scaled(MinimumBlockWidth), MeasureStatusWidth(graphics, snapshot, maxBlockWidth)));
+        }
         if (!hasBlock) return 0;
         return Math.Min(maxBlockWidth, Math.Max(Scaled(MinimumBlockWidth), width));
+    }
+
+    private int MeasureStatusWidth(Graphics graphics, TaskbarQuotaSnapshot snapshot, int maxBlockWidth)
+    {
+        var width = 0;
+        foreach (var row in snapshot.Rows.Take(2))
+        {
+            if (row.Blocks.Length > 0 || string.IsNullOrWhiteSpace(row.StatusLabel)) continue;
+            width = Math.Max(width, MeasureDrawStringWidth(graphics, row.StatusLabel, _blockFont, maxBlockWidth));
+        }
+        return width + (Scaled(BlockHorizontalPadding) * 2);
     }
 
     private int MeasureBlockWidth(Graphics graphics, TaskbarQuotaBlock? block, int maxBlockWidth)
@@ -555,9 +655,24 @@ internal sealed class TaskbarQuotaCanvas : Control
     private void DrawRow(Graphics graphics, TaskbarQuotaPeriodRow row, ColumnLayout columns, Rectangle rowBounds)
     {
         DrawText(graphics, PeriodText(row.Period), _periodFont, _palette.Text, RowCell(columns[PeriodColumn], rowBounds));
+        if (row.Blocks.Length == 0)
+        {
+            DrawText(graphics, row.StatusLabel ?? "--", _blockFont, _palette.Muted, RowCell(columns[BlockOneColumn], rowBounds));
+            return;
+        }
         DrawBlock(graphics, row.Blocks.ElementAtOrDefault(0), RowCell(columns[BlockOneColumn], rowBounds));
         DrawBlock(graphics, row.Blocks.ElementAtOrDefault(1), RowCell(columns[BlockTwoColumn], rowBounds));
-        DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), RowCell(columns[BlockThreeColumn], rowBounds));
+        var thirdCell = RowCell(columns[BlockThreeColumn], rowBounds);
+        if (row.HiddenCount > 0 && thirdCell.Width > 0)
+        {
+            var badgeWidth = Math.Min(Scaled(OverflowBadgeWidth), thirdCell.Width);
+            var blockCell = new Rectangle(thirdCell.Left, thirdCell.Top, Math.Max(0, thirdCell.Width - badgeWidth), thirdCell.Height);
+            var badgeCell = new Rectangle(thirdCell.Right - badgeWidth, thirdCell.Top, badgeWidth, thirdCell.Height);
+            DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), blockCell);
+            DrawOverflowBadge(graphics, row.HiddenCount, badgeCell);
+            return;
+        }
+        DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), thirdCell);
     }
 
     private void DrawBlock(Graphics graphics, TaskbarQuotaBlock? block, Rectangle bounds)
@@ -569,6 +684,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         var quotaUsedText = QuotaUsedText(block);
         var elapsedText = ElapsedText(block);
         var resetText = ResetText(block);
+        var sourceText = SourceText(block);
         var prefixWidth = DrawMeasuredText(
             graphics,
             prefixText,
@@ -592,11 +708,21 @@ internal sealed class TaskbarQuotaCanvas : Control
         cursor += elapsedWidth;
         if (cursor < bounds.Right)
         {
-            DrawText(
+            var resetWidth = DrawMeasuredText(
                 graphics,
                 resetText,
                 _blockFont,
                 _palette.Text,
+                new Rectangle(cursor, bounds.Top, Math.Max(0, bounds.Right - cursor), bounds.Height));
+            cursor += resetWidth;
+        }
+        if (cursor < bounds.Right)
+        {
+            DrawText(
+                graphics,
+                sourceText,
+                _blockFont,
+                _palette.Muted,
                 new Rectangle(cursor, bounds.Top, Math.Max(0, bounds.Right - cursor), bounds.Height));
         }
     }
@@ -632,6 +758,15 @@ internal sealed class TaskbarQuotaCanvas : Control
         graphics.FillRectangle(brush, bounds);
     }
 
+    private void DrawOverflowBadge(Graphics graphics, int hiddenCount, Rectangle bounds)
+    {
+        if (hiddenCount <= 0 || bounds.Width <= 0 || bounds.Height <= 0) return;
+        using var brush = new SolidBrush(_palette.Muted);
+        using var format = TextStringFormat();
+        format.Alignment = StringAlignment.Far;
+        graphics.DrawString($"+{hiddenCount}", _blockFont, brush, bounds, format);
+    }
+
     private Rectangle RowCell(Rectangle column, Rectangle rowBounds)
     {
         var top = rowBounds.Top;
@@ -643,7 +778,7 @@ internal sealed class TaskbarQuotaCanvas : Control
 
     private static string QuotaPrefixLabel(TaskbarQuotaBlock block) => $"{block.Abbreviation}:";
 
-    private static string BlockDetailText(TaskbarQuotaBlock block) => $"{QuotaPairText(block)}{ResetText(block)}";
+    private static string BlockDetailText(TaskbarQuotaBlock block) => $"{QuotaPairText(block)}{ResetText(block)}{SourceText(block)}";
 
     private static string QuotaPairText(TaskbarQuotaBlock block)
     {
@@ -657,6 +792,8 @@ internal sealed class TaskbarQuotaCanvas : Control
     private static string ElapsedText(TaskbarQuotaBlock block) => $"/{PctText(block.ElapsedPct)}";
 
     private static string ResetText(TaskbarQuotaBlock block) => string.IsNullOrWhiteSpace(block.ResetLabel) ? " --" : $" {block.ResetLabel}";
+
+    private static string SourceText(TaskbarQuotaBlock block) => string.IsNullOrWhiteSpace(block.SourceLabel) ? string.Empty : $" {block.SourceLabel}";
 
     private static string PctText(double? value) => value is null ? "--" : $"{Math.Round(value.Value):0}%";
 
