@@ -127,7 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
-| Unreleased | TBD | Add Codex reset-credit availability to Plan Usage and a self-contained draggable Windows taskbar mini quota display with 5H/1W rows, overflow indicators, runtime-disable safeguards, and privacy docs |
+| v1.20.0 | 2026-07-07 | Add Codex reset-credit availability to Plan Usage and a self-contained draggable Windows taskbar mini quota display with 5H/1W rows, overflow indicators, runtime-disable safeguards, and privacy docs |
 | v1.19.2 | 2026-06-22 | Stabilize Trend breakdown imports for short Claude thinking blocks by widening the CALIB guard while still failing on clear encoding drift |
 | v1.19.1 | 2026-06-22 | Fix Claude JSONL discovery so agent logs contribute to recent usage graphs while visible startup sessions still hide agent-only logs |
 | v1.19.0 | 2026-06-17 | Add clickable Trend bucket breakdowns with provider input/output, thinking/response/tool composition, cache-aware work/billing token views, git net-line categories, and hardened breakdown ledger/import validation |
