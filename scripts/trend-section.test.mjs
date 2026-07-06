@@ -123,7 +123,7 @@ test('TrendCard wires click selection to the inline breakdown card', () => {
 test('TrendCard breakdown effect uses stable selected bucket inputs', () => {
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(trendCard, /const selectedExists = selectedKey !== null && selectedIndex >= 0/);
-  assert.match(trendCard, /}, \[selectedKey, selectedSignature, grain, selectedExists\]\)/);
+  assert.match(trendCard, /}, \[selectedKey, selectedSignature, grain, selectedExists, lastUpdated\]\)/);
   assert.doesNotMatch(trendCard, /}, \[[^\]]*selectedRow[^\]]*\]\)/);
 });
 
@@ -133,18 +133,30 @@ test('TrendCard clears stale breakdown only when the selected bucket identity ch
   assert.match(trendCard, /breakdownRequestKeyRef\.current = null/);
   assert.match(trendCard, /const requestKey = `\$\{grain\}\|\$\{selectedKey\}`/);
   assert.match(trendCard, /const isNewRequestKey = breakdownRequestKeyRef\.current !== requestKey/);
-  assert.match(trendCard, /if \(isNewRequestKey\) \{\s*setBreakdown\(null\);\s*\}/);
+  assert.match(trendCard, /if \(isNewRequestKey\) \{\s*breakdownRef\.current = null;\s*setBreakdown\(null\);\s*\}/);
   assert.match(trendCard, /breakdownRequestKeyRef\.current = requestKey/);
 });
 
 test('TrendCard throttles same-bucket breakdown refreshes without showing loading', () => {
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(trendCard, /const BREAKDOWN_REFRESH_THROTTLE_MS = 30_000/);
+  assert.match(trendCard, /const breakdownRef = useRef<BucketBreakdown \| null>\(null\)/);
   assert.match(trendCard, /const breakdownRefreshDueAtRef = useRef\(0\)/);
+  assert.match(trendCard, /const breakdownTrailingTimerRef = useRef/);
   assert.match(trendCard, /const isNewRequestKey = breakdownRequestKeyRef\.current !== requestKey/);
-  assert.match(trendCard, /if \(!isNewRequestKey && now < breakdownRefreshDueAtRef\.current\) return/);
-  assert.match(trendCard, /breakdownRefreshDueAtRef\.current = now \+ BREAKDOWN_REFRESH_THROTTLE_MS/);
-  assert.match(trendCard, /setLoading\(isNewRequestKey\)/);
+  assert.match(trendCard, /if \(!isNewRequestKey && now < breakdownRefreshDueAtRef\.current\) \{/);
+  assert.match(trendCard, /breakdownTrailingTimerRef\.current = window\.setTimeout/);
+  assert.match(trendCard, /refreshBreakdown\(requestKey, selectedKey, breakdownRef\.current === null\)/);
+  assert.match(trendCard, /breakdownRefreshDueAtRef\.current = Date\.now\(\) \+ BREAKDOWN_REFRESH_THROTTLE_MS/);
+  assert.match(trendCard, /const showLoading = isNewRequestKey \|\| breakdown === null/);
+});
+
+test('TrendCard receives state freshness so breakdown-only ledger changes can refresh', () => {
+  const mainView = fs.readFileSync('src/renderer/views/MainView.tsx', 'utf8');
+  const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
+  assert.match(mainView, /<TrendCard[^>]*lastUpdated=\{state\.lastUpdated\}/);
+  assert.match(trendCard, /lastUpdated: number/);
+  assert.match(trendCard, /}, \[selectedKey, selectedSignature, grain, selectedExists, lastUpdated\]\)/);
 });
 
 test('TrendCard does not draw missing usage or output buckets as zero-value trend lines', () => {
