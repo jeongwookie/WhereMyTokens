@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 import stateManagerModule from '../dist/main/stateManager.js';
 import providersModule from '../dist/main/providers/index.js';
@@ -97,4 +98,32 @@ test('codex sessions without a usage summary are skipped while claude sessions a
     result.sessions.every(session => session.sessionId !== 'x1'),
     'codex session lacking a summary should be skipped',
   );
+});
+
+test('disabled Codex does not read or expose account service tier', () => {
+  const originalReadFileSync = fs.readFileSync;
+  let codexAccountReads = 0;
+  fs.readFileSync = function patchedReadFileSync(file, ...args) {
+    if (String(file).includes('.codex-global-state.json')) {
+      codexAccountReads += 1;
+      return JSON.stringify({
+        'electron-persisted-atom-state': {
+          'default-service-tier': 'team',
+        },
+      });
+    }
+    return originalReadFileSync.call(this, file, ...args);
+  };
+
+  try {
+    const disabled = buildManager(['claude'], []);
+    assert.equal(disabled.getState().codexAccount.serviceTier, null);
+    assert.equal(codexAccountReads, 0);
+
+    const enabled = buildManager(['codex'], []);
+    assert.equal(enabled.getState().codexAccount.serviceTier, 'team');
+    assert.equal(codexAccountReads, 1);
+  } finally {
+    fs.readFileSync = originalReadFileSync;
+  }
 });

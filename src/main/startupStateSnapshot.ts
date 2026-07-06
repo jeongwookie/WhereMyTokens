@@ -48,10 +48,16 @@ function sanitizeStateForSnapshot<TState extends StartupSnapshotState>(state: TS
     sessions?: unknown;
     repoGitStats?: unknown;
     settings?: unknown;
+    providerQuotas?: unknown;
   };
-  const { settings: _settings, ...rest } = raw;
+  const { settings: _settings, providerQuotas: rawProviderQuotas, ...rest } = raw;
+  const providerQuotas = asRecord(rawProviderQuotas);
+  const sanitizedProviderQuotas = providerQuotas
+    ? Object.fromEntries(Object.entries(providerQuotas).filter(([provider]) => provider !== 'codex'))
+    : undefined;
   return {
     ...rest,
+    ...(providerQuotas ? { providerQuotas: sanitizedProviderQuotas } : {}),
     sessions: Array.isArray(raw.sessions)
       ? raw.sessions
           .filter((session): session is Record<string, unknown> => !!session && typeof session === 'object' && !Array.isArray(session))

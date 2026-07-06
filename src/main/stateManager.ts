@@ -7,7 +7,7 @@ import { JsonlCache } from './jsonlCache';
 import { computeUsage, UsageData, UsageWindowResetHints } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
-import { CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexUsagePct, CodexUsageStatus, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
+import { CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION, CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexResetCreditsData, CodexUsagePct, CodexUsageStatus, getCodexAuthIdentityHash, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexResetCredits, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
@@ -43,6 +43,8 @@ import type {
   ProviderLedgerSource,
   ProviderQuotaSnapshot,
   ProviderQuotaStatus,
+  ProviderResetCredit,
+  ProviderResetCreditsData,
   ProviderQuotaWindow,
   ProviderQuotaWindowDisplay,
   ProviderSource,
@@ -53,7 +55,7 @@ import type {
 } from './providers/types';
 import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
 import { buildClaudeQuotaDisplayMetadata, isClaudeQuotaSnapshot } from './providers/claude/quota';
-import { buildCodexQuotaDisplayMetadata, isCodexQuotaSnapshot } from './providers/codex/quota';
+import { buildCodexQuotaDisplayMetadata, CodexProviderQuotaSnapshot, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
   buildUsageVisibilityFilter,
   usageProviderVisible,
@@ -168,6 +170,7 @@ type LedgerSourceFile = ProviderLedgerSource;
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
 const CODEX_H5_WINDOW_MS = 5 * 60 * 60 * 1000;
 const CODEX_WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const CODEX_RESET_COUNT_ONLY_TTL_MS = 10 * 60 * 1000;
 const STARTUP_STATE_SNAPSHOT_KEY = '_startupStateSnapshot';
 
 function getJsonlMtime(filePath: string): Date | null {
@@ -249,6 +252,20 @@ function quotaRecord(value: unknown): Record<string, unknown> | null {
 
 function finiteQuotaNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function nonNegativeQuotaInteger(value: unknown): number | undefined {
+  const numberValue = finiteQuotaNumber(value);
+  return numberValue == null ? undefined : Math.max(0, Math.round(numberValue));
+}
+
+function validQuotaIsoOrNull(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return Number.isFinite(Date.parse(trimmed)) ? trimmed : undefined;
 }
 
 function quotaString(value: unknown): string | undefined {
@@ -336,7 +353,9 @@ function sanitizeQuotaGroup(value: unknown): ProviderQuotaGroupSpec | null {
   const record = quotaRecord(value);
   const key = quotaString(record?.key);
   const label = quotaString(record?.label);
-  const windowKeys = quotaStringList(record?.windowKeys);
+  const windowKeys = Array.isArray(record?.windowKeys)
+    ? record.windowKeys.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map(item => item.trim())
+    : undefined;
   if (!record || !key || !label || !windowKeys) return null;
   return {
     key,
@@ -456,7 +475,7 @@ function isProviderIdValue(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as readonly string[]).includes(value);
 }
 
-function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
+export function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
   const record = quotaRecord(value);
   if (!record) return null;
   if (record.provider != null && record.provider !== provider) return null;
@@ -473,6 +492,63 @@ function sanitizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): Pr
     windowDisplay: sanitizeQuotaWindowDisplayMap(record.windowDisplay),
     credits: sanitizeProviderCredits(record.credits),
     status: sanitizeProviderQuotaStatus(record.status),
+    resetCredits: sanitizeResetCredits(record.resetCredits),
+  };
+}
+
+export function activeCodexResetCredits(
+  data: CodexResetCreditsData,
+  now: number,
+  connected: boolean,
+  latestStatus?: CodexUsageStatus | null,
+): CodexResetCreditsData {
+  const activeCredits = data.countOnly ? [] : data.credits.filter(c => {
+    if (c.expiresAtUtc == null) return true;
+    const ms = Date.parse(c.expiresAtUtc);
+    return Number.isFinite(ms) && ms > now;
+  });
+  const attemptFailed = !!latestStatus && latestStatus.code !== 'ok';
+  const status = attemptFailed ? latestStatus! : data.status;
+  const source: 'api' | 'cache' | 'usage' = data.source === 'usage'
+    ? 'usage'
+    : (!connected || attemptFailed) ? 'cache' : data.source;
+  return {
+    ...data,
+    credits: activeCredits,
+    availableCount: data.countOnly ? data.availableCount : activeCredits.length,
+    status,
+    source,
+  };
+}
+
+export function sanitizeResetCredits(value: unknown): ProviderResetCreditsData | null {
+  const r = quotaRecord(value);
+  if (!r) return null;
+  const rawCredits = Array.isArray(r.credits) ? r.credits : [];
+  const credits = rawCredits
+    .map(quotaRecord)
+    .filter((c): c is Record<string, unknown> => !!c)
+    .map((c): ProviderResetCredit | null => {
+      const expiresAtUtc = validQuotaIsoOrNull(c.expiresAtUtc);
+      if (expiresAtUtc === undefined) return null;
+      return {
+        idSuffix: null,
+        status: typeof c.status === 'string' ? c.status : 'available',
+        expiresAtUtc,
+      };
+    })
+    .filter((c): c is ProviderResetCredit => !!c);
+  const sourceAvailableCount = nonNegativeQuotaInteger(r.availableCount) ?? credits.length;
+  const countOnly = r.countOnly === true || sourceAvailableCount !== credits.length;
+  const publicCredits = countOnly ? [] : credits;
+  return {
+    credits: publicCredits,
+    availableCount: countOnly ? sourceAvailableCount : publicCredits.length,
+    totalEarnedCount: nonNegativeQuotaInteger(r.totalEarnedCount) ?? 0,
+    checkedAt: finiteQuotaNumber(r.checkedAt) ?? 0,
+    countOnly,
+    source: r.source === 'cache' ? 'cache' : r.source === 'usage' ? 'usage' : 'api',
+    status: sanitizeProviderQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
   };
 }
 
@@ -640,12 +716,27 @@ export class StateManager {
   private lastOAuthCredentialMarker: string | null = null;
   private codexUsagePct: CodexUsagePct | null = null;
   private codexUsagePctStoredAt = 0;
+  private codexUsageAuthMtimeMs: number | null = null;
+  private codexUsageAuthIdentityHash: string | null = null;
+  private codexUsageAttemptAuthMtimeMs: number | null = null;
+  private codexUsageAttemptAuthIdentityHash: string | null = null;
+  private codexAuthMissingObserved = false;
   private codexUsageConnected = false;
   private codexStatusLabel = '';
   private codexError = '';
   private lastCodexUsageCallMs = 0;
   private codexUsageBackoffMs = 0;
   private codexUsageRequestSeq = 0;
+  private codexResetCredits: CodexResetCreditsData | null = null;
+  private codexResetCountOnlyFallback: CodexResetCreditsData | null = null;
+  private codexResetCreditsStoredAt = 0;
+  private codexResetAuthMtimeMs: number | null = null;
+  private codexResetAuthIdentityHash: string | null = null;
+  private codexResetAttemptAuthMtimeMs: number | null = null;
+  private codexResetAttemptAuthIdentityHash: string | null = null;
+  private codexResetStatus: CodexUsageStatus | null = null;
+  private codexResetBackoffMs = 0;
+  private lastCodexResetCallMs = 0;
   private providerQuotaRequestSeqs = new Map<ProviderId, number>();
   private providerQuotaSnapshots = new Map<ProviderId, ProviderQuotaSnapshot>();
   private lastManualProviderUsageForceMs = 0;
@@ -673,6 +764,7 @@ export class StateManager {
   private repoGitStatsLastRefresh = 0;
   private static readonly API_MIN_INTERVAL_MS = 300_000;
   private static readonly CODEX_USAGE_MIN_INTERVAL_MS = 300_000;
+  private static readonly CODEX_RESET_MIN_INTERVAL_MS = 300_000;
   private static readonly MANUAL_PROVIDER_USAGE_FORCE_MIN_INTERVAL_MS = 60_000;
   private static readonly GIT_STATS_TTL_MS = 600_000;
   private static readonly FAST_REFRESH_VISIBLE_MS = 60_000;
@@ -724,21 +816,25 @@ export class StateManager {
       this.apiUsagePctStoredAt = cached.storedAt;
       this.apiUsagePct = cached;
     }
-    const cachedCodexRaw = this.getPersistedValue('_cachedCodexUsagePct', null);
-    const cachedCodex = normalizeStoredCodexUsagePct(cachedCodexRaw, getCodexAuthMtimeMs());
-    if (cachedCodexRaw && !cachedCodex) {
-      this.deletePersistedValue('_cachedCodexUsagePct');
+    const settings = this.getSettings();
+    if (settings.enabledProviders.includes('codex')) {
+      this.hydrateCodexCachesFromStore(settings);
+      if (this.codexUsagePct || this.codexResetCredits) {
+        this.state = {
+          ...this.state,
+          providerQuotas: this.buildProviderQuotas(Date.now(), settings),
+          codexAccount: this.codexAccountForSettings(settings),
+          codexUsageConnected: this.codexUsageConnected,
+          codexStatusLabel: this.codexStatusLabel || undefined,
+          codexError: this.codexError || undefined,
+        };
+      }
     }
-    if (cachedCodex && hasCodexUsageCredentials()) {
-      this.codexUsagePctStoredAt = cachedCodex.storedAt;
-      this.codexUsagePct = cachedCodex;
-    }
-
     this.bridgeWatcher = new BridgeWatcher((data) => {
       this.liveSession = data;
       this.state = {
         ...this.state,
-        providerQuotas: this.buildProviderQuotas(),
+        providerQuotas: this.buildProviderQuotas(Date.now(), this.getSettings()),
         bridgeActive: true,
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
@@ -813,16 +909,23 @@ export class StateManager {
 
   private reviveRestoredState(state: AppState): AppState {
     const sessions = Array.isArray(state.sessions) ? state.sessions : [];
-    const providerQuotas = sanitizeProviderQuotaMap(state.providerQuotas);
+    const settings = this.getSettings();
+    const enabled = new Set(settings.enabledProviders);
+    const restoredProviderQuotas = sanitizeProviderQuotaMap(state.providerQuotas);
+    const providerQuotas: ProviderQuotaMap = {};
     this.providerQuotaSnapshots.clear();
-    for (const [provider, snapshot] of Object.entries(providerQuotas) as Array<[ProviderId, ProviderQuotaSnapshot | undefined]>) {
-      if (snapshot?.provider === provider) this.providerQuotaSnapshots.set(provider, snapshot);
+    for (const [provider, snapshot] of Object.entries(restoredProviderQuotas) as Array<[ProviderId, ProviderQuotaSnapshot | undefined]>) {
+      if (!enabled.has(provider) || snapshot?.provider !== provider) continue;
+      if (provider === 'codex') continue;
+      providerQuotas[provider] = snapshot;
+      this.providerQuotaSnapshots.set(provider, snapshot);
     }
     return {
       ...state,
-      settings: this.getSettings(),
+      settings,
       repoGitStats: state.repoGitStats && typeof state.repoGitStats === 'object' ? state.repoGitStats : {},
       providerQuotas,
+      codexAccount: this.codexAccountForSettings(settings),
       sessions: sessions.map(session => ({
         ...session,
         startedAt: this.reviveDate(session.startedAt) ?? new Date(0),
@@ -936,7 +1039,7 @@ export class StateManager {
       usageTrend: emptyUsageTrendData(),
       providerQuotas: {},
       settings: this.getSettings(),
-      codexAccount: readCodexAccountState(),
+      codexAccount: this.codexAccountForSettings(),
       stateFreshness: 'empty',
       initialRefreshComplete: false,
       historyWarmupPending: false,
@@ -969,6 +1072,45 @@ export class StateManager {
       cacheEfficiency: 0,
       cacheSavingsUSD: 0,
     };
+  }
+
+  private codexAccountForSettings(settings: AppSettings = this.getSettings()): CodexAccountState {
+    return settings.enabledProviders.includes('codex')
+      ? readCodexAccountState()
+      : { serviceTier: null };
+  }
+
+  private hydrateCodexCachesFromStore(settings: AppSettings = this.getSettings()): void {
+    if (!settings.enabledProviders.includes('codex')) return;
+    const cachedCodexRaw = this.getPersistedValue('_cachedCodexUsagePct', null);
+    const cachedResetRaw = this.getPersistedValue('_cachedCodexResetCredits', null);
+    const codexAuthMtimeMs = getCodexAuthMtimeMs();
+    const codexAuthIdentityHash = getCodexAuthIdentityHash();
+    const cachedCodex = normalizeStoredCodexUsagePct(cachedCodexRaw, codexAuthMtimeMs, codexAuthIdentityHash);
+    if (cachedCodexRaw && !cachedCodex) {
+      this.deletePersistedValue('_cachedCodexUsagePct');
+    }
+    if (cachedCodex && hasCodexUsageCredentials()) {
+      this.codexUsagePctStoredAt = cachedCodex.storedAt;
+      this.codexUsageAuthMtimeMs = cachedCodex.authMtimeMs;
+      this.codexUsageAuthIdentityHash = cachedCodex.authIdentityHash;
+      this.codexUsageAttemptAuthMtimeMs = cachedCodex.authMtimeMs;
+      this.codexUsageAttemptAuthIdentityHash = cachedCodex.authIdentityHash;
+      this.codexUsagePct = cachedCodex;
+    }
+
+    const cachedReset = normalizeStoredCodexResetCredits(cachedResetRaw, codexAuthMtimeMs, codexAuthIdentityHash);
+    if (cachedResetRaw && !cachedReset) {
+      this.deletePersistedValue('_cachedCodexResetCredits');
+    }
+    if (cachedReset && hasCodexUsageCredentials()) {
+      this.codexResetCreditsStoredAt = cachedReset.storedAt;
+      this.codexResetCredits = cachedReset.data;
+      this.codexResetAuthMtimeMs = cachedReset.authMtimeMs;
+      this.codexResetAuthIdentityHash = cachedReset.authIdentityHash;
+      this.codexResetAttemptAuthMtimeMs = cachedReset.authMtimeMs;
+      this.codexResetAttemptAuthIdentityHash = cachedReset.authIdentityHash;
+    }
   }
 
   private emptyCodeOutputStats(): CodeOutputStats {
@@ -1256,6 +1398,16 @@ export class StateManager {
 
   private getAgedCodexUsagePct(now = Date.now()): CodexUsagePct | null {
     if (!this.codexUsagePct) return null;
+    if (!this.codexAuthMarkerMatches(this.codexUsageAuthMtimeMs, this.codexUsageAuthIdentityHash)) {
+      this.clearCodexUsageCache();
+      this.clearCodexResetCache();
+      this.codexResetStatus = null;
+      this.codexResetBackoffMs = 0;
+      this.codexUsageBackoffMs = 0;
+      this.lastCodexUsageCallMs = 0;
+      this.lastCodexResetCallMs = 0;
+      return null;
+    }
     if (!this.codexUsagePctStoredAt) return this.codexUsagePct;
     const aged = ageCodexUsageSample(this.codexUsagePct, now - this.codexUsagePctStoredAt);
     return aged.h5Available || aged.weekAvailable ? aged : null;
@@ -1294,23 +1446,36 @@ export class StateManager {
     return ++this.apiRequestSeq;
   }
 
-  private beginCodexQuotaRequest(force: boolean, now: number): number | null {
+  private beginCodexQuotaRequest(force: boolean, now: number): { requestSeq: number; skipCodexUsage: boolean; skipCodexResetCredits: boolean } | null {
+    const authChanged = this.consumeCodexAuthChange();
     const elapsedSinceLastCall = now - this.lastCodexUsageCallMs;
-    if (this.codexUsageBackoffMs > 0 && elapsedSinceLastCall < this.codexUsageBackoffMs) return null;
-    if (!force && elapsedSinceLastCall < StateManager.CODEX_USAGE_MIN_INTERVAL_MS) return null;
-    this.lastCodexUsageCallMs = now;
-    return ++this.codexUsageRequestSeq;
+    const usageBlockedByBackoff = this.codexUsageBackoffMs > 0 && elapsedSinceLastCall < this.codexUsageBackoffMs;
+    const usageBlockedByInterval = !force && !authChanged && elapsedSinceLastCall < StateManager.CODEX_USAGE_MIN_INTERVAL_MS;
+    const usageAllowed = !usageBlockedByBackoff && !usageBlockedByInterval;
+    const skipCodexResetCredits = this.shouldSkipCodexResetCredits(now, force || authChanged);
+    if (!usageAllowed && skipCodexResetCredits) return null;
+    if (usageAllowed) this.lastCodexUsageCallMs = now;
+    if (!skipCodexResetCredits) this.lastCodexResetCallMs = now;
+    return {
+      requestSeq: ++this.codexUsageRequestSeq,
+      skipCodexUsage: !usageAllowed,
+      skipCodexResetCredits,
+    };
   }
 
-  private beginProviderQuotaRequest(provider: ProviderId, force: boolean, now: number): number | null {
+  private beginProviderQuotaRequest(provider: ProviderId, force: boolean, now: number): { requestSeq: number; skipCodexUsage?: boolean; skipCodexResetCredits?: boolean } | null {
+    if (provider === 'codex') {
+      const admission = this.beginCodexQuotaRequest(force, now);
+      if (!admission) return null;
+      this.providerQuotaRequestSeqs.set(provider, admission.requestSeq);
+      return admission;
+    }
     const requestSeq = provider === 'claude'
       ? this.beginClaudeQuotaRequest(force, now)
-      : provider === 'codex'
-        ? this.beginCodexQuotaRequest(force, now)
-        : (this.providerQuotaRequestSeqs.get(provider) ?? 0) + 1;
+      : (this.providerQuotaRequestSeqs.get(provider) ?? 0) + 1;
     if (requestSeq == null) return null;
     this.providerQuotaRequestSeqs.set(provider, requestSeq);
-    return requestSeq;
+    return { requestSeq };
   }
 
   private applyClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, requestStartedAtMs: number): boolean {
@@ -1365,18 +1530,184 @@ export class StateManager {
     return 0;
   }
 
+  private codexBackoffForResetStatus(status: CodexUsageStatus): number {
+    if (status.code === 'ok') return 0;
+    if (status.code === 'rate-limited') {
+      return typeof status.retryAfterMs === 'number'
+        ? Math.min(CODEX_USAGE_MAX_BACKOFF_MS, Math.max(0, status.retryAfterMs))
+        : Math.min(this.codexResetBackoffMs === 0 ? 120_000 : this.codexResetBackoffMs * 2, CODEX_USAGE_MAX_BACKOFF_MS);
+    }
+    if (status.code === 'unauthorized' || status.code === 'forbidden' || status.code === 'schema-changed') {
+      return CODEX_USAGE_MAX_BACKOFF_MS;
+    }
+    if (status.code === 'timeout' || status.code === 'network' || status.code === 'http-error') {
+      return Math.min(this.codexResetBackoffMs === 0 ? 300_000 : this.codexResetBackoffMs * 2, CODEX_USAGE_MAX_BACKOFF_MS);
+    }
+    return 0;
+  }
+
+  private shouldSkipCodexResetCredits(now: number, force: boolean): boolean {
+    const elapsed = now - this.lastCodexResetCallMs;
+    if (this.codexResetBackoffMs > 0 && elapsed < this.codexResetBackoffMs) return true;
+    return !force && this.lastCodexResetCallMs > 0 && elapsed < StateManager.CODEX_RESET_MIN_INTERVAL_MS;
+  }
+
+  private codexAuthMarkerMatches(
+    markerMtime: number | null,
+    markerHash: string | null,
+    currentMtime = getCodexAuthMtimeMs(),
+    currentHash = getCodexAuthIdentityHash(),
+  ): boolean {
+    return markerMtime != null
+      && currentMtime != null
+      && Math.abs(markerMtime - currentMtime) <= 1
+      && !!markerHash
+      && !!currentHash
+      && markerHash === currentHash;
+  }
+
+  private codexAuthMarkerChanged(
+    markerMtime: number | null,
+    markerHash: string | null,
+    currentMtime = getCodexAuthMtimeMs(),
+    currentHash = getCodexAuthIdentityHash(),
+  ): boolean {
+    if (markerMtime == null || !markerHash) return false;
+    return currentMtime == null
+      || !currentHash
+      || Math.abs(markerMtime - currentMtime) > 1
+      || markerHash !== currentHash;
+  }
+
+  private consumeCodexAuthChange(): boolean {
+    const currentMtime = getCodexAuthMtimeMs();
+    const currentHash = getCodexAuthIdentityHash();
+    const usageChanged = this.codexAuthMarkerChanged(this.codexUsageAttemptAuthMtimeMs, this.codexUsageAttemptAuthIdentityHash, currentMtime, currentHash);
+    const resetChanged = this.codexAuthMarkerChanged(this.codexResetAttemptAuthMtimeMs, this.codexResetAttemptAuthIdentityHash, currentMtime, currentHash);
+    const authAppeared = this.codexAuthMissingObserved && currentMtime != null && !!currentHash;
+    if (!usageChanged && !resetChanged && !authAppeared) return false;
+
+    this.clearCodexUsageCache();
+    this.clearCodexResetCache();
+    this.codexAuthMissingObserved = currentMtime == null || !currentHash;
+    this.codexUsageAttemptAuthMtimeMs = null;
+    this.codexUsageAttemptAuthIdentityHash = null;
+    this.codexResetAttemptAuthMtimeMs = null;
+    this.codexResetAttemptAuthIdentityHash = null;
+    this.codexResetStatus = null;
+    this.codexUsageBackoffMs = 0;
+    this.codexResetBackoffMs = 0;
+    this.lastCodexUsageCallMs = 0;
+    this.lastCodexResetCallMs = 0;
+    return true;
+  }
+
+  private clearCodexUsageCache(options: { deletePersisted?: boolean } = {}): void {
+    this.codexUsagePct = null;
+    this.codexUsagePctStoredAt = 0;
+    this.codexUsageAuthMtimeMs = null;
+    this.codexUsageAuthIdentityHash = null;
+    this.providerQuotaSnapshots.delete('codex');
+    if (options.deletePersisted !== false) this.deletePersistedValue('_cachedCodexUsagePct');
+  }
+
+  private clearCodexResetCache(options: { deletePersisted?: boolean } = {}): void {
+    this.codexResetCredits = null;
+    this.codexResetCountOnlyFallback = null;
+    this.codexResetCreditsStoredAt = 0;
+    this.codexResetAuthMtimeMs = null;
+    this.codexResetAuthIdentityHash = null;
+    if (options.deletePersisted !== false) this.deletePersistedValue('_cachedCodexResetCredits');
+  }
+
+  private codexResetStatusInvalidatesUsage(status: CodexUsageStatus): boolean {
+    return status.code === 'no-credentials'
+      || status.code === 'unauthorized'
+      || status.code === 'forbidden'
+      || status.code === 'schema-changed';
+  }
+
+  private applyCodexResetCredits(snapshot: CodexProviderQuotaSnapshot): void {
+    const incomingReset = snapshot.resetCredits;
+    if (incomingReset == null) {
+      return;
+    }
+    const reset: CodexResetCreditsData = {
+      ...incomingReset,
+      credits: incomingReset.credits.map(credit => ({ ...credit, idSuffix: null })),
+    };
+    this.lastCodexResetCallMs = Date.now();
+    this.codexResetAttemptAuthMtimeMs = snapshot.resetAuthMtimeMs;
+    this.codexResetAttemptAuthIdentityHash = snapshot.resetAuthIdentityHash;
+    this.codexResetStatus = reset.status;
+    if (reset.status.code === 'ok') {
+      if (reset.countOnly) {
+        this.codexResetCountOnlyFallback = reset;
+        this.codexResetCredits = null;
+        this.codexResetCreditsStoredAt = 0;
+        this.codexResetAuthMtimeMs = null;
+        this.codexResetAuthIdentityHash = null;
+        this.deletePersistedValue('_cachedCodexResetCredits');
+      } else {
+        this.codexResetCountOnlyFallback = null;
+        this.codexResetCredits = reset;
+        this.codexResetCreditsStoredAt = Date.now();
+        this.codexResetAuthMtimeMs = snapshot.resetAuthMtimeMs;
+        this.codexResetAuthIdentityHash = snapshot.resetAuthIdentityHash;
+        this.setPersistedValue('_cachedCodexResetCredits', {
+          schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
+          storedAt: this.codexResetCreditsStoredAt,
+          authMtimeMs: snapshot.resetAuthMtimeMs,
+          authIdentityHash: snapshot.resetAuthIdentityHash,
+          data: reset,
+        });
+      }
+    } else if (reset.countOnly) {
+      this.codexResetCountOnlyFallback = reset;
+    } else if (reset.status.code === 'no-credentials' || reset.status.code === 'unauthorized' || reset.status.code === 'forbidden' || reset.status.code === 'schema-changed') {
+      this.clearCodexResetCache();
+      this.codexResetAttemptAuthMtimeMs = snapshot.resetAuthMtimeMs;
+      this.codexResetAttemptAuthIdentityHash = snapshot.resetAuthIdentityHash;
+    }
+    this.codexResetBackoffMs = this.codexBackoffForResetStatus(reset.status);
+  }
+
   private applyCodexQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number): boolean {
     if (!isCodexQuotaSnapshot(snapshot)) return false;
     if (requestSeq !== this.codexUsageRequestSeq) return false;
-    this.applyCodexStatus(snapshot.status);
+    if (!snapshot.usageSkipped) {
+      this.codexUsageAttemptAuthMtimeMs = snapshot.authMtimeMs;
+      this.codexUsageAttemptAuthIdentityHash = snapshot.authIdentityHash;
+      this.codexAuthMissingObserved = snapshot.status.code === 'no-credentials';
+      this.applyCodexStatus(snapshot.status);
+    }
+    this.applyCodexResetCredits(snapshot);
+
+    if (snapshot.usageSkipped) {
+      const resetStatus = snapshot.resetCredits?.status;
+      if (resetStatus && this.codexResetStatusInvalidatesUsage(resetStatus)) {
+        this.applyCodexStatus(resetStatus);
+        this.clearCodexUsageCache();
+        this.codexUsageBackoffMs = resetStatus.code === 'no-credentials' ? 0 : this.codexBackoffForStatus(resetStatus);
+        if (resetStatus.code === 'no-credentials') {
+          this.codexAuthMissingObserved = true;
+          this.lastCodexUsageCallMs = 0;
+        }
+      }
+      return true;
+    }
 
     if (snapshot.usage) {
+      this.codexAuthMissingObserved = false;
       this.codexUsagePct = snapshot.usage;
       this.codexUsagePctStoredAt = Date.now();
+      this.codexUsageAuthMtimeMs = snapshot.authMtimeMs;
+      this.codexUsageAuthIdentityHash = snapshot.authIdentityHash;
       this.codexUsageBackoffMs = 0;
       this.setPersistedValue('_cachedCodexUsagePct', {
         ...snapshot.usage,
         authMtimeMs: snapshot.authMtimeMs,
+        authIdentityHash: snapshot.authIdentityHash,
         storedAt: this.codexUsagePctStoredAt,
         schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
       });
@@ -1384,9 +1715,17 @@ export class StateManager {
     }
 
     if (snapshot.status.code === 'no-credentials') {
-      this.codexUsagePct = null;
-      this.codexUsagePctStoredAt = 0;
-      this.deletePersistedValue('_cachedCodexUsagePct');
+      this.clearCodexUsageCache();
+      this.clearCodexResetCache();
+      this.codexUsageAttemptAuthMtimeMs = null;
+      this.codexUsageAttemptAuthIdentityHash = null;
+      this.codexResetAttemptAuthMtimeMs = null;
+      this.codexResetAttemptAuthIdentityHash = null;
+      this.codexAuthMissingObserved = true;
+      this.codexResetBackoffMs = 0;
+      this.lastCodexUsageCallMs = 0;
+      this.lastCodexResetCallMs = 0;
+      this.codexResetStatus = { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' };
     }
     this.codexUsageBackoffMs = this.codexBackoffForStatus(snapshot.status);
     if (snapshot.status.code === 'rate-limited' && this.codexUsageBackoffMs > 0) {
@@ -1405,7 +1744,18 @@ export class StateManager {
       accepted = this.applyCodexQuotaSnapshot(snapshot, requestSeq);
     }
     if (!accepted) return false;
-    const publicSnapshot = sanitizeProviderQuotaSnapshot(snapshot.provider, snapshot);
+    const snapshotForStore = snapshot.provider === 'codex' && isCodexQuotaSnapshot(snapshot) && snapshot.usageSkipped
+      ? {
+          ...snapshot,
+          status: {
+            connected: this.codexUsageConnected,
+            code: this.codexStatusLabel || (this.codexUsageConnected ? 'connected' : 'local-log'),
+            label: this.codexStatusLabel || undefined,
+            detail: this.codexError || undefined,
+          },
+        }
+      : snapshot;
+    const publicSnapshot = sanitizeProviderQuotaSnapshot(snapshot.provider, snapshotForStore);
     if (!publicSnapshot) return false;
     this.providerQuotaSnapshots.set(snapshot.provider, publicSnapshot);
     return true;
@@ -1419,11 +1769,15 @@ export class StateManager {
   ): Promise<boolean> {
     if (!fetchQuota || !provider.capabilities.has('quota')) return false;
     const now = Date.now();
-    const requestSeq = this.beginProviderQuotaRequest(provider.id, force, now);
-    if (requestSeq == null) return false;
-    const snapshot = await fetchQuota(this.providerContext({ settings, force, nowMs: now }));
+    const admission = this.beginProviderQuotaRequest(provider.id, force, now);
+    if (admission == null) return false;
+    const baseCtx = { settings, force, nowMs: now };
+    const ctxOverrides = provider.id === 'codex'
+      ? { ...baseCtx, skipCodexUsage: admission.skipCodexUsage, skipCodexResetCredits: admission.skipCodexResetCredits }
+      : baseCtx;
+    const snapshot = await fetchQuota(this.providerContext(ctxOverrides));
     if (!snapshot) return false;
-    return this.applyProviderQuotaSnapshot(snapshot, requestSeq, now);
+    return this.applyProviderQuotaSnapshot(snapshot, admission.requestSeq, now);
   }
 
   private async refreshProviderQuotas(settings: AppSettings, force = false): Promise<boolean> {
@@ -1539,7 +1893,7 @@ export class StateManager {
 
   private computeDerivedUsage(settings: AppSettings): Pick<AppState, 'usage' | 'providerQuotas' | 'bridgeActive'> {
     const now = Date.now();
-    const providerQuotas = this.buildProviderQuotas(now);
+    const providerQuotas = this.buildProviderQuotas(now, settings);
     const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
     const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
     const resetWindows: UsageWindowResetHints = {};
@@ -1959,7 +2313,7 @@ export class StateManager {
     await this.refreshRecentCodexRateLimits(settings);
     const derived = this.computeDerivedUsage(settings);
     const usageTrend = this.buildUsageTrend();
-    const codexAccount = readCodexAccountState();
+    const codexAccount = this.codexAccountForSettings(settings);
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     const allTimeSessions = this.countAllTimeUsageSessions(settings);
     const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
@@ -2044,7 +2398,7 @@ export class StateManager {
         const settings = this.getSettings();
         const derived = this.computeDerivedUsage(settings);
         const usageTrend = this.buildUsageTrend();
-        const codexAccount = readCodexAccountState();
+        const codexAccount = this.codexAccountForSettings(settings);
         const sessionState = this.refreshCachedSessionInfos();
         const sessions = sessionState.sessions;
         sessionResult = sessionState;
@@ -2122,7 +2476,7 @@ export class StateManager {
       const settings = this.getSettings();
       const derived = this.computeDerivedUsage(settings);
       const usageTrend = this.buildUsageTrend();
-      const codexAccount = readCodexAccountState();
+      const codexAccount = this.codexAccountForSettings(settings);
       const allTimeSessions = this.countAllTimeUsageSessions(settings);
       const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
       const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && partialHistoryScan;
@@ -2272,14 +2626,16 @@ export class StateManager {
     return (await this.buildScopedSessionInfosDetailed(summaries)).sessions;
   }
 
-  private buildProviderQuotas(now = Date.now()): ProviderQuotaMap {
+  private buildProviderQuotas(now = Date.now(), settings: AppSettings = this.getSettings()): ProviderQuotaMap {
     const quotas: ProviderQuotaMap = {};
+    const enabled = this.enabledProviderSet(settings);
     for (const [provider, snapshot] of this.providerQuotaSnapshots.entries()) {
+      if (!enabled.has(provider)) continue;
       const publicSnapshot = sanitizeProviderQuotaSnapshot(provider, snapshot);
       if (publicSnapshot) quotas[provider] = publicSnapshot;
     }
-    quotas.claude = this.buildClaudeProviderQuota(now);
-    quotas.codex = this.buildCodexProviderQuota(now);
+    if (enabled.has('claude')) quotas.claude = this.buildClaudeProviderQuota(now);
+    if (enabled.has('codex')) quotas.codex = this.buildCodexProviderQuota(now);
     return quotas;
   }
 
@@ -2425,6 +2781,33 @@ export class StateManager {
     const windows = this.getCodexLimitWindows(now);
     const raw = sanitizeProviderQuotaSnapshot('codex', this.providerQuotaSnapshots.get('codex'));
     const source = windows.h5.source ?? windows.week.source ?? raw?.source ?? (this.codexUsageConnected ? 'api' : 'localLog');
+    const currentAuthMtimeMs = getCodexAuthMtimeMs();
+    const currentAuthIdentityHash = getCodexAuthIdentityHash();
+    const storedReset = this.codexAuthMarkerMatches(this.codexResetAuthMtimeMs, this.codexResetAuthIdentityHash, currentAuthMtimeMs, currentAuthIdentityHash)
+      ? this.codexResetCredits
+      : null;
+    const resetConnected = this.codexResetStatus ? this.codexResetStatus.code === 'ok' : this.codexUsageConnected;
+    const rawResetCandidate = (raw as ProviderQuotaSnapshot | undefined)?.resetCredits ?? null;
+    const rawResetFresh = !rawResetCandidate?.countOnly || now - rawResetCandidate.checkedAt <= CODEX_RESET_COUNT_ONLY_TTL_MS;
+    const rawReset = rawResetCandidate && rawResetFresh && this.codexAuthMarkerMatches(this.codexResetAttemptAuthMtimeMs, this.codexResetAttemptAuthIdentityHash, currentAuthMtimeMs, currentAuthIdentityHash)
+      ? rawResetCandidate
+      : null;
+    const fallbackResetFresh = !!this.codexResetCountOnlyFallback && now - this.codexResetCountOnlyFallback.checkedAt <= CODEX_RESET_COUNT_ONLY_TTL_MS;
+    const fallbackReset = this.codexResetCountOnlyFallback && fallbackResetFresh && this.codexAuthMarkerMatches(this.codexResetAttemptAuthMtimeMs, this.codexResetAttemptAuthIdentityHash, currentAuthMtimeMs, currentAuthIdentityHash)
+      ? this.codexResetCountOnlyFallback
+      : null;
+    let resetCredits: ProviderResetCreditsData | null;
+    if (fallbackReset) {
+      resetCredits = sanitizeResetCredits(activeCodexResetCredits(fallbackReset, now, resetConnected, this.codexResetStatus));
+    } else if (storedReset) {
+      resetCredits = sanitizeResetCredits(activeCodexResetCredits(storedReset, now, resetConnected, this.codexResetStatus));
+    } else if (rawReset) {
+      resetCredits = sanitizeResetCredits(rawReset);
+    } else if (this.codexResetStatus && this.codexResetStatus.code !== 'ok') {
+      resetCredits = sanitizeResetCredits({ credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: this.codexResetCreditsStoredAt || now, countOnly: false, source: 'api', status: this.codexResetStatus });
+    } else {
+      resetCredits = null;
+    }
     return {
       ...raw,
       ...buildCodexQuotaDisplayMetadata(),
@@ -2433,6 +2816,7 @@ export class StateManager {
       capturedAt: now,
       planName: this.getAgedCodexUsagePct(now)?.plan || raw?.planName,
       windows,
+      resetCredits,
       status: raw?.status ?? {
         connected: this.codexUsageConnected,
         code: this.codexUsageConnected ? 'connected' : 'local-log',
@@ -3205,12 +3589,36 @@ export class StateManager {
     const providerChanged = this.providerSelectionChanged(settings, this.state.settings);
     const quotaSettingsChanged = this.quotaAffectingSettingsChanged(settings, this.state.settings);
     if (providerChanged) {
+      const previousEnabled = this.enabledProviderSet(this.state.settings);
+      const enabled = this.enabledProviderSet(settings);
+      const codexSelectionChanged = enabled.has('codex') !== previousEnabled.has('codex');
+      if (codexSelectionChanged) {
+        this.lastCodexUsageCallMs = 0;
+        this.lastCodexResetCallMs = 0;
+        this.codexUsageBackoffMs = 0;
+        this.codexResetBackoffMs = 0;
+      }
+      if (!enabled.has('codex')) {
+        this.clearCodexUsageCache({ deletePersisted: false });
+        this.clearCodexResetCache({ deletePersisted: false });
+        this.codexUsageAttemptAuthMtimeMs = null;
+        this.codexUsageAttemptAuthIdentityHash = null;
+        this.codexAuthMissingObserved = false;
+        this.codexResetStatus = null;
+        this.codexResetAttemptAuthMtimeMs = null;
+        this.codexResetAttemptAuthIdentityHash = null;
+        this.codexUsageConnected = false;
+        this.codexStatusLabel = '';
+        this.codexError = '';
+        this.providerQuotaSnapshots.delete('codex');
+      } else {
+        this.hydrateCodexCachesFromStore(settings);
+      }
       this.summaries.clear();
       clearSessionMetadataCache();
       this.codexRateLimits = null;
       this.repoGitStatsLastRefresh = 0;
       const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-      const enabled = this.enabledProviderSet(settings);
       const sessions = this.state.sessions.filter(session =>
         enabled.has(session.provider)
         && !isExcluded(this.sessionProjectKeys(session)),
@@ -3227,6 +3635,7 @@ export class StateManager {
         usage: derived.usage,
         usageTrend,
         providerQuotas: derived.providerQuotas,
+        codexAccount: this.codexAccountForSettings(settings),
         bridgeActive: derived.bridgeActive,
         codeOutputStats,
         codeOutputLoading: true,

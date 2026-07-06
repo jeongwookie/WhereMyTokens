@@ -14,6 +14,8 @@ import {
   ProviderQuotaStatus,
   ProviderQuotaWindow,
   ProviderQuotaWindowDisplay,
+  ProviderResetCredit,
+  ProviderResetCreditsData,
   ProviderWindowUsage,
   QuotaDisplayMode,
   WindowStats,
@@ -229,7 +231,7 @@ function normalizeQuotaGroupSpec(value: unknown): ProviderQuotaGroupSpec | null 
   const windowKeys = Array.isArray(record.windowKeys)
     ? record.windowKeys.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : [];
-  if (!key || !label || !isQuotaDisplayMode(record.defaultMode) || windowKeys.length === 0) return null;
+  if (!key || !label || !isQuotaDisplayMode(record.defaultMode)) return null;
   return {
     key,
     label,
@@ -301,6 +303,46 @@ function normalizeModelQuota(value: unknown): ProviderModelQuota | null {
   };
 }
 
+function normalizeResetCredit(value: unknown): ProviderResetCredit | null {
+  const r = recordOrNull(value);
+  if (!r) return null;
+  const hasExpiry = Object.prototype.hasOwnProperty.call(r, 'expiresAtUtc');
+  const expiresAtUtc = typeof r.expiresAtUtc === 'string' && Number.isFinite(Date.parse(r.expiresAtUtc))
+    ? r.expiresAtUtc
+    : hasExpiry && r.expiresAtUtc === null ? null : undefined;
+  if (expiresAtUtc === undefined) return null;
+  return {
+    idSuffix: null,
+    status: typeof r.status === 'string' ? r.status : 'available',
+    expiresAtUtc,
+  };
+}
+
+function normalizeResetCredits(value: unknown): ProviderResetCreditsData | null {
+  const r = recordOrNull(value);
+  if (!r) return null;
+  const credits = Array.isArray(r.credits)
+    ? r.credits.map(normalizeResetCredit).filter((c): c is ProviderResetCredit => !!c)
+    : [];
+  const availableCount = typeof r.availableCount === 'number' && Number.isFinite(r.availableCount)
+    ? Math.max(0, Math.round(r.availableCount))
+    : credits.length;
+  const countOnly = r.countOnly === true || availableCount !== credits.length;
+  const publicCredits = countOnly ? [] : credits;
+  const totalEarnedCount = typeof r.totalEarnedCount === 'number' && Number.isFinite(r.totalEarnedCount)
+    ? Math.max(0, Math.round(r.totalEarnedCount))
+    : 0;
+  return {
+    credits: publicCredits,
+    availableCount: countOnly ? availableCount : publicCredits.length,
+    totalEarnedCount,
+    checkedAt: typeof r.checkedAt === 'number' && Number.isFinite(r.checkedAt) ? r.checkedAt : 0,
+    countOnly,
+    source: r.source === 'cache' ? 'cache' : r.source === 'usage' ? 'usage' : 'api',
+    status: normalizeQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
+  };
+}
+
 function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
   const record = recordOrNull(value);
   if (!record) return null;
@@ -340,10 +382,11 @@ function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): P
     windowDisplay: normalizeQuotaWindowDisplayMap(record.windowDisplay),
     credits: Object.keys(credits).length > 0 ? credits : undefined,
     status: normalizeQuotaStatus(record.status),
+    resetCredits: normalizeResetCredits(record.resetCredits),
   };
 }
 
-function normalizeProviderQuotas(value: unknown): AppState['providerQuotas'] {
+export function normalizeProviderQuotas(value: unknown): AppState['providerQuotas'] {
   const record = recordOrNull(value);
   if (!record) return {};
   const providerQuotas: AppState['providerQuotas'] = {};
