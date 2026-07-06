@@ -502,6 +502,7 @@ test('settings quota list yields a Codex Resets target with rich/simple/none con
   assert.ok(row, 'Codex Resets settings row present');
   assert.equal(row.defaultMode, 'simple');
   assert.equal(row.period, 'reset credits');
+  assert.equal(row.taskbarEligible, false);
 });
 
 test('mode none hides the reset card (models.resetCredits null) but the settings row stays', async () => {

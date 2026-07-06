@@ -76,6 +76,7 @@ export interface QuotaTargetSettingsOption {
   provider: ProviderId;
   label: string;
   period: string;
+  taskbarEligible: boolean;
   mode: QuotaDisplayMode;
   defaultMode: QuotaDisplayMode;
   badges: ProviderQuotaDisplayBadge[];
@@ -214,6 +215,13 @@ export function hasQuotaInput(window: ProviderQuotaWindow): boolean {
 
 function rowHasDisplaySignal(row: QuotaDisplayRowViewModel): boolean {
   return row.pending || row.apiConnected === false || hasQuotaInput(row.quota) || row.stats.totalTokens > 0;
+}
+
+function rowTaskbarPeriod(row: QuotaDisplayRowViewModel): '5h' | '1w' | null {
+  if (row.durationMs === FIVE_HOURS_MS) return '5h';
+  if (row.durationMs === WEEK_MS) return '1w';
+  if (row.label === '5h' || row.label === '1w') return row.label;
+  return null;
 }
 
 export function extraUsageFromCredit(credit: ProviderCreditBalance | undefined): ExtraUsage | null {
@@ -560,13 +568,15 @@ export function buildQuotaTargetSettingsOptions(
     simpleIncludesRich: true,
   });
   return models.settingsTargets.map(group => {
-    const period = group.rows.map(row => row.label).join(' / ')
+    const taskbarEligible = group.rows.some(row => rowTaskbarPeriod(row) != null);
+    const period = group.rows.map(row => rowTaskbarPeriod(row) ?? row.label).join(' / ')
       || (group.id === quotaGroupId('codex', 'resets') ? 'reset credits' : '');
     return {
       id: group.id,
       provider: group.provider,
       label: group.label,
       period,
+      taskbarEligible,
       mode: group.mode,
       defaultMode: group.defaultMode,
       badges: group.badges,

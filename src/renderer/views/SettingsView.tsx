@@ -97,6 +97,8 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'excludedProjects',
   'quotaTargetModes',
   'quotaTargetOrder',
+  'taskbarQuotaEnabled',
+  'quotaTargetAbbreviations',
   'antigravityQuotaDurationPaceEnabled',
   'compactWidgetEnabled',
   'compactWidgetWaitingAnimationEnabled',
@@ -109,6 +111,8 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     ...settings,
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
+    taskbarQuotaEnabled: settings.taskbarQuotaEnabled === true,
+    quotaTargetAbbreviations: settings.quotaTargetAbbreviations ?? {},
     antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
@@ -139,6 +143,31 @@ function toggleProvider(settings: AppSettings, id: ProviderId): AppSettings {
     ...settings,
     enabledProviders,
   };
+}
+
+function normalizeQuotaTargetAbbreviationInput(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+}
+
+function defaultQuotaTargetAbbreviation(provider: ProviderId, label: string): string {
+  const normalizedLabel = label.trim().toLowerCase();
+  if (provider === 'claude') return normalizedLabel.includes('sonnet') ? 'S' : 'C';
+  if (provider === 'codex') return 'CX';
+  if (provider === 'antigravity') return shortQuotaLabelCode(label, 'AG');
+  return label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? '?';
+}
+
+function shortQuotaLabelCode(label: string, fallback: string): string {
+  const words = label.toUpperCase().match(/[A-Z0-9]+/g) ?? [];
+  const initials = words.map(word => word[0]).join('');
+  if (initials.length >= 2) return initials.slice(0, 3);
+  const compact = words.join('');
+  if (compact.length >= 2) return compact.slice(0, 3);
+  return initials || compact || fallback;
+}
+
+function isTaskbarEligibleQuotaTarget(target: { taskbarEligible: boolean; rowCount: number }): boolean {
+  return target.rowCount > 0 && target.taskbarEligible;
 }
 
 function settingValue(settings: AppSettings, key: EditableSettingKey): unknown {
@@ -191,6 +220,19 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         [targetId]: mode,
       },
     }));
+  };
+
+  const setQuotaTargetAbbreviation = (targetId: string, value: string) => {
+    const abbreviation = normalizeQuotaTargetAbbreviationInput(value);
+    setS(current => {
+      const next = { ...(current.quotaTargetAbbreviations ?? {}) };
+      if (abbreviation) next[targetId] = abbreviation;
+      else delete next[targetId];
+      return {
+        ...current,
+        quotaTargetAbbreviations: next,
+      };
+    });
   };
 
   function moveQuotaTarget(targetId: string, direction: -1 | 1) {
@@ -407,6 +449,15 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         </div>
         <div style={row}>
           <div>
+            <div style={labelStyle}>Taskbar mini quota display</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+              Shows fixed 5h / 1w quota rows inside the Windows taskbar when supported
+            </div>
+          </div>
+          <input type="checkbox" style={chk} checked={s.taskbarQuotaEnabled} onChange={e => setS({ ...s, taskbarQuotaEnabled: e.target.checked })} />
+        </div>
+        <div style={row}>
+          <div>
             <div style={labelStyle}>Waiting animation</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
               Animates floating-widget waiting bars when limit data is missing
@@ -507,6 +558,11 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         {quotaTargetOptions.length > 0 && (
           <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
             <div style={{ ...labelStyle, marginBottom: 6 }}>Quota display</div>
+            {s.taskbarQuotaEnabled && (
+              <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 7 }}>
+                The small text box customizes the taskbar label for 5h / 1w targets.
+              </div>
+            )}
             <div style={{ display: 'grid', gap: 6 }}>
               {quotaTargetOptions.map((target, index) => (
                 <div key={target.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 8 }}>
@@ -541,6 +597,16 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    {s.taskbarQuotaEnabled && isTaskbarEligibleQuotaTarget(target) && (
+                      <input
+                        aria-label={`Taskbar abbreviation for ${target.label}`}
+                        title={`Default: ${defaultQuotaTargetAbbreviation(target.provider, target.label)}`}
+                        placeholder={defaultQuotaTargetAbbreviation(target.provider, target.label)}
+                        value={s.quotaTargetAbbreviations?.[target.id] ?? ''}
+                        onChange={e => setQuotaTargetAbbreviation(target.id, e.target.value)}
+                        style={{ ...inp, width: 42, textTransform: 'uppercase', textAlign: 'center', fontFamily: C.fontMono }}
+                      />
+                    )}
                     <div style={{ display: 'flex', gap: 2 }}>
                       {(['rich', 'simple', 'none'] as const).map(mode => {
                         const active = target.mode === mode;

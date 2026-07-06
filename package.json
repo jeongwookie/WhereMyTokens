@@ -6,13 +6,14 @@
   "scripts": {
     "build:main": "tsc",
     "build:renderer": "node scripts/build-renderer.mjs",
-    "build": "node scripts/make-icons.mjs && npm run build:main && npm run build:renderer",
+    "build": "node scripts/make-icons.mjs && npm run build:main && npm run build:renderer && node scripts/prepare-taskbar-helper-resource.mjs",
+    "build:taskbar-helper": "dotnet publish taskbar-helper/WhereMyTokens.Taskbar.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o taskbar-helper/bin",
     "typecheck:reset-contract": "tsc --noEmit -p tsconfig.reset-contract.json",
-    "test": "npm run typecheck:reset-contract && npm run build:main && node --test scripts/session-metadata.test.mjs scripts/claude-discovery.test.mjs scripts/git-stats-keys.test.mjs scripts/git-stats-daily.test.mjs scripts/git-output-ledger.test.mjs scripts/git-output-ledger-category.test.mjs scripts/path-classifier.test.mjs scripts/refresh-scheduler.test.mjs scripts/state-readiness.test.mjs scripts/startup-state-snapshot.test.mjs scripts/integration.test.mjs scripts/jsonl-summary.test.mjs scripts/provider-settings.test.mjs scripts/antigravity-process-finder.test.mjs scripts/antigravity-ls-client.test.mjs scripts/antigravity-quota-parser.test.mjs scripts/antigravity-session-parser.test.mjs scripts/antigravity-gm-parser.test.mjs scripts/antigravity-usage-cache-store.test.mjs scripts/antigravity-gm-tracker.test.mjs scripts/antigravity-provider-integration.test.mjs scripts/antigravity-privacy.test.mjs scripts/generic-provider-single-scan.test.mjs scripts/compact-widget-sizing.test.mjs scripts/quota-display-groups.test.mjs scripts/provider-registry.test.mjs scripts/provider-state-assembly.test.mjs scripts/provider-state-runtime.test.mjs scripts/provider-usage-shape.test.mjs scripts/usage-alert-manager.test.mjs scripts/usage-ledger-aggregates.test.mjs scripts/usage-ledger-store.test.mjs scripts/usage-ledger-importer.test.mjs scripts/usage-ledger-generic-ingest.test.mjs scripts/breakdown-ingest.test.mjs scripts/breakdown-query.test.mjs scripts/breakdown-ipc-bridge.test.mjs scripts/usage-ledger-usage.test.mjs scripts/usage-ledger-state.test.mjs scripts/trend-section.test.mjs scripts/trend-breakdown-card.test.mjs scripts/trend-selection.test.mjs scripts/main-section-visibility.test.mjs scripts/usage-ledger-rebuild-ui.test.mjs scripts/rate-limit-fetcher.test.mjs scripts/oauth-refresh.test.mjs scripts/codex-usage-fetcher.test.mjs scripts/codex-reset-credits-fetcher.test.mjs scripts/codex-reset-credits-render.test.mjs scripts/stability-regressions.test.mjs scripts/bucket-key.test.mjs scripts/output-splitter.test.mjs",
+    "test": "npm run typecheck:reset-contract && npm run build:main && node --test scripts/session-metadata.test.mjs scripts/claude-discovery.test.mjs scripts/git-stats-keys.test.mjs scripts/git-stats-daily.test.mjs scripts/git-output-ledger.test.mjs scripts/git-output-ledger-category.test.mjs scripts/path-classifier.test.mjs scripts/refresh-scheduler.test.mjs scripts/state-readiness.test.mjs scripts/startup-state-snapshot.test.mjs scripts/integration.test.mjs scripts/jsonl-summary.test.mjs scripts/provider-settings.test.mjs scripts/taskbar-quota-snapshot.test.mjs scripts/taskbar-helper-manager.test.mjs scripts/prepare-taskbar-helper-resource.test.mjs scripts/taskbar-helper-native.test.mjs scripts/antigravity-process-finder.test.mjs scripts/antigravity-ls-client.test.mjs scripts/antigravity-quota-parser.test.mjs scripts/antigravity-session-parser.test.mjs scripts/antigravity-gm-parser.test.mjs scripts/antigravity-usage-cache-store.test.mjs scripts/antigravity-gm-tracker.test.mjs scripts/antigravity-provider-integration.test.mjs scripts/antigravity-privacy.test.mjs scripts/generic-provider-single-scan.test.mjs scripts/compact-widget-sizing.test.mjs scripts/quota-display-groups.test.mjs scripts/provider-registry.test.mjs scripts/provider-state-assembly.test.mjs scripts/provider-state-runtime.test.mjs scripts/provider-usage-shape.test.mjs scripts/usage-alert-manager.test.mjs scripts/usage-ledger-aggregates.test.mjs scripts/usage-ledger-store.test.mjs scripts/usage-ledger-importer.test.mjs scripts/usage-ledger-generic-ingest.test.mjs scripts/breakdown-ingest.test.mjs scripts/breakdown-query.test.mjs scripts/breakdown-ipc-bridge.test.mjs scripts/usage-ledger-usage.test.mjs scripts/usage-ledger-state.test.mjs scripts/trend-section.test.mjs scripts/trend-breakdown-card.test.mjs scripts/trend-selection.test.mjs scripts/main-section-visibility.test.mjs scripts/usage-ledger-rebuild-ui.test.mjs scripts/rate-limit-fetcher.test.mjs scripts/oauth-refresh.test.mjs scripts/codex-usage-fetcher.test.mjs scripts/codex-reset-credits-fetcher.test.mjs scripts/codex-reset-credits-render.test.mjs scripts/stability-regressions.test.mjs scripts/bucket-key.test.mjs scripts/output-splitter.test.mjs",
     "start": "npm run build && electron .",
     "dev": "concurrently \"tsc -w\" \"wait-on dist/main/index.js && npm run build:renderer && electron .\"",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "pack": "npm run build:taskbar-helper && npm run build && electron-builder --dir",
+    "dist": "npm run build:taskbar-helper && npm run build && electron-builder"
   },
   "keywords": [],
   "author": "jeongwook",
@@ -51,10 +52,15 @@
       {
         "from": "dist/bridge",
         "to": "bridge"
+      },
+      {
+        "from": "dist/taskbar-helper",
+        "to": "taskbar-helper"
       }
     ],
     "files": [
       "dist/**/*",
+      "!dist/taskbar-helper/**/*",
       "assets/**/*",
       "!assets/screenshot*.png",
       "node_modules/**/*"

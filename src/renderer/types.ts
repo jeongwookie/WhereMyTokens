@@ -302,6 +302,8 @@ export interface AppSettings {
   excludedProjects: string[];
   quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
   quotaTargetOrder: string[];
+  taskbarQuotaEnabled: boolean;
+  quotaTargetAbbreviations: Partial<Record<string, string>>;
   antigravityQuotaDurationPaceEnabled: boolean;
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;

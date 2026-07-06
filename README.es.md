@@ -72,7 +72,7 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
-| **Unreleased** | TBD | Añade Codex reset credits como target de Plan Usage con modos Rich/Simple/oculto, cache ligada al auth y estados stale/error más claros |
+| **Unreleased** | TBD | Añade Codex reset credits como target de Plan Usage y un taskbar mini quota display self-contained y arrastrable con filas 5H/1W |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 22 jun | Estabiliza el import de Trend breakdown para bloques cortos de thinking de Claude ajustando el calibration guard |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 22 jun | Corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso sin añadir filas de sesión solo de agentes |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 17 jun | Añade breakdowns clicables en Trend con input/output por provider, thinking/response/tool usage, tokens work/billing y categorías de líneas netas git |
@@ -118,7 +118,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 
 ### Límites de Uso y Alertas
 - **Barras de provider quota** — Claude, Codex, Antigravity y futuros providers publican snapshots efectivos por `providerQuotas`; Claude usa Anthropic API/statusLine/cache, Codex usa live usage 5h/1sem con fallback local-log y reset-credit endpoint con cache ligada al auth, y Antigravity lee quota por modelo desde 127.0.0.1 local RPC cuando el IDE está en ejecución
-- **Visualización quota por target** — cada provider window y model target puede mostrarse como Rich, Simple u oculto desde Settings; esto solo afecta Plan Usage y el widget flotante. Codex Resets se muestra como target de Plan Usage con modos Rich, Simple u oculto
+- **Visualización quota por target** — cada provider window y model target puede mostrarse como Rich, Simple u oculto desde Settings; también afecta el orden y la visibilidad en Plan Usage, el widget flotante y el taskbar mini. Codex Resets es exclusivo de Plan Usage
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
@@ -212,6 +212,8 @@ WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicit
 | `~/.codex/auth.json` | Material OAuth de ChatGPT usado solo para snapshots de uso de Codex y consultas de reset credits; no se copia al storage de la app ni se registra en logs. El reset-credit cache guarda solo counts, vencimientos, fetch status, source labels, un hashed auth marker y el modified time del archivo auth. |
 | Antigravity local RPC | Lee sesiones, quota por modelo y generator metadata desde el language server del IDE Antigravity en ejecución. No usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Snapshot local escrito por el bridge `statusLine` de Claude Code. |
+| Taskbar mini helper stdin | Cuando el taskbar mini está habilitado, el main process envía datos resumidos de quota 5H/1W y el resolved light/dark theme fallback al native helper. El helper samplea localmente el fondo visible de la barra de tareas para contraste, pero no guarda ni transmite píxeles; tampoco lee credentials, logs ni llama provider APIs directamente. |
+| `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Guarda solo la posición del taskbar mini relativa a la barra de tareas. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | Ajustes de la app, cachés locales, historial de notificaciones y estado del bridge. |
 
 El manejo de credenciales es deliberadamente estrecho: WhereMyTokens lee los archivos locales oficiales de la CLI, no pide pegar API keys, no guarda una copia de respaldo de credenciales y oculta detalles de credenciales en la salida de estado. Si el access token de Claude expira, la app puede refrescarlo con Anthropic y escribir las credentials actualizadas de forma atómica en `~/.claude/.credentials.json`.

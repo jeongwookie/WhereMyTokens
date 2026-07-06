@@ -72,7 +72,7 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
-| **Unreleased** | TBD | Codex reset credit を Plan Usage target として追加し、Rich/Simple/非表示設定、auth-bound cache、stale/error 表示を強化 |
+| **Unreleased** | TBD | Codex reset credit を Plan Usage target として追加し、ドラッグ可能な self-contained Windows taskbar mini quota 表示を 5H/1W 行で提供 |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 6/22 | 短い Claude thinking block で calibration guard が過剰に失敗しないよう調整し、Trend breakdown import を安定化 |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL discovery を修正し、agent log を usage graph に含めつつ agent 専用 session row は追加しないよう改善 |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | クリック可能な Trend breakdown を追加し、provider 別 input/output、thinking/response/tool 使用量、work/billing token、git net-line category を表示 |
@@ -118,7 +118,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 
 ### レート制限 & アラート
 - **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は `providerQuotas` snapshot で有効な quota を公開します。Claude は Anthropic API/statusLine/cache、Codex は 5h/1w live usage と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC からモデル quota を読み取ります
-- **Target 別 quota 表示** — 各 provider window と model target は Settings で Rich、Simple、非表示にでき、Plan Usage と Floating widget の表示だけに影響します。Codex Resets target は Plan Usage で Rich、Simple、非表示にできます
+- **Target 別 quota 表示** — 各 provider window と model target は Settings で Rich、Simple、非表示にでき、Plan Usage、Floating widget、taskbar mini の表示順と表示対象に反映されます。Codex Resets target は Plan Usage 専用です
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` プラグインで API ポーリングなしのリアルタイムデータ受信
 - **Windows トースト通知** — 使用量しきい値（50% / 80% / 90%）でアラート
@@ -212,6 +212,8 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 | `~/.codex/auth.json` | Codex 使用量 snapshot と reset-credit 取得にだけ使う ChatGPT OAuth 情報。アプリ storage へコピーしたりログ出力したりしません。reset-credit cache には count、有効期限、fetch status、source label、hashed auth marker、auth file modified time だけを保存します。 |
 | Antigravity local RPC | 実行中の Antigravity IDE の language server からセッション、モデル quota、generator metadata を読み取ります。Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。 |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Claude Code `statusLine` bridge が書き込むローカル bridge snapshot。 |
+| Taskbar mini helper stdin | taskbar mini が有効な場合、main process は要約された 5H/1W quota 表示データと resolved light/dark theme fallback を native helper に渡します。helper は contrast のため表示中のタスクバー背景をローカルでサンプリングしますが、pixel は保存も送信もしません。credentials、ログファイル、provider API を直接読み取ったり呼び出したりしません。 |
+| `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | taskbar mini のタスクバー相対位置だけを保存します。 |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | アプリ設定、ローカルキャッシュ、通知履歴、bridge 状態。 |
 
 認証情報の扱いは狭く限定されています。WhereMyTokens は公式 CLI のローカル credential ファイルを読み取り、API key の貼り付けを求めず、別の credential バックアップを保存しません。Claude access token が期限切れの場合は Anthropic で refresh し、更新された credentials を `~/.claude/.credentials.json` に原子的に書き戻すことがあります。

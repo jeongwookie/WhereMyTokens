@@ -9,6 +9,9 @@ import { initOAuthRefresh } from './oauthRefresh';
 import type { WindowStats } from './usageWindows';
 import type { ProviderId, ProviderQuotaWindow } from './providers/types';
 import { compactWidgetSize } from './compactWidgetSizing';
+import { createTaskbarQuotaHelperManager } from './taskbarQuotaHelper';
+import { buildTaskbarQuotaSnapshot } from './taskbarQuotaSnapshot';
+import { addNotification } from './notificationHistory';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -35,6 +38,39 @@ type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
 const POPUP_MARGIN = 8;
+const TASKBAR_MINI_DISABLED_TITLE = 'Taskbar mini disabled';
+const TASKBAR_MINI_DISABLED_BODY = 'The taskbar mini quota helper could not start after repeated attempts. Open Settings to enable it again after checking Windows taskbar support.';
+function resolveTaskbarSnapshotTheme(theme: AppSettings['theme']): 'light' | 'dark' {
+  if (theme === 'light' || theme === 'dark') return theme;
+  return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+}
+const taskbarQuotaHelper = createTaskbarQuotaHelperManager({
+  openDashboard: () => showPopup('main'),
+  buildSnapshot: state => buildTaskbarQuotaSnapshot(state, resolveTaskbarSnapshotTheme(state.settings.theme)),
+  onRuntimeDisabled: () => {
+    try {
+      store.set('taskbarQuotaEnabled', false);
+    } catch { /* 설정 저장 실패와 사용자 알림은 서로 독립적으로 처리한다. */ }
+    try {
+      addNotification(
+        'alert',
+        TASKBAR_MINI_DISABLED_TITLE,
+        TASKBAR_MINI_DISABLED_BODY,
+      );
+    } catch { /* 알림 기록 실패가 화면 상태 갱신을 막지 않게 한다. */ }
+    try {
+      if (Notification.isSupported()) {
+        new Notification({ title: `WhereMyTokens ${TASKBAR_MINI_DISABLED_TITLE}`, body: TASKBAR_MINI_DISABLED_BODY }).show();
+      }
+    } catch { /* 알림 표시 실패는 설정 복구 흐름을 막지 않는다. */ }
+    try {
+      stateManager?.applySettingsChange();
+    } catch { /* manager 갱신 실패가 tray 메뉴 갱신 시도를 막지 않게 한다. */ }
+    try {
+      rebuildTrayMenu();
+    } catch { /* tray 종료/초기화 경합은 다음 상태 갱신에서 회복한다. */ }
+  },
+});
 function registerDebugTargets() {
   setListenerTargetsProvider(() => ([
     { name: 'process', emitter: process },
@@ -631,6 +667,7 @@ function updateTray(state: AppState) {
 
   queueRendererStateUpdate(state);
   sendWidgetStateUpdate(state);
+  taskbarQuotaHelper.syncTaskbarQuotaHelper(state);
   } catch { /* 종료 중 tray/window가 이미 소멸된 경우 무시 */ }
 }
 
@@ -693,6 +730,7 @@ app.whenReady().then(() => {
     applySettingsChange: () => {
       manager.applySettingsChange();
       applyRuntimeSettings();
+      taskbarQuotaHelper.syncTaskbarQuotaHelper(manager.getState());
     },
     rebuildUsageLedger: () => manager.rebuildUsageLedger(),
     getDebugMemSnapshot: () => manager.getDebugMemSnapshot('ipc'),
@@ -709,7 +747,10 @@ app.whenReady().then(() => {
   popupWindow = createPopupWindow();
   manager.start();
   syncCompactWidget();
-  app.once('before-quit', () => manager.stop());
+  app.once('before-quit', () => {
+    taskbarQuotaHelper.stopTaskbarQuotaHelper();
+    manager.stop();
+  });
 
   // Show popup on first launch (after renderer is ready)
   popupWindow.once('ready-to-show', () => showPopup());
@@ -768,9 +809,18 @@ app.whenReady().then(() => {
     if (s.theme === 'auto' && widgetWindow && !widgetWindow.isDestroyed()) {
       widgetWindow.webContents.send('theme:changed', resolveTheme());
     }
+    if (s.theme === 'auto') {
+      const nextState = stateManager?.getState();
+      if (nextState?.settings.taskbarQuotaEnabled === true) {
+        taskbarQuotaHelper.syncTaskbarQuotaHelper(nextState);
+      }
+    }
   });
 });
 
 app.on('window-all-closed', () => { /* tray app: do not quit */ });
 app.on('second-instance', () => showPopup());
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  taskbarQuotaHelper.stopTaskbarQuotaHelper();
+  globalShortcut.unregisterAll();
+});

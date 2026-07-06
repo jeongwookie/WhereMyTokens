@@ -43,6 +43,8 @@ export interface AppSettings {
   excludedProjects: string[];
   quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
   quotaTargetOrder: string[];
+  taskbarQuotaEnabled: boolean;
+  quotaTargetAbbreviations: Partial<Record<string, string>>;
   antigravityQuotaDurationPaceEnabled: boolean;
   compactWidgetEnabled: boolean;
   compactWidgetWaitingAnimationEnabled: boolean;
@@ -159,6 +161,19 @@ function normalizeQuotaTargetOrder(value: unknown): string[] | null {
   return normalized;
 }
 
+function normalizeQuotaTargetAbbreviations(value: unknown): Partial<Record<string, string>> | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  const normalized: Partial<Record<string, string>> = {};
+  for (const [targetId, abbreviation] of Object.entries(record)) {
+    if (!isQuotaTargetId(targetId) || typeof abbreviation !== 'string') continue;
+    const trimmed = abbreviation.trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,3}$/.test(trimmed)) continue;
+    normalized[targetId] = trimmed;
+  }
+  return normalized;
+}
+
 function legacyProviderToEnabledProviders(value: unknown): ProviderId[] | null {
   if (value === 'claude') return ['claude'];
   if (value === 'codex') return ['codex'];
@@ -203,6 +218,11 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
     const quotaTargetOrder = normalizeQuotaTargetOrder(record.quotaTargetOrder);
     if (quotaTargetOrder) next.quotaTargetOrder = quotaTargetOrder;
   }
+  if (typeof record.taskbarQuotaEnabled === 'boolean') next.taskbarQuotaEnabled = record.taskbarQuotaEnabled;
+  if (Object.prototype.hasOwnProperty.call(record, 'quotaTargetAbbreviations')) {
+    const quotaTargetAbbreviations = normalizeQuotaTargetAbbreviations(record.quotaTargetAbbreviations);
+    if (quotaTargetAbbreviations) next.quotaTargetAbbreviations = quotaTargetAbbreviations;
+  }
   if (typeof record.antigravityQuotaDurationPaceEnabled === 'boolean') {
     next.antigravityQuotaDurationPaceEnabled = record.antigravityQuotaDurationPaceEnabled;
   }
@@ -230,6 +250,7 @@ export function normalizeSettings(value: unknown): AppSettings {
     excludedProjects: sanitized.excludedProjects ?? DEFAULT_SETTINGS.excludedProjects,
     quotaTargetModes: sanitized.quotaTargetModes ?? DEFAULT_SETTINGS.quotaTargetModes,
     quotaTargetOrder: sanitized.quotaTargetOrder ?? DEFAULT_SETTINGS.quotaTargetOrder,
+    quotaTargetAbbreviations: sanitized.quotaTargetAbbreviations ?? DEFAULT_SETTINGS.quotaTargetAbbreviations,
   };
 }
 
@@ -249,6 +270,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   excludedProjects: [],
   quotaTargetModes: {},
   quotaTargetOrder: [],
+  taskbarQuotaEnabled: false,
+  quotaTargetAbbreviations: {},
   antigravityQuotaDurationPaceEnabled: false,
   compactWidgetEnabled: false,
   compactWidgetWaitingAnimationEnabled: false,
