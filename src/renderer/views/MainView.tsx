@@ -1548,7 +1548,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
       case 'trend':
         return (
           <RenderErrorBoundary key={sectionId} label="Trend Card">
-            <TrendCard usageTrend={state.usageTrend} codeOutputStats={state.codeOutputStats} currency={currency} usdToKrw={usdToKrw} />
+            <TrendCard usageTrend={state.usageTrend} codeOutputStats={state.codeOutputStats} lastUpdated={state.lastUpdated} currency={currency} usdToKrw={usdToKrw} />
           </RenderErrorBoundary>
         );
       case 'sessions':
