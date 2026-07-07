@@ -24,7 +24,6 @@ export interface TaskbarQuotaSnapshot {
 export interface TaskbarQuotaPeriodRow {
   period: TaskbarQuotaPeriod;
   blocks: TaskbarQuotaBlock[];
-  hiddenCount: number;
   statusLabel: string | null;
 }
 
@@ -275,6 +274,13 @@ function sortBlocks(blocks: CandidateBlock[]): CandidateBlock[] {
   });
 }
 
+function taskbarQuotaMaxBlocks(settings: AppSettings): number {
+  const value = settings.taskbarQuotaMaxBlocks;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(1, Math.min(3, Math.round(value)))
+    : 2;
+}
+
 function publicBlock(block: CandidateBlock): TaskbarQuotaBlock {
   const {
     risk: _risk,
@@ -290,6 +296,7 @@ export function buildTaskbarQuotaSnapshot(
   resolvedTheme?: 'light' | 'dark',
 ): TaskbarQuotaSnapshot {
   const settings = state.settings;
+  const maxBlocks = taskbarQuotaMaxBlocks(settings);
   const order = configuredOrder(settings);
   const rows: Record<TaskbarQuotaPeriod, CandidateBlock[]> = { '5h': [], '1w': [] };
   const hiddenPeriods: Record<TaskbarQuotaPeriod, boolean> = { '5h': false, '1w': false };
@@ -334,11 +341,10 @@ export function buildTaskbarQuotaSnapshot(
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : (resolvedTheme ?? 'dark'),
     rows: (['5h', '1w'] as const).map(period => {
       const sorted = sortBlocks(rows[period]);
-      const blocks = sorted.slice(0, 3).map(publicBlock);
+      const blocks = sorted.slice(0, maxBlocks).map(publicBlock);
       return {
         period,
         blocks,
-        hiddenCount: Math.max(0, sorted.length - 3),
         statusLabel: blocks.length > 0 ? null : waiting ? 'waiting' : hiddenPeriods[period] ? 'hidden' : hasOfflineProvider ? 'offline' : 'no data',
       };
     }),

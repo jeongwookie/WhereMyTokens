@@ -77,6 +77,7 @@ const DEFAULT_STATE: AppState = {
     quotaTargetModes: {},
     quotaTargetOrder: [],
     taskbarQuotaEnabled: false,
+    taskbarQuotaMaxBlocks: 2,
     quotaTargetAbbreviations: {},
     antigravityQuotaDurationPaceEnabled: false,
     compactWidgetEnabled: false, compactWidgetWaitingAnimationEnabled: false, compactWidgetBounds: null,
@@ -435,6 +436,11 @@ function normalizeQuotaTargetAbbreviations(value: unknown): AppState['settings']
   return abbreviations;
 }
 
+function normalizeTaskbarQuotaMaxBlocks(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 2;
+  return Math.max(1, Math.min(3, Math.round(value)));
+}
+
 function normalizeStateFreshness(value: unknown, initialRefreshComplete: boolean): AppState['stateFreshness'] {
   if (value === 'empty' || value === 'restored' || value === 'fresh') return value;
   return initialRefreshComplete ? 'fresh' : 'empty';
@@ -587,6 +593,7 @@ function normalizeState(next: AppState): AppState {
       quotaTargetModes: normalizeQuotaTargetModes(next.settings?.quotaTargetModes),
       quotaTargetOrder: normalizeQuotaTargetOrder(next.settings?.quotaTargetOrder),
       taskbarQuotaEnabled: next.settings?.taskbarQuotaEnabled === true,
+      taskbarQuotaMaxBlocks: normalizeTaskbarQuotaMaxBlocks(next.settings?.taskbarQuotaMaxBlocks),
       quotaTargetAbbreviations: normalizeQuotaTargetAbbreviations(next.settings?.quotaTargetAbbreviations),
       antigravityQuotaDurationPaceEnabled: next.settings?.antigravityQuotaDurationPaceEnabled === true,
       compactWidgetEnabled: next.settings?.compactWidgetEnabled === true,

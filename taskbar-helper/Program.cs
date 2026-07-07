@@ -77,8 +77,7 @@ internal static class Program
             if (row is null
                 || !ValidTaskbarPeriods.Contains(row.Period)
                 || row.Blocks is null
-                || row.Blocks.Length > 3
-                || row.HiddenCount < 0)
+                || row.Blocks.Length > 3)
             {
                 return false;
             }
@@ -406,7 +405,7 @@ internal static class JsonOptions
 }
 
 internal sealed record TaskbarQuotaSnapshot(long UpdatedAt, string? Theme, TaskbarQuotaPeriodRow[] Rows);
-internal sealed record TaskbarQuotaPeriodRow(string Period, TaskbarQuotaBlock[] Blocks, int HiddenCount, string? StatusLabel = null);
+internal sealed record TaskbarQuotaPeriodRow(string Period, TaskbarQuotaBlock[] Blocks, string? StatusLabel = null);
 internal sealed record LayoutState(int X, int Y);
 internal sealed record TaskbarQuotaBlock(
     string TargetId,
@@ -426,15 +425,14 @@ internal sealed class TaskbarQuotaCanvas : Control
     private const int BlockOneColumn = 1;
     private const int BlockTwoColumn = 2;
     private const int BlockThreeColumn = 3;
-    private const int BlockGap = 8;
-    private const int HorizontalPadding = 6;
+    private const int BlockGap = 6;
+    private const int HorizontalPadding = 4;
     private const int VerticalPadding = 2;
-    private const int PeriodWidth = 36;
-    private const int BlockHorizontalPadding = 4;
-    private const int OverflowBadgeWidth = 30;
-    private const int MinimumBlockWidth = 140;
-    private const int MinimumMaximumBlockWidth = 160;
-    private const int MaximumMaximumBlockWidth = 300;
+    private const int PeriodWidth = 32;
+    private const int BlockHorizontalPadding = 2;
+    private const int MinimumBlockWidth = 112;
+    private const int MinimumMaximumBlockWidth = 124;
+    private const int MaximumMaximumBlockWidth = 260;
     private readonly Font _periodFont = new("Segoe UI", 9.25f, FontStyle.Regular);
     private readonly Font _blockFont = new("Segoe UI", 9.0f, FontStyle.Regular);
     private TaskbarQuotaSnapshot? _snapshot;
@@ -662,17 +660,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         }
         DrawBlock(graphics, row.Blocks.ElementAtOrDefault(0), RowCell(columns[BlockOneColumn], rowBounds));
         DrawBlock(graphics, row.Blocks.ElementAtOrDefault(1), RowCell(columns[BlockTwoColumn], rowBounds));
-        var thirdCell = RowCell(columns[BlockThreeColumn], rowBounds);
-        if (row.HiddenCount > 0 && thirdCell.Width > 0)
-        {
-            var badgeWidth = Math.Min(Scaled(OverflowBadgeWidth), thirdCell.Width);
-            var blockCell = new Rectangle(thirdCell.Left, thirdCell.Top, Math.Max(0, thirdCell.Width - badgeWidth), thirdCell.Height);
-            var badgeCell = new Rectangle(thirdCell.Right - badgeWidth, thirdCell.Top, badgeWidth, thirdCell.Height);
-            DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), blockCell);
-            DrawOverflowBadge(graphics, row.HiddenCount, badgeCell);
-            return;
-        }
-        DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), thirdCell);
+        DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), RowCell(columns[BlockThreeColumn], rowBounds));
     }
 
     private void DrawBlock(Graphics graphics, TaskbarQuotaBlock? block, Rectangle bounds)
@@ -740,7 +728,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         if (string.IsNullOrEmpty(text) || maxWidth <= 0) return 0;
         using var format = TextStringFormat();
         var measured = graphics.MeasureString(text, font, maxWidth, format);
-        return Math.Min(maxWidth, (int)Math.Ceiling(measured.Width) + Scaled(4));
+        return Math.Min(maxWidth, (int)Math.Ceiling(measured.Width) + Scaled(2));
     }
 
     private void DrawText(Graphics graphics, string text, Font font, Color color, Rectangle bounds)
@@ -756,15 +744,6 @@ internal sealed class TaskbarQuotaCanvas : Control
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         using var brush = new SolidBrush(_palette.Divider);
         graphics.FillRectangle(brush, bounds);
-    }
-
-    private void DrawOverflowBadge(Graphics graphics, int hiddenCount, Rectangle bounds)
-    {
-        if (hiddenCount <= 0 || bounds.Width <= 0 || bounds.Height <= 0) return;
-        using var brush = new SolidBrush(_palette.Muted);
-        using var format = TextStringFormat();
-        format.Alignment = StringAlignment.Far;
-        graphics.DrawString($"+{hiddenCount}", _blockFont, brush, bounds, format);
     }
 
     private Rectangle RowCell(Rectangle column, Rectangle rowBounds)

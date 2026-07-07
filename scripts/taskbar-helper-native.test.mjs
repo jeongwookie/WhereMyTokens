@@ -48,8 +48,12 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.match(source, /NonBlockWidthForBlockCount/);
   const minimumBlockWidth = Number(source.match(/MinimumBlockWidth\s*=\s*(\d+)/)?.[1]);
   const minimumMaximumBlockWidth = Number(source.match(/MinimumMaximumBlockWidth\s*=\s*(\d+)/)?.[1]);
-  assert.ok(minimumBlockWidth > 0 && minimumBlockWidth <= 150);
-  assert.ok(minimumMaximumBlockWidth > 0 && minimumMaximumBlockWidth <= 180);
+  const blockGap = Number(source.match(/BlockGap\s*=\s*(\d+)/)?.[1]);
+  const blockHorizontalPadding = Number(source.match(/BlockHorizontalPadding\s*=\s*(\d+)/)?.[1]);
+  assert.ok(minimumBlockWidth > 0 && minimumBlockWidth <= 120);
+  assert.ok(minimumMaximumBlockWidth > 0 && minimumMaximumBlockWidth <= 140);
+  assert.ok(blockGap > 0 && blockGap <= 6);
+  assert.ok(blockHorizontalPadding > 0 && blockHorizontalPadding <= 2);
   assert.match(source, /ClientSize\.Width/);
   assert.match(source, /DividerWidth/);
   assert.match(source, /DrawDivider/);
@@ -60,11 +64,11 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.doesNotMatch(source, /usableWidth\s*\/\s*2/);
 });
 
-test('taskbar helper shows overflow count when taskbar rows hide extra targets', () => {
+test('taskbar helper does not render overflow counts for hidden targets', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.match(source, /HiddenCount\s*>\s*0/);
-  assert.match(source, /DrawOverflowBadge/);
-  assert.match(source, /\$"\+\{hiddenCount\}"/);
+  assert.doesNotMatch(source, /HiddenCount/);
+  assert.doesNotMatch(source, /DrawOverflowBadge/);
+  assert.doesNotMatch(source, /\$"\+\{hiddenCount\}"/);
 });
 
 test('taskbar helper renders row status text when no quota blocks are available', () => {
@@ -87,7 +91,6 @@ test('taskbar helper validates semantic snapshot arrays before rendering', () =>
   assert.match(source, /ValidTaskbarPeriods\.Contains\(row\.Period\)/);
   assert.match(source, /row\.Blocks is null/);
   assert.match(source, /row\.Blocks\.Length > 3/);
-  assert.match(source, /row\.HiddenCount < 0/);
   assert.match(source, /string\.IsNullOrWhiteSpace\(block\.TargetId\)/);
   assert.match(source, /ValidQuotaSeverities\.Contains\(block\.Severity\)/);
 });
@@ -196,7 +199,7 @@ test('taskbar helper uses a subdued taskbar palette without text shadows', () =>
 
 test('taskbar helper renders uppercase periods, percent pairs, and largest-unit reset text', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.match(source, /PeriodWidth\s*=\s*(3[4-9]|[4-9][0-9])/);
+  assert.match(source, /PeriodWidth\s*=\s*(3[0-9]|[4-9][0-9])/);
   assert.match(source, /PeriodText/);
   assert.match(source, /ToUpperInvariant/);
   assert.match(source, /QuotaPairText/);

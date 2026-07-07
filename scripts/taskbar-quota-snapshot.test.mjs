@@ -18,6 +18,7 @@ function settings(overrides = {}) {
     quotaTargetOrder: [],
     quotaTargetAbbreviations: {},
     taskbarQuotaEnabled: false,
+    taskbarQuotaMaxBlocks: 2,
     ...overrides,
   };
 }
@@ -115,6 +116,7 @@ test('formats reset labels with only the largest remaining unit', () => {
 test('orders by configured quota order before risk, then natural target order', () => {
   const snapshot = buildTaskbarQuotaSnapshot(state({
     quotaTargetOrder: ['claude.group.account', 'codex.group.account'],
+    taskbarQuotaMaxBlocks: 3,
     theme: 'light',
   }, {
     claude: accountQuota('claude', 'Claude', 70, 50),
@@ -145,10 +147,9 @@ test('orders by configured quota order before risk, then natural target order', 
     'codex.group.account',
     'antigravity.group.model.gemini-3-pro',
   ]);
-  assert.equal(h5.hiddenCount, 0);
 });
 
-test('orders unconfigured targets by quota risk before truncating rows', () => {
+test('orders unconfigured targets by quota risk before applying the default taskbar row limit', () => {
   const snapshot = buildTaskbarQuotaSnapshot(state({}, {
     claude: accountQuota('claude', 'Claude', 20, 20),
     codex: accountQuota('codex', 'Codex', 30, 30),
@@ -183,9 +184,39 @@ test('orders unconfigured targets by quota risk before truncating rows', () => {
   assert.deepEqual(snapshot.rows[0].blocks.map(block => block.targetId), [
     'antigravity.group.model.gemini-danger',
     'antigravity.group.model.gemini-low',
-    'codex.group.account',
   ]);
-  assert.equal(snapshot.rows[0].hiddenCount, 1);
+});
+
+test('applies explicit taskbar row block limits between one and three blocks', () => {
+  const providerQuotas = {
+    claude: accountQuota('claude', 'Claude', 20, 20),
+    codex: accountQuota('codex', 'Codex', 30, 30),
+    antigravity: {
+      provider: 'antigravity',
+      source: 'localRpc',
+      capturedAt: 1000,
+      models: [
+        {
+          model: 'gemini-danger',
+          label: 'Gemini Danger',
+          remainingPct: 5,
+          resetMs: H5 / 2,
+          durationMs: H5,
+          defaultMode: 'simple',
+          visualKind: 'pace',
+        },
+      ],
+      status: { connected: true, code: 'ok' },
+    },
+  };
+
+  const one = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 1 }, providerQuotas));
+  const three = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 3 }, providerQuotas));
+  const clamped = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 99 }, providerQuotas));
+
+  assert.equal(one.rows[0].blocks.length, 1);
+  assert.equal(three.rows[0].blocks.length, 3);
+  assert.equal(clamped.rows[0].blocks.length, 3);
 });
 
 test('excludes none mode and percent-only Antigravity models without 5h or 1w period', () => {
@@ -260,7 +291,7 @@ test('labels fallback taskbar sources without marking live API or local RPC data
   claude.source = 'statusLine';
   claude.windows.h5.source = 'statusLine';
 
-  const snapshot = buildTaskbarQuotaSnapshot(state({}, {
+  const snapshot = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 3 }, {
     codex,
     claude,
     antigravity: {
