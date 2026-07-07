@@ -11,6 +11,7 @@ internal static class Program
 {
     private static readonly HashSet<string> ValidTaskbarPeriods = new(StringComparer.Ordinal) { "5h", "1w" };
     private static readonly HashSet<string> ValidQuotaSeverities = new(StringComparer.Ordinal) { "normal", "warning", "danger", "unknown" };
+    private static readonly HashSet<string> ValidProviderStatusTones = new(StringComparer.Ordinal) { "normal", "warning", "danger", "unknown" };
 
     [STAThread]
     private static void Main()
@@ -88,7 +89,8 @@ internal static class Program
                     || string.IsNullOrWhiteSpace(block.Provider)
                     || string.IsNullOrWhiteSpace(block.Abbreviation)
                     || string.IsNullOrWhiteSpace(block.Label)
-                    || !ValidQuotaSeverities.Contains(block.Severity))
+                    || !ValidQuotaSeverities.Contains(block.Severity)
+                    || !ValidProviderStatusTones.Contains(block.ProviderStatusTone))
                 {
                     return false;
                 }
@@ -415,7 +417,7 @@ internal sealed record TaskbarQuotaBlock(
     double? QuotaPct,
     double? ElapsedPct,
     string? ResetLabel,
-    string? SourceLabel,
+    string ProviderStatusTone,
     string Severity);
 
 internal sealed class TaskbarQuotaCanvas : Control
@@ -453,8 +455,6 @@ internal sealed class TaskbarQuotaCanvas : Control
     private int Scaled(int value) => Math.Max(1, (int)Math.Round(value * DpiScale));
 
     private int RowHeight => Math.Max(Scaled(18), (ClientSize.Height - (Scaled(VerticalPadding) * 2)) / 2);
-    private int MaximumBlockWidth => MaximumBlockWidthFor(ClientSize.Width);
-
     public TaskbarQuotaCanvas()
     {
         SetStyle(
@@ -476,7 +476,7 @@ internal sealed class TaskbarQuotaCanvas : Control
     public int MeasurePreferredWidth(TaskbarQuotaSnapshot snapshot, int taskbarWidth)
     {
         using var graphics = CreateGraphics();
-        var maxBlockWidth = MaximumBlockWidthFor(taskbarWidth);
+        var maxBlockWidth = MaximumBlockWidthFor(taskbarWidth, VisibleBlockCount(snapshot));
         var blockWidths = MeasureColumnWidths(graphics, snapshot, maxBlockWidth);
         return (Scaled(HorizontalPadding) * 2) + MeasureContentWidth(blockWidths);
     }
@@ -530,7 +530,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         var period = new Rectangle(content.Left, content.Top, Scaled(PeriodWidth), content.Height);
         var periodDivider = new Rectangle(period.Right, content.Top, Scaled(DividerWidth), content.Height);
 
-        var blockWidths = FitBlockWidths(MeasureColumnWidths(graphics, snapshot, MaximumBlockWidth), content.Width);
+        var blockWidths = FitBlockWidths(MeasureColumnWidths(graphics, snapshot, MaximumBlockWidthFor(ClientSize.Width, VisibleBlockCount(snapshot))), content.Width);
         var blockOneWidth = blockWidths[0];
         var blockTwoWidth = blockWidths[1];
         var blockThreeWidth = blockWidths[2];
@@ -629,11 +629,15 @@ internal sealed class TaskbarQuotaCanvas : Control
         return Math.Min(maxBlockWidth, measured + (Scaled(BlockHorizontalPadding) * 2));
     }
 
-    private int MaximumBlockWidthFor(int availableWidth)
+    private static int VisibleBlockCount(TaskbarQuotaSnapshot snapshot)
+        => Math.Clamp(snapshot.Rows.Take(2).Select(row => row.Blocks.Length).DefaultIfEmpty(0).Max(), 1, 3);
+
+    private int MaximumBlockWidthFor(int availableWidth, int visibleBlockCount)
     {
         var contentWidth = Math.Max(0, availableWidth - (Scaled(HorizontalPadding) * 2));
-        var nonBlockWidth = Scaled(PeriodWidth) + Scaled(DividerWidth) + Scaled(BlockGap) + ((Scaled(BlockGap) / 2 + Scaled(DividerWidth) + Scaled(BlockGap)) * 2);
-        return Math.Clamp((contentWidth - nonBlockWidth) / 3, Scaled(MinimumMaximumBlockWidth), Scaled(MaximumMaximumBlockWidth));
+        var blockCount = Math.Clamp(visibleBlockCount, 1, 3);
+        var nonBlockWidth = NonBlockWidthForBlockCount(blockCount);
+        return Math.Clamp((contentWidth - nonBlockWidth) / blockCount, Scaled(MinimumMaximumBlockWidth), Scaled(MaximumMaximumBlockWidth));
     }
 
     private int MeasureContentWidth(IReadOnlyList<int> blockWidths)
@@ -672,12 +676,11 @@ internal sealed class TaskbarQuotaCanvas : Control
         var quotaUsedText = QuotaUsedText(block);
         var elapsedText = ElapsedText(block);
         var resetText = ResetText(block);
-        var sourceText = SourceText(block);
         var prefixWidth = DrawMeasuredText(
             graphics,
             prefixText,
             _blockFont,
-            _palette.Text,
+            ProviderStatusColorFor(block.ProviderStatusTone),
             new Rectangle(cursor, bounds.Top, Math.Max(0, bounds.Right - cursor), bounds.Height));
         cursor += prefixWidth;
         var quotaWidth = DrawMeasuredText(
@@ -703,15 +706,6 @@ internal sealed class TaskbarQuotaCanvas : Control
                 _palette.Text,
                 new Rectangle(cursor, bounds.Top, Math.Max(0, bounds.Right - cursor), bounds.Height));
             cursor += resetWidth;
-        }
-        if (cursor < bounds.Right)
-        {
-            DrawText(
-                graphics,
-                sourceText,
-                _blockFont,
-                _palette.Muted,
-                new Rectangle(cursor, bounds.Top, Math.Max(0, bounds.Right - cursor), bounds.Height));
         }
     }
 
@@ -757,7 +751,7 @@ internal sealed class TaskbarQuotaCanvas : Control
 
     private static string QuotaPrefixLabel(TaskbarQuotaBlock block) => $"{block.Abbreviation}:";
 
-    private static string BlockDetailText(TaskbarQuotaBlock block) => $"{QuotaPairText(block)}{ResetText(block)}{SourceText(block)}";
+    private static string BlockDetailText(TaskbarQuotaBlock block) => $"{QuotaPairText(block)}{ResetText(block)}";
 
     private static string QuotaPairText(TaskbarQuotaBlock block)
     {
@@ -772,8 +766,6 @@ internal sealed class TaskbarQuotaCanvas : Control
 
     private static string ResetText(TaskbarQuotaBlock block) => string.IsNullOrWhiteSpace(block.ResetLabel) ? " --" : $" {block.ResetLabel}";
 
-    private static string SourceText(TaskbarQuotaBlock block) => string.IsNullOrWhiteSpace(block.SourceLabel) ? string.Empty : $" {block.SourceLabel}";
-
     private static string PctText(double? value) => value is null ? "--" : $"{Math.Round(value.Value):0}%";
 
     private Color QuotaColorFor(string severity) => severity switch
@@ -782,6 +774,14 @@ internal sealed class TaskbarQuotaCanvas : Control
         "warning" => _palette.Warning,
         "unknown" => _palette.Unknown,
         _ => _palette.Normal,
+    };
+
+    private Color ProviderStatusColorFor(string tone) => tone switch
+    {
+        "danger" => _palette.Danger,
+        "warning" => _palette.Warning,
+        "unknown" => _palette.Muted,
+        _ => _palette.Text,
     };
 
     private static StringFormat TextStringFormat() => new()

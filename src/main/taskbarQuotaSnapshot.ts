@@ -14,6 +14,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type TaskbarQuotaPeriod = '5h' | '1w';
 export type TaskbarQuotaSeverity = 'normal' | 'warning' | 'danger' | 'unknown';
+export type ProviderStatusTone = 'normal' | 'warning' | 'danger' | 'unknown';
 
 export interface TaskbarQuotaSnapshot {
   updatedAt: number;
@@ -35,8 +36,8 @@ export interface TaskbarQuotaBlock {
   quotaPct: number | null;
   elapsedPct: number | null;
   resetLabel: string | null;
-  sourceLabel: string | null;
   severity: TaskbarQuotaSeverity;
+  providerStatusTone: ProviderStatusTone;
 }
 
 interface CandidateBlock extends TaskbarQuotaBlock {
@@ -102,11 +103,12 @@ function resetLabel(resetMs: number | null | undefined): string | null {
   return `${days}d`;
 }
 
-function taskbarSourceLabel(source: ProviderQuotaSnapshot['source'] | undefined): string | null {
-  if (source === 'cache') return 'cache';
-  if (source === 'localLog') return 'log';
-  if (source === 'statusLine') return 'bridge';
-  return null;
+function providerStatusTone(quota: ProviderQuotaSnapshot): ProviderStatusTone {
+  if (!quota.status) return 'unknown';
+  if (!quota.status.connected) return 'danger';
+  if (quota.source === 'api' || quota.source === 'localRpc') return 'normal';
+  if (quota.source === 'statusLine' || quota.source === 'localLog' || quota.source === 'cache') return 'warning';
+  return 'unknown';
 }
 
 function severity(quotaPct: number | null, elapsedPctValue: number | null): TaskbarQuotaSeverity {
@@ -168,7 +170,7 @@ function makeBlock(
   quotaPctValue: number | null,
   durationMs: number | undefined,
   resetMs: number | null | undefined,
-  source: ProviderQuotaSnapshot['source'] | undefined,
+  statusTone: ProviderStatusTone,
   settings: AppSettings,
   order: Map<string, number>,
   naturalOrder: number,
@@ -183,8 +185,8 @@ function makeBlock(
     quotaPct: quotaPctValue,
     elapsedPct: elapsedPctValue,
     resetLabel: resetLabel(safeResetMs),
-    sourceLabel: taskbarSourceLabel(source),
     severity: severity(quotaPctValue, elapsedPctValue),
+    providerStatusTone: statusTone,
     risk: risk(quotaPctValue, elapsedPctValue),
     configuredOrder: order.get(targetId) ?? Number.MAX_SAFE_INTEGER,
     naturalOrder,
@@ -201,6 +203,7 @@ function addWindowCandidate(
   settings: AppSettings,
   order: Map<string, number>,
   naturalOrder: number,
+  statusTone: ProviderStatusTone,
 ): void {
   const display = quota.windowDisplay?.[windowKey];
   const period = periodFromDisplay(display, windowKey);
@@ -216,7 +219,7 @@ function addWindowCandidate(
     nullablePct(window.pct),
     display?.durationMs,
     window.resetMs,
-    window.source ?? quota.source,
+    statusTone,
     settings,
     order,
     naturalOrder,
@@ -227,7 +230,7 @@ function addModelCandidate(
   rows: Record<TaskbarQuotaPeriod, CandidateBlock[]>,
   provider: ProviderId,
   model: ProviderModelQuota,
-  source: ProviderQuotaSnapshot['source'],
+  statusTone: ProviderStatusTone,
   settings: AppSettings,
   order: Map<string, number>,
   naturalOrder: number,
@@ -244,7 +247,7 @@ function addModelCandidate(
     quotaPctFromModel(model),
     model.durationMs,
     model.resetMs ?? null,
-    source,
+    statusTone,
     settings,
     order,
     naturalOrder,
@@ -307,6 +310,7 @@ export function buildTaskbarQuotaSnapshot(
   for (const provider of settings.enabledProviders) {
     const quota = state.providerQuotas?.[provider];
     if (!quota) continue;
+    const statusTone = providerStatusTone(quota);
     const coveredModelGroups = new Set<string>();
     for (const group of quota.groups ?? []) {
       coveredModelGroups.add(group.key);
@@ -318,7 +322,7 @@ export function buildTaskbarQuotaSnapshot(
         continue;
       }
       for (const windowKey of group.windowKeys) {
-        addWindowCandidate(rows, provider, quota, targetId, group.label, windowKey, settings, order, groupOrder);
+        addWindowCandidate(rows, provider, quota, targetId, group.label, windowKey, settings, order, groupOrder, statusTone);
       }
     }
     for (const model of quota.models ?? []) {
@@ -332,7 +336,7 @@ export function buildTaskbarQuotaSnapshot(
         if (period) hiddenPeriods[period] = true;
         continue;
       }
-      addModelCandidate(rows, provider, model, quota.source, settings, order, modelOrder);
+      addModelCandidate(rows, provider, model, statusTone, settings, order, modelOrder);
     }
   }
 

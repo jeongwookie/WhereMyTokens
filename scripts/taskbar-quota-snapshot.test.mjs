@@ -91,7 +91,7 @@ test('builds exactly fixed 5h and 1w rows with provider default abbreviations an
   assert.deepEqual(snapshot.rows.map(row => row.period), ['5h', '1w']);
   assert.deepEqual(snapshot.rows[0].blocks.map(block => block.abbreviation), ['C', 'CX']);
   assert.deepEqual(snapshot.rows[1].blocks.map(block => block.abbreviation), ['CX', 'C']);
-  assert.deepEqual(snapshot.rows[0].blocks.map(block => block.sourceLabel), [null, null]);
+  assert.deepEqual(snapshot.rows[0].blocks.map(block => Object.hasOwn(block, 'sourceLabel')), [false, false]);
   assert.equal(snapshot.rows[0].blocks[0].elapsedPct, 50);
   assert.match(snapshot.rows[0].blocks[0].resetLabel, /^\d+h/);
 });
@@ -282,7 +282,7 @@ test('formats unknown quota signals as nullable fields and uses severity boundar
   assert.equal(dangerAt90.severity, 'danger');
 });
 
-test('labels fallback taskbar sources without marking live API or local RPC data', () => {
+test('uses provider status tones instead of rendering fallback taskbar source labels', () => {
   const codex = accountQuota('codex', 'Codex', 60, 50);
   codex.source = 'localLog';
   codex.windows.h5.source = 'localLog';
@@ -313,12 +313,86 @@ test('labels fallback taskbar sources without marking live API or local RPC data
     },
   }));
 
-  const h5Sources = Object.fromEntries(snapshot.rows[0].blocks.map(block => [block.targetId, block.sourceLabel]));
-  const weekSources = Object.fromEntries(snapshot.rows[1].blocks.map(block => [block.targetId, block.sourceLabel]));
-  assert.equal(h5Sources['codex.group.account'], 'log');
-  assert.equal(h5Sources['claude.group.account'], 'bridge');
-  assert.equal(h5Sources['antigravity.group.model.gemini-3-pro'], null);
-  assert.equal(weekSources['codex.group.account'], 'cache');
+  const h5Blocks = Object.fromEntries(snapshot.rows[0].blocks.map(block => [block.targetId, block]));
+  const weekBlocks = Object.fromEntries(snapshot.rows[1].blocks.map(block => [block.targetId, block]));
+  assert.equal(h5Blocks['codex.group.account'].providerStatusTone, 'warning');
+  assert.equal(h5Blocks['claude.group.account'].providerStatusTone, 'warning');
+  assert.equal(h5Blocks['antigravity.group.model.gemini-3-pro'].providerStatusTone, 'normal');
+  assert.equal(weekBlocks['codex.group.account'].providerStatusTone, 'warning');
+  assert.equal(Object.hasOwn(h5Blocks['codex.group.account'], 'sourceLabel'), false);
+  assert.equal(Object.hasOwn(h5Blocks['claude.group.account'], 'sourceLabel'), false);
+  assert.equal(Object.hasOwn(weekBlocks['codex.group.account'], 'sourceLabel'), false);
+});
+
+test('assigns provider status tones independently from quota severity', () => {
+  const api = accountQuota('claude', 'Claude', 20, 20);
+  const localRpc = {
+    provider: 'antigravity',
+    source: 'localRpc',
+    capturedAt: 1000,
+    models: [
+      {
+        model: 'gemini-3-pro',
+        label: 'Gemini 3 Pro',
+        remainingPct: 60,
+        resetMs: H5 / 2,
+        durationMs: H5,
+        defaultMode: 'simple',
+        visualKind: 'pace',
+      },
+    ],
+    status: { connected: true, code: 'ok' },
+  };
+  const localLog = accountQuota('codex', 'Codex', 95, 95);
+  localLog.source = 'localLog';
+  localLog.windows.h5.source = 'localLog';
+  localLog.windows.week.source = 'localLog';
+  const cache = accountQuota('claude', 'Claude Cache', 35, 35);
+  cache.source = 'cache';
+  cache.windows.h5.source = 'cache';
+  cache.windows.week.source = 'cache';
+  const offline = accountQuota('codex', 'Codex Offline', 15, 15);
+  offline.source = 'cache';
+  offline.windows.h5.source = 'cache';
+  offline.windows.week.source = 'cache';
+  offline.status = { connected: false, code: 'offline', severity: 'warning' };
+  const unknown = accountQuota('claude', 'Claude Unknown', 45, 45);
+  unknown.source = 'futureSource';
+  unknown.windows.h5.source = 'futureSource';
+  unknown.windows.week.source = 'futureSource';
+  unknown.status = undefined;
+
+  const normalSnapshot = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 3 }, {
+    claude: api,
+    antigravity: localRpc,
+  }));
+  assert.deepEqual(
+    Object.fromEntries(normalSnapshot.rows[0].blocks.map(block => [block.targetId, block.providerStatusTone])),
+    {
+      'claude.group.account': 'normal',
+      'antigravity.group.model.gemini-3-pro': 'normal',
+    },
+  );
+
+  const warningSnapshot = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 3 }, {
+    codex: localLog,
+    claude: cache,
+  }));
+  assert.deepEqual(
+    Object.fromEntries(warningSnapshot.rows[0].blocks.map(block => [block.targetId, block.providerStatusTone])),
+    {
+      'codex.group.account': 'warning',
+      'claude.group.account': 'warning',
+    },
+  );
+  assert.equal(warningSnapshot.rows[0].blocks.find(block => block.targetId === 'codex.group.account')?.severity, 'danger');
+
+  const dangerSnapshot = buildTaskbarQuotaSnapshot(state({}, { codex: offline }));
+  assert.equal(dangerSnapshot.rows[0].blocks[0].providerStatusTone, 'danger');
+  assert.equal(dangerSnapshot.rows[0].blocks[0].severity, 'normal');
+
+  const unknownSnapshot = buildTaskbarQuotaSnapshot(state({}, { claude: unknown }));
+  assert.equal(unknownSnapshot.rows[0].blocks[0].providerStatusTone, 'unknown');
 });
 
 test('drops non-finite reset values from taskbar labels and pacing', () => {
@@ -332,7 +406,8 @@ test('drops non-finite reset values from taskbar labels and pacing', () => {
   assert.equal(block.resetLabel, null);
   assert.equal(block.elapsedPct, null);
   assert.equal(block.severity, 'unknown');
-  assert.equal(block.sourceLabel, 'bridge');
+  assert.equal(Object.hasOwn(block, 'sourceLabel'), false);
+  assert.equal(block.providerStatusTone, 'warning');
 });
 
 test('labels empty taskbar rows as waiting, offline, or no data', () => {

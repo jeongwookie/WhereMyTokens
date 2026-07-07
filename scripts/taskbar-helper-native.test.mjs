@@ -93,6 +93,7 @@ test('taskbar helper validates semantic snapshot arrays before rendering', () =>
   assert.match(source, /row\.Blocks\.Length > 3/);
   assert.match(source, /string\.IsNullOrWhiteSpace\(block\.TargetId\)/);
   assert.match(source, /ValidQuotaSeverities\.Contains\(block\.Severity\)/);
+  assert.match(source, /ValidProviderStatusTones\.Contains\(block\.ProviderStatusTone\)/);
 });
 
 test('taskbar helper sizes its host window from measured quota content', () => {
@@ -178,13 +179,23 @@ test('taskbar helper colors only quota used percent by severity', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
   assert.match(source, /QuotaPrefixLabel/);
   assert.match(source, /QuotaColorFor\(block\.Severity\)/);
-  assert.match(source, /DrawMeasuredText\(\s*graphics,\s*prefixText,\s*_blockFont,\s*_palette\.Text/s);
+  assert.match(source, /ProviderStatusColorFor\(block\.ProviderStatusTone\)/);
+  assert.match(source, /DrawMeasuredText\(\s*graphics,\s*prefixText,\s*_blockFont,\s*ProviderStatusColorFor\(block\.ProviderStatusTone\)/s);
   assert.match(source, /DrawMeasuredText\(\s*graphics,\s*quotaUsedText,\s*_blockFont,\s*QuotaColorFor\(block\.Severity\)/s);
   assert.match(source, /DrawMeasuredText\(\s*graphics,\s*elapsedText,\s*_blockFont,\s*_palette\.Text/s);
   assert.doesNotMatch(source, /DrawMeasuredText\(\s*graphics,\s*quotaText,\s*_blockFont,\s*QuotaColorFor\(block\.Severity\)/s);
   assert.doesNotMatch(source, /\$"\{QuotaPrefixLabel\(block\)\}\{QuotaPairText\(block\)\}"/);
   assert.match(source, /BlockDetailText/);
   assert.match(source, /_palette\.Text/);
+});
+
+test('taskbar helper sizes maximum block width from visible block columns', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /VisibleBlockCount/);
+  assert.match(source, /MaximumBlockWidthFor\(taskbarWidth,\s*VisibleBlockCount\(snapshot\)\)/);
+  assert.match(source, /MaximumBlockWidthFor\(ClientSize\.Width,\s*VisibleBlockCount\(snapshot\)\)/);
+  assert.match(source, /NonBlockWidthForBlockCount\(blockCount\)/);
+  assert.doesNotMatch(source, /MaximumBlockWidthFor\(int availableWidth,\s*int visibleBlockCount\)[\s\S]*\/\s*3/);
 });
 
 test('taskbar helper uses a subdued taskbar palette without text shadows', () => {
@@ -207,9 +218,9 @@ test('taskbar helper renders uppercase periods, percent pairs, and largest-unit 
   assert.match(source, /PctText/);
   assert.match(source, /%"/);
   assert.match(source, /ResetText/);
-  assert.match(source, /SourceLabel/);
-  assert.match(source, /SourceText/);
-  assert.match(source, /BlockDetailText\(TaskbarQuotaBlock block\)\s*=>\s*\$"\{QuotaPairText\(block\)\}\{ResetText\(block\)\}\{SourceText\(block\)\}"/);
+  assert.doesNotMatch(source, /SourceLabel/);
+  assert.doesNotMatch(source, /SourceText/);
+  assert.match(source, /BlockDetailText\(TaskbarQuotaBlock block\)\s*=>\s*\$"\{QuotaPairText\(block\)\}\{ResetText\(block\)\}"/);
 });
 
 test('taskbar helper measures owner-drawn text with the same API it uses to draw it', () => {
