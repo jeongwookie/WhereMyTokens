@@ -198,6 +198,14 @@ test('taskbar helper sizes maximum block width from visible block columns', () =
   assert.doesNotMatch(source, /MaximumBlockWidthFor\(int availableWidth,\s*int visibleBlockCount\)[\s\S]*\/\s*3/);
 });
 
+test('taskbar helper measures block width from the same text segments it draws', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /MeasureBlockContentWidth/);
+  assert.match(source, /MeasureBlockWidth\(Graphics graphics,\s*TaskbarQuotaBlock\? block,\s*int maxBlockWidth\)[\s\S]*MeasureBlockContentWidth\(graphics,\s*block,\s*maxBlockWidth\)/);
+  assert.match(source, /MeasureBlockContentWidth[\s\S]*QuotaPrefixLabel\(block\)[\s\S]*QuotaUsedText\(block\)[\s\S]*ElapsedText\(block\)[\s\S]*ResetText\(block\)/);
+  assert.doesNotMatch(source, /MeasureDrawStringWidth\(graphics,\s*\$"\{QuotaPrefixLabel\(block\)\}\{BlockDetailText\(block\)\}",\s*_blockFont,\s*maxBlockWidth\)/);
+});
+
 test('taskbar helper uses a subdued taskbar palette without text shadows', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
   assert.match(source, /SubduedDark/);

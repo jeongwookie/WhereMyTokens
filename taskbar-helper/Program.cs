@@ -625,8 +625,25 @@ internal sealed class TaskbarQuotaCanvas : Control
     private int MeasureBlockWidth(Graphics graphics, TaskbarQuotaBlock? block, int maxBlockWidth)
     {
         if (block is null) return Scaled(MinimumBlockWidth);
-        var measured = MeasureDrawStringWidth(graphics, $"{QuotaPrefixLabel(block)}{BlockDetailText(block)}", _blockFont, maxBlockWidth);
+        var measured = MeasureBlockContentWidth(graphics, block, maxBlockWidth);
         return Math.Min(maxBlockWidth, measured + (Scaled(BlockHorizontalPadding) * 2));
+    }
+
+    private int MeasureBlockContentWidth(Graphics graphics, TaskbarQuotaBlock block, int maxBlockWidth)
+    {
+        var width = 0;
+        foreach (var text in new[]
+        {
+            QuotaPrefixLabel(block),
+            QuotaUsedText(block),
+            ElapsedText(block),
+            ResetText(block),
+        })
+        {
+            width += MeasureDrawStringWidth(graphics, text, _blockFont, Math.Max(0, maxBlockWidth - width));
+            if (width >= maxBlockWidth) return maxBlockWidth;
+        }
+        return width;
     }
 
     private static int VisibleBlockCount(TaskbarQuotaSnapshot snapshot)
