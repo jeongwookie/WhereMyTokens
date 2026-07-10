@@ -91,6 +91,7 @@ test('builds exactly fixed 5h and 1w rows with provider default abbreviations an
   assert.deepEqual(snapshot.rows.map(row => row.period), ['5h', '1w']);
   assert.deepEqual(snapshot.rows[0].blocks.map(block => block.abbreviation), ['C', 'CX']);
   assert.deepEqual(snapshot.rows[1].blocks.map(block => block.abbreviation), ['CX', 'C']);
+  assert.equal(snapshot.rows[0].hiddenCount, 0);
   assert.deepEqual(snapshot.rows[0].blocks.map(block => Object.hasOwn(block, 'sourceLabel')), [false, false]);
   assert.equal(snapshot.rows[0].blocks[0].elapsedPct, 50);
   assert.match(snapshot.rows[0].blocks[0].resetLabel, /^\d+h/);
@@ -185,6 +186,7 @@ test('orders unconfigured targets by quota risk before applying the default task
     'antigravity.group.model.gemini-danger',
     'antigravity.group.model.gemini-low',
   ]);
+  assert.equal(snapshot.rows[0].hiddenCount, 2);
 });
 
 test('applies explicit taskbar row block limits between one and three blocks', () => {
@@ -215,8 +217,11 @@ test('applies explicit taskbar row block limits between one and three blocks', (
   const clamped = buildTaskbarQuotaSnapshot(state({ taskbarQuotaMaxBlocks: 99 }, providerQuotas));
 
   assert.equal(one.rows[0].blocks.length, 1);
+  assert.equal(one.rows[0].hiddenCount, 2);
   assert.equal(three.rows[0].blocks.length, 3);
+  assert.equal(three.rows[0].hiddenCount, 0);
   assert.equal(clamped.rows[0].blocks.length, 3);
+  assert.equal(clamped.rows[0].hiddenCount, 0);
 });
 
 test('excludes none mode and percent-only Antigravity models without 5h or 1w period', () => {
@@ -316,9 +321,9 @@ test('uses provider status tones instead of rendering fallback taskbar source la
   const h5Blocks = Object.fromEntries(snapshot.rows[0].blocks.map(block => [block.targetId, block]));
   const weekBlocks = Object.fromEntries(snapshot.rows[1].blocks.map(block => [block.targetId, block]));
   assert.equal(h5Blocks['codex.group.account'].providerStatusTone, 'warning');
-  assert.equal(h5Blocks['claude.group.account'].providerStatusTone, 'warning');
+  assert.equal(h5Blocks['claude.group.account'].providerStatusTone, 'normal');
   assert.equal(h5Blocks['antigravity.group.model.gemini-3-pro'].providerStatusTone, 'normal');
-  assert.equal(weekBlocks['codex.group.account'].providerStatusTone, 'warning');
+  assert.equal(weekBlocks['codex.group.account'].providerStatusTone, 'normal');
   assert.equal(Object.hasOwn(h5Blocks['codex.group.account'], 'sourceLabel'), false);
   assert.equal(Object.hasOwn(h5Blocks['claude.group.account'], 'sourceLabel'), false);
   assert.equal(Object.hasOwn(weekBlocks['codex.group.account'], 'sourceLabel'), false);
@@ -382,17 +387,25 @@ test('assigns provider status tones independently from quota severity', () => {
     Object.fromEntries(warningSnapshot.rows[0].blocks.map(block => [block.targetId, block.providerStatusTone])),
     {
       'codex.group.account': 'warning',
-      'claude.group.account': 'warning',
+      'claude.group.account': 'normal',
     },
   );
   assert.equal(warningSnapshot.rows[0].blocks.find(block => block.targetId === 'codex.group.account')?.severity, 'danger');
 
   const dangerSnapshot = buildTaskbarQuotaSnapshot(state({}, { codex: offline }));
-  assert.equal(dangerSnapshot.rows[0].blocks[0].providerStatusTone, 'danger');
+  assert.equal(dangerSnapshot.rows[0].blocks[0].providerStatusTone, 'warning');
   assert.equal(dangerSnapshot.rows[0].blocks[0].severity, 'normal');
 
   const unknownSnapshot = buildTaskbarQuotaSnapshot(state({}, { claude: unknown }));
   assert.equal(unknownSnapshot.rows[0].blocks[0].providerStatusTone, 'unknown');
+
+  const offlineUnknown = accountQuota('codex', 'Codex Offline Unknown', 15, 15);
+  offlineUnknown.source = 'futureSource';
+  offlineUnknown.windows.h5.source = 'futureSource';
+  offlineUnknown.windows.week.source = 'futureSource';
+  offlineUnknown.status = { connected: false, code: 'offline', severity: 'warning' };
+  const offlineUnknownSnapshot = buildTaskbarQuotaSnapshot(state({}, { codex: offlineUnknown }));
+  assert.equal(offlineUnknownSnapshot.rows[0].blocks[0].providerStatusTone, 'danger');
 });
 
 test('drops non-finite reset values from taskbar labels and pacing', () => {
@@ -407,7 +420,7 @@ test('drops non-finite reset values from taskbar labels and pacing', () => {
   assert.equal(block.elapsedPct, null);
   assert.equal(block.severity, 'unknown');
   assert.equal(Object.hasOwn(block, 'sourceLabel'), false);
-  assert.equal(block.providerStatusTone, 'warning');
+  assert.equal(block.providerStatusTone, 'normal');
 });
 
 test('labels empty taskbar rows as waiting, offline, or no data', () => {

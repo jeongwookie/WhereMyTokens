@@ -25,6 +25,7 @@ export interface TaskbarQuotaSnapshot {
 export interface TaskbarQuotaPeriodRow {
   period: TaskbarQuotaPeriod;
   blocks: TaskbarQuotaBlock[];
+  hiddenCount: number;
   statusLabel: string | null;
 }
 
@@ -103,11 +104,22 @@ function resetLabel(resetMs: number | null | undefined): string | null {
   return `${days}d`;
 }
 
-function providerStatusTone(quota: ProviderQuotaSnapshot): ProviderStatusTone {
+function sourceStatusTone(source: ProviderQuotaSnapshot['source'] | undefined): ProviderStatusTone | null {
+  if (source === 'localLog') return 'warning';
+  if (source === 'api' || source === 'localRpc' || source === 'statusLine' || source === 'cache') return 'normal';
+  return null;
+}
+
+function providerStatusTone(quota: ProviderQuotaSnapshot, source: ProviderQuotaSnapshot['source'] | undefined): ProviderStatusTone {
+  const effectiveSource = source ?? quota.source;
+  if (quota.status?.connected === false) {
+    if (effectiveSource === 'statusLine') return 'normal';
+    if (effectiveSource === 'cache' || effectiveSource === 'localLog') return 'warning';
+    return 'danger';
+  }
+  const sourceTone = sourceStatusTone(effectiveSource);
+  if (sourceTone) return sourceTone;
   if (!quota.status) return 'unknown';
-  if (!quota.status.connected) return 'danger';
-  if (quota.source === 'api' || quota.source === 'localRpc') return 'normal';
-  if (quota.source === 'statusLine' || quota.source === 'localLog' || quota.source === 'cache') return 'warning';
   return 'unknown';
 }
 
@@ -203,7 +215,6 @@ function addWindowCandidate(
   settings: AppSettings,
   order: Map<string, number>,
   naturalOrder: number,
-  statusTone: ProviderStatusTone,
 ): void {
   const display = quota.windowDisplay?.[windowKey];
   const period = periodFromDisplay(display, windowKey);
@@ -219,7 +230,7 @@ function addWindowCandidate(
     nullablePct(window.pct),
     display?.durationMs,
     window.resetMs,
-    statusTone,
+    providerStatusTone(quota, window.source ?? quota.source),
     settings,
     order,
     naturalOrder,
@@ -229,8 +240,8 @@ function addWindowCandidate(
 function addModelCandidate(
   rows: Record<TaskbarQuotaPeriod, CandidateBlock[]>,
   provider: ProviderId,
+  quota: ProviderQuotaSnapshot,
   model: ProviderModelQuota,
-  statusTone: ProviderStatusTone,
   settings: AppSettings,
   order: Map<string, number>,
   naturalOrder: number,
@@ -247,7 +258,7 @@ function addModelCandidate(
     quotaPctFromModel(model),
     model.durationMs,
     model.resetMs ?? null,
-    statusTone,
+    providerStatusTone(quota, quota.source),
     settings,
     order,
     naturalOrder,
@@ -310,7 +321,6 @@ export function buildTaskbarQuotaSnapshot(
   for (const provider of settings.enabledProviders) {
     const quota = state.providerQuotas?.[provider];
     if (!quota) continue;
-    const statusTone = providerStatusTone(quota);
     const coveredModelGroups = new Set<string>();
     for (const group of quota.groups ?? []) {
       coveredModelGroups.add(group.key);
@@ -322,7 +332,7 @@ export function buildTaskbarQuotaSnapshot(
         continue;
       }
       for (const windowKey of group.windowKeys) {
-        addWindowCandidate(rows, provider, quota, targetId, group.label, windowKey, settings, order, groupOrder, statusTone);
+        addWindowCandidate(rows, provider, quota, targetId, group.label, windowKey, settings, order, groupOrder);
       }
     }
     for (const model of quota.models ?? []) {
@@ -336,7 +346,7 @@ export function buildTaskbarQuotaSnapshot(
         if (period) hiddenPeriods[period] = true;
         continue;
       }
-      addModelCandidate(rows, provider, model, statusTone, settings, order, modelOrder);
+      addModelCandidate(rows, provider, quota, model, settings, order, modelOrder);
     }
   }
 
@@ -349,6 +359,7 @@ export function buildTaskbarQuotaSnapshot(
       return {
         period,
         blocks,
+        hiddenCount: Math.max(0, sorted.length - blocks.length),
         statusLabel: blocks.length > 0 ? null : waiting ? 'waiting' : hiddenPeriods[period] ? 'hidden' : hasOfflineProvider ? 'offline' : 'no data',
       };
     }),

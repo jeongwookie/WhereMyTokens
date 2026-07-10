@@ -64,11 +64,12 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.doesNotMatch(source, /usableWidth\s*\/\s*2/);
 });
 
-test('taskbar helper does not render overflow counts for hidden targets', () => {
+test('taskbar helper renders compact overflow counts for hidden targets', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.doesNotMatch(source, /HiddenCount/);
-  assert.doesNotMatch(source, /DrawOverflowBadge/);
-  assert.doesNotMatch(source, /\$"\+\{hiddenCount\}"/);
+  assert.match(source, /HiddenCount/);
+  assert.match(source, /DrawOverflowBadge/);
+  assert.match(source, /\$"\+\{hiddenCount\}"/);
+  assert.doesNotMatch(source, /SourceLabel/);
 });
 
 test('taskbar helper renders row status text when no quota blocks are available', () => {
@@ -91,6 +92,7 @@ test('taskbar helper validates semantic snapshot arrays before rendering', () =>
   assert.match(source, /ValidTaskbarPeriods\.Contains\(row\.Period\)/);
   assert.match(source, /row\.Blocks is null/);
   assert.match(source, /row\.Blocks\.Length > 3/);
+  assert.match(source, /row\.HiddenCount < 0/);
   assert.match(source, /string\.IsNullOrWhiteSpace\(block\.TargetId\)/);
   assert.match(source, /ValidQuotaSeverities\.Contains\(block\.Severity\)/);
   assert.match(source, /ValidProviderStatusTones\.Contains\(block\.ProviderStatusTone\)/);
