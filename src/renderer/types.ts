@@ -303,6 +303,7 @@ export interface AppSettings {
   quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
   quotaTargetOrder: string[];
   taskbarQuotaEnabled: boolean;
+  taskbarQuotaMaxBlocks: number;
   quotaTargetAbbreviations: Partial<Record<string, string>>;
   antigravityQuotaDurationPaceEnabled: boolean;
   compactWidgetEnabled: boolean;

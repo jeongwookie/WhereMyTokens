@@ -98,6 +98,7 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'quotaTargetModes',
   'quotaTargetOrder',
   'taskbarQuotaEnabled',
+  'taskbarQuotaMaxBlocks',
   'quotaTargetAbbreviations',
   'antigravityQuotaDurationPaceEnabled',
   'compactWidgetEnabled',
@@ -112,6 +113,7 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
     taskbarQuotaEnabled: settings.taskbarQuotaEnabled === true,
+    taskbarQuotaMaxBlocks: Math.max(1, Math.min(3, Math.round(settings.taskbarQuotaMaxBlocks || 2))),
     quotaTargetAbbreviations: settings.quotaTargetAbbreviations ?? {},
     antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
     mainSectionOrder,
@@ -456,6 +458,25 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
           </div>
           <input type="checkbox" style={chk} checked={s.taskbarQuotaEnabled} onChange={e => setS({ ...s, taskbarQuotaEnabled: e.target.checked })} />
         </div>
+        {s.taskbarQuotaEnabled && (
+          <div style={row}>
+            <div>
+              <div style={labelStyle}>Taskbar max blocks</div>
+              <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
+                Limits how many quota blocks each taskbar row shows
+              </div>
+            </div>
+            <select
+              style={sel}
+              value={s.taskbarQuotaMaxBlocks}
+              onChange={e => setS({ ...s, taskbarQuotaMaxBlocks: Number(e.target.value) })}
+            >
+              <option value={1}>1 block</option>
+              <option value={2}>2 blocks</option>
+              <option value={3}>3 blocks</option>
+            </select>
+          </div>
+        )}
         <div style={row}>
           <div>
             <div style={labelStyle}>Waiting animation</div>

@@ -44,6 +44,7 @@ export interface AppSettings {
   quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>;
   quotaTargetOrder: string[];
   taskbarQuotaEnabled: boolean;
+  taskbarQuotaMaxBlocks: number;
   quotaTargetAbbreviations: Partial<Record<string, string>>;
   antigravityQuotaDurationPaceEnabled: boolean;
   compactWidgetEnabled: boolean;
@@ -174,6 +175,12 @@ function normalizeQuotaTargetAbbreviations(value: unknown): Partial<Record<strin
   return normalized;
 }
 
+function normalizeTaskbarQuotaMaxBlocks(value: unknown): number | null {
+  const numberValue = finiteNumber(value);
+  if (numberValue == null) return null;
+  return Math.max(1, Math.min(3, Math.round(numberValue)));
+}
+
 function legacyProviderToEnabledProviders(value: unknown): ProviderId[] | null {
   if (value === 'claude') return ['claude'];
   if (value === 'codex') return ['codex'];
@@ -219,6 +226,10 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
     if (quotaTargetOrder) next.quotaTargetOrder = quotaTargetOrder;
   }
   if (typeof record.taskbarQuotaEnabled === 'boolean') next.taskbarQuotaEnabled = record.taskbarQuotaEnabled;
+  if (Object.prototype.hasOwnProperty.call(record, 'taskbarQuotaMaxBlocks')) {
+    const taskbarQuotaMaxBlocks = normalizeTaskbarQuotaMaxBlocks(record.taskbarQuotaMaxBlocks);
+    if (taskbarQuotaMaxBlocks != null) next.taskbarQuotaMaxBlocks = taskbarQuotaMaxBlocks;
+  }
   if (Object.prototype.hasOwnProperty.call(record, 'quotaTargetAbbreviations')) {
     const quotaTargetAbbreviations = normalizeQuotaTargetAbbreviations(record.quotaTargetAbbreviations);
     if (quotaTargetAbbreviations) next.quotaTargetAbbreviations = quotaTargetAbbreviations;
@@ -271,6 +282,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quotaTargetModes: {},
   quotaTargetOrder: [],
   taskbarQuotaEnabled: false,
+  taskbarQuotaMaxBlocks: 2,
   quotaTargetAbbreviations: {},
   antigravityQuotaDurationPaceEnabled: false,
   compactWidgetEnabled: false,

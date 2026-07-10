@@ -85,6 +85,7 @@ test('Antigravity quota duration pace setting defaults off and normalizes boolea
 test('taskbar quota settings default off and normalize abbreviation overrides', () => {
   const settings = normalizeSettings({
     taskbarQuotaEnabled: true,
+    taskbarQuotaMaxBlocks: 9,
     quotaTargetAbbreviations: {
       'claude.group.account': ' c ',
       'codex.group.account': 'x1',
@@ -98,8 +99,10 @@ test('taskbar quota settings default off and normalize abbreviation overrides', 
   });
 
   assert.equal(DEFAULT_SETTINGS.taskbarQuotaEnabled, false);
+  assert.equal(DEFAULT_SETTINGS.taskbarQuotaMaxBlocks, 2);
   assert.deepEqual(DEFAULT_SETTINGS.quotaTargetAbbreviations, {});
   assert.equal(settings.taskbarQuotaEnabled, true);
+  assert.equal(settings.taskbarQuotaMaxBlocks, 3);
   assert.deepEqual(settings.quotaTargetAbbreviations, {
     'claude.group.account': 'C',
     'codex.group.account': 'X1',
@@ -133,25 +136,32 @@ test('settings:set persists taskbar quota settings through the explicit allowlis
 
   let saved = setSettings(null, {
     taskbarQuotaEnabled: true,
+    taskbarQuotaMaxBlocks: 1,
     quotaTargetAbbreviations: {
       'claude.group.account': ' cc ',
       'codex.group.account': 'x',
     },
   });
   assert.equal(saved.taskbarQuotaEnabled, true);
+  assert.equal(saved.taskbarQuotaMaxBlocks, 1);
   assert.deepEqual(saved.quotaTargetAbbreviations, {
     'claude.group.account': 'CC',
     'codex.group.account': 'X',
   });
   assert.equal(store.store.taskbarQuotaEnabled, true);
+  assert.equal(store.store.taskbarQuotaMaxBlocks, 1);
 
-  saved = setSettings(null, { taskbarQuotaEnabled: false });
+  saved = setSettings(null, { taskbarQuotaEnabled: false, taskbarQuotaMaxBlocks: 99 });
   assert.equal(saved.taskbarQuotaEnabled, false);
+  assert.equal(saved.taskbarQuotaMaxBlocks, 3);
   assert.equal(store.store.taskbarQuotaEnabled, false);
+  assert.equal(store.store.taskbarQuotaMaxBlocks, 3);
 
-  saved = setSettings(null, { taskbarQuotaEnabled: 'true' });
+  saved = setSettings(null, { taskbarQuotaEnabled: 'true', taskbarQuotaMaxBlocks: '2' });
   assert.equal(saved.taskbarQuotaEnabled, false);
+  assert.equal(saved.taskbarQuotaMaxBlocks, 3);
   assert.equal(store.store.taskbarQuotaEnabled, false);
+  assert.equal(store.store.taskbarQuotaMaxBlocks, 3);
 });
 
 test('renderer settings model exposes enabledProviders as editable state', () => {
@@ -163,6 +173,7 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(types, /quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>/);
   assert.match(types, /quotaTargetOrder: string\[\]/);
   assert.match(types, /taskbarQuotaEnabled: boolean/);
+  assert.match(types, /taskbarQuotaMaxBlocks: number/);
   assert.match(types, /quotaTargetAbbreviations: Partial<Record<string, string>>/);
   assert.match(types, /antigravityQuotaDurationPaceEnabled: boolean/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
@@ -170,10 +181,12 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(settingsView, /'quotaTargetModes'/);
   assert.match(settingsView, /'quotaTargetOrder'/);
   assert.match(settingsView, /'taskbarQuotaEnabled'/);
+  assert.match(settingsView, /'taskbarQuotaMaxBlocks'/);
   assert.match(settingsView, /'quotaTargetAbbreviations'/);
   assert.match(settingsView, /'antigravityQuotaDurationPaceEnabled'/);
   assert.match(settingsView, /Antigravity quota pace/);
   assert.match(app, /taskbarQuotaEnabled: false/);
+  assert.match(app, /taskbarQuotaMaxBlocks: 2/);
   assert.match(app, /quotaTargetAbbreviations: \{\}/);
   assert.doesNotMatch(settingsView, /'plan'/);
   assert.doesNotMatch(settingsView, /'provider'/);
@@ -187,6 +200,7 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   assert.doesNotMatch(settingsView, /<SectionHeader label="Tracking" \/>/);
   assert.match(settingsView, /Quota display/);
   assert.match(settingsView, /Taskbar mini quota display/);
+  assert.match(settingsView, /Taskbar max blocks/);
   assert.match(settingsView, /Shows fixed 5h \/ 1w quota rows inside the Windows taskbar when supported/);
   assert.match(settingsView, /setQuotaTargetAbbreviation/);
   assert.match(settingsView, /normalizeQuotaTargetAbbreviationInput/);

@@ -48,8 +48,12 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.match(source, /NonBlockWidthForBlockCount/);
   const minimumBlockWidth = Number(source.match(/MinimumBlockWidth\s*=\s*(\d+)/)?.[1]);
   const minimumMaximumBlockWidth = Number(source.match(/MinimumMaximumBlockWidth\s*=\s*(\d+)/)?.[1]);
-  assert.ok(minimumBlockWidth > 0 && minimumBlockWidth <= 150);
-  assert.ok(minimumMaximumBlockWidth > 0 && minimumMaximumBlockWidth <= 180);
+  const blockGap = Number(source.match(/BlockGap\s*=\s*(\d+)/)?.[1]);
+  const blockHorizontalPadding = Number(source.match(/BlockHorizontalPadding\s*=\s*(\d+)/)?.[1]);
+  assert.ok(minimumBlockWidth > 0 && minimumBlockWidth <= 120);
+  assert.ok(minimumMaximumBlockWidth > 0 && minimumMaximumBlockWidth <= 140);
+  assert.ok(blockGap > 0 && blockGap <= 6);
+  assert.ok(blockHorizontalPadding > 0 && blockHorizontalPadding <= 2);
   assert.match(source, /ClientSize\.Width/);
   assert.match(source, /DividerWidth/);
   assert.match(source, /DrawDivider/);
@@ -60,11 +64,12 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.doesNotMatch(source, /usableWidth\s*\/\s*2/);
 });
 
-test('taskbar helper shows overflow count when taskbar rows hide extra targets', () => {
+test('taskbar helper renders compact overflow counts for hidden targets', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.match(source, /HiddenCount\s*>\s*0/);
+  assert.match(source, /HiddenCount/);
   assert.match(source, /DrawOverflowBadge/);
   assert.match(source, /\$"\+\{hiddenCount\}"/);
+  assert.doesNotMatch(source, /SourceLabel/);
 });
 
 test('taskbar helper renders row status text when no quota blocks are available', () => {
@@ -90,6 +95,7 @@ test('taskbar helper validates semantic snapshot arrays before rendering', () =>
   assert.match(source, /row\.HiddenCount < 0/);
   assert.match(source, /string\.IsNullOrWhiteSpace\(block\.TargetId\)/);
   assert.match(source, /ValidQuotaSeverities\.Contains\(block\.Severity\)/);
+  assert.match(source, /ValidProviderStatusTones\.Contains\(block\.ProviderStatusTone\)/);
 });
 
 test('taskbar helper sizes its host window from measured quota content', () => {
@@ -175,13 +181,31 @@ test('taskbar helper colors only quota used percent by severity', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
   assert.match(source, /QuotaPrefixLabel/);
   assert.match(source, /QuotaColorFor\(block\.Severity\)/);
-  assert.match(source, /DrawMeasuredText\(\s*graphics,\s*prefixText,\s*_blockFont,\s*_palette\.Text/s);
+  assert.match(source, /ProviderStatusColorFor\(block\.ProviderStatusTone\)/);
+  assert.match(source, /DrawMeasuredText\(\s*graphics,\s*prefixText,\s*_blockFont,\s*ProviderStatusColorFor\(block\.ProviderStatusTone\)/s);
   assert.match(source, /DrawMeasuredText\(\s*graphics,\s*quotaUsedText,\s*_blockFont,\s*QuotaColorFor\(block\.Severity\)/s);
   assert.match(source, /DrawMeasuredText\(\s*graphics,\s*elapsedText,\s*_blockFont,\s*_palette\.Text/s);
   assert.doesNotMatch(source, /DrawMeasuredText\(\s*graphics,\s*quotaText,\s*_blockFont,\s*QuotaColorFor\(block\.Severity\)/s);
   assert.doesNotMatch(source, /\$"\{QuotaPrefixLabel\(block\)\}\{QuotaPairText\(block\)\}"/);
   assert.match(source, /BlockDetailText/);
   assert.match(source, /_palette\.Text/);
+});
+
+test('taskbar helper sizes maximum block width from visible block columns', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /VisibleBlockCount/);
+  assert.match(source, /MaximumBlockWidthFor\(taskbarWidth,\s*VisibleBlockCount\(snapshot\)\)/);
+  assert.match(source, /MaximumBlockWidthFor\(ClientSize\.Width,\s*VisibleBlockCount\(snapshot\)\)/);
+  assert.match(source, /NonBlockWidthForBlockCount\(blockCount\)/);
+  assert.doesNotMatch(source, /MaximumBlockWidthFor\(int availableWidth,\s*int visibleBlockCount\)[\s\S]*\/\s*3/);
+});
+
+test('taskbar helper measures block width from the same text segments it draws', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  assert.match(source, /MeasureBlockContentWidth/);
+  assert.match(source, /MeasureBlockWidth\(Graphics graphics,\s*TaskbarQuotaBlock\? block,\s*int maxBlockWidth\)[\s\S]*MeasureBlockContentWidth\(graphics,\s*block,\s*maxBlockWidth\)/);
+  assert.match(source, /MeasureBlockContentWidth[\s\S]*QuotaPrefixLabel\(block\)[\s\S]*QuotaUsedText\(block\)[\s\S]*ElapsedText\(block\)[\s\S]*ResetText\(block\)/);
+  assert.doesNotMatch(source, /MeasureDrawStringWidth\(graphics,\s*\$"\{QuotaPrefixLabel\(block\)\}\{BlockDetailText\(block\)\}",\s*_blockFont,\s*maxBlockWidth\)/);
 });
 
 test('taskbar helper uses a subdued taskbar palette without text shadows', () => {
@@ -196,7 +220,7 @@ test('taskbar helper uses a subdued taskbar palette without text shadows', () =>
 
 test('taskbar helper renders uppercase periods, percent pairs, and largest-unit reset text', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.match(source, /PeriodWidth\s*=\s*(3[4-9]|[4-9][0-9])/);
+  assert.match(source, /PeriodWidth\s*=\s*(3[0-9]|[4-9][0-9])/);
   assert.match(source, /PeriodText/);
   assert.match(source, /ToUpperInvariant/);
   assert.match(source, /QuotaPairText/);
@@ -204,9 +228,9 @@ test('taskbar helper renders uppercase periods, percent pairs, and largest-unit 
   assert.match(source, /PctText/);
   assert.match(source, /%"/);
   assert.match(source, /ResetText/);
-  assert.match(source, /SourceLabel/);
-  assert.match(source, /SourceText/);
-  assert.match(source, /BlockDetailText\(TaskbarQuotaBlock block\)\s*=>\s*\$"\{QuotaPairText\(block\)\}\{ResetText\(block\)\}\{SourceText\(block\)\}"/);
+  assert.doesNotMatch(source, /SourceLabel/);
+  assert.doesNotMatch(source, /SourceText/);
+  assert.match(source, /BlockDetailText\(TaskbarQuotaBlock block\)\s*=>\s*\$"\{QuotaPairText\(block\)\}\{ResetText\(block\)\}"/);
 });
 
 test('taskbar helper measures owner-drawn text with the same API it uses to draw it', () => {

@@ -85,7 +85,7 @@ function manager(options = {}) {
     },
     buildSnapshot: appState => {
       builtSnapshots.push(appState);
-      return { updatedAt: 1, rows: [{ period: '5h', blocks: [], hiddenCount: 0 }, { period: '1w', blocks: [], hiddenCount: 0 }] };
+      return { updatedAt: 1, rows: [{ period: '5h', blocks: [] }, { period: '1w', blocks: [] }] };
     },
     openDashboard: () => opened.push('main'),
     onRuntimeDisabled: () => runtimeDisabled.push('disabled'),
