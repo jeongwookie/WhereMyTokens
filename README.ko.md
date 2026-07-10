@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.0/WhereMyTokens-Setup.exe"><strong>v1.20.0 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe"><strong>v1.20.1 다운로드</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 버전</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.20.0은 Codex reset credit과 Windows taskbar mini quota 표시를 추가합니다.</em>
+  <em>v1.20.1은 taskbar mini quota 행당 표시 블록 수를 1-3개로 조정하고, 숨김 `+N` 표시와 source/status prefix 색상을 바로잡습니다.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 7/10 | Taskbar mini quota 행당 표시 블록 수를 1-3개로 설정할 수 있고, 숨겨진 target `+N` 표시와 live/cache/log prefix 상태 색상을 보정 |
 | **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | 7/7 | Codex reset credit을 Plan Usage target으로 추가하고, 드래그 가능한 self-contained Windows taskbar mini quota 표시를 5H/1W 행으로 제공 |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 6/22 | 짧은 Claude thinking 블록에서 calibration guard가 과하게 실패하지 않도록 조정해 Trend breakdown import를 안정화 |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL 발견을 수정해 agent 로그도 사용량 그래프에 포함하되 agent 전용 세션 행은 추가하지 않도록 개선 |
 | **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | 클릭 가능한 Trend breakdown을 추가해 provider별 input/output, thinking/response/tool 사용량, work/billing 토큰, git 순 라인 카테고리를 확인 |
-| **[v1.18.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.18.2)** | 6/5 | 긴 Rich quota card title이 Plan Usage 컬럼을 밀어내지 않도록 수정하고, ellipsis 단서와 tooltip fallback은 유지 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS 사용자는 별도 공개 저장소를 사용하세요:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.0/WhereMyTokens-v1.20.0-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-v1.20.1-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -99,7 +99,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.20.0-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.20.1-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -117,7 +117,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 
 ### 속도 제한 & 알림
 - **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 `providerQuotas` snapshot으로 유효 quota를 게시합니다. Claude는 Anthropic API/statusLine/cache, Codex는 5h/1w live usage와 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity는 IDE 실행 중 127.0.0.1 local RPC에서 모델 quota를 읽습니다
-- **Target별 quota 표시** — 각 provider window와 model target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Codex Resets target은 Plan Usage 전용입니다
+- **Target별 quota 표시** — 각 provider window와 model target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Taskbar mini는 행당 1-3개 블록 제한과 숨김 target `+N` 표시를 지원하며, prefix 색상은 quota severity가 아니라 live/cache/log 같은 데이터 source/status를 나타냅니다. Codex Resets target은 Plan Usage 전용입니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
 - **Windows 토스트 알림** — 사용량 임계값(50% / 80% / 90%)에서 알림
