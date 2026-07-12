@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ExtraUsage } from '../types';
 import { useTheme } from '../ThemeContext';
 
@@ -21,6 +22,7 @@ function fmtMonthlyReset(): string {
 
 function ExtraUsageCard({ extraUsage, variant = 'row' }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const { monthlyLimit, usedCredits, utilization } = extraUsage;
   const barPct = Math.max(0, Math.min(100, utilization));
   const barColor = barPct >= 90 ? C.barRed : barPct >= 75 ? C.barOrange : barPct >= 50 ? C.barYellow : C.barOrange;
@@ -31,8 +33,8 @@ function ExtraUsageCard({ extraUsage, variant = 'row' }: Props) {
   const limitUSD = (monthlyLimit / 100).toFixed(0);
   const resetStr = fmtMonthlyReset();
   const title = isBanner
-    ? (barPct >= 100 ? 'Claude Extra Usage over monthly cap' : 'Claude Extra Usage near monthly cap')
-    : 'Claude Extra Usage - monthly';
+    ? (barPct >= 100 ? t('extraUsageCard.title.overCap') : t('extraUsageCard.title.nearCap'))
+    : t('extraUsageCard.title.monthly');
 
   return (
     <div style={{

@@ -1,10 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowUpRight, X } from 'lucide-react';
 import { AppState, ProviderId, ProviderQuotaDisplayBadge, ProviderQuotaSnapshot, ProviderQuotaStatus, ProviderQuotaWindow } from '../types';
 import { useTheme } from '../ThemeContext';
 import { hasLimitData, limitDataState, limitSourceDisplay, LimitWindow, providerDisplayName } from '../limitDisplay';
 import { buildQuotaDisplayModels, QuotaDisplayGroupViewModel, QuotaDisplayRowViewModel } from '../quotaDisplayModels';
 import { quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
+// This module mixes plain (non-React) builder functions with React components. The plain
+// functions below (formatRefreshAge, formatRefreshLabel, missingLimitStatus, providerHealth,
+// buildWidgetAgents) cannot call the useTranslation() hook, so — following the same pattern
+// as limitDisplay.ts — they use the i18next singleton's `.t()` directly. Callers that memoize
+// results built from them (agents/healthItems below) include i18n.language in their deps.
+import i18n from '../i18n';
 
 interface Props {
   state: AppState;
@@ -55,16 +62,16 @@ interface HealthItem {
 }
 
 function formatRefreshAge(lastUpdated: number): string {
-  if (!lastUpdated) return 'refresh';
+  if (!lastUpdated) return i18n.t('compactWidgetView.refresh.default');
   const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
-  if (elapsed < 60) return 'now';
-  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
-  return `${Math.floor(elapsed / 3600)}h`;
+  if (elapsed < 60) return i18n.t('compactWidgetView.refresh.now');
+  if (elapsed < 3600) return i18n.t('compactWidgetView.refresh.ageMinutes', { n: Math.floor(elapsed / 60) });
+  return i18n.t('compactWidgetView.refresh.ageHours', { n: Math.floor(elapsed / 3600) });
 }
 
 function formatRefreshLabel(lastUpdated: number, stateFreshness: AppState['stateFreshness']): string {
   const age = formatRefreshAge(lastUpdated);
-  if (stateFreshness === 'restored' && lastUpdated) return `last run · ${age}`;
+  if (stateFreshness === 'restored' && lastUpdated) return i18n.t('compactWidgetView.refresh.lastRun', { age });
   return age;
 }
 
@@ -113,18 +120,22 @@ function missingLimitStatus(
   if (bootPending) {
     return {
       unknown: true,
+      // NOTE: 'loading' here is an internal state-discriminator code (compared via
+      // `unknownLabel === 'loading'` in ProgressRow and `row.unknownLabel === 'waiting'`
+      // in CompactWidgetView) — it is never rendered as text, so it must stay untranslated.
       unknownLabel: 'loading',
-      unknownBadge: 'wait',
-      unknownTitle: 'Startup scan is still loading.',
+      unknownBadge: i18n.t('compactWidgetView.status.waitBadge'),
+      unknownTitle: i18n.t('compactWidgetView.tooltip.startupLoading'),
     };
   }
   if (pct <= 0 && resetMs == null) {
     return {
       unknown: true,
+      // Same as above: internal code, not displayed text — keep untranslated.
       unknownLabel: 'waiting',
       unknownBadge: '',
       unknownTitle: windowLabel === '5h'
-        ? 'No 5h reset data yet. It will appear after local usage or provider data is detected.'
+        ? i18n.t('compactWidgetView.tooltip.noFiveHourData')
         : unavailableTitle,
     };
   }
@@ -137,7 +148,8 @@ function hasSimpleQuotaInput(window: ProviderQuotaWindow | undefined): boolean {
 
 function MiniLimitStatus({ state, animate = true }: { state: 'syncing' | 'waiting'; animate?: boolean }) {
   const C = useTheme();
-  const label = state === 'syncing' ? 'syncing' : 'waiting';
+  const { t } = useTranslation();
+  const label = state === 'syncing' ? t('compactWidgetView.status.syncing') : t('compactWidgetView.status.waiting');
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, color: state === 'syncing' ? C.accent : C.textDim }}>
       <span style={{ display: 'inline-flex', gap: 2, alignItems: 'center' }}>
@@ -200,42 +212,72 @@ function providerHealth(
   statusTone: HealthTone = 'neutral',
 ): HealthItem {
   if (syncing || limitDataState(primary, syncing) === 'syncing' || limitDataState(secondary, syncing) === 'syncing') {
-    return { key: provider, label: `${providerLabel} syncing`, tone: 'good', title: `${providerLabel} limit data is syncing in the background.` };
+    return {
+      key: provider,
+      label: i18n.t('compactWidgetView.health.syncing.label', { provider: providerLabel }),
+      tone: 'good',
+      title: i18n.t('compactWidgetView.health.syncing.title', { provider: providerLabel }),
+    };
   }
 
   if (statusLabel && !connected) {
     return {
       key: provider,
-      label: `${providerLabel} ${statusLabel}`,
+      label: i18n.t('compactWidgetView.health.statusLabel.label', { provider: providerLabel, statusLabel }),
       tone: statusTone === 'neutral' ? 'danger' : statusTone,
-      title: `${providerLabel} provider quota status: ${statusLabel}.`,
+      title: i18n.t('compactWidgetView.health.statusLabel.title', { provider: providerLabel, statusLabel }),
     };
   }
 
   if (!connected) {
-    return { key: provider, label: `${providerLabel} offline`, tone: 'danger', title: `${providerLabel} provider quota is unavailable.` };
+    return {
+      key: provider,
+      label: i18n.t('compactWidgetView.health.offline.label', { provider: providerLabel }),
+      tone: 'danger',
+      title: i18n.t('compactWidgetView.health.offline.title', { provider: providerLabel }),
+    };
   }
 
   const sources = [healthLabelForSource(primary), healthLabelForSource(secondary)].filter((label): label is string => !!label);
   if (sources.includes('Log')) {
-    return { key: provider, label: `${providerLabel} Log`, tone: 'warning', title: `${providerLabel} is using local log estimates for at least one limit window.` };
+    return {
+      key: provider,
+      label: i18n.t('compactWidgetView.health.log.label', { provider: providerLabel }),
+      tone: 'warning',
+      title: i18n.t('compactWidgetView.health.log.title', { provider: providerLabel }),
+    };
   }
   if (sources.includes('Cache')) {
-    return { key: provider, label: `${providerLabel} Cache`, tone: 'neutral', title: `${providerLabel} is using the last trusted cached usage snapshot.` };
+    return {
+      key: provider,
+      label: i18n.t('compactWidgetView.health.cache.label', { provider: providerLabel }),
+      tone: 'neutral',
+      title: i18n.t('compactWidgetView.health.cache.title', { provider: providerLabel }),
+    };
   }
   if (sources.includes('Bridge')) {
-    return { key: provider, label: `${providerLabel} Bridge`, tone: 'neutral', title: `${providerLabel} is using the local status-line bridge.` };
+    return {
+      key: provider,
+      label: i18n.t('compactWidgetView.health.bridge.label', { provider: providerLabel }),
+      tone: 'neutral',
+      title: i18n.t('compactWidgetView.health.bridge.title', { provider: providerLabel }),
+    };
   }
 
   if (!hasLimitData(primary) && !hasLimitData(secondary)) {
-    return { key: provider, label: `${providerLabel} waiting`, tone: 'neutral', title: `${providerLabel} limit data has not arrived yet.` };
+    return {
+      key: provider,
+      label: i18n.t('compactWidgetView.health.waiting.label', { provider: providerLabel }),
+      tone: 'neutral',
+      title: i18n.t('compactWidgetView.health.waiting.title', { provider: providerLabel }),
+    };
   }
 
   return {
     key: provider,
-    label: `${providerLabel} OK`,
+    label: i18n.t('compactWidgetView.health.ok.label', { provider: providerLabel }),
     tone: 'good',
-    title: `${providerLabel} account limit data is current.`,
+    title: i18n.t('compactWidgetView.health.ok.title', { provider: providerLabel }),
   };
 }
 
@@ -251,7 +293,7 @@ function buildWidgetAgents(state: AppState): WidgetAgent[] {
   });
   const bootPending = !state.initialRefreshComplete;
   return widgetGroups.map((group: QuotaDisplayGroupViewModel) => {
-    const unavailableTitle = `${group.label} limit data has not arrived from provider quota sources yet.`;
+    const unavailableTitle = i18n.t('compactWidgetView.tooltip.groupUnavailable', { group: group.label });
     const rowFor = (row: QuotaDisplayRowViewModel) => {
       return {
         key: row.key,
@@ -324,6 +366,7 @@ function ProgressRow({
   animateWaiting?: boolean;
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const percentOnly = visualKind === 'percentOnly';
   const quota = clampPct(quotaPct);
   const visualState: 'syncing' | 'waiting' | null = pending ? 'syncing' : unknown ? (unknownLabel === 'loading' ? 'syncing' : 'waiting') : null;
@@ -386,7 +429,7 @@ function ProgressRow({
       </div>
       {!percentOnly && (
         <div
-          title={resetLabel ? `Time until reset: ${resetLabel}` : undefined}
+          title={resetLabel ? t('compactWidgetView.tooltip.timeUntilReset', { resetLabel }) : undefined}
           style={{
             color: C.textDim,
             fontSize: 9,
@@ -401,7 +444,7 @@ function ProgressRow({
         </div>
       )}
       <div
-        title={percentOnly ? 'Used' : 'Used / Time elapsed'}
+        title={percentOnly ? t('compactWidgetView.tooltip.used') : t('compactWidgetView.tooltip.usedElapsed')}
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
         {visualState ? (
@@ -422,6 +465,7 @@ function ProgressRow({
 
 function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWaiting: boolean }) {
   const C = useTheme();
+  const { t } = useTranslation();
   return (
     <div style={{ display: 'grid', gap: 5 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -443,7 +487,7 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
               opacity: 0.8,
             }}
           >
-            scanning
+            {t('compactWidgetView.status.scanning')}
           </span>
         ) : null}
         {agent.badges.length > 0 ? (
@@ -494,6 +538,7 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
 
 export default function CompactWidgetView({ state, onRefresh }: Props) {
   const C = useTheme();
+  const { t, i18n } = useTranslation();
   const [refreshLabel, setRefreshLabel] = useState(() => formatRefreshLabel(state.lastUpdated, state.stateFreshness));
   const [refreshing, setRefreshing] = useState(false);
   const dragRef = useRef<DragState | null>(null);
@@ -504,11 +549,13 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     setRefreshLabel(formatRefreshLabel(state.lastUpdated, state.stateFreshness));
     const timer = window.setInterval(() => setRefreshLabel(formatRefreshLabel(state.lastUpdated, state.stateFreshness)), 30_000);
     return () => window.clearInterval(timer);
-  }, [state.lastUpdated, state.stateFreshness]);
+    // i18n.language: formatRefreshLabel/formatRefreshAge build translated text via the
+    // i18next singleton, so the label needs to be recomputed right away on language switch.
+  }, [state.lastUpdated, state.stateFreshness, i18n.language]);
 
-  const agents = useMemo<WidgetAgent[]>(() => buildWidgetAgents(state), [state]);
+  const agents = useMemo<WidgetAgent[]>(() => buildWidgetAgents(state), [state, i18n.language]);
 
-  const healthItems = useMemo<HealthItem[]>(() => buildHealthItems(state), [state]);
+  const healthItems = useMemo<HealthItem[]>(() => buildHealthItems(state), [state, i18n.language]);
 
   const healthToneStyle = useCallback((tone: HealthTone): React.CSSProperties => {
     if (tone === 'good') return { color: C.active, background: `${C.active}14`, border: `1px solid ${C.active}33` };
@@ -615,16 +662,16 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 13 }}>
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 900, color: C.text, letterSpacing: 0, lineHeight: 1 }}>
-          Quota Pace
+          {t('compactWidgetView.header.title')}
         </span>
         <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
-          used / elapsed
+          {t('compactWidgetView.header.subtitle')}
         </span>
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <button
             data-no-drag="true"
             onClick={handleRefresh}
-            title="Refresh now"
+            title={t('compactWidgetView.button.refreshNow')}
             style={{
               ...toolbarButtonStyle,
               color: refreshing ? C.accent : C.textDim,
@@ -638,7 +685,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
           <button
             data-no-drag="true"
             onClick={() => window.wmt.openDashboard().catch(() => {})}
-            title="Open dashboard"
+            title={t('compactWidgetView.button.openDashboard')}
             style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 11 }}
           >
             <ArrowUpRight size={11} strokeWidth={2} />
@@ -646,7 +693,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
           <button
             data-no-drag="true"
             onClick={() => window.wmt.hideCompactWidget().catch(() => {})}
-            title="Hide widget"
+            title={t('compactWidgetView.button.hideWidget')}
             style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 12 }}
           >
             <X size={11} strokeWidth={2} />
@@ -659,7 +706,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
       </div>
       {healthItems.length > 0 ? (
         <div
-          title="Provider limit-data health"
+          title={t('compactWidgetView.health.sectionTitle')}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -670,7 +717,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
           }}
         >
           <span style={{ fontSize: 8, color: C.textMuted, fontFamily: C.fontMono, flexShrink: 0 }}>
-            Health
+            {t('compactWidgetView.health.label')}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
             {healthItems.map(item => (
@@ -700,7 +747,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
       ) : null}
       {showFiveHourHint ? (
         <div
-          title="No 5h reset data yet. It will appear after local usage or provider data is detected."
+          title={t('compactWidgetView.tooltip.noFiveHourData')}
           style={{
             marginTop: -2,
             color: C.textMuted,
@@ -712,7 +759,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
             whiteSpace: 'nowrap',
           }}
         >
-          5h limits appear after first usage event
+          {t('compactWidgetView.hint.fiveHourLimits')}
         </div>
       ) : null}
     </div>

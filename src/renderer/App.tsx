@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AppState,
   AppSettings,
@@ -742,6 +743,7 @@ function BootFallback({
   onRetry: () => void;
   onQuit: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div style={{
       minHeight: '100vh',
@@ -755,10 +757,10 @@ function BootFallback({
       fontFamily: theme.fontSans,
     }}>
       <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', color: theme.headerAccent }}>
-        Startup Recovery
+        {t('app.bootFallback.eyebrow')}
       </div>
       <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2 }}>
-        WhereMyTokens is still loading.
+        {t('app.bootFallback.title')}
       </div>
       <div style={{ fontSize: 12, color: theme.textMuted, lineHeight: 1.6 }}>
         {message}
@@ -777,7 +779,7 @@ function BootFallback({
             fontWeight: 700,
           }}
         >
-          Retry
+          {t('app.bootFallback.retry')}
         </button>
         <button
           onClick={() => window.wmt.minimize().catch(() => {})}
@@ -792,7 +794,7 @@ function BootFallback({
             fontWeight: 700,
           }}
         >
-          Minimize
+          {t('app.bootFallback.minimize')}
         </button>
         <button
           onClick={onQuit}
@@ -807,7 +809,7 @@ function BootFallback({
             fontWeight: 700,
           }}
         >
-          Quit
+          {t('app.bootFallback.quit')}
         </button>
       </div>
     </div>
@@ -815,12 +817,13 @@ function BootFallback({
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const isWidget = useMemo(() => new URLSearchParams(window.location.search).get('view') === 'widget', []);
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [view, setView] = useState<View>('main');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
   const [bootFallbackVisible, setBootFallbackVisible] = useState(false);
-  const [bootFallbackMessage, setBootFallbackMessage] = useState('Still waiting for initial session and usage data.');
+  const [bootFallbackMessage, setBootFallbackMessage] = useState(() => t('app.bootFallback.messageInitial'));
   const scrollingRef = useRef(false);
   const pendingStateRef = useRef<AppState | null>(null);
   const scrollTimerRef = useRef<number | null>(null);
@@ -864,16 +867,16 @@ export default function App() {
         applyState(s);
         return;
       }
-      setBootFallbackMessage('The app returned an empty startup state. Try refreshing once.');
+      setBootFallbackMessage(t('app.bootFallback.messageEmptyState'));
       setBootFallbackVisible(true);
       revealRoot();
     } catch (e) {
       console.error('state:get failed', e);
-      setBootFallbackMessage('The main process did not return startup data. Try refreshing or reopen the tray window.');
+      setBootFallbackMessage(t('app.bootFallback.messageGetStateFailed'));
       setBootFallbackVisible(true);
       revealRoot();
     }
-  }, [applyState, revealRoot]);
+  }, [applyState, revealRoot, t]);
 
   const retryStartup = useCallback(async () => {
     try {
@@ -975,12 +978,12 @@ export default function App() {
       return;
     }
     const timer = window.setTimeout(() => {
-      setBootFallbackMessage('Showing a recovery view while recent sessions and usage continue loading in the background.');
+      setBootFallbackMessage(t('app.bootFallback.messageTimeout'));
       setBootFallbackVisible(true);
       revealRoot();
     }, BOOT_FALLBACK_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [isWidget, state.initialRefreshComplete, revealRoot]);
+  }, [isWidget, state.initialRefreshComplete, revealRoot, t]);
 
   async function handleSaveSettings(partial: Partial<AppSettings>) {
     const updated = await window.wmt.setSettings(partial);

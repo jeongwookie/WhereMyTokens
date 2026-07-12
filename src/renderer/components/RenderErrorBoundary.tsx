@@ -1,4 +1,5 @@
 import React from 'react';
+import i18n from '../i18n';
 
 interface Props {
   label: string;
@@ -55,10 +56,10 @@ export default class RenderErrorBoundary extends React.Component<Props, State> {
         }}
       >
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--wmt-bar-red)' }}>
-          Renderer Error
+          {i18n.t('renderErrorBoundary.rendererError')}
         </div>
         <div style={{ fontSize: 12, fontWeight: 700 }}>
-          {this.props.label} rendering failed.
+          {i18n.t('renderErrorBoundary.renderingFailed', { label: this.props.label })}
         </div>
         <div style={{ fontSize: 11, color: 'var(--wmt-text-muted)', lineHeight: 1.5 }}>
           {this.state.error.message || String(this.state.error)}
@@ -77,7 +78,7 @@ export default class RenderErrorBoundary extends React.Component<Props, State> {
               fontWeight: 700,
             }}
           >
-            Reload
+            {i18n.t('renderErrorBoundary.reload')}
           </button>
           <button
             onClick={this.handleMinimize}
@@ -92,7 +93,7 @@ export default class RenderErrorBoundary extends React.Component<Props, State> {
               fontWeight: 700,
             }}
           >
-            Minimize
+            {i18n.t('renderErrorBoundary.minimize')}
           </button>
           <button
             onClick={this.handleQuit}
@@ -107,7 +108,7 @@ export default class RenderErrorBoundary extends React.Component<Props, State> {
               fontWeight: 700,
             }}
           >
-            Quit
+            {i18n.t('renderErrorBoundary.quit')}
           </button>
         </div>
       </div>

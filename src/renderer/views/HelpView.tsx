@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Hash, Activity, Signal, GitBranch, Code } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 
@@ -495,11 +496,14 @@ function ContentJA() {
 
 export default function HelpView({ onBack }: Props) {
   const C = useTheme();
-  const [lang, setLang] = useState<Lang>('en');
+  const { t, i18n } = useTranslation();
+  // Help content is a self-contained EN/KO/JA switcher (predates app-wide i18n); default its
+  // panel to the app's current UI language instead of always starting on English.
+  const [lang, setLang] = useState<Lang>(() => (i18n.language.startsWith('ja') ? 'ja' : 'en'));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
-      <ViewHeader title="Help" onBack={onBack} />
+      <ViewHeader title={t('help.title')} onBack={onBack} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 0', gap: 4, flexShrink: 0 }}>
         {(['en', 'ko', 'ja'] as Lang[]).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{

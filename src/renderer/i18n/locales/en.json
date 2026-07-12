@@ -1,0 +1,51 @@
+{
+  "common": {
+    "state": {
+      "active": "active",
+      "waiting": "waiting",
+      "idle": "idle",
+      "compacting": "compacting"
+    },
+    "mainSections": {
+      "planUsage": "Plan Usage",
+      "codeOutput": "Code Output",
+      "trend": "Trend",
+      "sessions": "Sessions",
+      "activity": "Activity",
+      "modelUsage": "Model Usage"
+    },
+    "limitSource": {
+      "api": {
+        "title": "Account usage snapshot. Refreshed every few minutes."
+      },
+      "bridge": {
+        "title": "Local status-line fallback while the API is unavailable."
+      },
+      "cache": {
+        "title": "Last trusted usage snapshot. It ages out automatically."
+      },
+      "localLog": {
+        "title": "Local session-log estimate. It can lag account-level limits."
+      },
+      "localRpc": {
+        "title": "Local provider runtime snapshot."
+      }
+    }
+  },
+  "app": {
+    "bootFallback": {
+      "eyebrow": "Startup Recovery",
+      "title": "WhereMyTokens is still loading.",
+      "retry": "Retry",
+      "minimize": "Minimize",
+      "quit": "Quit",
+      "messageInitial": "Still waiting for initial session and usage data.",
+      "messageEmptyState": "The app returned an empty startup state. Try refreshing once.",
+      "messageGetStateFailed": "The main process did not return startup data. Try refreshing or reopen the tray window.",
+      "messageTimeout": "Showing a recovery view while recent sessions and usage continue loading in the background."
+    }
+  },
+  "help": {
+    "title": "Help"
+  }
+}

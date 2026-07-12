@@ -1,0 +1,51 @@
+{
+  "common": {
+    "state": {
+      "active": "アクティブ",
+      "waiting": "待機中",
+      "idle": "アイドル",
+      "compacting": "圧縮中"
+    },
+    "mainSections": {
+      "planUsage": "プラン使用状況",
+      "codeOutput": "コード出力",
+      "trend": "トレンド",
+      "sessions": "セッション",
+      "activity": "アクティビティ",
+      "modelUsage": "モデル使用状況"
+    },
+    "limitSource": {
+      "api": {
+        "title": "アカウントの使用状況スナップショットです。数分ごとに更新されます。"
+      },
+      "bridge": {
+        "title": "APIが利用できない間のローカル statusLine フォールバックです。"
+      },
+      "cache": {
+        "title": "最後に信頼できた使用状況スナップショットです。時間の経過とともに自動的に無効になります。"
+      },
+      "localLog": {
+        "title": "ローカルセッションログによる推定値です。アカウントレベルの制限より遅れる場合があります。"
+      },
+      "localRpc": {
+        "title": "ローカル provider ランタイムのスナップショットです。"
+      }
+    }
+  },
+  "app": {
+    "bootFallback": {
+      "eyebrow": "起動リカバリー",
+      "title": "WhereMyTokens を読み込んでいます。",
+      "retry": "再試行",
+      "minimize": "最小化",
+      "quit": "終了",
+      "messageInitial": "最初のセッションと使用状況データを待っています。",
+      "messageEmptyState": "アプリから空の起動状態が返されました。もう一度更新してみてください。",
+      "messageGetStateFailed": "メインプロセスから起動データが返されませんでした。更新するか、トレイウィンドウを開き直してください。",
+      "messageTimeout": "最近のセッションと使用状況の読み込みをバックグラウンドで続けながら、リカバリー画面を表示しています。"
+    }
+  },
+  "help": {
+    "title": "ヘルプ"
+  }
+}

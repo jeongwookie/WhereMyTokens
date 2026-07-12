@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens } from '../theme';
 import { buildBreakdownBlocks, type ProviderOutputBlock, type ToolMerged } from '../breakdownViewModel';
@@ -48,6 +49,7 @@ const PATH_META: Record<PathCategory, { label: string; color: string }> = {
 
 function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const blocks = useMemo(() => buildBreakdownBlocks(breakdown), [breakdown]);
   const providerNames = breakdown?.providers.map(provider => provider.provider) ?? [];
 
@@ -55,7 +57,7 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
     return (
       <div style={shellStyle(C)}>
         <div style={{ color: C.barRed, fontSize: 11, fontFamily: C.fontMono }}>
-          Breakdown unavailable
+          {t('trendBreakdownCard.unavailable')}
         </div>
       </div>
     );
@@ -64,20 +66,20 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
   if (loading && !breakdown) {
     return (
       <div style={shellStyle(C)}>
-        <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>Loading breakdown...</div>
+        <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>{t('trendBreakdownCard.loading')}</div>
       </div>
     );
   }
 
   return (
     <div style={shellStyle(C)}>
-      {loading && <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, marginBottom: 8 }}>Loading breakdown...</div>}
+      {loading && <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, marginBottom: 8 }}>{t('trendBreakdownCard.loading')}</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {blocks.partialSinceDate && (
             <div style={{ fontSize: 10, color: C.waiting, fontFamily: C.fontMono }}>
-              Breakdown data since {blocks.partialSinceDate}
+              {t('trendBreakdownCard.breakdownSince', { date: blocks.partialSinceDate })}
             </div>
           )}
           {providerNames.length > 0 && (
@@ -98,20 +100,20 @@ function TrendBreakdownCard({ breakdown, loading = false, error = null }: Props)
             </div>
           )}
 
-          <SectionTitle title="Token panorama" unit="input + output · no-cache" />
+          <SectionTitle title={t('trendBreakdownCard.tokenPanorama')} unit={t('trendBreakdownCard.inputOutputNoCache')} />
           {blocks.tokenEmpty ? (
-            <EmptyRow label="No token data" />
+            <EmptyRow label={t('trendBreakdownCard.noTokenData')} />
           ) : (
             <OutputCompositionBlock providers={blocks.perProviderOutput} />
           )}
 
-          <SectionTitle title={providerNames.length > 1 ? 'Tool usage · all providers' : 'Tool usage'} unit="calls · ≈tok" />
+          <SectionTitle title={providerNames.length > 1 ? t('trendBreakdownCard.toolUsageAllProviders') : t('trendBreakdownCard.toolUsage')} unit={t('trendBreakdownCard.callsApproxTok')} />
           <MergedToolBlock tools={blocks.toolMerged} />
         </div>
 
         <div style={{ borderTop: `1px solid ${C.borderSub}`, paddingTop: 9 }}>
-          <SectionTitle title="Net lines committed" unit="git · lines" />
-          {blocks.netLinesEmpty ? <EmptyRow label="No commits for this period" /> : <NetLinesBlock netLines={blocks.netLines} />}
+          <SectionTitle title={t('trendBreakdownCard.netLinesCommitted')} unit={t('trendBreakdownCard.gitLines')} />
+          {blocks.netLinesEmpty ? <EmptyRow label={t('trendBreakdownCard.noCommits')} /> : <NetLinesBlock netLines={blocks.netLines} />}
         </div>
       </div>
     </div>
@@ -151,23 +153,24 @@ function OutputCompositionBlock({ providers }: { providers: ProviderOutputBlock[
 
 function ProviderCompositionRows({ provider }: { provider: ProviderOutputBlock }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   // Level 1 — input : output split (denominator = provider.total).
   const inputPct = pctOf(provider.input, provider.total);
   const ioSegments = [
-    { key: 'input', label: 'Input', color: INPUT_COLOR, value: provider.input },
-    { key: 'output', label: 'Output', color: OUTPUT_COLOR, value: provider.outputTotal },
+    { key: 'input', label: t('trendBreakdownCard.input'), color: INPUT_COLOR, value: provider.input },
+    { key: 'output', label: t('trendBreakdownCard.output'), color: OUTPUT_COLOR, value: provider.outputTotal },
   ].filter(seg => seg.value > 0);
 
   // Level 2 — flat output composition (denominator = provider.outputTotal).
   // thinking + response + Σ tool categories == outputTotal exactly (no aggregate row → no double-count).
   const headRows = [
-    { key: 'thinking', label: 'Thinking', color: THINKING_COLOR, value: provider.output.thinking, marker: provider.thinkingExact ? '' : '≈' },
-    { key: 'response', label: 'Response', color: RESPONSE_COLOR, value: provider.output.response, marker: '≈' as const },
+    { key: 'thinking', label: t('trendBreakdownCard.thinking'), color: THINKING_COLOR, value: provider.output.thinking, marker: provider.thinkingExact ? '' : '≈' },
+    { key: 'response', label: t('trendBreakdownCard.response'), color: RESPONSE_COLOR, value: provider.output.response, marker: '≈' as const },
   ].filter(row => row.value > 0);
   const toolRows = TOOL_META
-    .map(meta => ({ ...meta, value: provider.output.toolOutput[meta.key], marker: '≈' as const }))
+    .map(meta => ({ ...meta, label: t(`trendBreakdownCard.tools.${meta.key}`), value: provider.output.toolOutput[meta.key], marker: '≈' as const }))
     .filter(row => row.value > 0)
     .sort((a, b) => b.value - a.value);
 
@@ -188,12 +191,12 @@ function ProviderCompositionRows({ provider }: { provider: ProviderOutputBlock }
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
             {provider.input > 0 && (
               <span style={{ fontSize: 11, fontFamily: C.fontMono, color: INPUT_COLOR }}>
-                Input {fmtTokens(Math.round(provider.input))} · {Math.round(inputPct)}%
+                {t('trendBreakdownCard.input')} {fmtTokens(Math.round(provider.input))} · {Math.round(inputPct)}%
               </span>
             )}
             {provider.outputTotal > 0 && (
               <span style={{ fontSize: 11, fontFamily: C.fontMono, color: OUTPUT_COLOR, marginLeft: 'auto' }}>
-                Output {fmtTokens(Math.round(provider.outputTotal))} · {Math.round(pctOf(provider.outputTotal, provider.total))}%
+                {t('trendBreakdownCard.output')} {fmtTokens(Math.round(provider.outputTotal))} · {Math.round(pctOf(provider.outputTotal, provider.total))}%
               </span>
             )}
           </div>
@@ -217,7 +220,7 @@ function ProviderCompositionRows({ provider }: { provider: ProviderOutputBlock }
             ))}
             {(hiddenCount > 0 || expanded) && (
               <button type="button" onClick={() => setExpanded(prev => !prev)} style={expandToggleStyle(C)}>
-                {expanded ? 'Collapse' : `Show ${hiddenCount} more`}
+                {expanded ? t('trendBreakdownCard.collapse') : t('trendBreakdownCard.showMore', { count: hiddenCount })}
               </button>
             )}
           </div>
@@ -243,18 +246,22 @@ function expandToggleStyle(C: ReturnType<typeof useTheme>): React.CSSProperties 
 }
 
 function MergedToolBlock({ tools }: { tools: ToolMerged }) {
+  const { t } = useTranslation();
   const totalTokens = TOOL_CATEGORY_KEYS.reduce((sum, key) => sum + tools[key].tokens, 0);
   const totalCount = TOOL_CATEGORY_KEYS.reduce((sum, key) => sum + tools[key].count, 0);
   const active = TOOL_META
-    .map(meta => ({ ...meta, count: tools[meta.key].count, tokens: tools[meta.key].tokens }))
+    .map(meta => ({ ...meta, label: t(`trendBreakdownCard.tools.${meta.key}`), count: tools[meta.key].count, tokens: tools[meta.key].tokens }))
     .filter(row => row.count > 0 || row.tokens > 0)
     .sort((a, b) => (b.tokens + b.count) - (a.tokens + a.count));
 
-  if (active.length === 0) return <EmptyRow label="No tool data" />;
+  if (active.length === 0) return <EmptyRow label={t('trendBreakdownCard.noToolData')} />;
 
   return (
     <div>
-      <TotalLine value={`${Math.round(totalCount)} calls`} label={`Tool calls · ≈${fmtTokens(Math.round(totalTokens))} tok`} />
+      <TotalLine
+        value={t('trendBreakdownCard.callsCount', { count: Math.round(totalCount) })}
+        label={t('trendBreakdownCard.toolCallsApprox', { tokens: fmtTokens(Math.round(totalTokens)) })}
+      />
       <StackedBar active={active.filter(row => row.tokens > 0).map(row => ({ ...row, value: row.tokens }))} total={totalTokens} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {active.map(row => (
@@ -262,7 +269,7 @@ function MergedToolBlock({ tools }: { tools: ToolMerged }) {
             key={row.key}
             label={row.label}
             color={row.color}
-            value={`${row.count} calls · ≈${fmtTokens(Math.round(row.tokens))} tok`}
+            value={t('trendBreakdownCard.callsApproxTokValue', { count: row.count, tokens: fmtTokens(Math.round(row.tokens)) })}
             pct={pctOf(row.tokens, totalTokens)}
             valueWidth={124}
           />
@@ -274,13 +281,14 @@ function MergedToolBlock({ tools }: { tools: ToolMerged }) {
 
 function NetLinesBlock({ netLines }: { netLines: NetLinesByCategory | null }) {
   const C = useTheme();
-  if (!netLines) return <EmptyRow label="No commits for this period" />;
+  const { t } = useTranslation();
+  if (!netLines) return <EmptyRow label={t('trendBreakdownCard.noCommits')} />;
 
   const rows = PATH_CATEGORIES
     .map(category => ({ category, ...netLines[category] }))
     .filter(row => row.added > 0 || row.removed > 0)
     .sort((a, b) => (b.added + b.removed) - (a.added + a.removed));
-  if (rows.length === 0) return <EmptyRow label="No commits for this period" />;
+  if (rows.length === 0) return <EmptyRow label={t('trendBreakdownCard.noCommits')} />;
 
   const totalAdded = rows.reduce((sum, row) => sum + row.added, 0);
   const totalRemoved = rows.reduce((sum, row) => sum + row.removed, 0);
@@ -288,7 +296,10 @@ function NetLinesBlock({ netLines }: { netLines: NetLinesByCategory | null }) {
 
   return (
     <div>
-      <TotalLine value={fmtSigned(totalAdded - totalRemoved)} label={`${totalAdded} added / ${totalRemoved} removed`} />
+      <TotalLine
+        value={fmtSigned(totalAdded - totalRemoved)}
+        label={t('trendBreakdownCard.addedRemoved', { added: totalAdded, removed: totalRemoved })}
+      />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {rows.map(row => {
           const meta = PATH_META[row.category];
@@ -297,13 +308,13 @@ function NetLinesBlock({ netLines }: { netLines: NetLinesByCategory | null }) {
           return (
             <div key={row.category}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <span style={{ fontSize: 11, color: C.textDim, justifySelf: 'start', minWidth: 0 }}>{meta.label}</span>
+                <span style={{ fontSize: 11, color: C.textDim, justifySelf: 'start', minWidth: 0 }}>{t(`trendBreakdownCard.paths.${row.category}`)}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 3, justifySelf: 'center', fontSize: 10, fontFamily: C.fontMono }}>
                   <span style={{ color: C.barRed }}>-{row.removed}</span>
                   <span style={{ color: C.textMuted }}>|</span>
                   <span style={{ color: C.active }}>+{row.added}</span>
                 </span>
-                <span style={{ fontSize: 10, fontFamily: C.fontMono, fontWeight: 700, color: C.text, justifySelf: 'end' }}>Net:{fmtSigned(row.added - row.removed)}</span>
+                <span style={{ fontSize: 10, fontFamily: C.fontMono, fontWeight: 700, color: C.text, justifySelf: 'end' }}>{t('trendBreakdownCard.netPrefix', { value: fmtSigned(row.added - row.removed) })}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, height: 5 }}>
                 <div style={{ background: `${C.barRed}18`, borderRadius: 3, overflow: 'hidden', display: 'flex', justifyContent: 'flex-end' }}>

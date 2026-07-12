@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { BucketBreakdown, CodeOutputStats, GitDailyStats, UsageTrendData, UsageTrendPoint } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtCost, fmtTokens } from '../theme';
@@ -41,10 +43,6 @@ interface TrendRow {
 const GRAINS: Grain[] = ['day', 'week', 'month'];
 const METRICS: Metric[] = ['cost', 'tokens'];
 const CACHE_VIEWS: CacheView[] = ['work', 'billing'];
-const CACHE_VIEW_LABELS: Record<CacheView, string> = {
-  work: 'Work',
-  billing: 'Billing',
-};
 const TREND_COST_COLOR = 'gpt4';
 const CHART = { width: 330, height: 126, left: 12, right: 52, top: 12, bottom: 24 };
 const BREAKDOWN_REFRESH_THROTTLE_MS = 30_000;
@@ -56,6 +54,16 @@ const GRAIN_WINDOWS: Record<Grain, { limit: number; label: string }> = {
 
 function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKrw }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
+  const cacheViewLabels: Record<CacheView, string> = {
+    work: t('trendCard.cacheView.work'),
+    billing: t('trendCard.cacheView.billing'),
+  };
+  const grainLabels: Record<Grain, string> = {
+    day: t('trendCard.grain.day'),
+    week: t('trendCard.grain.week'),
+    month: t('trendCard.grain.month'),
+  };
   const [grain, setGrain] = useState<Grain>('day');
   const [metric, setMetric] = useState<Metric>('cost');
   const [cacheView, setCacheView] = useState<CacheView>('work');
@@ -230,17 +238,17 @@ function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKr
     <div onMouseLeave={handleMouseLeave} style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Trend</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('trendCard.trend')}</div>
           <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {rows.length === 0
-              ? `${GRAIN_WINDOWS[grain].label}: no trend data yet`
-              : `${GRAIN_WINDOWS[grain].label}: ${hasUsageSeries ? formatPrimary(totalPrimary, metric, currency, usdToKrw) : 'usage pending'} / ${hasOutputSeries ? fmtSignedCompact(totalOutput) : 'output pending'} net`}
+              ? `${GRAIN_WINDOWS[grain].label}: ${t('trendCard.noTrendDataYet')}`
+              : `${GRAIN_WINDOWS[grain].label}: ${hasUsageSeries ? formatPrimary(totalPrimary, metric, currency, usdToKrw) : t('trendCard.usagePending')} / ${hasOutputSeries ? fmtSignedCompact(totalOutput) : t('trendCard.outputPending')} ${t('trendCard.netSuffix')}`}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 5 }}>
-            <ControlGroupLabel C={C}>Metric</ControlGroupLabel>
-            <SegmentedControl items={METRICS} active={metric} onSelect={setMetric} C={C} />
+            <ControlGroupLabel C={C}>{t('trendCard.metricLabel')}</ControlGroupLabel>
+            <SegmentedControl items={METRICS} active={metric} onSelect={setMetric} C={C} labels={{ cost: t('trendCard.metric.cost'), tokens: t('trendCard.metric.tokens') }} />
             {metric === 'tokens' && (
               <div
                 className="cacheModifier"
@@ -255,15 +263,15 @@ function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKr
                 }}
               >
                 <span style={{ width: 3, height: 3, borderRadius: 999, background: C.textMuted, opacity: 0.75 }} />
-                <ControlGroupLabel C={C}>Cache</ControlGroupLabel>
-                <SegmentedControl items={CACHE_VIEWS} active={cacheView} onSelect={setCacheView} C={C} compact labels={CACHE_VIEW_LABELS} />
+                <ControlGroupLabel C={C}>{t('trendCard.cacheLabel')}</ControlGroupLabel>
+                <SegmentedControl items={CACHE_VIEWS} active={cacheView} onSelect={setCacheView} C={C} compact labels={cacheViewLabels} />
               </div>
             )}
           </div>
           <div style={{ width: 1, alignSelf: 'stretch', minHeight: 18, background: C.borderSub, opacity: 0.9 }} />
           <div style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 5 }}>
-            <ControlGroupLabel C={C}>Range</ControlGroupLabel>
-            <SegmentedControl items={GRAINS} active={grain} onSelect={handleGrainSelect} C={C} />
+            <ControlGroupLabel C={C}>{t('trendCard.rangeLabel')}</ControlGroupLabel>
+            <SegmentedControl items={GRAINS} active={grain} onSelect={handleGrainSelect} C={C} labels={grainLabels} />
           </div>
         </div>
       </div>
@@ -276,16 +284,16 @@ function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKr
             height={CHART.height}
             preserveAspectRatio="none"
             role="button"
-            aria-label="Trend bucket breakdown"
+            aria-label={t('trendCard.selectBucketAriaLabel')}
             aria-pressed={selectedKey !== null}
             tabIndex={0}
             onKeyDown={handleChartKeyDown}
             style={{ width: '100%', display: 'block', overflow: 'visible', cursor: rows.length > 0 ? 'pointer' : 'default' }}
           >
-            <title>Select a trend bucket for breakdown</title>
+            <title>{t('trendCard.selectBucketAriaLabel')}</title>
             {rows.length === 0 && (
               <text x={CHART.width / 2} y={CHART.height / 2} textAnchor="middle" fill={C.textMuted} fontSize={10} fontFamily={C.fontMono}>
-                No trend data yet
+                {t('trendCard.noTrendDataYetSvg')}
               </text>
             )}
             {rows.length > 0 && [0, 0.5, 1].map(tick => {
@@ -343,8 +351,8 @@ function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKr
               whiteSpace: 'nowrap',
             }}>
               <div style={{ color: C.text, fontWeight: 700 }}>{activeRow.label}</div>
-              {activeRow.hasUsage && <div><span style={{ color: primaryColor }}>{formatPrimary(trendPrimaryValue(activeRow, metric, cacheView), metric, currency, usdToKrw)}</span> / {activeRow.requestCount} requests</div>}
-              {activeRow.hasOutput && <div style={{ color: outputColor }}>{fmtSignedCompact(activeRow.netLines)} net lines</div>}
+              {activeRow.hasUsage && <div><span style={{ color: primaryColor }}>{formatPrimary(trendPrimaryValue(activeRow, metric, cacheView), metric, currency, usdToKrw)}</span> / {t('trendCard.requestsCount', { count: activeRow.requestCount })}</div>}
+              {activeRow.hasOutput && <div style={{ color: outputColor }}>{fmtSignedCompact(activeRow.netLines)} {t('trendCard.netLines')}</div>}
             </div>
           )}
         </div>
@@ -352,11 +360,11 @@ function TrendCard({ usageTrend, codeOutputStats, lastUpdated, currency, usdToKr
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '2px 3px 0', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, opacity: hasUsageSeries ? 1 : 0.45 }}>
             <span style={{ width: 16, height: 2, background: primaryColor, display: 'inline-block', borderRadius: 999 }} />
-            <span>{metric === 'tokens' ? `${cacheView} tokens` : metric}</span>
+            <span>{metric === 'tokens' ? `${cacheViewLabels[cacheView]} ${t('trendCard.metric.tokens')}` : t('trendCard.metric.cost')}</span>
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, opacity: hasOutputSeries ? 1 : 0.45 }}>
             <span style={{ width: 16, height: 2, background: outputColor, display: 'inline-block', borderRadius: 999 }} />
-            <span>net lines</span>
+            <span>{t('trendCard.netLines')}</span>
           </span>
         </div>
       </div>
@@ -583,7 +591,7 @@ function dateFromKey(dateKey: string): Date {
 
 function labelForKey(key: string, grain: Grain): string {
   if (grain === 'month') return key;
-  if (grain === 'week') return `Week ${axisLabelForKey(key, grain)}`;
+  if (grain === 'week') return i18n.t('trendCard.weekPrefix', { label: axisLabelForKey(key, grain) });
   return axisLabelForKey(key, grain);
 }
 

@@ -1,4 +1,6 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { WindowStats } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtDuration, quotaPctBarColor, quotaSourceBadgeToneStyle, Theme } from '../theme';
@@ -14,7 +16,7 @@ function cacheBadge(eff: number, C: Theme) {
 }
 
 function cacheBadgeTitle(title: string | undefined): string {
-  return title || 'Provider cache metric';
+  return title || i18n.t('tokenStatsCard.providerCacheMetric');
 }
 
 function formatUsagePct(pct: number): string {
@@ -112,10 +114,11 @@ function LimitStatusIndicator({
   hero?: boolean;
 }) {
   const C = useTheme();
-  const label = state === 'syncing' ? 'Syncing' : 'Waiting';
+  const { t } = useTranslation();
+  const label = state === 'syncing' ? t('tokenStatsCard.syncing') : t('tokenStatsCard.waiting');
   const title = state === 'syncing'
-    ? 'Limit data is syncing in the background.'
-    : 'Waiting for provider limit data.';
+    ? t('tokenStatsCard.syncingTooltip')
+    : t('tokenStatsCard.waitingTooltip');
   return (
     <span
       title={title}
@@ -190,6 +193,7 @@ function TokenStatsCard({
   accountTooltip,
 }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
 
   if (!hero && stats.totalTokens === 0 && stats.requestCount === 0) return null;
 
@@ -210,7 +214,7 @@ function TokenStatsCard({
     const durationStr = `↻${approx}${fmtDuration(resetMs)}`;
     if (resetMs > 4 * 24 * 3600 * 1000) {
       const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(Date.now() + resetMs).getDay()];
-      resetStr = `${durationStr} · resets ${dayName}`;
+      resetStr = `${durationStr} · ${t('tokenStatsCard.resets', { day: dayName })}`;
     } else {
       resetStr = durationStr;
     }
@@ -224,7 +228,7 @@ function TokenStatsCard({
   const breakdownTokens = stats.inputTokens + stats.outputTokens + stats.cacheCreationTokens + stats.cacheReadTokens;
   const displayTitle = `${provider} ${period}`;
   const displayTitleTooltip = accountTooltip ? `${displayTitle} · ${accountTooltip}` : displayTitle;
-  const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? 'Syncing') : limitSourceLabel;
+  const displayLimitSourceLabel = pendingLimit ? (pendingLimitLabel ?? t('tokenStatsCard.syncing')) : limitSourceLabel;
   const displayLimitSourceTitle = pendingLimitTitle ?? limitSourceTitle ?? displayLimitSourceLabel ?? '';
   const cachedDisconnected = apiConnected === false && limitSourceLabel === 'Cache';
   const limitValueColor = pendingLimit ? C.textMuted : barColor;
@@ -262,7 +266,7 @@ function TokenStatsCard({
           <span title={displayTitleTooltip} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {displayTitle}
             {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
-              <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>(cached)</span>
+              <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>{t('tokenStatsCard.cachedSuffix')}</span>
             )}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 0 }}>
@@ -281,7 +285,7 @@ function TokenStatsCard({
           </div>
           {!noData && timeElapsed != null && (
             <div
-              title={`${Math.round(timeElapsed)}% of this ${period} window has elapsed`}
+              title={t('tokenStatsCard.windowElapsedTooltip', { pct: Math.round(timeElapsed), period })}
               style={{
                 marginTop: 4,
                 fontSize: 9,
@@ -293,7 +297,7 @@ function TokenStatsCard({
                 flexShrink: 0,
               }}
             >
-              <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>time elapsed</div>
+              <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('tokenStatsCard.timeElapsed')}</div>
               <div style={{ fontSize: 12, color: C.textDim }}>{Math.round(timeElapsed)}%</div>
             </div>
           )}
@@ -321,7 +325,7 @@ function TokenStatsCard({
             <span style={{ fontSize: 10, color: C.textMuted }}>{resetStr}</span>
           ) : <span />}
           {!hideCost && stats.costUSD > 0 && (
-            <span title="Usage window cost" style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
+            <span title={t('tokenStatsCard.usageWindowCost')} style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
           )}
         </div>
       </div>
@@ -337,7 +341,7 @@ function TokenStatsCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontSize: 11, color: C.textMuted }}>{provider} · {period}</span>
           {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
-            <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>(cached)</span>
+            <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>{t('tokenStatsCard.cachedSuffix')}</span>
           )}
           {sourceChip}
           {cache && (
@@ -352,7 +356,7 @@ function TokenStatsCard({
             <span style={{ fontSize: 11, color: C.textMuted }}>{stats.requestCount} req</span>
           )}
           {!hideCost && (
-            <span title="Usage window cost" style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
+            <span title={t('tokenStatsCard.usageWindowCost')} style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
           )}
         </div>
       </div>

@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
-import { stateLabel, modelColor, fmtRelative, fmtTokens } from '../theme';
+import { modelColor, fmtRelative, fmtTokens } from '../theme';
 import ActivityBreakdown from './ActivityBreakdown';
 
 // idle 시간(분) 계산
@@ -34,6 +35,7 @@ function SessionRow({ session, expanded, onToggle }: {
   onToggle?: () => void;
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const TOOL_COLORS = [C.input, C.output, C.cacheW, C.cacheR, C.sonnet, C.idle];
   const mc = modelColor(session.modelName, C);
   const providerBadgeBackground = session.provider === 'codex'
@@ -60,10 +62,10 @@ function SessionRow({ session, expanded, onToggle }: {
   const ctxColor = ctxPct >= 95 ? C.barRed : ctxPct >= 85 ? C.barOrange : ctxPct >= 70 ? C.barYellow : C.accent;
   const ctxRemaining = session.contextMax - session.contextUsed;
   let ctxLabel = '';
-  if (ctxPct >= 100) ctxLabel = 'at limit';
-  else if (ctxPct >= 95) ctxLabel = 'near limit';
-  else if (ctxPct >= 85) ctxLabel = 'compact soon';
-  else ctxLabel = `${fmtTokens(ctxRemaining)} left`;
+  if (ctxPct >= 100) ctxLabel = t('sessionRow.atLimit');
+  else if (ctxPct >= 95) ctxLabel = t('sessionRow.nearLimit');
+  else if (ctxPct >= 85) ctxLabel = t('sessionRow.compactSoon');
+  else ctxLabel = t('sessionRow.tokensLeft', { tokens: fmtTokens(ctxRemaining) });
 
   const idle = useMemo(() => idleMinutes(session), [session]);
   const isCompact = idle >= 60;
@@ -103,7 +105,7 @@ function SessionRow({ session, expanded, onToggle }: {
             <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>{Math.round(ctxPct)}% ctx</span>
           )}
           <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.04)', color: C.textMuted, borderRadius: 3, padding: '1px 5px', border: `1px solid rgba(255,255,255,0.04)` }}>
-            {stateLabel(session.state)}
+            {t(`common.state.${session.state}`)}
           </span>
           <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
         </div>
@@ -142,8 +144,8 @@ function SessionRow({ session, expanded, onToggle }: {
             {hasBreakdown && (
               <button
                 onClick={handleBreakdownClick}
-                title={isExpanded ? 'Hide breakdown' : 'Show breakdown'}
-                aria-label={isExpanded ? 'Hide session breakdown' : 'Show session breakdown'}
+                title={isExpanded ? t('sessionRow.hideBreakdown') : t('sessionRow.showBreakdown')}
+                aria-label={isExpanded ? t('sessionRow.hideSessionBreakdown') : t('sessionRow.showSessionBreakdown')}
                 style={{
                   height: 18,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -164,7 +166,7 @@ function SessionRow({ session, expanded, onToggle }: {
                     <span key={i} style={{ display: 'inline-block', width: 2, height: h, background: 'currentColor', borderRadius: '1px 1px 0 0' }} />
                   ))}
                 </span>
-                {isExpanded ? 'Hide' : 'Details'}
+                {isExpanded ? t('sessionRow.hide') : t('sessionRow.details')}
               </button>
             )}
             <span style={{
@@ -175,7 +177,7 @@ function SessionRow({ session, expanded, onToggle }: {
               color: session.state === 'active' ? C.active :
                      session.state === 'waiting' ? C.waiting : C.textMuted,
             }}>
-              {stateLabel(session.state)}
+              {t(`common.state.${session.state}`)}
             </span>
             <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono }}>{fmtRelative(session.lastModified)}</span>
           </div>
@@ -184,7 +186,7 @@ function SessionRow({ session, expanded, onToggle }: {
         {showCtx && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
             <span style={{ fontSize: 10, color: ctxPct >= 95 ? C.barRed : C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Context {Math.round(ctxPct)}%
+              {t('sessionRow.context', { pct: Math.round(ctxPct) })}
             </span>
             <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {ctxLabel}

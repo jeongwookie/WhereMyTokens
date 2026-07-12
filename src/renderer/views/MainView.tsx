@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PanelBottom, PictureInPicture2 } from 'lucide-react';
 import { AppState, ProviderQuotaSource, ProviderQuotaStatus, SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtRelative, modelColor, quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
+// Plain (non-component) helper functions below call the i18next singleton's `.t()` directly
+// (same pattern as limitDisplay.ts), since React hooks cannot be used outside components.
+// Memoized call sites that consume their output must include `i18n.language` in their
+// dependency array so results recompute after a language switch.
+import i18n from '../i18n';
 import SessionRow from '../components/SessionRow';
 import TokenStatsCard from '../components/TokenStatsCard';
 import ActivityChart from '../components/ActivityChart';
@@ -60,36 +66,38 @@ const drag = { WebkitAppRegion: 'drag' } as React.CSSProperties;
 const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 const STALE_MS = 6 * 60 * 60 * 1000;
 function formatRefreshAge(lastUpdated: number): string {
-  if (!lastUpdated) return 'Refresh';
+  if (!lastUpdated) return i18n.t('mainView.refresh.label');
   const elapsed = Math.round((Date.now() - lastUpdated) / 1000);
-  if (elapsed < 5) return 'just now';
-  if (elapsed < 60) return `${elapsed}s ago`;
-  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m ago`;
-  return `${Math.floor(elapsed / 3600)}h ago`;
+  if (elapsed < 5) return i18n.t('mainView.refresh.justNow');
+  // Named "n" rather than "count" so i18next does not treat this as a pluralizable key —
+  // these are compact "5s/5m/5h ago" unit labels, not grammatically pluralized phrases.
+  if (elapsed < 60) return i18n.t('mainView.refresh.secondsAgo', { n: elapsed });
+  if (elapsed < 3600) return i18n.t('mainView.refresh.minutesAgo', { n: Math.floor(elapsed / 60) });
+  return i18n.t('mainView.refresh.hoursAgo', { n: Math.floor(elapsed / 3600) });
 }
 
 function formatRefreshLabel(lastUpdated: number, stateFreshness: AppState['stateFreshness']): string {
   const age = formatRefreshAge(lastUpdated);
-  if (stateFreshness === 'restored' && lastUpdated) return `last run · ${age}`;
+  if (stateFreshness === 'restored' && lastUpdated) return i18n.t('mainView.refresh.lastRun', { age });
   return age;
 }
 
 function formatWarmupEta(historyWarmupStartsAt: number | null): string {
-  if (!historyWarmupStartsAt) return 'queued';
+  if (!historyWarmupStartsAt) return i18n.t('mainView.warmup.queued');
   const remainingMs = Math.max(0, historyWarmupStartsAt - Date.now());
-  if (remainingMs === 0) return 'syncing...';
+  if (remainingMs === 0) return i18n.t('mainView.warmup.syncing');
   const totalSeconds = Math.ceil(remainingMs / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  if (minutes > 0) return `in ${minutes}m ${seconds}s`;
-  return `in ${seconds}s`;
+  if (minutes > 0) return i18n.t('mainView.warmup.inMinutesSeconds', { minutes, seconds });
+  return i18n.t('mainView.warmup.inSeconds', { seconds });
 }
 
 function formatWarmupStatus(historyWarmupStartsAt: number | null): string {
   const etaLabel = formatWarmupEta(historyWarmupStartsAt);
-  if (etaLabel === 'queued') return 'is queued';
-  if (etaLabel === 'syncing...') return 'is syncing now';
-  return `starts ${etaLabel}`;
+  if (etaLabel === i18n.t('mainView.warmup.queued')) return i18n.t('mainView.warmup.statusQueued');
+  if (etaLabel === i18n.t('mainView.warmup.syncing')) return i18n.t('mainView.warmup.statusSyncing');
+  return i18n.t('mainView.warmup.statusStarts', { eta: etaLabel });
 }
 
 function cacheMetricColor(value: number, C: ReturnType<typeof useTheme>): string {
@@ -107,10 +115,10 @@ function providerLabel(provider: ProviderId): string {
 function cacheMetricTitle(enabledProviders: readonly ProviderId[]): string {
   if (enabledProviders.length === 1) {
     const provider = enabledProviders[0];
-    if (provider === 'codex' || provider === 'antigravity') return `${providerLabel(provider)}: cache read / prompt tokens`;
-    return `${providerLabel(provider)}: cache read / (cache read + cache creation)`;
+    if (provider === 'codex' || provider === 'antigravity') return i18n.t('mainView.cacheMetric.singleSimple', { provider: providerLabel(provider) });
+    return i18n.t('mainView.cacheMetric.singleClaude', { provider: providerLabel(provider) });
   }
-  return 'Combined view: provider-specific cache metrics are aggregated';
+  return i18n.t('mainView.cacheMetric.combined');
 }
 
 function sessionProviderLabel(provider: SessionInfo['provider']): string {
@@ -130,10 +138,13 @@ function emptySessionLabel(enabledProviders: readonly ProviderId[]): string {
     enabled.has('codex') ? 'Codex' : null,
     enabled.has('antigravity') ? 'Antigravity' : null,
   ].filter((label): label is string => !!label);
+  // Japanese uses "、" list separators and "または" for "or" instead of ", "/"or" — pick the
+  // separator here rather than hardcoding an English-shaped join inside the translated string.
+  const listSeparator = i18n.language.startsWith('ja') ? '、' : ', ';
   if (labels.length === 1) return labels[0];
-  if (labels.length === 2) return `${labels[0]} or ${labels[1]}`;
-  if (labels.length > 2) return `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`;
-  return 'enabled provider';
+  if (labels.length === 2) return i18n.t('mainView.sessions.providersTwo', { a: labels[0], b: labels[1] });
+  if (labels.length > 2) return i18n.t('mainView.sessions.providersList', { list: labels.slice(0, -1).join(listSeparator), last: labels[labels.length - 1] });
+  return i18n.t('mainView.sessions.enabledProviderFallback');
 }
 
 function formatCodexServiceTier(serviceTier: string | null | undefined): string | null {
@@ -199,41 +210,44 @@ function buildClaudeHeaderStatus(args: {
 
   if (hasClaudeFallback) {
     return {
-      label: 'Claude local',
-      title: `Using local Claude status-line data while API status is ${apiStatusLabel || 'unavailable'}${apiError ? ` - ${apiError}` : ''}`,
+      label: i18n.t('mainView.status.claude.localLabel'),
+      title: i18n.t('mainView.status.claude.localTitle', {
+        status: apiStatusLabel || i18n.t('mainView.status.provider.unavailable'),
+        errorSuffix: apiError ? ` - ${apiError}` : '',
+      }),
       tone: 'warning',
     };
   }
 
   switch (apiStatusLabel) {
     case 'rate limited':
-      return { label: 'Claude limited', title: apiError || 'Claude API returned HTTP 429.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.claude.limitedLabel'), title: apiError || i18n.t('mainView.status.claude.limitedTitleDefault'), tone: 'warning' };
     case 'refresh limited':
-      return { label: 'Claude refresh', title: apiError || 'Claude OAuth refresh is rate limited.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.claude.refreshLabel'), title: apiError || i18n.t('mainView.status.claude.refreshLimitedTitleDefault'), tone: 'warning' };
     case 'refresh failed':
-      return { label: 'Claude refresh', title: apiError || 'Claude OAuth refresh failed.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.claude.refreshLabel'), title: apiError || i18n.t('mainView.status.claude.refreshFailedTitleDefault'), tone: 'danger' };
     case 'schema changed':
-      return { label: 'Claude schema', title: apiError || 'Claude API response changed shape.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.claude.schemaLabel'), title: apiError || i18n.t('mainView.status.claude.schemaTitleDefault'), tone: 'danger' };
     case 'reset partial':
-      return { label: 'Claude partial', title: apiError || 'Claude API usage loaded without reset timing.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.claude.partialLabel'), title: apiError || i18n.t('mainView.status.claude.partialTitleDefault'), tone: 'warning' };
     case 'local only':
-      return { label: 'Claude local', title: apiError || 'Claude credentials were not found. Showing local data only.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.claude.localLabel'), title: apiError || i18n.t('mainView.status.claude.localOnlyTitleDefault'), tone: 'warning' };
     case 'auth failed':
-      return { label: 'Claude auth', title: apiError || 'Claude CLI token was rejected or expired.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.claude.authLabel'), title: apiError || i18n.t('mainView.status.claude.authTitleDefault'), tone: 'danger' };
     case 'login required':
-      return { label: 'Claude login', title: apiError || 'Refresh token rejected. Run `claude /login` to re-authenticate.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.claude.loginLabel'), title: apiError || i18n.t('mainView.status.claude.loginTitleDefault'), tone: 'danger' };
     case 'forbidden':
-      return { label: 'Claude blocked', title: apiError || 'Claude API denied this account or beta surface.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.claude.blockedLabel'), title: apiError || i18n.t('mainView.status.claude.blockedTitleDefault'), tone: 'danger' };
     case 'api disconnected':
-      return { label: 'Claude offline', title: apiError || 'Claude API request failed.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.claude.offlineLabel'), title: apiError || i18n.t('mainView.status.claude.offlineTitleDefault'), tone: 'danger' };
     default:
       break;
   }
 
   if (!apiConnected) {
     return {
-      label: 'Claude offline',
-      title: apiError || 'Claude API request failed.',
+      label: i18n.t('mainView.status.claude.offlineLabel'),
+      title: apiError || i18n.t('mainView.status.claude.offlineTitleDefault'),
       tone: 'danger',
     };
   }
@@ -261,39 +275,39 @@ function buildCodexHeaderStatus(args: {
 
   switch (codexStatusLabel) {
     case 'rate limited':
-      return { label: 'Codex limited', title: codexError || 'Codex usage endpoint returned HTTP 429.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.codex.limitedLabel'), title: codexError || i18n.t('mainView.status.codex.limitedTitleDefault'), tone: 'warning' };
     case 'schema changed':
-      return { label: 'Codex schema', title: codexError || 'Codex usage response changed shape.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.codex.schemaLabel'), title: codexError || i18n.t('mainView.status.codex.schemaTitleDefault'), tone: 'danger' };
     case 'unsupported endpoint':
-      return { label: 'Codex endpoint', title: codexError || 'Custom Codex base URLs are not monitored for token safety.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.codex.endpointLabel'), title: codexError || i18n.t('mainView.status.codex.endpointTitleDefault'), tone: 'warning' };
     case 'local log':
-      return { label: 'Codex local', title: codexError || 'Codex credentials were not found. Showing local log estimates only.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.codex.localLabel'), title: codexError || i18n.t('mainView.status.codex.localTitleDefault'), tone: 'warning' };
     case 'auth failed':
-      return { label: 'Codex auth', title: codexError || 'Codex usage token was rejected or expired.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.codex.authLabel'), title: codexError || i18n.t('mainView.status.codex.authTitleDefault'), tone: 'danger' };
     case 'forbidden':
-      return { label: 'Codex blocked', title: codexError || 'Codex usage access was denied for this account.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.codex.blockedLabel'), title: codexError || i18n.t('mainView.status.codex.blockedTitleDefault'), tone: 'danger' };
     case 'api timeout':
-      return { label: 'Codex timeout', title: codexError || 'Codex usage request timed out.', tone: 'warning' };
+      return { label: i18n.t('mainView.status.codex.timeoutLabel'), title: codexError || i18n.t('mainView.status.codex.timeoutTitleDefault'), tone: 'warning' };
     case 'api disconnected':
-      return { label: 'Codex offline', title: codexError || 'Codex usage request failed.', tone: 'danger' };
+      return { label: i18n.t('mainView.status.codex.offlineLabel'), title: codexError || i18n.t('mainView.status.codex.offlineTitleDefault'), tone: 'danger' };
     default:
       break;
   }
 
   if (hasCodexFallback) {
-    const label = codexFallbackSource === 'cache' ? 'Codex cache' : 'Codex log';
-    const source = codexFallbackSource === 'cache' ? 'last cached usage snapshot' : 'local log estimates';
+    const label = codexFallbackSource === 'cache' ? i18n.t('mainView.status.codex.cacheLabel') : i18n.t('mainView.status.codex.logLabel');
+    const source = codexFallbackSource === 'cache' ? i18n.t('mainView.status.codex.fallbackSourceCache') : i18n.t('mainView.status.codex.fallbackSourceLog');
     return {
       label,
-      title: `Codex live usage is unavailable; using ${source}.`,
+      title: i18n.t('mainView.status.codex.fallbackTitle', { source }),
       tone: 'warning',
     };
   }
 
   if (!codexUsageConnected && codexStatusLabel) {
     return {
-      label: 'Codex offline',
-      title: codexError || 'Codex live usage is unavailable.',
+      label: i18n.t('mainView.status.codex.offlineLabel'),
+      title: codexError || i18n.t('mainView.status.codex.offlineNoDetail'),
       tone: 'danger',
     };
   }
@@ -307,15 +321,15 @@ function buildProviderQuotaHeaderStatus(
 ): HeaderStatus | null {
   if (!status || status.connected || status.severity === 'ok') return null;
   const label = providerLabel(provider);
-  const statusLabel = status.label || status.code || 'unavailable';
+  const statusLabel = status.label || status.code || i18n.t('mainView.status.provider.unavailable');
   const compactLabel = status.code === 'not-running'
-    ? (provider === 'antigravity' ? 'Start Antigravity' : `${label} off`)
+    ? (provider === 'antigravity' ? i18n.t('mainView.status.provider.startAntigravity') : i18n.t('mainView.status.provider.offCompact', { label }))
     : status.code === 'unavailable'
-      ? `${label} offline`
-      : `${label} ${statusLabel}`;
+      ? i18n.t('mainView.status.provider.offlineCompact', { label })
+      : i18n.t('mainView.status.provider.genericCompact', { label, status: statusLabel });
   return {
     label: compactLabel,
-    title: status.detail || `${label} provider status: ${statusLabel}.`,
+    title: status.detail || i18n.t('mainView.status.provider.genericTitle', { label, status: statusLabel }),
     tone: status.severity === 'danger' ? 'danger' : 'warning',
   };
 }
@@ -435,22 +449,25 @@ const RefreshStatus = React.memo(function RefreshStatus({
   historyWarmupStartsAt: number | null;
   stateFreshness: AppState['stateFreshness'];
 }) {
+  const { t, i18n: i18nInstance } = useTranslation();
   const [label, setLabel] = useState(() => syncingHistory ? formatWarmupEta(historyWarmupStartsAt) : formatRefreshLabel(lastUpdated, stateFreshness));
 
   useEffect(() => {
     if (refreshing) {
-      setLabel('refreshing...');
+      setLabel(t('mainView.refresh.refreshing'));
       return;
     }
     if (syncingHistory) {
-      setLabel(`scan ${formatWarmupEta(historyWarmupStartsAt)}`);
-      const t = setInterval(() => setLabel(`scan ${formatWarmupEta(historyWarmupStartsAt)}`), 1000);
-      return () => clearInterval(t);
+      setLabel(t('mainView.refresh.scan', { eta: formatWarmupEta(historyWarmupStartsAt) }));
+      const timer = setInterval(() => setLabel(t('mainView.refresh.scan', { eta: formatWarmupEta(historyWarmupStartsAt) })), 1000);
+      return () => clearInterval(timer);
     }
     setLabel(formatRefreshLabel(lastUpdated, stateFreshness));
-    const t = setInterval(() => setLabel(formatRefreshLabel(lastUpdated, stateFreshness)), 1000);
-    return () => clearInterval(t);
-  }, [historyWarmupStartsAt, lastUpdated, refreshing, stateFreshness, syncingHistory]);
+    const timer = setInterval(() => setLabel(formatRefreshLabel(lastUpdated, stateFreshness)), 1000);
+    return () => clearInterval(timer);
+    // i18nInstance.language is included so this re-runs (and picks up freshly translated
+    // strings) immediately after a language switch, instead of waiting for the next tick.
+  }, [historyWarmupStartsAt, lastUpdated, refreshing, stateFreshness, syncingHistory, t, i18nInstance.language]);
 
   return <>{label}</>;
 });
@@ -495,6 +512,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   onToggleTaskbarQuota: () => void;
 }) {
   const C = useTheme();
+  const { t, i18n: i18nInstance } = useTranslation();
   const {
     sessions,
     usage,
@@ -538,7 +556,10 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
     codexStatusLabel,
     codexError,
     codexFallbackSource,
-  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, enabledProviderList, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage, state.providerQuotas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nInstance.language forces
+    // recomputation of the translated label/title strings built by buildHeaderStatus after a
+    // language switch, since that helper reads the i18next singleton directly.
+  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, enabledProviderList, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage, state.providerQuotas, i18nInstance.language]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -575,7 +596,9 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
         </span>
         <div style={{ ...noDrag, display: 'inline-flex', gap: 3, marginLeft: 4, flexShrink: 0 }}>
           {(['today', 'all'] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={headerPeriodButtonStyle(period === p, C)}>{p}</button>
+            <button key={p} onClick={() => setPeriod(p)} style={headerPeriodButtonStyle(period === p, C)}>
+              {p === 'today' ? t('mainView.header.periodToday') : t('mainView.header.periodAll')}
+            </button>
           ))}
         </div>
         <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
@@ -601,9 +624,9 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
           <button
             type="button"
             onClick={onToggleCompactWidget}
-            aria-label={compactWidgetEnabled ? 'Hide floating Quota Pace widget' : 'Show floating Quota Pace widget'}
+            aria-label={compactWidgetEnabled ? t('mainView.header.hideCompactWidget') : t('mainView.header.showCompactWidget')}
             aria-pressed={compactWidgetEnabled}
-            title={compactWidgetEnabled ? 'Hide floating Quota Pace widget' : 'Show floating Quota Pace widget'}
+            title={compactWidgetEnabled ? t('mainView.header.hideCompactWidget') : t('mainView.header.showCompactWidget')}
             style={headerIconButtonStyle(compactWidgetEnabled, C)}
           >
             <PictureInPicture2 size={13} strokeWidth={2.1} aria-hidden="true" />
@@ -626,9 +649,9 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
           <button
             type="button"
             onClick={onToggleTaskbarQuota}
-            aria-label={taskbarQuotaEnabled ? 'Hide taskbar mini quota display' : 'Show taskbar mini quota display'}
+            aria-label={taskbarQuotaEnabled ? t('mainView.header.hideTaskbarQuota') : t('mainView.header.showTaskbarQuota')}
             aria-pressed={taskbarQuotaEnabled}
-            title={taskbarQuotaEnabled ? 'Hide taskbar mini quota display' : 'Show taskbar mini quota display'}
+            title={taskbarQuotaEnabled ? t('mainView.header.hideTaskbarQuota') : t('mainView.header.showTaskbarQuota')}
             style={headerIconButtonStyle(taskbarQuotaEnabled, C)}
           >
             <PanelBottom size={13} strokeWidth={2.1} aria-hidden="true" />
@@ -649,8 +672,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
             )}
           </button>
           <div style={{ width: 1, height: 14, background: C.headerBorder, flexShrink: 0 }} />
-          <button onClick={() => window.wmt.minimize().catch(() => {})} title="Minimize" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>-</button>
-          <button onClick={onQuit} title="Quit" style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>x</button>
+          <button onClick={() => window.wmt.minimize().catch(() => {})} title={t('mainView.header.minimize')} style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>-</button>
+          <button onClick={onQuit} title={t('mainView.header.quit')} style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>x</button>
         </div>
       </div>
 
@@ -658,13 +681,13 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, marginBottom: 3 }}>
             <div style={{ fontSize: 9, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, whiteSpace: 'nowrap' }}>
-              {isAll ? 'All-time Cost' : 'Today Cost'}
+              {isAll ? t('mainView.header.allTimeCost') : t('mainView.header.todayCost')}
             </div>
           </div>
           {(planLabel || codexTierLabel) && (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', minWidth: 0, marginBottom: 6 }}>
               {planLabel && (
-                <div title={`Claude plan: ${planLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <div title={t('mainView.header.claudePlanTooltip', { plan: planLabel })} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                   <span style={{
                     fontSize: 9,
                     color: C.textMuted,
@@ -683,7 +706,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
                 </div>
               )}
               {codexTierLabel && (
-                <div title={`Codex service tier: ${codexTierLabel}`} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                <div title={t('mainView.header.codexTierTooltip', { tier: codexTierLabel })} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                   <span style={{
                     fontSize: 9,
                     color: C.textMuted,
@@ -707,20 +730,22 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
             {fmtCost(cost, currency, usdToKrw)}
           </div>
           <div style={{ fontSize: 11, color: C.headerSub, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{fmtTokens(calls)}</span> calls
+            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{fmtTokens(calls)}</span> {t('mainView.header.calls')}
             <span style={{ margin: '0 6px', color: C.textMuted }}>/</span>
-            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{sessionCount}</span> sessions
+            <span style={{ fontFamily: C.fontMono, fontWeight: 700, color: C.headerText }}>{sessionCount}</span> {t('mainView.header.sessions')}
           </div>
         </div>
         <div style={{ textAlign: 'right', minWidth: 0 }} title={cacheTitle}>
           <div style={{ fontSize: 9, color: C.headerSub, textTransform: 'uppercase', letterSpacing: 1.1, marginBottom: 3, whiteSpace: 'nowrap' }}>
-            {isAll ? 'Avg Cache Efficiency' : 'Cache Efficiency'}
+            {isAll ? t('mainView.header.avgCacheEfficiency') : t('mainView.header.cacheEfficiency')}
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, color: cacheColor, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {Math.round(cacheEff)}%
           </div>
           <div style={{ fontSize: 11, color: cacheColor, marginTop: 4, whiteSpace: 'nowrap' }}>
-            + {fmtCost(saved, currency, usdToKrw)} saved{isAll ? ' total' : ' today'}
+            {isAll
+              ? t('mainView.header.savedTotal', { saved: fmtCost(saved, currency, usdToKrw) })
+              : t('mainView.header.savedToday', { saved: fmtCost(saved, currency, usdToKrw) })}
           </div>
         </div>
       </div>
@@ -749,7 +774,7 @@ function simpleTimeElapsedPct(durationMs: number | null | undefined, resetMs: nu
 
 function formatSimpleReset(resetMs: number | null, resetLabel?: string): string {
   if (resetLabel) return resetLabel;
-  if (resetMs == null || resetMs <= 0) return 'waiting';
+  if (resetMs == null || resetMs <= 0) return i18n.t('mainView.quota.waitingReset');
   const totalMinutes = Math.max(1, Math.round(resetMs / 60000));
   if (totalMinutes < 60) return `${totalMinutes}m`;
   const hours = Math.floor(totalMinutes / 60);
@@ -761,6 +786,7 @@ function formatSimpleReset(resetMs: number | null, resetLabel?: string): string 
 
 function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const source = limitSourceDisplay(row.quota);
   const dataState = limitDataState(row.quota, row.pending);
   const percentOnly = row.visualKind === 'percentOnly';
@@ -822,11 +848,11 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
       </div>
       {!percentOnly && (
         <span style={{ color: C.textMuted, fontSize: 9, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
-          {row.pending ? 'syncing' : formatSimpleReset(row.resetMs, row.resetLabel)}
+          {row.pending ? t('mainView.quota.syncingLabel') : formatSimpleReset(row.resetMs, row.resetLabel)}
         </span>
       )}
       <span
-        title={percentOnly ? 'Used' : 'Used / Time elapsed'}
+        title={percentOnly ? t('mainView.quota.usedTooltip') : t('mainView.quota.usedElapsedTooltip')}
         style={{ color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap', textAlign: 'right', minWidth: 42 }}
       >
         {row.pending ? (
@@ -847,6 +873,7 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
 
 function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const tokenRows = group.rows.filter(row => row.stats.totalTokens > 0);
   const tokenBadge = tokenRows.length === 0
     ? null
@@ -855,8 +882,8 @@ function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel })
         ? tokenRows[0].stats.totalTokens
         : tokenRows.reduce((max, row) => Math.max(max, row.stats.totalTokens), 0),
       title: tokenRows.length === 1
-        ? 'Total tokens for this quota target'
-        : 'Largest window token count for this quota target',
+        ? t('mainView.quota.tokenBadgeSingle')
+        : t('mainView.quota.tokenBadgeMulti'),
     };
   return (
     <div style={{ padding: '6px 12px', borderTop: `1px solid ${C.border}` }}>
@@ -910,7 +937,7 @@ function SimpleQuotaGroupBlock({ group }: { group: QuotaDisplayGroupViewModel })
                   whiteSpace: 'nowrap',
                 }}
               >
-                {fmtTokens(tokenBadge.value)} tok
+                {t('mainView.quota.tokenBadgeSuffix', { tokens: fmtTokens(tokenBadge.value) })}
               </span>
             )}
           </span>
@@ -937,21 +964,22 @@ function resetSourceBadge(vm: ResetCreditsViewModel, C: ReturnType<typeof useThe
   const warningColor = C.bgCard === '#ffffff' ? '#6f3d00' : C.waiting;
   const color = degraded ? warningColor : isUsageCount ? C.accent : isApi ? C.accent : C.barGreen;
   const label = vm.errored
-    ? 'Error'
+    ? i18n.t('mainView.resetCredits.badge.error')
     : vm.status.code === 'rate-limited'
-      ? 'Limited'
+      ? i18n.t('mainView.resetCredits.badge.limited')
       : degraded
-        ? 'Stale'
+        ? i18n.t('mainView.resetCredits.badge.stale')
         : vm.countOnly
-          ? (isUsageCount ? 'Usage' : 'Partial')
-          : (isApi ? 'API' : 'Cache');
+          ? (isUsageCount ? i18n.t('mainView.resetCredits.badge.usage') : i18n.t('mainView.resetCredits.badge.partial'))
+          : (isApi ? i18n.t('mainView.resetCredits.badge.api') : i18n.t('mainView.resetCredits.badge.cache'));
+  const sourceDesc = isApi ? i18n.t('mainView.resetCredits.badge.fromApi') : i18n.t('mainView.resetCredits.badge.fromCache');
   return {
     label,
     title: vm.countOnly && !vm.errored
-      ? (isUsageCount ? 'Count from live usage; expiry list unavailable' : 'Count-only reset credits; expiry list unavailable')
+      ? (isUsageCount ? i18n.t('mainView.resetCredits.badge.usageOnlyTitle') : i18n.t('mainView.resetCredits.badge.partialOnlyTitle'))
       : degraded
-      ? `Reset credits ${isApi ? 'from API' : 'from cached data'}; status: ${vm.status.code}`
-      : isApi ? 'Reset credits from API' : 'Reset credits from cached data',
+      ? i18n.t('mainView.resetCredits.badge.degradedTitle', { sourceDesc, code: vm.status.code })
+      : i18n.t('mainView.resetCredits.badge.okTitle', { sourceDesc }),
     style: {
       background: degraded && C.bgCard === '#ffffff' ? '#fff3cf' : `${color}18`,
       color,
@@ -983,19 +1011,19 @@ function resetTooltipAnchorFromEvent(event: React.MouseEvent<HTMLElement>, frame
 }
 
 function resetStatusSummary(status: ProviderQuotaStatus): string {
-  if (status.label === 'unsupported endpoint') return 'Reset endpoint unsupported';
+  if (status.label === 'unsupported endpoint') return i18n.t('mainView.resetCredits.status.unsupported');
   switch (status.code) {
-    case 'no-credentials': return 'Codex login required';
-    case 'unauthorized': return 'Codex login expired';
-    case 'forbidden': return 'Codex access denied';
-    case 'rate-limited': return 'Reset check limited';
-    case 'schema-changed': return 'Reset check changed';
+    case 'no-credentials': return i18n.t('mainView.resetCredits.status.loginRequired');
+    case 'unauthorized': return i18n.t('mainView.resetCredits.status.loginExpired');
+    case 'forbidden': return i18n.t('mainView.resetCredits.status.accessDenied');
+    case 'rate-limited': return i18n.t('mainView.resetCredits.status.limited');
+    case 'schema-changed': return i18n.t('mainView.resetCredits.status.changed');
     case 'timeout':
     case 'network':
     case 'http-error':
-      return 'Reset check offline';
+      return i18n.t('mainView.resetCredits.status.offline');
     default:
-      return 'Reset data unavailable';
+      return i18n.t('mainView.resetCredits.status.unavailable');
   }
 }
 
@@ -1056,9 +1084,10 @@ function useResetTooltipTrigger<T extends HTMLElement>(frameRef: React.RefObject
 
 export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHoverChange }: ResetCreditsTooltipProps) {
   const C = useTheme();
+  const { t } = useTranslation();
   const updated = new Date(vm.checkedAt);
-  const updatedLabel = Number.isFinite(updated.getTime()) ? updated.toLocaleString() : 'unknown';
-  const nextExpiryLabel = vm.countOnly ? 'list unavailable' : vm.nextExpiryMs == null ? '-' : formatCreditDuration(vm.nextExpiryMs);
+  const updatedLabel = Number.isFinite(updated.getTime()) ? updated.toLocaleString() : t('mainView.resetCredits.tooltip.unknown');
+  const nextExpiryLabel = vm.countOnly ? t('mainView.resetCredits.tooltip.listUnavailable') : vm.nextExpiryMs == null ? '-' : formatCreditDuration(vm.nextExpiryMs);
   const sourceColor = vm.status.code !== 'ok' || vm.stale ? C.waiting : vm.source === 'api' ? C.accent : C.barGreen;
   const viewportH = typeof window !== 'undefined' ? window.innerHeight : 0;
   const anchoredTop = anchor
@@ -1093,13 +1122,13 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHove
     return (
       <div id={RESET_CREDITS_TOOLTIP_ID} role="tooltip" tabIndex={visible ? 0 : -1} aria-hidden={!visible} data-testid="reset-tooltip" style={shellStyle} {...hoverHandlers}>
         <div style={{ fontWeight: 800, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
-          Codex reset credits
+          {t('mainView.resetCredits.heading')}
         </div>
         <div style={{ display: 'grid', gap: 4 }}>
-          <div>Status <b style={{ color: C.text }}>{vm.status.code}</b> · {resetStatusSummary(vm.status)}</div>
+          <div>{t('mainView.resetCredits.tooltip.statusLabel')} <b style={{ color: C.text }}>{vm.status.code}</b> · {resetStatusSummary(vm.status)}</div>
           {vm.status.detail && <div>{vm.status.detail}</div>}
-          <div>last update <b style={{ color: C.text }}>{updatedLabel}</b></div>
-          <div>Source <b style={{ color: sourceColor }}>{vm.source}</b></div>
+          <div>{t('mainView.resetCredits.tooltip.lastUpdate')} <b style={{ color: C.text }}>{updatedLabel}</b></div>
+          <div>{t('mainView.resetCredits.tooltip.sourceLabel')} <b style={{ color: sourceColor }}>{vm.source}</b></div>
         </div>
       </div>
     );
@@ -1107,30 +1136,30 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHove
   return (
     <div id={RESET_CREDITS_TOOLTIP_ID} role="tooltip" tabIndex={visible ? 0 : -1} aria-hidden={!visible} data-testid="reset-tooltip" style={shellStyle} {...hoverHandlers}>
       <div style={{ fontWeight: 800, color: C.text, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 7 }}>
-        Codex reset credits
+        {t('mainView.resetCredits.heading')}
       </div>
       {/* reset fetch가 실패한 count-only fallback도 실제 상태와 상세 사유를 함께 보여준다. */}
       {vm.status.code !== 'ok' && (
         <div style={{ marginBottom: 7, color: C.textDim }}>
-          Status <b style={{ color: C.text }}>{vm.status.code}</b>{vm.status.detail ? ` - ${vm.status.detail}` : ''}
+          {t('mainView.resetCredits.tooltip.statusLabel')} <b style={{ color: C.text }}>{vm.status.code}</b>{vm.status.detail ? ` - ${vm.status.detail}` : ''}
         </div>
       )}
       {vm.countOnly && (
         <div data-testid="reset-count-only-note" style={{ marginBottom: 7, color: C.textDim }}>
-          Count-only availability; expiry list unavailable.
+          {t('mainView.resetCredits.tooltip.countOnlyNote')}
         </div>
       )}
       <div style={{ display: 'flex', gap: 14, marginBottom: 8, flexWrap: 'wrap' }}>
-        <div>Available<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{vm.availableCount}</b></div>
-        <div>Next expires<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{nextExpiryLabel}</b></div>
-        <div>Earned<b style={{ display: 'block', color: C.text, marginTop: 1 }}>{vm.totalEarnedCount}</b></div>
+        <div>{t('mainView.resetCredits.tooltip.available')}<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{vm.availableCount}</b></div>
+        <div>{t('mainView.resetCredits.tooltip.nextExpires')}<b style={{ display: 'block', color: urgencyColor(vm.urgency, C), marginTop: 1 }}>{nextExpiryLabel}</b></div>
+        <div>{t('mainView.resetCredits.tooltip.earned')}<b style={{ display: 'block', color: C.text, marginTop: 1 }}>{vm.totalEarnedCount}</b></div>
       </div>
       {vm.credits.length > 0 && (
         <div style={{ display: 'grid', gap: 4 }}>
           {vm.credits.map((credit, index) => {
             const urgency = creditUrgencyBucket(credit.remainingMs);
             const expires = credit.expiresAtUtc ? new Date(credit.expiresAtUtc) : null;
-            const local = expires && Number.isFinite(expires.getTime()) ? expires.toLocaleString() : 'unknown';
+            const local = expires && Number.isFinite(expires.getTime()) ? expires.toLocaleString() : t('mainView.resetCredits.tooltip.unknown');
             return (
               <div
                 key={`${credit.idSuffix ?? index}-${credit.expiresAtUtc ?? 'none'}`}
@@ -1144,7 +1173,7 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHove
               >
                 <span style={{ color: urgencyColor(urgency, C) }}>#{index + 1}</span>
                 <span>{credit.status}</span>
-                <span>expires in {formatCreditDuration(credit.remainingMs)}</span>
+                <span>{t('mainView.resetCredits.tooltip.expiresIn', { duration: formatCreditDuration(credit.remainingMs) })}</span>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{local}</span>
               </div>
             );
@@ -1152,8 +1181,8 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHove
         </div>
       )}
       <div style={{ marginTop: 8, paddingTop: 7, borderTop: `1px solid ${C.borderSub}`, display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 9 }}>
-        <span>Updated: {updatedLabel}</span>
-        <span>Source: {vm.source}</span>
+        <span>{t('mainView.resetCredits.tooltip.updatedFooter', { date: updatedLabel })}</span>
+        <span>{t('mainView.resetCredits.tooltip.sourceFooter', { source: vm.source })}</span>
       </div>
     </div>
   );
@@ -1161,6 +1190,7 @@ export function ResetCreditsTooltip({ vm, visible = false, anchor = null, onHove
 
 export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const frameRef = useRef<HTMLDivElement>(null);
   const { hovered, anchor, tooltipHandlers, handleTooltipHover } = useResetTooltipTrigger(frameRef);
   const source = resetSourceBadge(vm, C);
@@ -1182,7 +1212,7 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
       ref={frameRef}
       {...tooltipHandlers}
       tabIndex={0}
-      aria-label="Codex reset credits details"
+      aria-label={t('mainView.resetCredits.detailsAriaLabel')}
       aria-describedby={RESET_CREDITS_TOOLTIP_ID}
       style={{ position: 'relative', minWidth: 0 }}
     >
@@ -1196,7 +1226,7 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            CODEX RESETS
+            {t('mainView.resetCredits.cardHeading')}
           </span>
           <span
             title={source.title}
@@ -1247,12 +1277,12 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
               >
                 {vm.availableCount}
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginLeft: 6 }}>
-                  available
+                  {t('mainView.resetCredits.card.available')}
                 </span>
               </div>
               {vm.nextExpiryMs != null && (
                 <div style={{ marginTop: 4, fontSize: 9, lineHeight: 1.25, color: C.textMuted, textAlign: 'right', fontFamily: C.fontMono, opacity: 0.78, flexShrink: 0 }}>
-                  <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>next expires</div>
+                  <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('mainView.resetCredits.card.nextExpiresLabel')}</div>
                   <div style={{ fontSize: 12, color: countColor }}>{formatCreditDuration(vm.nextExpiryMs)}</div>
                 </div>
               )}
@@ -1260,7 +1290,7 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
 
             {vm.availableCount === 0 ? (
               <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, marginBottom: 4 }}>
-                No resets available
+                {t('mainView.resetCredits.card.noResets')}
               </div>
             ) : chipCredits.length > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', marginBottom: 4 }}>
@@ -1291,13 +1321,13 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
                 })}
                 {hiddenCount > 0 && (
                   <span style={{ fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, background: C.bgRow, border: `1px solid ${C.borderSub}`, borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>
-                    +{hiddenCount} more
+                    {t('mainView.resetCredits.card.moreCount', { n: hiddenCount })}
                   </span>
                 )}
               </div>
             ) : vm.countOnly ? (
               <div data-testid="reset-count-only-note" style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, marginBottom: 4 }}>
-                Count only · expiry list unavailable
+                {t('mainView.resetCredits.card.countOnlyShort')}
               </div>
             ) : null}
           </>
@@ -1310,6 +1340,7 @@ export function ResetCreditsCard({ vm }: { vm: ResetCreditsViewModel }) {
 
 export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const frameRef = useRef<HTMLDivElement>(null);
   const { hovered, anchor, tooltipHandlers, handleTooltipHover } = useResetTooltipTrigger(frameRef);
   const source = resetSourceBadge(vm, C);
@@ -1326,7 +1357,7 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
       data-testid="reset-simple-line"
       {...tooltipHandlers}
       tabIndex={0}
-      aria-label="Codex reset credits details"
+      aria-label={t('mainView.resetCredits.detailsAriaLabel')}
       aria-describedby={RESET_CREDITS_TOOLTIP_ID}
       style={{
         position: 'relative',
@@ -1339,7 +1370,7 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
       }}
     >
       <span style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
-        Codex Resets
+        {t('mainView.resetCredits.rowHeading')}
       </span>
 
       {vm.errored ? (
@@ -1373,24 +1404,24 @@ export function ResetCreditsSimpleRow({ vm }: { vm: ResetCreditsViewModel }) {
         <>
           <span style={{ fontSize: 11, fontFamily: C.fontMono, color: C.textDim, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {vm.availableCount === 0 ? (
-              <span style={{ color: C.textMuted }}>no resets available</span>
+              <span style={{ color: C.textMuted }}>{t('mainView.resetCredits.row.noResetsAvailable')}</span>
             ) : (
               <span
                 data-testid="reset-available-trigger"
                 style={{ cursor: 'default' }}
               >
-                <b style={{ fontSize: 13, fontWeight: 800, color: countColor }}>{vm.availableCount}</b>{' '}available
+                <b style={{ fontSize: 13, fontWeight: 800, color: countColor }}>{vm.availableCount}</b>{' '}{t('mainView.resetCredits.row.available')}
               </span>
             )}
           </span>
           {vm.nextExpiryMs != null && (
             <span style={{ marginLeft: 'auto', fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              next in {formatCreditDuration(vm.nextExpiryMs)}
+              {t('mainView.resetCredits.row.nextIn', { duration: formatCreditDuration(vm.nextExpiryMs) })}
             </span>
           )}
           {vm.countOnly && vm.availableCount > 0 && (
-            <span data-testid="reset-count-only-note" title="Count-only availability; expiry list unavailable" style={{ marginLeft: vm.nextExpiryMs == null ? 'auto' : 0, fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
-              count only
+            <span data-testid="reset-count-only-note" title={t('mainView.resetCredits.tooltip.countOnlyNote')} style={{ marginLeft: vm.nextExpiryMs == null ? 'auto' : 0, fontSize: 9, fontFamily: C.fontMono, color: C.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {t('mainView.resetCredits.row.countOnly')}
             </span>
           )}
         </>
@@ -1431,6 +1462,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
   historyWarmupStartsAt: number | null;
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const { currency, usdToKrw } = settings;
   const { targets, richGroups, simpleGroups, extraUsage, resetCredits } = buildQuotaDisplayModels({
     usage,
@@ -1495,7 +1527,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
             limitSourceTone={source.tone}
             limitDataState={limitDataState(card.quota, card.pending)}
             pendingLimit={card.pending}
-            pendingLimitLabel="Syncing"
+            pendingLimitLabel={t('mainView.quota.pendingLabel')}
             pendingLimitTitle={card.pendingTitle}
             cacheMetricTitle={card.cacheMetricTitle}
             durationMs={card.durationMs}
@@ -1543,7 +1575,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Plan Usage</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('common.mainSections.planUsage')}</span>
       </div>
 
       <div data-testid="plan-usage-body">
@@ -1564,6 +1596,7 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
   historyWarmupStartsAt: number | null;
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const statusLabel = formatWarmupStatus(historyWarmupStartsAt);
   return (
     <div style={{
@@ -1575,10 +1608,10 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
       color: C.textDim,
     }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: C.headerAccent, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-        Partial History
+        {t('mainView.warmup.bannerTitle')}
       </div>
       <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
-        Showing current sessions and recent usage first. Full history sync {statusLabel}. Trend and totals may keep changing until this banner disappears.
+        {t('mainView.warmup.bannerBody', { status: statusLabel })}
       </div>
     </div>
   );
@@ -1586,6 +1619,7 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
 
 const LedgerNeedsRebuildBanner = React.memo(function LedgerNeedsRebuildBanner() {
   const C = useTheme();
+  const { t } = useTranslation();
   return (
     <div style={{
       margin: '10px 8px 0',
@@ -1596,10 +1630,10 @@ const LedgerNeedsRebuildBanner = React.memo(function LedgerNeedsRebuildBanner() 
       color: C.textDim,
     }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: C.barRed, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-        Ledger Needs Rebuild
+        {t('mainView.ledgerRebuild.title')}
       </div>
       <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
-        Historical totals are using recent fallback data until the local usage ledger is rebuilt from Settings.
+        {t('mainView.ledgerRebuild.body')}
       </div>
     </div>
   );
@@ -1611,6 +1645,7 @@ const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, on
   onToggle: () => void;
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const provider = sessionProviderLabel(item.provider);
   const providerBadge = sessionProviderBadgeColors(item.provider, C);
   const chipColor = item.state === 'waiting' ? C.waiting : C.textMuted;
@@ -1645,16 +1680,16 @@ const SessionStackRow = React.memo(function SessionStackRow({ item, expanded, on
             {provider}
           </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: C.text }}>
-            {item.sessions.length} {item.state} sessions
+            {t('mainView.sessions.stackCount', { count: item.sessions.length, state: t(`common.state.${item.state}`) })}
           </span>
         </span>
         <span style={{ display: 'block', fontSize: 10, color: C.textMuted, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.source} - latest {fmtRelative(item.latest)} - max ctx {Math.round(item.maxCtxPct)}%
+          {item.source} - {t('mainView.sessions.latest')} {fmtRelative(item.latest)} - {t('mainView.sessions.maxCtx')} {Math.round(item.maxCtxPct)}%
         </span>
       </span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
         <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: `${chipColor}1a`, color: chipColor, fontWeight: 700 }}>
-          {expanded ? 'open' : 'stack'}
+          {expanded ? t('mainView.sessions.chipOpen') : t('mainView.sessions.chipStack')}
         </span>
         <span style={{ fontSize: 12, color: C.textMuted }}>{expanded ? '^' : 'v'}</span>
       </span>
@@ -1685,6 +1720,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
   settings: AppState['settings'];
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const hiddenProjects = settings.hiddenProjects ?? [];
   const excludedProjects = settings.excludedProjects ?? [];
   const [showHiddenManager, setShowHiddenManager] = useState(false);
@@ -1800,7 +1836,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}`, paddingBottom: 16, contain: 'layout paint style', overflowAnchor: 'none' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Sessions</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('common.mainSections.sessions')}</span>
         <div style={{ display: 'flex', gap: 4 }}>
           {(['all', 'active'] as const).map(filter => (
             <button
@@ -1813,7 +1849,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
                 borderRadius: 3, padding: '1px 7px', fontSize: 10, cursor: 'pointer', fontWeight: activeFilter === filter ? 700 : 400,
               }}
             >
-              {filter === 'all' ? 'All' : 'Active'}
+              {filter === 'all' ? t('mainView.sessions.filterAll') : t('mainView.sessions.filterActive')}
             </button>
           ))}
         </div>
@@ -1831,21 +1867,21 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {project.totalCommits > 0 && (
                   <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>
-                    {project.totalCommits} commit{project.totalCommits > 1 ? 's' : ''} · +{project.totalAdded} / -{project.totalRemoved}
+                    {t('mainView.sessions.commitCount', { count: project.totalCommits })} · +{project.totalAdded} / -{project.totalRemoved}
                   </span>
                 )}
                 <div style={{ position: 'relative' }}>
                   <button
                     onClick={() => setProjectMenuOpen(open => open === project.name ? null : project.name)}
-                    title="Project actions"
+                    title={t('mainView.sessions.projectActionsTitle')}
                     style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '0 6px', lineHeight: 1.4, borderRadius: 4 }}
                   >
                     ...
                   </button>
                   {projectMenuOpen === project.name && (
                     <div style={{ position: 'absolute', right: 0, top: 20, zIndex: 5, display: 'grid', gap: 2, padding: 4, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, boxShadow: '0 4px 10px rgba(0,0,0,0.18)' }}>
-                      <button onClick={() => hideProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Hide</button>
-                      <button onClick={() => excludeProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>Exclude</button>
+                      <button onClick={() => hideProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>{t('mainView.sessions.hide')}</button>
+                      <button onClick={() => excludeProject(project.name)} style={{ background: C.bgRow, border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 3, textAlign: 'left' }}>{t('mainView.sessions.exclude')}</button>
                     </div>
                   )}
                 </div>
@@ -1868,7 +1904,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
                   {branch.commits > 0 && (
                     <>
                       <span style={{ fontSize: 9, background: '#60a5fa1a', color: '#60a5fa', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>
-                        {branch.commits} commit{branch.commits > 1 ? 's' : ''}
+                        {t('mainView.sessions.commitCount', { count: branch.commits })}
                       </span>
                       <span style={{ fontSize: 9, background: '#34d3991a', color: '#34d399', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>+{branch.added}</span>
                       <span style={{ fontSize: 9, background: '#f871711a', color: '#f87171', borderRadius: 3, padding: '1px 5px', fontFamily: C.fontMono, fontWeight: 600 }}>-{branch.removed}</span>
@@ -1916,7 +1952,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
                       fontFamily: C.fontMono,
                     }}
                   >
-                    Show {hiddenCount} more
+                    {t('mainView.sessions.showMore', { n: hiddenCount })}
                   </button>
                 )}
                 {isBranchExpanded && branch.items.length > 3 && (
@@ -1935,7 +1971,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
                       fontFamily: C.fontMono,
                     }}
                   >
-                    Show less
+                    {t('mainView.sessions.showLess')}
                   </button>
                 )}
               </div>
@@ -1943,7 +1979,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
           </div>
         ))
         : sessions.length === 0
-          ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>No active {emptySessionLabel(settings.enabledProviders)} sessions</div>
+          ? <div style={{ padding: '10px 14px', fontSize: 12, color: C.textMuted }}>{t('mainView.sessions.noActive', { providers: emptySessionLabel(settings.enabledProviders) })}</div>
           : null
       }
 
@@ -1957,7 +1993,9 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
               fontFamily: C.fontMono,
             }}
           >
-            {showStale ? 'Hide' : 'Show'} {staleSessions.length} idle session{staleSessions.length > 1 ? 's' : ''}
+            {showStale
+              ? t('mainView.sessions.hideIdleSessions', { count: staleSessions.length })
+              : t('mainView.sessions.showIdleSessions', { count: staleSessions.length })}
           </button>
         </div>
       )}
@@ -1968,7 +2006,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
             onClick={() => setShowHiddenManager(v => !v)}
             style={{ background: 'none', border: 'none', color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: 0 }}
           >
-            {showHiddenManager ? 'v' : '>'} {hiddenProjects.length} hidden project{hiddenProjects.length > 1 ? 's' : ''}
+            {showHiddenManager ? 'v' : '>'} {t('mainView.sessions.hiddenProjectsCount', { count: hiddenProjects.length })}
           </button>
           {showHiddenManager && (
             <div style={{ marginTop: 4 }}>
@@ -1978,7 +2016,7 @@ const SessionsPanel = React.memo(function SessionsPanel({ sessions, settings }: 
                   <button
                     onClick={() => unhideProject(name)}
                     style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textDim, cursor: 'pointer', fontSize: 11, padding: '1px 6px', borderRadius: 3 }}
-                  >show</button>
+                  >{t('mainView.sessions.show')}</button>
                 </div>
               ))}
             </div>
@@ -2037,10 +2075,11 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
   onNav: (view: NavView) => void;
 }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const items: Array<{ key: NavView | 'refresh'; icon: string; label: React.ReactNode }> = [
-    { key: 'settings', icon: '⚙', label: 'Settings' },
-    { key: 'notifications', icon: '!', label: 'Alerts' },
-    { key: 'help', icon: '?', label: 'Help' },
+    { key: 'settings', icon: '⚙', label: t('mainView.nav.settings') },
+    { key: 'notifications', icon: '!', label: t('mainView.nav.alerts') },
+    { key: 'help', icon: '?', label: t('help.title') },
     { key: 'refresh', icon: '↻', label: <RefreshStatus lastUpdated={lastUpdated} refreshing={refreshing} syncingHistory={syncingHistory} historyWarmupStartsAt={historyWarmupStartsAt} stateFreshness={stateFreshness} /> },
   ];
   return (
@@ -2071,6 +2110,7 @@ const BottomNav = React.memo(function BottomNav({ lastUpdated, refreshing, synci
 
 export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActivity, onToggleCompactWidget, onToggleTaskbarQuota }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const { sessions, usage, settings } = state;
   const { currency, usdToKrw } = settings;
   const allTimeCost = useMemo(() => usage.models.reduce((sum, model) => sum + model.costUSD, 0), [usage.models]);
@@ -2117,7 +2157,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
     switch (sectionId) {
       case 'planUsage':
         return (
-          <RenderErrorBoundary key={sectionId} label="Plan Usage Panel">
+          <RenderErrorBoundary key={sectionId} label={t('mainView.errorBoundary.planUsagePanel')}>
             <PlanUsagePanel
               usage={usage}
               providerQuotas={state.providerQuotas}
@@ -2129,58 +2169,58 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
         );
       case 'codeOutput':
         return (
-          <RenderErrorBoundary key={sectionId} label="Code Output Card">
+          <RenderErrorBoundary key={sectionId} label={t('mainView.errorBoundary.codeOutputCard')}>
             <CodeOutputCard stats={state.codeOutputStats} loading={state.codeOutputLoading} todayCost={usage.todayCost} allTimeCost={allTimeCost} currency={currency} usdToKrw={usdToKrw} />
           </RenderErrorBoundary>
         );
       case 'trend':
         return (
-          <RenderErrorBoundary key={sectionId} label="Trend Card">
+          <RenderErrorBoundary key={sectionId} label={t('mainView.errorBoundary.trendCard')}>
             <TrendCard usageTrend={state.usageTrend} codeOutputStats={state.codeOutputStats} lastUpdated={state.lastUpdated} currency={currency} usdToKrw={usdToKrw} />
           </RenderErrorBoundary>
         );
       case 'sessions':
         return (
-          <RenderErrorBoundary key={sectionId} label="Sessions Panel">
+          <RenderErrorBoundary key={sectionId} label={t('mainView.errorBoundary.sessionsPanel')}>
             <SessionsPanel sessions={sessions} settings={settings} />
           </RenderErrorBoundary>
         );
       case 'activity':
         return (
-          <RenderErrorBoundary key={sectionId} label="Activity Section">
+          <RenderErrorBoundary key={sectionId} label={t('mainView.errorBoundary.activitySection')}>
             <ActivitySection usage={usage} currency={currency} usdToKrw={usdToKrw} />
           </RenderErrorBoundary>
         );
       case 'modelUsage':
         return (
-          <RenderErrorBoundary key={sectionId} label="Model Section">
+          <RenderErrorBoundary key={sectionId} label={t('mainView.errorBoundary.modelSection')}>
             <ModelSection models={usage.models} currency={currency} usdToKrw={usdToKrw} />
           </RenderErrorBoundary>
         );
       default:
         return null;
     }
-  }, [allTimeCost, currency, sessions, settings, state.codeOutputLoading, state.codeOutputStats, state.historyWarmupPending, state.historyWarmupStartsAt, state.providerQuotas, state.usageTrend, usage, usdToKrw]);
+  }, [allTimeCost, currency, sessions, settings, state.codeOutputLoading, state.codeOutputStats, state.historyWarmupPending, state.historyWarmupStartsAt, state.providerQuotas, state.usageTrend, usage, usdToKrw, t]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg, color: C.text, overflow: 'hidden' }}>
-      <RenderErrorBoundary label="Header Metrics">
+      <RenderErrorBoundary label={t('mainView.errorBoundary.headerMetrics')}>
         <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} onToggleTaskbarQuota={onToggleTaskbarQuota} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
         {state.usageLedgerNeedsRebuild && (
-          <RenderErrorBoundary label="Usage Ledger Rebuild Banner">
+          <RenderErrorBoundary label={t('mainView.errorBoundary.usageLedgerRebuildBanner')}>
             <LedgerNeedsRebuildBanner />
           </RenderErrorBoundary>
         )}
         {state.historyWarmupPending && (
-          <RenderErrorBoundary label="History Warmup Banner">
+          <RenderErrorBoundary label={t('mainView.errorBoundary.historyWarmupBanner')}>
             <HistoryWarmupBanner historyWarmupStartsAt={state.historyWarmupStartsAt} />
           </RenderErrorBoundary>
         )}
         {visibleMainSections.map(renderMainSection)}
       </div>
-      <RenderErrorBoundary label="Bottom Navigation">
+      <RenderErrorBoundary label={t('mainView.errorBoundary.bottomNavigation')}>
         <BottomNav
           lastUpdated={state.lastUpdated}
           refreshing={refreshing}
