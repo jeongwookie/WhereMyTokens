@@ -47,5 +47,642 @@
   },
   "help": {
     "title": "ヘルプ"
+  },
+  "activityBreakdown": {
+    "categories": {
+      "read": "読み取り",
+      "editWrite": "編集 / 書き込み",
+      "search": "検索",
+      "git": "Git",
+      "buildTest": "ビルド / テスト",
+      "terminal": "ターミナル",
+      "subagents": "サブエージェント",
+      "thinking": "思考",
+      "response": "応答",
+      "web": "Web"
+    },
+    "categoryTooltip": "{{label}}: {{pct}}%",
+    "totalLabel": {
+      "events": "今回のセッションのツールイベント数",
+      "tokens": "今回のセッションの出力トークン数"
+    }
+  },
+  "activityChart": {
+    "noData": "データなし",
+    "noTokens": "なし",
+    "tokensValue": "{{value}} tok",
+    "captions": {
+      "fiveMonth": "5か月間のアクティビティ",
+      "hourly30d": "時間帯別 (30日間)",
+      "weekly4w": "週別 (4週間)"
+    },
+    "legend": {
+      "less": "少ない",
+      "more": "多い"
+    },
+    "weekly": {
+      "current": "現在",
+      "weeksAgo": "{{count}}週間前",
+      "fourWeekTotal": "4週間合計",
+      "peak": "ピーク"
+    },
+    "tod": {
+      "morning": "朝",
+      "afternoon": "午後",
+      "evening": "夕方",
+      "night": "夜",
+      "peakLabel": "ピーク:",
+      "rangeTotal": "30日間 · 合計 {{cost}}",
+      "pctOfTotal": "全体の{{pct}}%",
+      "columns": {
+        "tokens": "トークン",
+        "cost": "コスト",
+        "requests": "リクエスト数"
+      }
+    }
+  },
+  "codeOutputCard": {
+    "period": {
+      "today": "今日",
+      "all": "すべて"
+    },
+    "kpi": {
+      "commits": "コミット数",
+      "netLines": "正味行数",
+      "costPerHundredAdded": "$/100行追加"
+    },
+    "totalLines": "{{value}} 行",
+    "avgCost": "平均 {{cost}}",
+    "commitsSub": {
+      "totalCount": "計{{count}}件",
+      "allTime": "全期間"
+    },
+    "scanningGitHistory": "Git履歴をスキャン中",
+    "loadingHint": "ローカルのリポジトリ統計が完了すると、コード出力が表示されます。",
+    "outputGrowth": {
+      "title": "出力の推移",
+      "caption": "直近7日間（全期間ベースライン比）",
+      "totalNetSuffix": "行の純増",
+      "totalSuffix": "累計",
+      "daySuffix": "日次"
+    },
+    "summary": {
+      "commits_other": "{{count}} 件のコミット",
+      "netLines": "正味 {{value}} 行",
+      "costPerHundred": "100行あたり {{cost}}"
+    }
+  },
+  "extraUsageCard": {
+    "title": {
+      "overCap": "Claude Extra Usage が月間上限を超過",
+      "nearCap": "Claude Extra Usage が月間上限に接近",
+      "monthly": "Claude Extra Usage - 月間"
+    }
+  },
+  "modelBreakdown": {
+    "top4AllTime": "上位4件 - 全期間",
+    "otherProvider": "その他"
+  },
+  "renderErrorBoundary": {
+    "rendererError": "レンダラーエラー",
+    "renderingFailed": "{{label}} の描画に失敗しました。",
+    "reload": "再読み込み",
+    "minimize": "最小化",
+    "quit": "終了"
+  },
+  "sessionRow": {
+    "hideBreakdown": "内訳を非表示",
+    "showBreakdown": "内訳を表示",
+    "hideSessionBreakdown": "セッションの内訳を非表示",
+    "showSessionBreakdown": "セッションの内訳を表示",
+    "hide": "非表示",
+    "details": "詳細",
+    "context": "コンテキスト {{pct}}%",
+    "atLimit": "上限に到達",
+    "nearLimit": "上限間近",
+    "compactSoon": "まもなく圧縮",
+    "tokensLeft": "残り {{tokens}}"
+  },
+  "tokenStatsCard": {
+    "syncing": "同期中",
+    "waiting": "待機中",
+    "syncingTooltip": "制限データをバックグラウンドで同期しています。",
+    "waitingTooltip": "プロバイダーの制限データを待っています。",
+    "cachedSuffix": "(キャッシュ)",
+    "usageWindowCost": "使用ウィンドウのコスト",
+    "resets": "{{day}}にリセット",
+    "timeElapsed": "経過時間",
+    "windowElapsedTooltip": "この{{period}}ウィンドウの{{pct}}%が経過しました",
+    "providerCacheMetric": "プロバイダーのキャッシュ指標"
+  },
+  "trendBreakdownCard": {
+    "unavailable": "内訳を利用できません",
+    "loading": "内訳を読み込み中...",
+    "breakdownSince": "{{date}}以降の内訳データ",
+    "tokenPanorama": "トークン全体像",
+    "inputOutputNoCache": "入力 + 出力 · キャッシュ除く",
+    "noTokenData": "トークンデータなし",
+    "toolUsage": "ツール使用状況",
+    "toolUsageAllProviders": "ツール使用状況 · 全プロバイダー",
+    "callsApproxTok": "回 · ≈tok",
+    "netLinesCommitted": "コミットされた純増減行数",
+    "gitLines": "git · 行数",
+    "noCommits": "この期間のコミットなし",
+    "input": "入力",
+    "output": "出力",
+    "thinking": "思考",
+    "response": "応答",
+    "showMore": "さらに{{count}}件表示",
+    "collapse": "折りたたむ",
+    "noToolData": "ツールデータなし",
+    "callsCount": "{{count}}回",
+    "toolCallsApprox": "ツール呼び出し · ≈{{tokens}} tok",
+    "callsApproxTokValue": "{{count}}回 · ≈{{tokens}} tok",
+    "addedRemoved": "追加{{added}} / 削除{{removed}}",
+    "netPrefix": "純増減:{{value}}",
+    "tools": {
+      "read": "読み取り",
+      "editWrite": "編集 / 書き込み",
+      "search": "検索",
+      "git": "Git",
+      "buildTest": "ビルド / テスト",
+      "terminal": "ターミナル",
+      "subagents": "サブエージェント",
+      "web": "Web"
+    },
+    "paths": {
+      "product_code": "プロダクトコード",
+      "test_code": "テスト",
+      "docs_spec": "ドキュメント / 仕様",
+      "config_build": "設定 / ビルド",
+      "schema_migration": "スキーマ / マイグレーション",
+      "vendor": "ベンダー",
+      "asset": "アセット"
+    }
+  },
+  "trendCard": {
+    "trend": "トレンド",
+    "noTrendDataYet": "トレンドデータはまだありません",
+    "noTrendDataYetSvg": "トレンドデータはまだありません",
+    "usagePending": "使用状況待機中",
+    "outputPending": "出力待機中",
+    "netSuffix": "純増減",
+    "metricLabel": "指標",
+    "cacheLabel": "キャッシュ",
+    "rangeLabel": "範囲",
+    "metric": {
+      "cost": "コスト",
+      "tokens": "トークン"
+    },
+    "cacheView": {
+      "work": "作業",
+      "billing": "請求"
+    },
+    "grain": {
+      "day": "日",
+      "week": "週",
+      "month": "月"
+    },
+    "selectBucketAriaLabel": "内訳を表示するトレンドの期間を選択",
+    "netLines": "純増減行数",
+    "requestsCount_other": "{{count}}件のリクエスト",
+    "weekPrefix": "{{label}}の週"
+  },
+  "mainView": {
+    "refresh": {
+      "label": "更新",
+      "justNow": "たった今",
+      "secondsAgo": "{{n}}秒前",
+      "minutesAgo": "{{n}}分前",
+      "hoursAgo": "{{n}}時間前",
+      "lastRun": "前回実行 · {{age}}",
+      "refreshing": "更新中...",
+      "scan": "スキャン {{eta}}"
+    },
+    "warmup": {
+      "queued": "待機中",
+      "syncing": "同期中...",
+      "inMinutesSeconds": "あと{{minutes}}分{{seconds}}秒",
+      "inSeconds": "あと{{seconds}}秒",
+      "statusQueued": "待機中です",
+      "statusSyncing": "同期中です",
+      "statusStarts": "{{eta}}に開始します",
+      "bannerTitle": "履歴を一部読み込み中",
+      "bannerBody": "現在のセッションと直近の使用状況を先に表示しています。履歴の完全な同期は{{status}}。このバナーが消えるまで、トレンドと合計は変動する場合があります。"
+    },
+    "cacheMetric": {
+      "singleSimple": "{{provider}}: キャッシュ読み取り / プロンプトトークン",
+      "singleClaude": "{{provider}}: キャッシュ読み取り / (キャッシュ読み取り + キャッシュ作成)",
+      "combined": "統合ビュー: プロバイダーごとのキャッシュ指標を集計しています"
+    },
+    "status": {
+      "claude": {
+        "localLabel": "Claude ローカル",
+        "localTitle": "APIステータスが{{status}}のため、ローカルのClaudeステータスラインデータを使用しています{{errorSuffix}}",
+        "limitedLabel": "Claude 制限",
+        "limitedTitleDefault": "Claude APIがHTTP 429を返しました。",
+        "refreshLabel": "Claude リフレッシュ",
+        "refreshLimitedTitleDefault": "Claude OAuthのリフレッシュがレート制限されています。",
+        "refreshFailedTitleDefault": "Claude OAuthのリフレッシュに失敗しました。",
+        "schemaLabel": "Claude スキーマ",
+        "schemaTitleDefault": "Claude APIのレスポンス形式が変更されました。",
+        "partialLabel": "Claude 一部",
+        "partialTitleDefault": "Claude APIの使用状況はリセット時刻なしで読み込まれました。",
+        "localOnlyTitleDefault": "Claudeの認証情報が見つかりませんでした。ローカルデータのみ表示しています。",
+        "authLabel": "Claude 認証",
+        "authTitleDefault": "Claude CLIのトークンが拒否されたか、期限切れです。",
+        "loginLabel": "Claude ログイン",
+        "loginTitleDefault": "リフレッシュトークンが拒否されました。`claude /login` を実行して再認証してください。",
+        "blockedLabel": "Claude ブロック",
+        "blockedTitleDefault": "Claude APIがこのアカウントまたはベータ機能へのアクセスを拒否しました。",
+        "offlineLabel": "Claude オフライン",
+        "offlineTitleDefault": "Claude APIへのリクエストが失敗しました。"
+      },
+      "codex": {
+        "limitedLabel": "Codex 制限",
+        "limitedTitleDefault": "Codexの使用状況エンドポイントがHTTP 429を返しました。",
+        "schemaLabel": "Codex スキーマ",
+        "schemaTitleDefault": "Codexの使用状況レスポンス形式が変更されました。",
+        "endpointLabel": "Codex エンドポイント",
+        "endpointTitleDefault": "カスタムのCodexベースURLはトークンの安全性を監視していません。",
+        "localLabel": "Codex ローカル",
+        "localTitleDefault": "Codexの認証情報が見つかりませんでした。ローカルログの推定値のみ表示しています。",
+        "authLabel": "Codex 認証",
+        "authTitleDefault": "Codexの使用状況トークンが拒否されたか、期限切れです。",
+        "blockedLabel": "Codex ブロック",
+        "blockedTitleDefault": "このアカウントのCodex使用状況へのアクセスが拒否されました。",
+        "timeoutLabel": "Codex タイムアウト",
+        "timeoutTitleDefault": "Codexの使用状況リクエストがタイムアウトしました。",
+        "offlineLabel": "Codex オフライン",
+        "offlineTitleDefault": "Codexの使用状況リクエストが失敗しました。",
+        "cacheLabel": "Codex キャッシュ",
+        "logLabel": "Codex ログ",
+        "fallbackSourceCache": "最後にキャッシュされた使用状況スナップショット",
+        "fallbackSourceLog": "ローカルログの推定値",
+        "fallbackTitle": "Codexのライブ使用状況が利用できないため、{{source}}を使用しています。",
+        "offlineNoDetail": "Codexのライブ使用状況が利用できません。"
+      },
+      "provider": {
+        "unavailable": "利用不可",
+        "startAntigravity": "Antigravity を起動",
+        "offCompact": "{{label}} オフ",
+        "offlineCompact": "{{label}} オフライン",
+        "genericCompact": "{{label}} {{status}}",
+        "genericTitle": "{{label}} プロバイダーの状態: {{status}}。"
+      }
+    },
+    "header": {
+      "periodToday": "今日",
+      "periodAll": "全期間",
+      "hideCompactWidget": "フローティング Quota Pace ウィジェットを非表示",
+      "showCompactWidget": "フローティング Quota Pace ウィジェットを表示",
+      "hideTaskbarQuota": "タスクバーのミニクォータ表示を非表示",
+      "showTaskbarQuota": "タスクバーのミニクォータ表示を表示",
+      "minimize": "最小化",
+      "quit": "終了",
+      "allTimeCost": "累計コスト",
+      "todayCost": "本日のコスト",
+      "claudePlanTooltip": "Claude プラン: {{plan}}",
+      "codexTierTooltip": "Codex サービスティア: {{tier}}",
+      "calls": "コール",
+      "sessions": "セッション",
+      "avgCacheEfficiency": "平均キャッシュ効率",
+      "cacheEfficiency": "キャッシュ効率",
+      "savedTotal": "+ {{saved}} 節約(累計)",
+      "savedToday": "+ {{saved}} 節約(本日)"
+    },
+    "quota": {
+      "waitingReset": "待機中",
+      "syncingLabel": "同期中",
+      "usedTooltip": "使用量",
+      "usedElapsedTooltip": "使用量 / 経過時間",
+      "tokenBadgeSingle": "このクォータ対象の合計トークン数",
+      "tokenBadgeMulti": "このクォータ対象の最大ウィンドウのトークン数",
+      "tokenBadgeSuffix": "{{tokens}} tok",
+      "pendingLabel": "同期中"
+    },
+    "resetCredits": {
+      "heading": "Codex リセットクレジット",
+      "cardHeading": "CODEX リセット",
+      "rowHeading": "Codex リセット",
+      "detailsAriaLabel": "Codex リセットクレジットの詳細",
+      "badge": {
+        "error": "エラー",
+        "limited": "制限",
+        "stale": "古い",
+        "usage": "使用量",
+        "partial": "一部",
+        "api": "API",
+        "cache": "Cache",
+        "fromApi": "APIから",
+        "fromCache": "キャッシュされたデータから",
+        "usageOnlyTitle": "ライブ使用状況からの件数のみです。有効期限リストは利用できません",
+        "partialOnlyTitle": "件数のみのリセットクレジットです。有効期限リストは利用できません",
+        "degradedTitle": "リセットクレジット({{sourceDesc}});ステータス: {{code}}",
+        "okTitle": "リセットクレジット({{sourceDesc}})"
+      },
+      "status": {
+        "unsupported": "リセットエンドポイント未対応",
+        "loginRequired": "Codexのログインが必要です",
+        "loginExpired": "Codexのログインが期限切れです",
+        "accessDenied": "Codexへのアクセスが拒否されました",
+        "limited": "リセット確認が制限されています",
+        "changed": "リセット確認の形式が変更されました",
+        "offline": "リセット確認がオフラインです",
+        "unavailable": "リセットデータが利用できません"
+      },
+      "tooltip": {
+        "unknown": "不明",
+        "listUnavailable": "リスト利用不可",
+        "statusLabel": "ステータス",
+        "lastUpdate": "最終更新",
+        "sourceLabel": "ソース",
+        "countOnlyNote": "件数のみ利用可能です。有効期限リストは利用できません。",
+        "available": "利用可能",
+        "nextExpires": "次の失効",
+        "earned": "獲得数",
+        "expiresIn": "{{duration}}後に失効",
+        "updatedFooter": "更新: {{date}}",
+        "sourceFooter": "ソース: {{source}}"
+      },
+      "card": {
+        "available": "利用可能",
+        "nextExpiresLabel": "次の失効",
+        "noResets": "利用可能なリセットはありません",
+        "moreCount": "他{{n}}件",
+        "countOnlyShort": "件数のみ · 有効期限リストは利用不可"
+      },
+      "row": {
+        "noResetsAvailable": "利用可能なリセットなし",
+        "available": "利用可能",
+        "nextIn": "次は{{duration}}後",
+        "countOnly": "件数のみ"
+      }
+    },
+    "ledgerRebuild": {
+      "title": "台帳の再構築が必要です",
+      "body": "設定からローカルの使用状況台帳を再構築するまで、履歴の合計には直近のフォールバックデータが使用されます。"
+    },
+    "sessions": {
+      "providersTwo": "{{a}}または{{b}}",
+      "providersList": "{{list}}、または{{last}}",
+      "enabledProviderFallback": "有効なプロバイダー",
+      "stackCount_other": "{{state}}セッション {{count}}件",
+      "latest": "最新",
+      "maxCtx": "最大コンテキスト",
+      "chipOpen": "展開中",
+      "chipStack": "まとめ",
+      "filterAll": "すべて",
+      "filterActive": "アクティブ",
+      "commitCount_other": "コミット {{count}}件",
+      "projectActionsTitle": "プロジェクト操作",
+      "hide": "非表示",
+      "exclude": "除外",
+      "showMore": "他{{n}}件を表示",
+      "showLess": "表示を減らす",
+      "noActive": "アクティブな{{providers}}セッションはありません",
+      "hideIdleSessions_other": "アイドルセッション{{count}}件を隠す",
+      "showIdleSessions_other": "アイドルセッション{{count}}件を表示",
+      "hiddenProjectsCount_other": "非表示プロジェクト {{count}}件",
+      "show": "表示"
+    },
+    "nav": {
+      "settings": "設定",
+      "alerts": "アラート"
+    },
+    "errorBoundary": {
+      "planUsagePanel": "プラン使用状況パネル",
+      "codeOutputCard": "コード出力カード",
+      "trendCard": "トレンドカード",
+      "sessionsPanel": "セッションパネル",
+      "activitySection": "アクティビティセクション",
+      "modelSection": "モデルセクション",
+      "headerMetrics": "ヘッダーメトリクス",
+      "usageLedgerRebuildBanner": "使用状況台帳再構築バナー",
+      "historyWarmupBanner": "履歴ウォームアップバナー",
+      "bottomNavigation": "ボトムナビゲーション"
+    }
+  },
+  "compactWidgetView": {
+    "refresh": {
+      "default": "更新",
+      "now": "たった今",
+      "ageMinutes": "{{n}}分前",
+      "ageHours": "{{n}}時間前",
+      "lastRun": "前回実行 · {{age}}"
+    },
+    "status": {
+      "syncing": "同期中",
+      "waiting": "待機中",
+      "scanning": "スキャン中",
+      "waitBadge": "待機"
+    },
+    "tooltip": {
+      "startupLoading": "起動時のスキャンを読み込んでいます。",
+      "noFiveHourData": "5時間リセットのデータはまだありません。ローカルの使用状況またはプロバイダーのデータが検出され次第表示されます。",
+      "groupUnavailable": "{{group}}の制限データはまだプロバイダーの割り当てソースから届いていません。",
+      "timeUntilReset": "リセットまでの時間: {{resetLabel}}",
+      "used": "使用量",
+      "usedElapsed": "使用量 / 経過時間"
+    },
+    "header": {
+      "title": "Quota Pace",
+      "subtitle": "使用量 / 経過時間"
+    },
+    "button": {
+      "refreshNow": "今すぐ更新",
+      "openDashboard": "ダッシュボードを開く",
+      "hideWidget": "ウィジェットを隠す"
+    },
+    "health": {
+      "sectionTitle": "プロバイダー制限データの状態",
+      "label": "状態",
+      "syncing": {
+        "label": "{{provider}} 同期中",
+        "title": "{{provider}}の制限データをバックグラウンドで同期しています。"
+      },
+      "statusLabel": {
+        "label": "{{provider}}: {{statusLabel}}",
+        "title": "{{provider}}のプロバイダー割り当てステータス: {{statusLabel}}。"
+      },
+      "offline": {
+        "label": "{{provider}} オフライン",
+        "title": "{{provider}}のプロバイダー割り当てを利用できません。"
+      },
+      "log": {
+        "label": "{{provider}} Log",
+        "title": "{{provider}}は少なくとも1つの制限ウィンドウでローカルログの推定値を使用しています。"
+      },
+      "cache": {
+        "label": "{{provider}} Cache",
+        "title": "{{provider}}は最後に信頼できたキャッシュ済みの使用状況スナップショットを使用しています。"
+      },
+      "bridge": {
+        "label": "{{provider}} Bridge",
+        "title": "{{provider}}はローカルのステータスラインブリッジを使用しています。"
+      },
+      "waiting": {
+        "label": "{{provider}} 待機中",
+        "title": "{{provider}}の制限データはまだ届いていません。"
+      },
+      "ok": {
+        "label": "{{provider}} 正常",
+        "title": "{{provider}}のアカウント制限データは最新です。"
+      }
+    },
+    "hint": {
+      "fiveHourLimits": "5時間制限は最初の使用イベント後に表示されます"
+    }
+  },
+  "notificationsView": {
+    "title": "アラート",
+    "sections": {
+      "usageAlerts": "使用状況アラート",
+      "alertTargets": "アラート対象"
+    },
+    "enableAlerts": {
+      "label": "使用状況アラートを有効にする",
+      "description": "追跡中の制限がしきい値に達したときにWindows通知を送信します"
+    },
+    "thresholds": {
+      "heading": "アラートしきい値 - 使用状況が次に達したときに通知:"
+    },
+    "targets": {
+      "claudeFiveHour": {
+        "label": "Claude 5時間制限",
+        "detail": "現在の5時間ウィンドウ内のClaude使用状況"
+      },
+      "claudeWeekly": {
+        "label": "Claude 週間制限",
+        "detail": "週間ウィンドウ内のClaude使用状況"
+      },
+      "claudeSonnetWeekly": {
+        "label": "Claude Sonnet 週間",
+        "detail": "Sonnet固有の週間使用状況"
+      },
+      "codexFiveHour": {
+        "label": "Codex 5時間制限",
+        "detail": "Codexのライブ使用状況、キャッシュ、またはローカルログの5時間ウィンドウ"
+      },
+      "codexWeekly": {
+        "label": "Codex 週間制限",
+        "detail": "Codexのライブ使用状況、キャッシュ、またはローカルログの週間ウィンドウ"
+      },
+      "antigravityModelQuotas": {
+        "label": "Antigravity モデル割り当て",
+        "detail": "Antigravity実行中のローカルRPCモデル割り当て使用状況"
+      }
+    },
+    "footerNote": "アラートは有効になっているプロバイダーおよび割り当て/モデル対象に従います。60秒ごとに自動更新され、アラートごとに1時間のクールダウンがあります。",
+    "button": {
+      "save": "保存",
+      "saved": "保存しました"
+    }
+  },
+  "settingsView": {
+    "title": "設定",
+    "integration": {
+      "heading": "Claude Code連携",
+      "realtimeLabel": "statusLine経由のリアルタイムデータ",
+      "description": "WhereMyTokensをClaude Codeプラグインとして登録し、レート制限をリアルタイムに取得します",
+      "connected": "接続済み",
+      "otherStatusLine": "他のstatusLine",
+      "notConfigured": "未設定",
+      "setupButton": "セットアップ",
+      "disableButton": "無効化",
+      "settingUp": "セットアップ中...",
+      "setupDone": "完了しました。有効化するにはClaude Codeを再起動してください。",
+      "setupFailed": "失敗: {{error}}",
+      "setupError": "エラー: {{error}}",
+      "disabling": "無効化中...",
+      "disableDone": "無効化しました。ブリッジを停止するにはClaude Codeを再起動してください。",
+      "disableFailed": "失敗: {{error}}",
+      "disableError": "エラー: {{error}}"
+    },
+    "general": {
+      "heading": "一般",
+      "language": "言語",
+      "languageSystem": "システム設定",
+      "startWithWindows": "Windows起動時に開始",
+      "alwaysOnTop": "ダッシュボードを常に最前面に表示",
+      "alwaysOnTopHint": "ダッシュボードのみに適用されます",
+      "floatingWidget": "フローティング使用状況ウィジェット",
+      "floatingWidgetHint": "常に最前面に表示され、クォータのペースをひと目で確認できます",
+      "taskbarQuota": "タスクバーのミニクォータ表示",
+      "taskbarQuotaHint": "対応している場合、Windowsタスクバー内に5時間/1週間のクォータ行を固定表示します",
+      "taskbarMaxBlocks": "タスクバーの最大ブロック数",
+      "taskbarMaxBlocksHint": "タスクバーの各行に表示するクォータブロックの数を制限します",
+      "blocksOption_other": "{{count}} ブロック",
+      "waitingAnimation": "待機中アニメーション",
+      "waitingAnimationHint": "制限データが取得できない場合、フローティングウィジェットの待機バーをアニメーション表示します",
+      "globalShortcut": "グローバルショートカット",
+      "globalShortcutTitle": "クリックしてからショートカットキーを押してください。Escでキャンセル、Backspaceでクリアします。",
+      "pressShortcut": "ショートカットを入力...",
+      "clickToRecord": "クリックして記録",
+      "shortcutHint": "Ctrl+ShiftまたはCtrl+Altを使用してください"
+    },
+    "providers": {
+      "heading": "プロバイダー",
+      "atLeastOneProvider": "少なくとも1つのプロバイダーを有効にする必要があります。",
+      "antigravityDetail": "Antigravity IDEが起動してサインインしている必要があります。ローカルRPCのみを使用します。",
+      "antigravityPace": "Antigravityクォータのペース推定",
+      "antigravityPaceHint": "リセット時刻から5時間または週単位のペースを推定します。オフにするとAntigravityのモデルクォータはパーセント表示のみになります"
+    },
+    "quotaDisplay": {
+      "heading": "クォータ表示",
+      "hint": "小さいテキストボックスで5時間/1週間ターゲットのタスクバーラベルをカスタマイズできます。",
+      "rowsFallback_other": "{{count}} 行",
+      "abbreviationLabel": "{{label}}のタスクバー略称",
+      "abbreviationTitle": "デフォルト: {{abbrev}}",
+      "modeRich": "リッチ",
+      "modeSimple": "シンプル",
+      "modeNone": "なし",
+      "moveUp": "上に移動",
+      "moveDown": "下に移動",
+      "resetOrder": "順序をリセット"
+    },
+    "data": {
+      "heading": "データ",
+      "usageLedger": "使用量台帳",
+      "usageLedgerHint": "有効なプロバイダーの履歴からローカル専用の集計を再構築します。同期中は合計値が変わる場合があります",
+      "rebuildButton": "台帳を再構築",
+      "rebuilding": "再構築中...",
+      "rebuildComplete": "再構築が完了しました。",
+      "rebuildFailed": "失敗: {{error}}"
+    },
+    "currency": {
+      "heading": "通貨",
+      "label": "通貨",
+      "usd": "USD ($)",
+      "krw": "KRW (₩)",
+      "exchangeRate": "為替レート (1 USD)"
+    },
+    "tray": {
+      "heading": "トレイ",
+      "label": "トレイラベル",
+      "none": "なし",
+      "h5pct": "5時間使用率",
+      "tokens": "5時間トークン数",
+      "cost": "5時間コスト"
+    },
+    "mainLayout": {
+      "heading": "メインレイアウト",
+      "showCardTitle": "カードを表示",
+      "hideCardTitle": "カードを非表示",
+      "show": "表示",
+      "hide": "非表示",
+      "moveUp": "上に移動",
+      "moveDown": "下に移動",
+      "resetOrder": "順序をリセット",
+      "showAll": "すべて表示"
+    },
+    "appearance": {
+      "heading": "外観",
+      "theme": "テーマ",
+      "auto": "自動",
+      "light": "ライト",
+      "dark": "ダーク"
+    },
+    "save": "保存"
   }
 }

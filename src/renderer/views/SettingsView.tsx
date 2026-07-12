@@ -6,7 +6,7 @@ import ViewHeader from '../components/ViewHeader';
 import { DEFAULT_MAIN_SECTION_ORDER, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 import { buildQuotaTargetSettingsOptions } from '../quotaDisplayModels';
 import { quotaSourceBadgeToneStyle } from '../theme';
-import i18n from '../i18n';
+import i18n, { getLanguagePreference, LanguagePreference, setLanguagePreference } from '../i18n';
 
 interface Props {
   settings: AppSettings;
@@ -426,6 +426,18 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         </div>
 
         <SectionHeader label={t('settingsView.general.heading')} />
+        <div style={row}>
+          <span style={labelStyle}>{t('settingsView.general.language')}</span>
+          <select
+            value={getLanguagePreference()}
+            onChange={e => setLanguagePreference(e.target.value as LanguagePreference)}
+            style={{ ...inputStyle, width: 140 }}
+          >
+            <option value="system">{t('settingsView.general.languageSystem')}</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+          </select>
+        </div>
         <div style={row}>
           <span style={labelStyle}>{t('settingsView.general.startWithWindows')}</span>
           <input type="checkbox" style={chk} checked={s.openAtLogin} onChange={e => setS({ ...s, openAtLogin: e.target.checked })} />

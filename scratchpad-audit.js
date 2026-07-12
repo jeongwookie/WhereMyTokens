@@ -45,8 +45,12 @@ const en = flatten(JSON.parse(fs.readFileSync("src/renderer/i18n/locales/en.json
 const ja = flatten(JSON.parse(fs.readFileSync("src/renderer/i18n/locales/ja.json", "utf8")));
 
 const usedKeys = [...used.keys()];
-const missingEn = usedKeys.filter(k => !(k in en)).sort();
-const missingJa = usedKeys.filter(k => !(k in ja)).sort();
+const hasTranslation = (catalog, key) => {
+  if (key.includes("${")) return true;
+  return key in catalog || `${key}_one` in catalog || `${key}_other` in catalog;
+};
+const missingEn = usedKeys.filter(k => !hasTranslation(en, k)).sort();
+const missingJa = usedKeys.filter(k => !hasTranslation(ja, k)).sort();
 
 console.log("files scanned:", files.length);
 console.log("total distinct t() keys referenced:", usedKeys.length);
