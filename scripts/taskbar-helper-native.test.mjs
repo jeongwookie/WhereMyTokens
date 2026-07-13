@@ -50,10 +50,14 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   const minimumMaximumBlockWidth = Number(source.match(/MinimumMaximumBlockWidth\s*=\s*(\d+)/)?.[1]);
   const blockGap = Number(source.match(/BlockGap\s*=\s*(\d+)/)?.[1]);
   const blockHorizontalPadding = Number(source.match(/BlockHorizontalPadding\s*=\s*(\d+)/)?.[1]);
+  const periodWidth = Number(source.match(/PeriodWidth\s*=\s*(\d+)/)?.[1]);
+  const textMeasurePadding = Number(source.match(/TextMeasurePadding\s*=\s*(\d+)/)?.[1]);
   assert.ok(minimumBlockWidth > 0 && minimumBlockWidth <= 120);
   assert.ok(minimumMaximumBlockWidth > 0 && minimumMaximumBlockWidth <= 140);
   assert.ok(blockGap > 0 && blockGap <= 6);
   assert.ok(blockHorizontalPadding > 0 && blockHorizontalPadding <= 2);
+  assert.ok(periodWidth >= 40);
+  assert.ok(textMeasurePadding >= 4);
   assert.match(source, /ClientSize\.Width/);
   assert.match(source, /DividerWidth/);
   assert.match(source, /DrawDivider/);
@@ -64,11 +68,11 @@ test('taskbar helper renders a column-aligned grid with full-height separators',
   assert.doesNotMatch(source, /usableWidth\s*\/\s*2/);
 });
 
-test('taskbar helper renders compact overflow counts for hidden targets', () => {
+test('taskbar helper does not render overflow counts for hidden targets', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.match(source, /HiddenCount/);
-  assert.match(source, /DrawOverflowBadge/);
-  assert.match(source, /\$"\+\{hiddenCount\}"/);
+  assert.doesNotMatch(source, /HiddenCount/);
+  assert.doesNotMatch(source, /DrawOverflowBadge/);
+  assert.doesNotMatch(source, /\$"\+\{hiddenCount\}"/);
   assert.doesNotMatch(source, /SourceLabel/);
 });
 
@@ -92,7 +96,6 @@ test('taskbar helper validates semantic snapshot arrays before rendering', () =>
   assert.match(source, /ValidTaskbarPeriods\.Contains\(row\.Period\)/);
   assert.match(source, /row\.Blocks is null/);
   assert.match(source, /row\.Blocks\.Length > 3/);
-  assert.match(source, /row\.HiddenCount < 0/);
   assert.match(source, /string\.IsNullOrWhiteSpace\(block\.TargetId\)/);
   assert.match(source, /ValidQuotaSeverities\.Contains\(block\.Severity\)/);
   assert.match(source, /ValidProviderStatusTones\.Contains\(block\.ProviderStatusTone\)/);
@@ -237,6 +240,9 @@ test('taskbar helper measures owner-drawn text with the same API it uses to draw
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
   assert.match(source, /MeasureDrawStringWidth/);
   assert.match(source, /MeasureString/);
+  assert.match(source, /StringFormatFlags\.MeasureTrailingSpaces/);
+  assert.match(source, /StringTrimming\.None/);
+  assert.doesNotMatch(source, /StringTrimming\.EllipsisCharacter/);
   assert.doesNotMatch(source, /private int DrawMeasuredText[\s\S]*?TextRenderer\.MeasureText/);
 });
 

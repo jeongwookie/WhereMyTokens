@@ -25,7 +25,6 @@ export interface TaskbarQuotaSnapshot {
 export interface TaskbarQuotaPeriodRow {
   period: TaskbarQuotaPeriod;
   blocks: TaskbarQuotaBlock[];
-  hiddenCount: number;
   statusLabel: string | null;
 }
 
@@ -359,7 +358,6 @@ export function buildTaskbarQuotaSnapshot(
       return {
         period,
         blocks,
-        hiddenCount: Math.max(0, sorted.length - blocks.length),
         statusLabel: blocks.length > 0 ? null : waiting ? 'waiting' : hiddenPeriods[period] ? 'hidden' : hasOfflineProvider ? 'offline' : 'no data',
       };
     }),

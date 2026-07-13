@@ -17,7 +17,7 @@ WhereMyTokens is local-first. There is no cloud sync and no telemetry.
 | `~/.codex/.codex-global-state.json` | Codex account metadata such as service tier for header labels. Read only when Codex is enabled. | No |
 | Antigravity language server on `127.0.0.1` | Local cascade sessions, model quota percentages, reset times, and token metadata. | Loopback only |
 | `%APPDATA%\WhereMyTokens` | App settings, local caches, ledgers, notification history, bridge state, and auth-bound Codex reset-credit cache. | No |
-| Taskbar mini helper stdin | Optional summarized quota snapshot for fixed `5h` and `1w` rows, hidden-target counts, per-block source/status tone for target-prefix coloring, plus current light/dark display theme fallback. | No |
+| Taskbar mini helper stdin | Optional summarized quota snapshot for fixed `5h` and `1w` rows, visible blocks capped by the configured per-row limit, per-block source/status tone for target-prefix coloring, plus current light/dark display theme fallback. | No |
 | `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Optional taskbar-relative helper position. | No |
 
 ## Credential Handling
