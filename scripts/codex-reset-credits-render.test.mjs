@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import esbuild from 'esbuild';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 async function loadModels() {
   const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-reset-'));
@@ -195,6 +196,7 @@ async function loadRendererBundle() {
     `export { DARK } from '../src/renderer/theme';`,
     `export * from '../src/renderer/views/MainView';`,
     `export { default as SettingsView } from '../src/renderer/views/SettingsView';`,
+    `export { default as i18n } from '../src/renderer/i18n';`,
     '',
   ].join('\n'));
   await esbuild.build({ entryPoints: [entry], outfile, bundle: true, format: 'esm', platform: 'node', packages: 'external', loader: { '.ts': 'ts', '.tsx': 'tsx' }, logLevel: 'silent' });
@@ -228,7 +230,16 @@ function stateVM(over) {
 
 async function mainView() {
   // Same single bundle as loadHarness → ResetCreditsCard/PlanUsagePanel share the DARK ThemeContext.
-  return loadRendererBundle();
+  const mod = await loadRendererBundle();
+  // i18n's initial language follows the host OS locale (navigator.language), so pin it to
+  // English for deterministic assertions. This must be re-applied on every call (not just once
+  // at bundle-load time): other tests in this file esbuild-bundle src/renderer/App.tsx via
+  // importComponent(), and that bundle inlines its own fresh copy of src/renderer/i18n/index.ts,
+  // which re-runs i18next's global (externalized, process-wide-singleton) init on module
+  // evaluation — resetting the language back to the OS locale for every renderer bundle,
+  // including this one, whenever such a test runs in between.
+  await mod.i18n.changeLanguage('en');
+  return mod;
 }
 
 function bodyRegion(html) {
@@ -602,8 +613,8 @@ test('unsupported Codex endpoint status has explicit UI copy', async () => {
 test('header status distinguishes unsupported Codex endpoint from generic schema/offline', () => {
   const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
   assert.match(source, /case 'unsupported endpoint'/);
-  assert.match(source, /Codex endpoint/);
-  assert.match(source, /Custom Codex base URLs are not monitored/);
+  assert.match(source, tCallRegex('mainView.status.codex.endpointLabel'));
+  assert.match(source, tCallRegex('mainView.status.codex.endpointTitleDefault'));
 });
 
 test('reset simple row anchors to the Codex simple group when Codex has no rich row (G5 edge)', async () => {

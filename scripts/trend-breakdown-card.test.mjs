@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { buildBreakdownBlocks } from '../dist/renderer/breakdownViewModel.js';
+import { tCallRegex, enText } from './test-support/i18n.mjs';
 
 const emptyToolOutput = () => ({
   read: 0,
@@ -117,18 +118,18 @@ test('buildBreakdownBlocks surfaces partialSinceDate', () => {
 
 test('TrendBreakdownCard carries the three unit labels (source guard, unavoidable)', () => {
   const src = fs.readFileSync('src/renderer/components/TrendBreakdownCard.tsx', 'utf8');
-  for (const label of ['input + output · no-cache', 'calls · ≈tok', 'git · lines']) {
-    assert.match(src, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  for (const key of ['trendBreakdownCard.inputOutputNoCache', 'trendBreakdownCard.callsApproxTok', 'trendBreakdownCard.gitLines']) {
+    assert.match(src, tCallRegex(key));
   }
 });
 
 test('TrendBreakdownCard uses precision-driven markers and only the merged tool block', () => {
   const src = fs.readFileSync('src/renderer/components/TrendBreakdownCard.tsx', 'utf8');
-  assert.match(src, /Input \{fmtTokens\(Math\.round\(provider\.input\)\)\}/);
+  assert.match(src, /t\('trendBreakdownCard\.input'\)\} \{fmtTokens\(Math\.round\(provider\.input\)\)\}/);
   assert.match(src, /thinkingExact \? '' : '≈'/);
   assert.match(src, /response[\s\S]*marker: '≈'/);
   assert.match(src, /toolOutput[\s\S]*marker: '≈'/);
-  assert.match(src, /\$\{row\.count\} calls · ≈\$\{fmtTokens\(Math\.round\(row\.tokens\)\)\} tok/);
+  assert.match(src, tCallRegex('trendBreakdownCard.callsApproxTokValue'));
   assert.doesNotMatch(src, /function ToolActivityBlock/);
   assert.doesNotMatch(src, /No tool calls/);
   assert.doesNotMatch(src, /outputSegmented/);
@@ -138,7 +139,7 @@ test('TrendBreakdownCard leads with an on-bar input:output split and an output f
   const src = fs.readFileSync('src/renderer/components/TrendBreakdownCard.tsx', 'utf8');
   // Level-1 split: values + % labelled directly on the bar (no separate detail rows).
   assert.match(src, /const inputPct = pctOf\(provider\.input, provider\.total\)/);
-  assert.match(src, /Output \{fmtTokens\(Math\.round\(provider\.outputTotal\)\)\}/);
+  assert.match(src, /t\('trendBreakdownCard\.output'\)\} \{fmtTokens\(Math\.round\(provider\.outputTotal\)\)\}/);
   assert.match(src, /pctOf\(provider\.outputTotal, provider\.total\)/);
   // Funnel drill-down cue from the output segment down to the full-width composition bar.
   assert.match(src, /function OutputFunnel/);
@@ -154,18 +155,20 @@ test('TrendBreakdownCard collapses the output tail behind a per-provider toggle'
   const src = fs.readFileSync('src/renderer/components/TrendBreakdownCard.tsx', 'utf8');
   assert.match(src, /useState\(false\)/);
   assert.match(src, /PINNED_TOOL_KEYS = new Set<ToolCategory>\(\['editWrite'\]\)/);
-  assert.match(src, /Show \$\{hiddenCount\} more/);
-  assert.match(src, /Collapse/);
+  assert.match(src, tCallRegex('trendBreakdownCard.showMore'));
+  assert.match(src, tCallRegex('trendBreakdownCard.collapse'));
 });
 
 test('NetLinesBlock shows title, centered delta pair, and right-aligned Net value', () => {
   const src = fs.readFileSync('src/renderer/components/TrendBreakdownCard.tsx', 'utf8');
   assert.match(src, /gridTemplateColumns: '1fr auto 1fr'/);
-  assert.match(src, /justifySelf: 'start'[\s\S]*>\{meta\.label\}/);
+  // Per-category label is a dynamic key: t(`trendBreakdownCard.paths.${row.category}`).
+  assert.match(src, /justifySelf: 'start'[\s\S]*t\(`trendBreakdownCard\.paths\.\$\{row\.category\}`\)/);
   assert.match(src, /justifySelf: 'center'[\s\S]*color: C\.barRed[\s\S]*>-\{row\.removed\}/);
   assert.match(src, /<span style=\{\{ color: C\.textMuted \}\}>\|<\/span>/);
   assert.match(src, /color: C\.active[\s\S]*>\+\{row\.added\}/);
-  assert.match(src, /justifySelf: 'end'[\s\S]*>Net:\{fmtSigned\(row\.added - row\.removed\)\}/);
+  assert.match(src, new RegExp(`justifySelf: 'end'[\\s\\S]*${tCallRegex('trendBreakdownCard.netPrefix').source}`));
   assert.ok(src.indexOf('>-{row.removed}') < src.indexOf('>+{row.added}'));
-  assert.doesNotMatch(src, /Net:\{fmtSigned\(row\.added - row\.removed\)\} lines/);
+  // Content guard: the "Net:" line must not carry a trailing unit suffix like " lines".
+  assert.doesNotMatch(enText('trendBreakdownCard.netPrefix'), / lines$/);
 });

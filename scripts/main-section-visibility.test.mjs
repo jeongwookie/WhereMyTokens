@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 test('settings model persists hidden main sections', () => {
   const types = fs.readFileSync('src/renderer/types.ts', 'utf8');
@@ -31,5 +32,6 @@ test('SettingsView can show and hide dashboard cards', () => {
   assert.match(settingsView, /hiddenMainSections/);
   assert.match(settingsView, /toggleMainSectionHidden/);
   assert.match(settingsView, /visibleSectionCount/);
-  assert.match(settingsView, /\? 'Show' : 'Hide'/);
+  assert.match(settingsView, tCallRegex('settingsView.mainLayout.show'));
+  assert.match(settingsView, tCallRegex('settingsView.mainLayout.hide'));
 });

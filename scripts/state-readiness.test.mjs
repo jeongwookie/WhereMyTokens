@@ -9,6 +9,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import stateManager from '../dist/main/stateManager.js';
 import * as gitStatsKeys from '../dist/main/gitStatsKeys.js';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 const { StateManager, resolveSessionRepoKeys } = stateManager;
 const { normalizeGitPathKey } = gitStatsKeys;
@@ -44,7 +45,11 @@ async function importRendererComponent(entryPoint, name) {
     bundle: true,
     format: 'esm',
     platform: 'node',
-    external: ['react'],
+    // packages:'external' (not just external:['react']) leaves react-i18next/i18next/lucide-react
+    // external too — since TokenStatsCard.tsx now imports useTranslation(), bundling
+    // react-i18next's use-sync-external-store dependency in ESM output caused
+    // "Dynamic require of react is not supported" (a CJS-require-in-ESM interop failure).
+    packages: 'external',
     logLevel: 'silent',
   });
   const mod = await import(pathToFileURL(outfile).href);
@@ -174,14 +179,13 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(cardSource, /displayLimitSourceLabel = pendingLimit/);
   assert.match(modelSource, /isPendingQuotaWindow/);
   assert.match(widgetSource, /unknownLabel: 'waiting'/);
-  assert.match(widgetSource, /No 5h reset data yet/);
-  assert.match(widgetSource, /It will appear after local usage or provider data is detected/);
+  assert.match(widgetSource, tCallRegex('compactWidgetView.tooltip.noFiveHourData'));
   assert.match(widgetSource, /target instanceof Element && !!target\.closest\('\[data-no-drag="true"\]'\)/);
   assert.match(widgetSource, /const scanning = rows\.some\(row => row\.pending\)/);
   assert.match(widgetSource, /agent\.scanning \? \(/);
   assert.match(widgetSource, /MiniLimitStatus/);
-  assert.match(widgetSource, /Provider limit-data health/);
-  assert.match(widgetSource, /\`\$\{providerLabel\} OK\`/);
+  assert.match(widgetSource, tCallRegex('compactWidgetView.health.sectionTitle'));
+  assert.match(widgetSource, tCallRegex('compactWidgetView.health.ok.label'));
   assert.match(widgetSource, /tone: 'good'/);
   assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
@@ -192,7 +196,7 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(stateSource, /refreshProviderQuotas\(settingsForApi, force \|\| forceProviderUsage\)/);
   assert.match(stateSource, /provider\.fetchQuota/);
   assert.match(mainSource, /codexStatusLabel/);
-  assert.match(mainSource, /Codex limited/);
+  assert.match(mainSource, tCallRegex('mainView.status.codex.limitedLabel'));
   assert.match(mainSource, /historyWarmupPending/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /provider === 'codex' && source === 'localLog'/);
@@ -297,9 +301,9 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(mainViewSource, /PictureInPicture2/);
   assert.match(mainViewSource, /PanelBottom/);
   assert.match(mainViewSource, /aria-pressed=\{compactWidgetEnabled\}/);
-  assert.match(mainViewSource, /Show floating Quota Pace widget/);
+  assert.match(mainViewSource, tCallRegex('mainView.header.showCompactWidget'));
   assert.match(mainViewSource, /aria-pressed=\{taskbarQuotaEnabled\}/);
-  assert.match(mainViewSource, /Show taskbar mini quota display/);
+  assert.match(mainViewSource, tCallRegex('mainView.header.showTaskbarQuota'));
   assert.match(mainViewSource, /quotaSourceBadgeToneStyle/);
   const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   assert.match(stateManagerSource, /return normalizeSettings\(this\.store\.store\)/);
@@ -318,11 +322,11 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(sectionsSource, /Array\.isArray\(value\) \? value : \[\]/);
   assert.match(settingsSource, /buildSettingsPatch\(s, baseSettings, latestSettings\)/);
   assert.match(settingsSource, /compactWidgetWaitingAnimationEnabled/);
-  assert.match(settingsSource, /Waiting animation/);
+  assert.match(settingsSource, tCallRegex('settingsView.general.waitingAnimation'));
   assert.match(settingsSource, /moveQuotaTarget/);
   assert.match(settingsSource, /quotaTargetOrder/);
   assert.match(settingsSource, /if \(sameSettingValue\(currentValue, settingValue\(latest, key\)\)\) continue/);
-  assert.match(settingsSource, /Use Ctrl\+Shift or Ctrl\+Alt/);
+  assert.match(settingsSource, tCallRegex('settingsView.general.shortcutHint'));
 });
 
 test('popup show path sends cached state without forcing refresh', () => {
@@ -389,9 +393,9 @@ test('Codex account limit collection is separated from visible usage filters', (
 test('bottom refresh label distinguishes scan countdown from update age', () => {
   const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
 
-  assert.match(source, /\$\{elapsed\}s ago/);
-  assert.match(source, /scan \$\{formatWarmupEta\(historyWarmupStartsAt\)\}/);
-  assert.match(source, /last run ·/);
+  assert.match(source, tCallRegex('mainView.refresh.secondsAgo'));
+  assert.match(source, tCallRegex('mainView.refresh.scan'));
+  assert.match(source, tCallRegex('mainView.refresh.lastRun'));
   assert.doesNotMatch(source, /Restoring/);
   assert.doesNotMatch(source, /Restored/);
 });
@@ -428,7 +432,7 @@ test('tray and header status derive provider data from enabled providers', () =>
   assert.match(rendererSource, /function buildProviderQuotaHeaderStatus/);
   assert.match(rendererSource, /enabledProviders: enabledProviderList/);
   assert.match(rendererSource, /args\.enabledProviders/);
-  assert.match(settingsSource, /enabled provider history/);
+  assert.match(settingsSource, tCallRegex('settingsView.data.usageLedgerHint'));
 });
 
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {

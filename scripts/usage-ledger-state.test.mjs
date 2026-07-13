@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 import stateManagerModule from '../dist/main/stateManager.js';
 import importerModule from '../dist/main/usageLedgerImporter.js';
@@ -172,7 +173,7 @@ test('usage ledger rebuild state is surfaced and completed imports suppress repe
   assert.match(stateSource, /sourceList\.partial && !alreadyCompletedFullImport/);
   assert.match(rendererSource, /LedgerNeedsRebuildBanner/);
   assert.match(rendererSource, /state\.usageLedgerNeedsRebuild/);
-  assert.match(rendererSource, /Historical totals are using recent fallback data/);
+  assert.match(rendererSource, tCallRegex('mainView.ledgerRebuild.body'));
 });
 
 test('trend falls back when excluded projects disable the ledger', () => {

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 test('StateManager can reset and rebuild the usage ledger from full history', () => {
   const stateManager = fs.readFileSync('src/main/stateManager.ts', 'utf8');
@@ -26,7 +27,7 @@ test('SettingsView has a rebuild ledger action', () => {
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
   assert.match(settingsView, /handleRebuildLedger/);
   assert.match(settingsView, /window\.wmt\.rebuildLedger/);
-  assert.match(settingsView, /Rebuild ledger/);
+  assert.match(settingsView, tCallRegex('settingsView.data.rebuildButton'));
 });
 
 test('readmes describe the persisted ledger and rebuild control', () => {
