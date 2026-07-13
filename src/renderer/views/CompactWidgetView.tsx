@@ -116,6 +116,7 @@ function missingLimitStatus(
   bootPending: boolean,
   unavailableTitle: string,
   windowLabel: string,
+  resetLabel: string | undefined,
 ): Pick<WidgetAgent['rows'][number], 'unknown' | 'unknownLabel' | 'unknownBadge' | 'unknownTitle'> {
   if (bootPending) {
     return {
@@ -129,6 +130,19 @@ function missingLimitStatus(
     };
   }
   if (pct <= 0 && resetMs == null) {
+    // The provider explicitly reported "no data for this window" (e.g. Codex has no active
+    // 5h limit for this account/plan) rather than "haven't heard back yet" — show it as a
+    // static, known state instead of the perpetually-animated waiting dots, which otherwise
+    // looks identical to "still loading" and never resolves.
+    if (resetLabel) {
+      return {
+        unknown: true,
+        // Not 'loading' or 'waiting' — see the ProgressRow visualState mapping below.
+        unknownLabel: 'unavailable',
+        unknownBadge: '--',
+        unknownTitle: resetLabel,
+      };
+    }
     return {
       unknown: true,
       // Same as above: internal code, not displayed text — keep untranslated.
@@ -304,7 +318,7 @@ function buildWidgetAgents(state: AppState): WidgetAgent[] {
         durationMs: row.durationMs,
         pending: row.pending,
         pendingTitle: row.pendingTitle,
-        ...(!row.pending && row.visualKind === 'pace' ? missingLimitStatus(row.quotaPct, row.resetMs, bootPending, unavailableTitle, row.label) : {}),
+        ...(!row.pending && row.visualKind === 'pace' ? missingLimitStatus(row.quotaPct, row.resetMs, bootPending, unavailableTitle, row.label, row.resetLabel) : {}),
       };
     };
     const rows: WidgetAgent['rows'] = group.rows.map(rowFor);
@@ -369,7 +383,12 @@ function ProgressRow({
   const { t } = useTranslation();
   const percentOnly = visualKind === 'percentOnly';
   const quota = clampPct(quotaPct);
-  const visualState: 'syncing' | 'waiting' | null = pending ? 'syncing' : unknown ? (unknownLabel === 'loading' ? 'syncing' : 'waiting') : null;
+  // unknownLabel 'unavailable' (provider explicitly has no data for this window) falls through
+  // to null here on purpose — it renders as a static row like a known/empty value, not the
+  // animated 'waiting' dots reserved for "still expecting data soon".
+  const visualState: 'syncing' | 'waiting' | null = pending
+    ? 'syncing'
+    : unknown ? (unknownLabel === 'loading' ? 'syncing' : unknownLabel === 'waiting' ? 'waiting' : null) : null;
   const suppressWaitingAnimation = visualState === 'waiting' && !animateWaiting;
   const elapsed = visualState || percentOnly ? null : timeElapsedPct(durationMs, resetMs);
   const elapsedWidth = elapsed ?? 0;
