@@ -431,7 +431,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
           <select
             value={getLanguagePreference()}
             onChange={e => setLanguagePreference(e.target.value as LanguagePreference)}
-            style={{ ...inputStyle, width: 140 }}
+            style={{ ...sel, width: 140 }}
           >
             <option value="system">{t('settingsView.general.languageSystem')}</option>
             <option value="en">English</option>

@@ -2862,9 +2862,20 @@ export class StateManager {
         source,
       };
     };
+    // The Codex API can legitimately omit a window (e.g. no active 5h limit reported for the
+    // account/plan) with no error. When that happens and the local-log fallback has nothing
+    // either, surface an explicit "unavailable" label instead of leaving pct/resetMs/source all
+    // empty — an empty window is indistinguishable from "still loading" and gets stuck showing
+    // a perpetual waiting state in the UI even though the API call succeeded.
+    const withUnavailableFallback = (fallback: ProviderQuotaWindow, unavailableLabel: string): ProviderQuotaWindow => {
+      if (!this.codexUsageConnected || hasMeaningfulQuotaWindow(fallback)) return fallback;
+      return { pct: 0, resetMs: null, resetLabel: unavailableLabel, source };
+    };
     return {
-      h5: liveWindow(live.h5Available, live.h5Pct, live.h5ResetMs, 'Codex 5h reset unavailable') ?? local.h5,
-      week: liveWindow(live.weekAvailable, live.weekPct, live.weekResetMs, 'Codex weekly reset unavailable') ?? local.week,
+      h5: liveWindow(live.h5Available, live.h5Pct, live.h5ResetMs, 'Codex 5h reset unavailable')
+        ?? withUnavailableFallback(local.h5, 'Codex 5h data unavailable'),
+      week: liveWindow(live.weekAvailable, live.weekPct, live.weekResetMs, 'Codex weekly reset unavailable')
+        ?? withUnavailableFallback(local.week, 'Codex weekly data unavailable'),
     };
   }
 
