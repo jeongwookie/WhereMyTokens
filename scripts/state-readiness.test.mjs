@@ -475,7 +475,11 @@ test('README release blocks stay compact and screenshots are full width', () => 
     'README.es.md',
   ];
   const packageJson = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
-  const currentVersion = `v${packageJson.version}`;
+  // The ja fork tags its builds as `<upstream-version>-ja.<n>` (e.g. 1.20.1-ja.1); the
+  // README changelog tracks the upstream feature/fix history it was built from, not a
+  // separate per-locale-build version, so compare against the base X.Y.Z only.
+  const baseVersion = packageJson.version.split('-')[0];
+  const currentVersion = `v${baseVersion}`;
 
   for (const file of readmes) {
     const source = fs.readFileSync(path.resolve(file), 'utf8');
