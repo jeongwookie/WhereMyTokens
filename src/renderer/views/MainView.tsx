@@ -1584,22 +1584,57 @@ const HistoryWarmupBanner = React.memo(function HistoryWarmupBanner({ historyWar
   );
 });
 
-const LedgerNeedsRebuildBanner = React.memo(function LedgerNeedsRebuildBanner() {
+const IndexCoverageBanner = React.memo(function IndexCoverageBanner({ coverage }: {
+  coverage: AppState['usageIndexCoverage'];
+}) {
   const C = useTheme();
+  const progress = coverage.requiredSourceCount > 0
+    ? `${coverage.indexedSourceCount}/${coverage.requiredSourceCount} sources indexed.`
+    : 'Discovering usage sources.';
+  const failures = coverage.failedSourceCount > 0
+    ? ` ${coverage.failedSourceCount} source${coverage.failedSourceCount === 1 ? '' : 's'} failed and will be retried.`
+    : '';
   return (
     <div style={{
       margin: '10px 8px 0',
       padding: '9px 12px',
       borderRadius: 10,
-      border: `1px solid ${C.barRed}30`,
-      background: `${C.barRed}10`,
+      border: `1px solid ${C.headerAccent}26`,
+      background: `${C.headerAccent}10`,
       color: C.textDim,
     }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.barRed, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-        Ledger Needs Rebuild
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.headerAccent, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        Indexing Usage History
       </div>
       <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
-        Historical totals are using recent fallback data until the local usage ledger is rebuilt from Settings.
+        Totals are incomplete until indexing finishes. {progress}{failures}
+      </div>
+    </div>
+  );
+});
+
+const UsageIndexHealthBanner = React.memo(function UsageIndexHealthBanner({ health }: {
+  health: AppState['usageIndexHealth'];
+}) {
+  const C = useTheme();
+  const unavailable = health.state === 'unavailable';
+  const color = unavailable ? C.barRed : C.headerAccent;
+  return (
+    <div style={{
+      margin: '10px 8px 0',
+      padding: '9px 12px',
+      borderRadius: 10,
+      border: `1px solid ${color}30`,
+      background: `${color}10`,
+      color: C.textDim,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        {unavailable ? 'Usage History Unavailable' : 'Usage History Recovered'}
+      </div>
+      <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }} title={health.preservedPath}>
+        {health.message ?? (unavailable
+          ? 'The local index could not be opened. Use Reset index in Settings only if you accept losing unavailable history.'
+          : 'The damaged database was preserved and a recovered index is active.')}
       </div>
     </div>
   );
@@ -2168,9 +2203,16 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
         <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} onToggleTaskbarQuota={onToggleTaskbarQuota} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
-        {state.usageLedgerNeedsRebuild && (
-          <RenderErrorBoundary label="Usage Ledger Rebuild Banner">
-            <LedgerNeedsRebuildBanner />
+        {state.usageIndexHealth.state !== 'ready' && (
+          <RenderErrorBoundary label="Usage Index Health Banner">
+            <UsageIndexHealthBanner health={state.usageIndexHealth} />
+          </RenderErrorBoundary>
+        )}
+        {settings.enabledProviders.some(provider => provider === 'claude' || provider === 'codex' || provider === 'antigravity')
+          && state.usageIndexHealth.state !== 'unavailable'
+          && state.usageIndexCoverage.state === 'incomplete' && (
+          <RenderErrorBoundary label="Usage Index Coverage Banner">
+            <IndexCoverageBanner coverage={state.usageIndexCoverage} />
           </RenderErrorBoundary>
         )}
         {state.historyWarmupPending && (

@@ -8,8 +8,7 @@ import {
   listRecentClaudeSources,
   ownsClaudePath,
   readClaudeSourceCwd,
-  buildClaudeLedgerSource,
-  scanClaudeSourceSummary,
+  buildClaudeUsageIndexSource,
 } from './sources';
 import { fetchClaudeQuota } from './quota';
 
@@ -26,8 +25,7 @@ export const claudeProvider: SourceBackedProviderAdapter = {
   ownsPath: ownsClaudePath,
   listRecentSources: listRecentClaudeSources,
   listAllSources: listAllClaudeSources,
-  scanSourceSummary: scanClaudeSourceSummary,
-  ledgerSource: buildClaudeLedgerSource,
+  usageIndexSource: buildClaudeUsageIndexSource,
   fetchQuota: fetchClaudeQuota,
   buildStartupSession: buildStartupClaudeSession,
   readSourceCwd: readClaudeSourceCwd,

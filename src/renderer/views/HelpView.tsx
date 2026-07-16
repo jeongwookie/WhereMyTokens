@@ -225,7 +225,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>Header status pill</B> — one pill in the top bar summarizes the most important provider health state and names the affected provider. Claude may show refresh/login/failed states while OAuth usage data recovers. Quota Pace Health shows separate chips such as <B>Claude OK</B> and <B>Codex OK</B>.</div>
         <div style={{ marginBottom: 5 }}><B>Source chips</B> — <B>API</B> means provider account usage, <B>Bridge</B> means Claude statusLine fallback, <B>RPC</B> means a local provider runtime snapshot, <B>Cache</B> means the last trusted snapshot, and <B>Log</B> means a local session-log estimate.</div>
         <div style={{ marginBottom: 5 }}><B>Waiting / Syncing</B> — a limit card shows a soft loading state while provider data is still arriving instead of showing an empty dash.</div>
-        <div><B>Ledger Needs Rebuild</B> — historical totals fall back to recent data when the local aggregate ledger cannot safely repair itself. Open Settings → Data → Rebuild ledger to replay local history.</div>
+        <div><B>Reset index</B> — clears indexed history and rebuilds from currently available provider logs. History from unavailable logs will be permanently lost.</div>
       </Section>
 
       <Divider />
@@ -345,7 +345,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>헤더 상태 pill</B> — 상단 한 개의 pill이 핵심 provider health를 요약하고, 문제가 있는 provider 이름을 함께 표시합니다. Claude OAuth 사용량 데이터가 복구되는 동안 refresh/login/failed 상태가 표시될 수 있습니다. Quota Pace Health는 <B>Claude OK</B>, <B>Codex OK</B>처럼 provider별 칩을 따로 보여줍니다.</div>
         <div style={{ marginBottom: 5 }}><B>Source 칩</B> — <B>API</B>는 provider 계정 사용량, <B>Bridge</B>는 Claude statusLine 폴백, <B>RPC</B>는 로컬 provider runtime snapshot, <B>Cache</B>는 마지막 신뢰 snapshot, <B>Log</B>는 로컬 세션 로그 추정값입니다.</div>
         <div style={{ marginBottom: 5 }}><B>Waiting / Syncing</B> — provider 데이터가 아직 도착하지 않았을 때 한도 카드가 빈 dash 대신 부드러운 대기 상태를 보여줍니다.</div>
-        <div><B>Ledger Needs Rebuild</B> — 로컬 aggregate ledger가 안전하게 복구할 수 없으면 historical totals는 최근 데이터 fallback을 사용합니다. Settings → Data → Rebuild ledger에서 로컬 히스토리를 다시 재생할 수 있습니다.</div>
+        <div><B>Reset index</B> — 인덱싱된 기록을 지우고 현재 사용 가능한 provider 로그에서 다시 빌드합니다. 사용할 수 없는 로그의 기록은 영구적으로 손실됩니다.</div>
       </Section>
 
       <Divider />
@@ -465,7 +465,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>ヘッダーステータス pill</B> — 上部の 1 つの pill が重要な provider health をまとめ、影響を受ける provider 名も表示します。Claude OAuth 使用量データの復旧中は refresh/login/failed 状態が表示されることがあります。Quota Pace Health は <B>Claude OK</B>、<B>Codex OK</B> のように provider 別チップを表示します。</div>
         <div style={{ marginBottom: 5 }}><B>Source チップ</B> — <B>API</B> は provider アカウント使用量、<B>Bridge</B> は Claude statusLine フォールバック、<B>RPC</B> はローカル provider runtime snapshot、<B>Cache</B> は最後に信頼できた snapshot、<B>Log</B> はローカルセッションログ推定です。</div>
         <div style={{ marginBottom: 5 }}><B>Waiting / Syncing</B> — provider データがまだ届いていない場合、制限カードは空の dash ではなく柔らかい待機状態を表示します。</div>
-        <div><B>Ledger Needs Rebuild</B> — ローカル aggregate ledger が安全に修復できない場合、historical totals は最近のデータ fallback を使います。Settings → Data → Rebuild ledger からローカル履歴を再生できます。</div>
+        <div><B>Reset index</B> — インデックス済み履歴を消去し、現在利用可能な provider ログから再構築します。利用できないログの履歴は永久に失われます。</div>
       </Section>
 
       <Divider />

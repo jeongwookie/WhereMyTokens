@@ -151,7 +151,7 @@ test('TrendCard throttles same-bucket breakdown refreshes without showing loadin
   assert.match(trendCard, /const showLoading = isNewRequestKey \|\| breakdown === null/);
 });
 
-test('TrendCard receives state freshness so breakdown-only ledger changes can refresh', () => {
+test('TrendCard receives state freshness so breakdown-only UsageIndex changes can refresh', () => {
   const mainView = fs.readFileSync('src/renderer/views/MainView.tsx', 'utf8');
   const trendCard = fs.readFileSync('src/renderer/components/TrendCard.tsx', 'utf8');
   assert.match(mainView, /<TrendCard[^>]*lastUpdated=\{state\.lastUpdated\}/);

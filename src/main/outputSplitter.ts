@@ -5,19 +5,9 @@ import {
 } from '../shared/breakdownTypes';
 
 export const CALIB = 2.4;
-export const CALIB_MIN = 1.2;
-export const CALIB_MAX = 5.0; // 짧은 thinking 블록은 고정 signature 오버헤드 때문에 sig/text 비율이 더 높을 수 있다.
 
 export function signatureProxyThinkingChars(signatureLength: number): number {
   return signatureLength > 0 ? signatureLength / CALIB : 0;
-}
-
-export function assertCalibInBand(signatureLength: number, textLength: number): void {
-  if (textLength <= 0 || signatureLength <= 0) return;
-  const ratio = signatureLength / textLength;
-  if (ratio < CALIB_MIN || ratio > CALIB_MAX) {
-    throw new Error(`CALIB drift: sig/text ratio ${ratio.toFixed(2)} outside [${CALIB_MIN}, ${CALIB_MAX}] - recalibrate`);
-  }
 }
 
 export interface OutputWeights {

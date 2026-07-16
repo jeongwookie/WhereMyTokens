@@ -1,14 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSafeLocalCwd } from '../../pathSafety';
-import { importUsageJsonlIntoSnapshot } from '../../usageLedgerImporter';
 import { readJsonlCwd } from '../../sessionMetadata';
-import { scanJsonlSummaryCached } from '../../jsonlParser';
-import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderLedgerSource, ProviderSource, ProviderSourceList } from '../types';
+import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderSource, ProviderSourceList } from '../types';
 import { describeRepoContext, projectKeysForCwd } from '../shared/repoContext';
 import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs } from '../shared/sourceFiles';
 import { CLAUDE_PROJECTS_DIR, CLAUDE_SESSIONS_DIR } from './paths';
 import { isClaudeAgentJsonlName, isClaudeJsonlName } from './logFiles';
+import { createClaudeUsageIndexScanner } from './usageIndexScanner';
 
 interface ClaudeRecentFile {
   filePath: string;
@@ -91,19 +90,25 @@ export function listAllClaudeSources(): ProviderSourceList {
   return { sources: files.map(sourceFromFile), truncated: false };
 }
 
-export async function scanClaudeSourceSummary(ctx: ProviderContext, source: ProviderSource) {
-  return scanJsonlSummaryCached(source.filePath, 'claude', ctx.jsonlCache, ctx.force);
-}
-
-export function buildClaudeLedgerSource(_ctx: ProviderContext, source: ProviderSource, priority = false): ProviderLedgerSource {
-  const sourcePath = normalizeSourcePath(source.filePath);
+export function buildClaudeUsageIndexSource(_ctx: ProviderContext, source: ProviderSource) {
+  const stat = fs.statSync(source.filePath);
+  const relative = path.relative(CLAUDE_PROJECTS_DIR, source.filePath);
+  const projectDir = relative.split(path.sep)[0];
   return {
-    provider: 'claude',
-    sourceId: source.sourceId,
-    sourcePath,
-    priority: priority || source.priority === true,
-    importIntoSnapshot: (snapshot, nowMs) =>
-      importUsageJsonlIntoSnapshot(snapshot, source.filePath, 'claude', nowMs),
+    descriptor: {
+      sourceId: `claude:${normalizeSourcePath(source.filePath)}`,
+      provider: 'claude' as const,
+      kind: 'file' as const,
+      parserVersion: 1,
+      version: {
+        token: `${stat.size}:${stat.mtimeMs}`,
+        size: stat.size,
+        mtimeMs: stat.mtimeMs,
+      },
+    },
+    scanner: createClaudeUsageIndexScanner(source.filePath, {
+      baseProjectKeys: projectDir ? [projectDir] : [],
+    }),
   };
 }
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { CompactRecentEntry, UsageProvider } from './jsonlTypes';
 
 export interface ExtractedUsageLine {
@@ -88,17 +89,15 @@ export function inferCodexModel(...records: Array<Record<string, unknown> | null
   return '';
 }
 
-function hashString(value: string): string {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
 export function codexEntryId(sourceKey: string, line: string, timestamp?: string): string {
-  return `${hashString(sourceKey)}-${timestamp ?? 'no-ts'}-${hashString(line)}`;
+  return createHash('sha256')
+    .update(sourceKey)
+    .update('\0')
+    .update(timestamp ?? 'no-ts')
+    .update('\0')
+    .update(line)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 function parseTimestampMs(timestamp: unknown, fallbackMs: number): number {

@@ -144,7 +144,7 @@ export interface UsageData {
   models: ModelUsage[];
   heatmap: HourlyBucket[];       // 7 days × 24 hours
   heatmap30: HourlyBucket[];     // 30 days × 24 hours
-  heatmap90: HourlyBucket[];     // 90 days × 24 hours
+  heatmap90: HourlyBucket[];     // 150 daily totals using the legacy field name
   weeklyTimeline: WeeklyTotal[]; // weekly timeline (last 20 weeks)
   todayTokens: number;
   todayCost: number;
@@ -334,6 +334,20 @@ export interface CodexAccountState {
   serviceTier: string | null;
 }
 
+export interface UsageIndexCoverage {
+  state: 'complete' | 'incomplete';
+  requiredSourceCount: number;
+  indexedSourceCount: number;
+  pendingSourceCount: number;
+  failedSourceCount: number;
+}
+
+export interface UsageIndexHealth {
+  state: 'ready' | 'recovered' | 'unavailable';
+  message?: string;
+  preservedPath?: string;
+}
+
 export interface AppState {
   sessions: SessionInfo[];
   usage: UsageData;
@@ -345,7 +359,8 @@ export interface AppState {
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
-  usageLedgerNeedsRebuild: boolean;
+  usageIndexCoverage: UsageIndexCoverage;
+  usageIndexHealth: UsageIndexHealth;
   lastUpdated: number;
   apiConnected: boolean;
   apiStatusLabel?: string;
@@ -395,13 +410,6 @@ export interface DebugMemSnapshot {
     watchedDirectories: number;
     watchedFiles: number;
   };
-  jsonlCache: {
-    memoryEntries: number;
-    pendingPersistedEntries: number;
-    persistedEntries: number;
-    memoryLimit: number;
-    persistedLimit: number;
-  };
 }
 
 export type IntegrationOwner = 'wmt' | 'other' | 'none';
@@ -422,7 +430,7 @@ declare global {
     wmt: {
       getState:           () => Promise<AppState>;
       forceRefresh:       () => Promise<AppState>;
-      rebuildLedger:      () => Promise<AppState>;
+      resetIndex:         () => Promise<AppState>;
       getBreakdown:       (grain: BreakdownGrain, bucketKey: string) => Promise<BucketBreakdown>;
       getSettings:        () => Promise<AppSettings>;
       setSettings:        (p: Partial<AppSettings>) => Promise<AppSettings>;

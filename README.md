@@ -98,7 +98,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 - Today and all-time token, cost, cache, model, and call summaries.
 - Activity heatmaps, rhythm charts, model usage, and tool breakdowns.
 - Git output metrics for current session repos.
-- Persistent totals use `usage-ledger.json`; **Rebuild ledger** in Settings can reset and replay local history.
+- Persistent totals use the source-attributed `usage-index.sqlite`. Request detail is retained for 8 days, hourly precision for 35 days, daily precision for 180 days, and monthly totals indefinitely. First indexing stays responsive and labels incomplete coverage; **Reset index** discards indexed history and rebuilds only from currently available provider logs.
 - Local-first storage with no cloud sync or telemetry.
 
 ## Privacy

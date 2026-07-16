@@ -300,7 +300,7 @@ export interface RegisterIpcHandlersOptions {
   getState: () => AppState;
   forceRefresh: () => Promise<void>;
   applySettingsChange: () => void;
-  rebuildUsageLedger?: () => Promise<void>;
+  resetUsageIndex?: () => Promise<void>;
   getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>;
   windowActions?: {
     openDashboard: () => void;
@@ -325,7 +325,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
     getState,
     forceRefresh,
     applySettingsChange,
-    rebuildUsageLedger,
+    resetUsageIndex,
     getDebugMemSnapshot,
     windowActions,
     getBreakdown,
@@ -334,8 +334,9 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
 
   ipc.handle('state:get', () => getState());
   ipc.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
-  ipc.handle('ledger:rebuild', async () => {
-    if (rebuildUsageLedger) await rebuildUsageLedger();
+  ipc.handle('usage-index:reset', async () => {
+    if (!resetUsageIndex) throw new Error('usage-index:reset not wired');
+    await resetUsageIndex();
     return getState();
   });
   ipc.handle('breakdown:get', async (_e, grain: unknown, bucketKey: unknown) => {

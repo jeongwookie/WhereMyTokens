@@ -1,19 +1,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSafeLocalCwd } from '../../pathSafety';
-import { importUsageJsonlIntoSnapshot } from '../../usageLedgerImporter';
 import { readCodexSessionHeader, readJsonlCwd } from '../../sessionMetadata';
-import { scanJsonlSummaryCached } from '../../jsonlParser';
 import { describeCodexSource } from './discovery';
-import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderLedgerSource, ProviderSource, ProviderSourceList } from '../types';
+import type { DiscoveredSession, ExcludedProjectMatcher, ProviderContext, ProviderSource, ProviderSourceList } from '../types';
 import { describeRepoContext, projectKeysForCwd } from '../shared/repoContext';
 import { isSourcePathInside, listJsonlFiles, normalizeSourcePath, sessionStateFromMtime, statMtimeMs, statMtimeMsOrNull } from '../shared/sourceFiles';
 import { CODEX_SESSIONS_DIR, CODEX_USAGE_DIRS } from './paths';
+import { createCodexUsageIndexScanner } from './usageIndexScanner';
 
 function sourceFromFile(filePath: string): ProviderSource {
   return {
     provider: 'codex',
-    sourceId: normalizeSourcePath(filePath),
+    sourceId: `codex:${codexSessionDedupeKey(filePath)}`,
     filePath,
   };
 }
@@ -65,10 +64,13 @@ export function listRecentCodexSources(_ctx: ProviderContext, limit: number): Pr
 }
 
 function codexSessionDedupeKey(filePath: string): string {
+  const basename = path.basename(filePath, '.jsonl');
+  const filenameSessionId = basename.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i)?.[1];
+  if (filenameSessionId) return filenameSessionId.toLowerCase();
   const header = readCodexSessionHeader(filePath);
   const sessionId = typeof header?.payload.id === 'string' && header.payload.id.trim()
     ? header.payload.id.trim()
-    : path.basename(filePath, '.jsonl');
+    : basename;
   return sessionId.toLowerCase();
 }
 
@@ -104,19 +106,21 @@ export function listAllCodexSources(): ProviderSourceList {
   return { sources: files.map(sourceFromFile), truncated: false };
 }
 
-export async function scanCodexSourceSummary(ctx: ProviderContext, source: ProviderSource) {
-  return scanJsonlSummaryCached(source.filePath, 'codex', ctx.jsonlCache, ctx.force);
-}
-
-export function buildCodexLedgerSource(_ctx: ProviderContext, source: ProviderSource, priority = false): ProviderLedgerSource {
-  const sourcePath = normalizeSourcePath(source.filePath);
+export function buildCodexUsageIndexSource(_ctx: ProviderContext, source: ProviderSource) {
+  const stat = fs.statSync(source.filePath);
   return {
-    provider: 'codex',
-    sourceId: source.sourceId,
-    sourcePath,
-    priority: priority || source.priority === true,
-    importIntoSnapshot: (snapshot, nowMs) =>
-      importUsageJsonlIntoSnapshot(snapshot, source.filePath, 'codex', nowMs),
+    descriptor: {
+      sourceId: `codex:${codexSessionDedupeKey(source.filePath)}`,
+      provider: 'codex' as const,
+      kind: 'file' as const,
+      parserVersion: 2,
+      version: {
+        token: `${stat.size}:${stat.mtimeMs}`,
+        size: stat.size,
+        mtimeMs: stat.mtimeMs,
+      },
+    },
+    scanner: createCodexUsageIndexScanner(source.filePath),
   };
 }
 

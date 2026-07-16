@@ -372,18 +372,20 @@ test('restored startup state uses the normal async startup refresh budget', () =
 test('Codex account limit collection is separated from visible usage filters', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const collectStart = source.indexOf('private collectCodexRateLimits');
-  const collectEnd = source.indexOf('private async loadProviderSummaries', collectStart);
+  const collectEnd = source.indexOf('private async scanGenericProviderUsage', collectStart);
   const collectBody = source.slice(collectStart, collectEnd);
   const fastStart = source.indexOf('private async fastRefresh');
   const fastEnd = source.indexOf('private async refreshGitStatsAfterStartup', fastStart);
   const fastBody = source.slice(fastStart, fastEnd);
 
-  assert.match(source, /scanCodexRateLimitsOnly/);
-  assert.match(source, /provider\.isExcludedSource\?\.\(source, isExcluded\)/);
-  assert.match(source, /codexRateLimits = this\.mergeCodexRateLimits\(codexRateLimits, await scanCodexRateLimitsOnly\(source\.filePath\)\)/);
+  assert.doesNotMatch(source, /scanCodexRateLimitsOnly/);
+  assert.match(source, /adapter\.isExcludedSource\(this\.sourceForPath\(adapter, filePath\), isExcluded\)/);
+  assert.match(collectBody, /this\.summaries\.values\(\)/);
+  assert.match(collectBody, /summary\.sessionSnapshot\.codexRateLimits/);
+  assert.doesNotMatch(collectBody, /readSessionProjections/);
   assert.doesNotMatch(collectBody, /getVisibleSummaries/);
-  assert.match(source, /private async refreshRecentCodexRateLimits/);
-  assert.match(fastBody, /await this\.refreshRecentCodexRateLimits\(settings\)/);
+  assert.doesNotMatch(source, /refreshRecentCodexRateLimits/);
+  assert.doesNotMatch(fastBody, /readSessionProjections/);
 });
 
 test('bottom refresh label distinguishes scan countdown from update age', () => {
@@ -428,7 +430,7 @@ test('tray and header status derive provider data from enabled providers', () =>
   assert.match(rendererSource, /function buildProviderQuotaHeaderStatus/);
   assert.match(rendererSource, /enabledProviders: enabledProviderList/);
   assert.match(rendererSource, /args\.enabledProviders/);
-  assert.match(settingsSource, /enabled provider history/);
+  assert.match(settingsSource, /Usage history/);
 });
 
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {
@@ -443,12 +445,13 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   assert.match(rendererSource, /resetLabel=\{card\.visualKind === 'percentOnly' \? undefined : card\.quota\.resetLabel\}/);
 });
 
-test('history warmup ignores recent summary truncation but keeps real partial scans', () => {
+test('history warmup tracks both source discovery truncation and partial scans', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
-  assert.match(source, /summaryPartial = loaded\.scanPartial \|\| \(hasExcludedProjects && loaded\.sourceListPartial\)/);
-  assert.match(source, /partialHistoryScan = ledgerRefresh\.partial \|\| summaryPartial/);
+  assert.match(source, /summaryPartial = loaded\.scanPartial \|\| loaded\.sourceListPartial/);
+  assert.match(source, /partialHistoryScan = summaryPartial/);
   assert.doesNotMatch(source, /partialHistoryScan = effectiveScanBudgetMs !== null/);
+  assert.doesNotMatch(source, /ledgerRefresh/);
   assert.match(source, /sourceListPartial/);
   assert.match(source, /scanPartial/);
 });
