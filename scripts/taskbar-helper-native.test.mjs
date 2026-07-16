@@ -69,7 +69,33 @@ test('taskbar helper renders compact overflow counts for hidden targets', () => 
   assert.match(source, /HiddenCount/);
   assert.match(source, /DrawOverflowBadge/);
   assert.match(source, /\$"\+\{hiddenCount\}"/);
+  assert.match(source, /MeasureOverflowBadgeWidth/);
+  assert.match(source, /OverflowBadgeHorizontalPadding/);
+  assert.doesNotMatch(source, /OverflowBadgeWidth\s*=\s*\d+/);
   assert.doesNotMatch(source, /SourceLabel/);
+});
+
+test('taskbar helper keeps overflow-only suffix columns at their measured text width', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  const measureColumn = source.match(/private int MeasureColumnWidth[\s\S]*?private int MeasureStatusWidth/)?.[0] ?? '';
+  const finalizeColumn = source.match(/private int FinalizeMeasuredColumnWidth[\s\S]*?private int MeasureOverflowBadgeWidth/)?.[0] ?? '';
+
+  assert.match(measureColumn, /MeasureOverflowBadgeWidth\(graphics,\s*row\.HiddenCount\)/);
+  assert.match(measureColumn, /blockIndex\s*==\s*row\.Blocks\.Length/);
+  assert.match(measureColumn, /FinalizeMeasuredColumnWidth\(width,\s*hasQuotaBlock,\s*maxBlockWidth\)/);
+  assert.match(finalizeColumn, /hasQuotaBlock\s*\?\s*Scaled\(MinimumBlockWidth\)\s*:\s*0/);
+  assert.doesNotMatch(finalizeColumn, /Math\.Max\(Scaled\(MinimumBlockWidth\),\s*measuredWidth\)/);
+});
+
+test('taskbar helper measures one-, two-, and three-block overflow geometry from each row hidden count', () => {
+  const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  const measureColumn = source.match(/private int MeasureColumnWidth[\s\S]*?private int MeasureStatusWidth/)?.[0] ?? '';
+  const drawRow = source.match(/private void DrawRow[\s\S]*?private void DrawBlock/)?.[0] ?? '';
+
+  assert.match(measureColumn, /row\.HiddenCount\s*>\s*0\s*&&\s*blockIndex\s*==\s*2[\s\S]*MeasureOverflowBadgeWidth\(graphics,\s*row\.HiddenCount\)/);
+  assert.match(measureColumn, /row\.HiddenCount\s*>\s*0\s*&&\s*blockIndex\s*==\s*row\.Blocks\.Length\s*&&\s*blockIndex\s*<\s*3/);
+  assert.match(drawRow, /row\.Blocks\.Length\s*<\s*3[\s\S]*row\.Blocks\.Length\s*==\s*1\s*\?\s*BlockTwoColumn\s*:\s*BlockThreeColumn/);
+  assert.match(drawRow, /MeasureOverflowBadgeWidth\(graphics,\s*row\.HiddenCount\)/);
 });
 
 test('taskbar helper renders row status text when no quota blocks are available', () => {
@@ -100,12 +126,14 @@ test('taskbar helper validates semantic snapshot arrays before rendering', () =>
 
 test('taskbar helper sizes its host window from measured quota content', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
+  const preferredWidth = source.match(/private int PreferredWidthForTaskbar[\s\S]*?public void Render/)?.[0] ?? '';
   assert.match(source, /MeasurePreferredWidth/);
   assert.match(source, /ResizeToSnapshot/);
   assert.match(source, /RefreshTaskbarMetrics/);
   assert.match(source, /private void ResizeToSnapshot[\s\S]*?!RefreshTaskbarMetrics\(\)/);
   assert.match(source, /PreferredWidthForTaskbar\(taskbarWidth,\s*preferredContentWidth\)/);
-  assert.doesNotMatch(source, /MinimumReadableWidth\s*=\s*780/);
+  assert.match(preferredWidth, /return Math\.Min\(taskbarLimit,\s*Math\.Min\(screenAwareLimit,\s*preferredContentWidth\)\)/);
+  assert.doesNotMatch(preferredWidth, /Math\.Max\([^\n]*preferredContentWidth/);
 });
 
 test('taskbar helper scales layout budgets for the taskbar monitor dpi', () => {
@@ -191,11 +219,14 @@ test('taskbar helper colors only quota used percent by severity', () => {
   assert.match(source, /_palette\.Text/);
 });
 
-test('taskbar helper sizes maximum block width from visible block columns', () => {
+test('taskbar helper sizes maximum block width from quota blocks without counting overflow suffixes', () => {
   const source = fs.readFileSync(path.resolve('taskbar-helper', 'Program.cs'), 'utf8');
-  assert.match(source, /VisibleBlockCount/);
-  assert.match(source, /MaximumBlockWidthFor\(taskbarWidth,\s*VisibleBlockCount\(snapshot\)\)/);
-  assert.match(source, /MaximumBlockWidthFor\(ClientSize\.Width,\s*VisibleBlockCount\(snapshot\)\)/);
+  const visibleCount = source.match(/private static int VisibleQuotaBlockCount[\s\S]*?private int MaximumBlockWidthFor/)?.[0] ?? '';
+  assert.match(source, /VisibleQuotaBlockCount/);
+  assert.match(source, /MaximumBlockWidthFor\(taskbarWidth,\s*VisibleQuotaBlockCount\(snapshot\)\)/);
+  assert.match(source, /MaximumBlockWidthFor\(ClientSize\.Width,\s*VisibleQuotaBlockCount\(snapshot\)\)/);
+  assert.match(visibleCount, /row\.Blocks\.Length/);
+  assert.doesNotMatch(visibleCount, /HiddenCount/);
   assert.match(source, /NonBlockWidthForBlockCount\(blockCount\)/);
   assert.doesNotMatch(source, /MaximumBlockWidthFor\(int availableWidth,\s*int visibleBlockCount\)[\s\S]*\/\s*3/);
 });
