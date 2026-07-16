@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import mod from '../dist/main/outputSplitter.js';
 
-const { splitOutput, signatureProxyThinkingChars, CALIB, assertCalibInBand, compositionToDelta } = mod;
+const { splitOutput, signatureProxyThinkingChars, CALIB, compositionToDelta } = mod;
 
 function weights(over = {}) {
   return {
@@ -87,14 +87,6 @@ test('invalid (NaN/negative) char weight THROWS (fail-loud, not coerced to 0) �
 test('no char signal: non-thinking remainder goes entirely to response (deterministic)', () => {
   const out = splitOutput(weights(), 100, 40);
   assert.equal(out.thinking, 40); assert.equal(out.response, 60); assert.equal(toolSum(out), 0);
-});
-
-test('CALIB drift guard: observed-band ratios pass, scheme-change ratio throws', () => {
-  assertCalibInBand(150, 100); // 1.5는 허용 범위 안이다.
-  assertCalibInBand(265, 100); // 2.65는 CALIB 중심값에 가깝다.
-  assertCalibInBand(379, 100); // 3.79는 짧은 블록에서 관측된 실제 outlier다.
-  assert.throws(() => assertCalibInBand(1000, 100)); // 10x는 허용 범위 밖이다.
-  assert.throws(() => assertCalibInBand(110, 100));  // 1.1은 CALIB_MIN 아래다.
 });
 
 test('compositionToDelta flattens nested toolOutput to flat row keys', () => {

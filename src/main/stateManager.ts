@@ -2,9 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chokidar from 'chokidar';
 import { projectKeysForCwd } from './providers/shared/repoContext';
-import { scanCodexRateLimitsOnly } from './jsonlParser';
-import { JsonlCache } from './jsonlCache';
-import { computeUsage, UsageData, UsageWindowResetHints } from './usageWindows';
+import { UsageData, UsageWindowResetHints } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
 import { API_USAGE_CACHE_SCHEMA_VERSION, CLAUDE_API_MAX_BACKOFF_MS, ApiUsagePct, ClaudeApiStatus, hasClaudeCredentials, normalizeStoredApiUsagePct } from './rateLimitFetcher';
 import { CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION, CODEX_USAGE_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexResetCreditsData, CodexUsagePct, CodexUsageStatus, getCodexAuthIdentityHash, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexResetCredits, normalizeStoredCodexUsagePct } from './codexUsageFetcher';
@@ -12,7 +10,12 @@ import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
 import { BridgeWatcher, LiveSessionData } from './bridgeWatcher';
 import { aggregateDailyAllStats, aggregateDailyStats, buildDaily7dWindow, getGitStatsAsync, GitDailyStats, GitStats } from './gitStatsCollector';
-import { GitOutputLedgerStore, buildCodeOutputFromGitLedger, type GitOutputLedgerSnapshot } from './gitOutputLedger';
+import {
+  GitOutputLedgerStore,
+  buildCategoryNetLines,
+  buildCodeOutputFromGitLedger,
+  hasCommitsInRange,
+} from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache } from './sessionMetadata';
 import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGitStats } from './gitStatsKeys';
@@ -21,12 +24,14 @@ import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
 import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
-import { UsageLedgerStore } from './usageLedgerStore';
-import type { SourceCheckpoint, UsageLedgerSnapshot } from './usageLedgerTypes';
-import { UsageTrendData, buildTrendDataFromLedger, computeUsageFromLedger, emptyUsageTrendData, type UsageLedgerVisibilityFilter } from './usageLedgerUsage';
-import { assembleBucketBreakdown } from './breakdownQuery';
-import type { BreakdownGrain } from '../shared/bucketKey';
-import type { BucketBreakdown } from '../shared/breakdownTypes';
+import { UsageTrendData, emptyUsageTrendData } from './usageTrendTypes';
+import { bucketDateRange, type BreakdownGrain } from '../shared/bucketKey';
+import {
+  emptyOutputComposition,
+  emptyToolActivity,
+  type BucketBreakdown,
+  type ProviderBreakdown,
+} from '../shared/breakdownTypes';
 import { makeStartupStateSnapshot, normalizeStartupStateSnapshot, StateFreshness } from './startupStateSnapshot';
 import { createProviderRegistry, ProviderRegistry } from './providers';
 import type {
@@ -40,7 +45,6 @@ import type {
   ProviderQuotaGroupSpec,
   ProviderQuotaRowVisualKind,
   ProviderId,
-  ProviderLedgerSource,
   ProviderQuotaSnapshot,
   ProviderQuotaStatus,
   ProviderResetCredit,
@@ -61,6 +65,22 @@ import {
   usageProviderVisible,
   type UsageVisibilityFilter,
 } from './usageVisibilityFilter';
+import {
+  DefaultUsageIndex,
+  InMemoryUsageIndexStorage,
+  type UsageIndex,
+  type UsageIndexCoverage,
+  type UsageIndexHealth,
+  type UsageSessionProjection,
+  type UsageSourceDescriptor,
+  type UsageSourceScanner,
+} from './usageIndex';
+import {
+  buildTrendDataFromUsageIndex,
+  computeUsageFromUsageIndex,
+  loadUsageIndexProjection,
+  type UsageIndexProjection,
+} from './usageIndexPresentation';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -99,10 +119,15 @@ export interface DebugMemSnapshot {
     watchedDirectories: number;
     watchedFiles: number;
   };
-  jsonlCache: ReturnType<JsonlCache['getDebugStats']>;
 }
 
 export type ProviderQuotaMap = Partial<Record<ProviderId, ProviderQuotaSnapshot>>;
+
+const INDEXED_USAGE_PROVIDERS: readonly ProviderId[] = ['claude', 'codex', 'antigravity'];
+
+function isIndexedUsageProvider(provider: ProviderId): boolean {
+  return INDEXED_USAGE_PROVIDERS.includes(provider);
+}
 
 export interface AppState {
   sessions: SessionInfo[];
@@ -115,7 +140,8 @@ export interface AppState {
   initialRefreshComplete: boolean;
   historyWarmupPending: boolean;
   historyWarmupStartsAt: number | null;
-  usageLedgerNeedsRebuild: boolean;
+  usageIndexCoverage: UsageIndexCoverage;
+  usageIndexHealth: UsageIndexHealth;
   lastUpdated: number;
   apiConnected: boolean;
   apiStatusLabel?: string;
@@ -160,12 +186,6 @@ interface SessionBuildResult {
   anomaly?: string;
 }
 
-interface LedgerRefreshResult {
-  partial: boolean;
-  scannedFiles: number;
-}
-
-type LedgerSourceFile = ProviderLedgerSource;
 
 const NULL_RESET_CACHE_TTL_MS = 30 * 60 * 1000;
 const CODEX_H5_WINDOW_MS = 5 * 60 * 60 * 1000;
@@ -594,11 +614,7 @@ function isSourceBackedProvider(provider: ProviderAdapter): provider is SourceBa
   return typeof (provider as SourceBackedProviderAdapter).ownsPath === 'function'
     && typeof (provider as SourceBackedProviderAdapter).listRecentSources === 'function'
     && typeof (provider as SourceBackedProviderAdapter).listAllSources === 'function'
-    && typeof (provider as SourceBackedProviderAdapter).scanSourceSummary === 'function';
-}
-
-function hasUsageRequests(summary: FileUsageSummary): boolean {
-  return summary.recentEntries.length > 0 || summary.historicalRollup.aggregate.requestCount > 0;
+    && typeof (provider as SourceBackedProviderAdapter).usageIndexSource === 'function';
 }
 
 function gitStatsCacheKey(cwd: string): string {
@@ -682,17 +698,29 @@ export function currentLedgerRepoKeys<T extends Pick<GitStats, 'gitCommonDir' | 
     .filter((key): key is string => !!key);
 }
 
-export function buildBreakdown(
-  usage: Pick<UsageLedgerSnapshot, 'dailyBreakdown' | 'dailyModel'>,
-  git: Pick<GitOutputLedgerSnapshot, 'dailyOutput'>,
-  repoKeys: string[],
-  breakdownStartedDate: string | null,
-  grain: BreakdownGrain,
-  bucketKey: string,
-  filter: UsageLedgerVisibilityFilter,
-): BucketBreakdown {
-  if (!filter) throw new Error('buildBreakdown: visibility filter is required');
-  return assembleBucketBreakdown(grain, bucketKey, usage, usage.dailyModel, git, repoKeys, breakdownStartedDate, filter);
+function sessionSummaryFromProjection(
+  projection: UsageSessionProjection,
+  descriptor: UsageSourceDescriptor,
+): FileUsageSummary {
+  const snapshot = projection.payload.sessionSnapshot as SessionSnapshot | undefined;
+  if (!snapshot) throw new Error(`Missing session snapshot for ${projection.sourceId}`);
+  return {
+    provider: descriptor.provider,
+    projectKeys: [...(descriptor.projectKeys ?? [])],
+    sessionSnapshot: snapshot,
+    mtimeMs: descriptor.version.mtimeMs ?? projection.updatedAt,
+    size: descriptor.version.size ?? projection.byteSize,
+  };
+}
+
+function incompleteUsageIndexCoverage(): UsageIndexCoverage {
+  return {
+    state: 'incomplete',
+    requiredSourceCount: 0,
+    indexedSourceCount: 0,
+    pendingSourceCount: 0,
+    failedSourceCount: 0,
+  };
 }
 
 export class StateManager {
@@ -743,13 +771,13 @@ export class StateManager {
   private bridgeWatcher: BridgeWatcher;
   private refreshScheduler: RefreshScheduler;
   private liveSession: LiveSessionData | null = null;
-  private jsonlCache = new JsonlCache();
   private readonly providerRegistry: ProviderRegistry;
+  private readonly usageIndex: UsageIndex;
+  private usageIndexProjections: UsageIndexProjection[] = [];
+  private usageIndexCoverage = incompleteUsageIndexCoverage();
   private codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
   private gitStatsCache = new Map<string, { stats: GitStats | null; ts: number }>();
   private dirtySessionFiles = new Set<string>();
-  private usageLedgerStore = new UsageLedgerStore();
-  private usageLedgerImportFailed = false;
   private gitOutputLedgerStore = new GitOutputLedgerStore();
   private historyWarmupTimer: NodeJS.Timeout | null = null;
   private gitWarmupTimer: NodeJS.Timeout | null = null;
@@ -789,11 +817,12 @@ export class StateManager {
   constructor(
     store: Store<AppSettings>,
     onUpdate: (s: AppState) => void,
-    options: { providerRegistry?: ProviderRegistry } = {},
+    options: { providerRegistry?: ProviderRegistry; usageIndex?: UsageIndex } = {},
   ) {
     this.store = store;
     this.onUpdate = onUpdate;
     this.providerRegistry = options.providerRegistry ?? createProviderRegistry();
+    this.usageIndex = options.usageIndex ?? new DefaultUsageIndex(new InMemoryUsageIndexStorage());
     this.state = this.emptyState();
     const restoredState = normalizeStartupStateSnapshot(
       this.getPersistedValue(STARTUP_STATE_SNAPSHOT_KEY, null),
@@ -850,22 +879,97 @@ export class StateManager {
 
   async getBreakdown(grain: BreakdownGrain, bucketKey: string): Promise<BucketBreakdown> {
     const settings = this.getSettings();
-    const usage = this.usageLedgerStore.getSnapshot();
     const repoKeys = this.getCurrentLedgerRepoKeys();
-    const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
-    const canUseUsage = this.canUseUsageLedger(usage, settings);
+    const enabledProviders = this.enabledProviderSet(settings);
     const canUseGit = (settings.excludedProjects?.length ?? 0) === 0 && repoKeys.length > 0;
-    const scopedUsage = canUseUsage ? usage : { dailyBreakdown: {}, dailyModel: {} };
-    const scopedGit = canUseGit ? this.gitOutputLedgerStore.getSnapshot() : { dailyOutput: {} };
-    return buildBreakdown(
-      scopedUsage,
-      scopedGit,
-      repoKeys,
-      canUseUsage ? usage.breakdownStartedDate : null,
+    const { startDate, endDate } = bucketDateRange(grain, bucketKey);
+    const git = this.gitOutputLedgerStore.getSnapshot();
+    const netLines = canUseGit && hasCommitsInRange(git, repoKeys, startDate, endDate)
+      ? buildCategoryNetLines(git, repoKeys, startDate, endDate)
+      : null;
+    const indexedProviders = await this.queryIndexedProviderBreakdowns(
       grain,
       bucketKey,
-      usageVisibilityFilter,
+      [...enabledProviders].filter(isIndexedUsageProvider),
+      settings.excludedProjects ?? [],
     );
+    return {
+      grain,
+      bucketKey,
+      providers: indexedProviders.sort((a, b) => a.provider.localeCompare(b.provider)),
+      netLines,
+    };
+  }
+
+  private async queryIndexedProviderBreakdowns(
+    grain: BreakdownGrain,
+    bucketKey: string,
+    providers: readonly ProviderId[],
+    excludedProjectKeys: readonly string[],
+  ): Promise<ProviderBreakdown[]> {
+    const { startDate, endDate } = bucketDateRange(grain, bucketKey);
+    const fromMs = new Date(`${startDate}T00:00:00`).getTime();
+    const afterEnd = new Date(`${endDate}T00:00:00`);
+    afterEnd.setDate(afterEnd.getDate() + 1);
+    const toMs = afterEnd.getTime();
+    const queryGrain = grain === 'month' ? 'month' : 'day';
+    const results = await Promise.all(providers.map(async (provider): Promise<ProviderBreakdown | null> => {
+      const providerScope = new Set<ProviderId>([provider]);
+      const [usage, breakdown] = await Promise.all([
+        this.usageIndex.queryUsage({
+          grain: queryGrain,
+          providers: providerScope,
+          excludedProjectKeys,
+          fromMs,
+          toMs,
+        }),
+        this.usageIndex.queryBreakdown({
+          grain: queryGrain,
+          providers: providerScope,
+          excludedProjectKeys,
+          fromMs,
+          toMs,
+        }),
+      ]);
+      const hasUsage = usage.aggregate.requestCount > 0
+        || usage.aggregate.inputTokens > 0
+        || usage.aggregate.outputTokens > 0;
+      if (!hasUsage) return null;
+      const output = emptyOutputComposition();
+      output.thinking = breakdown.aggregate.thinking;
+      output.response = breakdown.aggregate.response;
+      output.toolOutput.read = breakdown.aggregate.toolOutputRead;
+      output.toolOutput.editWrite = breakdown.aggregate.toolOutputEditWrite;
+      output.toolOutput.search = breakdown.aggregate.toolOutputSearch;
+      output.toolOutput.git = breakdown.aggregate.toolOutputGit;
+      output.toolOutput.buildTest = breakdown.aggregate.toolOutputBuildTest;
+      output.toolOutput.terminal = breakdown.aggregate.toolOutputTerminal;
+      output.toolOutput.subagents = breakdown.aggregate.toolOutputSubagents;
+      output.toolOutput.web = breakdown.aggregate.toolOutputWeb;
+      const tools = emptyToolActivity();
+      tools.read = breakdown.aggregate.read;
+      tools.editWrite = breakdown.aggregate.editWrite;
+      tools.search = breakdown.aggregate.search;
+      tools.git = breakdown.aggregate.git;
+      tools.buildTest = breakdown.aggregate.buildTest;
+      tools.terminal = breakdown.aggregate.terminal;
+      tools.subagents = breakdown.aggregate.subagents;
+      tools.web = breakdown.aggregate.web;
+      const firstBucket = usage.buckets
+        .filter(bucket => bucket.metrics.requestCount > 0 || bucket.metrics.inputTokens > 0 || bucket.metrics.outputTokens > 0)
+        .sort((a, b) => a.bucketStartMs - b.bucketStartMs)[0];
+      const firstSeen = firstBucket ? new Date(firstBucket.bucketStartMs) : new Date(fromMs);
+      const firstSeenDate = `${firstSeen.getFullYear()}-${String(firstSeen.getMonth() + 1).padStart(2, '0')}-${String(firstSeen.getDate()).padStart(2, '0')}`;
+      return {
+        provider,
+        input: usage.aggregate.inputTokens,
+        output,
+        thinkingExact: provider === 'codex',
+        tools,
+        firstSeenDate,
+      } satisfies ProviderBreakdown;
+    }));
+    return results.filter((result): result is ProviderBreakdown => result !== null);
   }
 
   private getPersistedValue(key: string, fallback: unknown = null): unknown {
@@ -923,6 +1027,8 @@ export class StateManager {
     return {
       ...state,
       settings,
+      usageIndexCoverage: incompleteUsageIndexCoverage(),
+      usageIndexHealth: this.usageIndex.getHealth(),
       repoGitStats: state.repoGitStats && typeof state.repoGitStats === 'object' ? state.repoGitStats : {},
       providerQuotas,
       codexAccount: this.codexAccountForSettings(settings),
@@ -972,6 +1078,13 @@ export class StateManager {
     return next.antigravityQuotaDurationPaceEnabled !== previous.antigravityQuotaDurationPaceEnabled;
   }
 
+  private projectExclusionsChanged(next: AppSettings, previous: AppSettings): boolean {
+    const nextProjects = new Set(next.excludedProjects ?? []);
+    const previousProjects = new Set(previous.excludedProjects ?? []);
+    if (nextProjects.size !== previousProjects.size) return true;
+    return [...nextProjects].some(project => !previousProjects.has(project));
+  }
+
   private sourceBackedProviders(settings: AppSettings): SourceBackedProviderAdapter[] {
     return this.enabledProviders(settings).filter(isSourceBackedProvider);
   }
@@ -980,7 +1093,6 @@ export class StateManager {
     const { settings, ...rest } = overrides;
     return {
       nowMs: Date.now(),
-      jsonlCache: this.jsonlCache,
       scanBudgetMs: null,
       prioritySourceIds: new Set<string>(),
       includeFullHistory: false,
@@ -1044,7 +1156,8 @@ export class StateManager {
       initialRefreshComplete: false,
       historyWarmupPending: false,
       historyWarmupStartsAt: null,
-      usageLedgerNeedsRebuild: false,
+      usageIndexCoverage: incompleteUsageIndexCoverage(),
+      usageIndexHealth: this.usageIndex.getHealth(),
       lastUpdated: 0,
       apiConnected: false,
       apiStatusLabel: undefined,
@@ -1158,7 +1271,10 @@ export class StateManager {
     this.wideWatcherPromotionTimer = null;
     this.watcher?.close();
     this.bridgeWatcher.stop();
-    this.jsonlCache.flushPersisted();
+  }
+
+  async close(): Promise<void> {
+    await this.usageIndex.close();
   }
 
   private requestRefresh(request: RefreshRequest): Promise<void> {
@@ -1285,7 +1401,6 @@ export class StateManager {
   }
 
   private getDebugCounts(): Record<string, number | string | boolean> {
-    const cacheStats = this.jsonlCache.getDebugStats();
     return {
       uiVisible: this.uiVisible,
       uiBusy: this.uiBusy,
@@ -1294,11 +1409,6 @@ export class StateManager {
       summaryCount: this.summaries.size,
       sessionCount: this.state.sessions.length,
       allTimeSessions: this.state.allTimeSessions,
-      cacheMemoryEntries: cacheStats.memoryEntries,
-      cachePersistedEntries: cacheStats.persistedEntries,
-      cachePendingPersistedEntries: cacheStats.pendingPersistedEntries,
-      cacheMemoryLimit: cacheStats.memoryLimit,
-      cachePersistedLimit: cacheStats.persistedLimit,
       gitCacheEntries: this.gitStatsCache.size,
       dirtyFiles: this.dirtySessionFiles.size,
       deferredFastFiles: this.refreshScheduler.getPendingChangedFileCount(),
@@ -1348,7 +1458,6 @@ export class StateManager {
   }
 
   async getDebugMemSnapshot(label = 'ipc'): Promise<DebugMemSnapshot> {
-    const cacheStats = this.jsonlCache.getDebugStats();
     const watched = this.countWatchedPaths();
     return {
       label,
@@ -1368,7 +1477,6 @@ export class StateManager {
         watchedDirectories: watched.watchedDirectories,
         watchedFiles: watched.watchedFiles,
       },
-      jsonlCache: cacheStats,
     };
   }
 
@@ -1811,16 +1919,18 @@ export class StateManager {
     });
   }
 
-  async rebuildUsageLedger(): Promise<void> {
+  async resetUsageIndex(): Promise<void> {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
-    this.usageLedgerStore.reset();
-    this.usageLedgerImportFailed = false;
+    await this.usageIndex.reset();
+    this.usageIndexProjections = [];
+    this.usageIndexCoverage = incompleteUsageIndexCoverage();
     this.state = {
       ...this.state,
       usageTrend: emptyUsageTrendData(),
       historyWarmupPending: true,
-      usageLedgerNeedsRebuild: false,
+      usageIndexCoverage: this.usageIndexCoverage,
+      usageIndexHealth: this.usageIndex.getHealth(),
       stateFreshness: this.currentStateFreshness(),
     };
     this.publishState();
@@ -1841,7 +1951,13 @@ export class StateManager {
     const heavyIntervalMs = this.uiVisible
       ? StateManager.HEAVY_REFRESH_VISIBLE_MS
       : StateManager.HEAVY_REFRESH_HIDDEN_MS;
-    this.fastTimer = setInterval(() => { void this.requestRefresh({ mode: 'fast', reason: 'timer' }); }, fastIntervalMs);
+    this.fastTimer = setInterval(() => {
+      void this.requestRefresh({
+        mode: 'fast',
+        reason: 'timer',
+        changedFiles: this.takeDirtySessionFiles(),
+      });
+    }, fastIntervalMs);
     this.heavyTimer = setInterval(() => {
       void this.requestRefresh({ mode: 'heavy', reason: 'timer', allowHiddenFullScan: true });
     }, heavyIntervalMs);
@@ -1905,10 +2021,13 @@ export class StateManager {
         h5ResetMs: windows.h5?.resetMs ?? null,
       };
     }
-    const ledgerSnapshot = this.usageLedgerStore.getSnapshot();
-    const usage = this.canUseUsageLedger(ledgerSnapshot, settings)
-      ? computeUsageFromLedger(ledgerSnapshot, resetWindows, now, usageVisibilityFilter, providerQuotas)
-      : computeUsage(this.getVisibleSummaries(settings), resetWindows, usageVisibilityFilter, providerQuotas);
+    const usage = computeUsageFromUsageIndex(
+      this.usageIndexProjections,
+      resetWindows,
+      now,
+      usageVisibilityFilter,
+      providerQuotas,
+    );
     return {
       usage,
       providerQuotas,
@@ -1916,48 +2035,35 @@ export class StateManager {
     };
   }
 
-  private canUseUsageLedger(snapshot = this.usageLedgerStore.getSnapshot(), settings = this.getSettings()): boolean {
-    if ((settings.excludedProjects?.length ?? 0) > 0) return false;
-    if (this.usageLedgerImportFailed) return false;
-    const enabled = this.enabledProviderSet(settings);
-    if (this.usageLedgerNeedsRebuild(settings, snapshot)) return false;
-    const hasProviderRows = (record: Record<string, unknown>) => Object.keys(record).some(key =>
-      enabled.has(key.split('|')[1] as ProviderId)
-    );
-    return hasProviderRows(snapshot.dailyModel) || hasProviderRows(snapshot.monthlyModel);
-  }
-
-  private usageLedgerNeedsRebuild(settings = this.getSettings(), snapshot = this.usageLedgerStore.getSnapshot()): boolean {
-    return Object.values(snapshot.sourceCheckpoints).some(checkpoint =>
-      checkpoint.needsRebuild && this.enabledProviderSet(settings).has(checkpoint.provider)
-    );
-  }
-
-  private hasCompletedUsageLedgerImport(
-    snapshot = this.usageLedgerStore.getSnapshot(),
-    settings = this.getSettings(),
-    sources: LedgerSourceFile[] = [],
-  ): boolean {
-    if ((snapshot.lastFullImportAt ?? 0) <= 0 || this.usageLedgerNeedsRebuild(settings, snapshot)) return false;
-    const enabled = this.enabledProviderSet(settings);
-    const requiredProviders = new Set<ProviderId>();
-    for (const source of sources) {
-      if (enabled.has(source.provider)) requiredProviders.add(source.provider);
-    }
-    if (requiredProviders.size === 0) return true;
-    const completedProviders = new Set<ProviderId>(
-      Object.values(snapshot.sourceCheckpoints).map(checkpoint => checkpoint.provider as ProviderId),
-    );
-    return [...requiredProviders].every(provider => completedProviders.has(provider));
-  }
-
   private buildUsageTrend(settings = this.getSettings()): UsageTrendData {
-    const now = Date.now();
-    const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
-    const snapshot = this.usageLedgerStore.getSnapshot();
-    return this.canUseUsageLedger(snapshot, settings)
-      ? buildTrendDataFromLedger(snapshot, now, usageVisibilityFilter)
-      : emptyUsageTrendData();
+    return buildTrendDataFromUsageIndex(this.usageIndexProjections, buildUsageVisibilityFilter(settings));
+  }
+
+  private async refreshUsageIndexProjections(settings: AppSettings): Promise<void> {
+    const enabled = this.enabledProviderSet(settings);
+    const projections = await Promise.all(INDEXED_USAGE_PROVIDERS
+      .filter(provider => enabled.has(provider))
+      .map(provider => loadUsageIndexProjection(
+        this.usageIndex,
+        provider,
+        settings.excludedProjects ?? [],
+      )));
+    this.usageIndexProjections = projections;
+    this.usageIndexCoverage = projections.length > 0
+      ? {
+        state: projections.every(projection => projection.monthly.coverage.state === 'complete') ? 'complete' : 'incomplete',
+        requiredSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.requiredSourceCount, 0),
+        indexedSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.indexedSourceCount, 0),
+        pendingSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.pendingSourceCount, 0),
+        failedSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.failedSourceCount, 0),
+      }
+      : {
+        state: 'complete',
+        requiredSourceCount: 0,
+        indexedSourceCount: 0,
+        pendingSourceCount: 0,
+        failedSourceCount: 0,
+      };
   }
 
   private isExcludedSummary(
@@ -1992,26 +2098,10 @@ export class StateManager {
     return visible;
   }
 
-  private checkpointHasVisibleUsage(checkpoint: SourceCheckpoint, filter: UsageVisibilityFilter): boolean {
-    if (checkpoint.hasUsage === false || checkpoint.needsRebuild) return false;
-    return usageProviderVisible(filter, checkpoint.provider);
-  }
-
-  private summaryHasVisibleUsage(summary: FileUsageSummary, filter: UsageVisibilityFilter): boolean {
-    if (!hasUsageRequests(summary)) return false;
-    return usageProviderVisible(filter, summary.provider);
-  }
-
   private countAllTimeUsageSessions(settings: AppSettings): number {
     const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
-    const snapshot = this.usageLedgerStore.getSnapshot();
-    if (this.canUseUsageLedger(snapshot, settings)) {
-      return Object.values(snapshot.sourceCheckpoints).filter(checkpoint =>
-        this.checkpointHasVisibleUsage(checkpoint, usageVisibilityFilter)
-      ).length;
-    }
     return this.getVisibleSummaries(settings).filter(summary =>
-      this.summaryHasVisibleUsage(summary, usageVisibilityFilter)
+      usageProviderVisible(usageVisibilityFilter, summary.provider)
     ).length;
   }
 
@@ -2166,10 +2256,16 @@ export class StateManager {
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
     this.fastDebounce = setTimeout(() => {
       this.fastDebounce = null;
-      const files = this.dirtySessionFiles.size > 0 ? new Set(this.dirtySessionFiles) : undefined;
-      this.dirtySessionFiles.clear();
+      const files = this.takeDirtySessionFiles();
       void this.requestRefresh({ mode: 'fast', reason: 'watcher', changedFiles: files });
     }, 1200);
+  }
+
+  private takeDirtySessionFiles(): Set<string> | undefined {
+    if (this.dirtySessionFiles.size === 0) return undefined;
+    const files = new Set(this.dirtySessionFiles);
+    this.dirtySessionFiles.clear();
+    return files;
   }
 
   private collectTrackedSessionFiles(
@@ -2279,7 +2375,6 @@ export class StateManager {
     });
     this.watcher.on('unlink', (filePath: string) => {
       if (filePath.endsWith('.jsonl')) {
-        this.jsonlCache.invalidate(filePath);
         this.summaries.delete(normalizeFileKey(filePath));
         invalidateSessionMetadataCache(filePath);
         this.codexRateLimits = this.collectCodexRateLimits();
@@ -2310,13 +2405,11 @@ export class StateManager {
       : ((sessionResult = this.refreshCachedSessionInfos()).sessions);
     sessionPerf = this.finishPerfSample(sessionSample);
     const settings = this.getSettings();
-    await this.refreshRecentCodexRateLimits(settings);
     const derived = this.computeDerivedUsage(settings);
     const usageTrend = this.buildUsageTrend();
     const codexAccount = this.codexAccountForSettings(settings);
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     const allTimeSessions = this.countAllTimeUsageSessions(settings);
-    const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
     this.state = {
       ...this.state,
       sessions,
@@ -2334,7 +2427,6 @@ export class StateManager {
       codeOutputStats,
       codeOutputLoading: false,
       allTimeSessions,
-      usageLedgerNeedsRebuild,
       stateFreshness: this.currentStateFreshness(),
       lastUpdated: Date.now(),
     };
@@ -2381,7 +2473,6 @@ export class StateManager {
   ) {
     const totalPerf = this.beginPerfSample();
     let apiPerf: PerfMetrics | null = null;
-    let ledgerPerf: PerfMetrics | null = null;
     let loadPerf: PerfMetrics | null = null;
     let sessionPerf: PerfMetrics | null = null;
     let gitPerf: PerfMetrics | null = null;
@@ -2404,7 +2495,6 @@ export class StateManager {
         sessionResult = sessionState;
         const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
         const allTimeSessions = this.countAllTimeUsageSessions(settings);
-        const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
         sessionPerf = this.finishPerfSample(sessionSample);
         this.state = {
           ...this.state,
@@ -2425,7 +2515,6 @@ export class StateManager {
           codeOutputStats,
           codeOutputLoading: false,
           allTimeSessions,
-          usageLedgerNeedsRebuild,
           stateFreshness: this.currentStateFreshness(),
         };
         this.publishState();
@@ -2441,29 +2530,19 @@ export class StateManager {
         });
         return;
       }
-      const settingsBeforeLoad = this.getSettings();
-      const hasExcludedProjects = (settingsBeforeLoad.excludedProjects?.length ?? 0) > 0;
-      const ledgerSample = this.beginPerfSample();
-      const ledgerRefresh = await this.refreshUsageLedgerFromDiscoveredSources(
+      const loadSample = this.beginPerfSample();
+      const loaded = await this.loadProviderSummaries(
+        force,
         effectiveScanBudgetMs,
         priorityFiles,
         includeFullHistory,
+        includeFullHistory,
       );
-      ledgerPerf = this.finishPerfSample(ledgerSample);
-      const loadSample = this.beginPerfSample();
-      const summaryForce = force && hasExcludedProjects;
-      const summaryIncludeFullHistory = includeFullHistory && hasExcludedProjects;
-      const loaded = await this.loadProviderSummaries(summaryForce, effectiveScanBudgetMs, priorityFiles, summaryIncludeFullHistory);
       loadPerf = this.finishPerfSample(loadSample);
-      await this.refreshUsageLedgerSources([
-        ...this.ledgerSourcesFromSummaries(loaded.summaries, settingsBeforeLoad),
-        ...loaded.ledgerSources,
-      ]);
       this.startupFreshComplete = true;
-      this.jsonlCache.flushPersisted();
-      const totalScannedFiles = loaded.scannedFiles + ledgerRefresh.scannedFiles;
-      const summaryPartial = loaded.scanPartial || (hasExcludedProjects && loaded.sourceListPartial);
-      const partialHistoryScan = ledgerRefresh.partial || summaryPartial;
+      const totalScannedFiles = loaded.scannedFiles;
+      const summaryPartial = loaded.scanPartial || loaded.sourceListPartial;
+      const partialHistoryScan = summaryPartial;
       const nextSummaries = partialHistoryScan && initialRefreshDone
         ? new Map([...this.summaries, ...loaded.summaries])
         : loaded.summaries;
@@ -2478,7 +2557,6 @@ export class StateManager {
       const usageTrend = this.buildUsageTrend();
       const codexAccount = this.codexAccountForSettings(settings);
       const allTimeSessions = this.countAllTimeUsageSessions(settings);
-      const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
       const showHistoryWarmupBanner = allowStartupBudget && !initialRefreshDone && partialHistoryScan;
       const historyWarmupStartsAt = partialHistoryScan
         ? this.scheduleHistoryWarmup(
@@ -2505,6 +2583,8 @@ export class StateManager {
         initialRefreshComplete: true,
         historyWarmupPending: keepHistoryWarmupBanner,
         historyWarmupStartsAt: keepHistoryWarmupBanner ? historyWarmupStartsAt : null,
+        usageIndexCoverage: this.usageIndexCoverage,
+        usageIndexHealth: this.usageIndex.getHealth(),
         lastUpdated: Date.now(),
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
@@ -2517,7 +2597,6 @@ export class StateManager {
         codeOutputStats: partialCodeOutputStats,
         codeOutputLoading: true,
         allTimeSessions,
-        usageLedgerNeedsRebuild,
       };
       this.publishState();
       if (!initialRefreshDone && !force) {
@@ -2533,15 +2612,12 @@ export class StateManager {
           force,
           scannedFiles: totalScannedFiles,
           summaryScannedFiles: loaded.scannedFiles,
-          ledgerScannedFiles: ledgerRefresh.scannedFiles,
           partial: partialHistoryScan,
           summaryPartial: loaded.partial,
           summarySourcePartial: loaded.sourceListPartial,
           summaryScanPartial: loaded.scanPartial,
-          ledgerPartial: ledgerRefresh.partial,
           scanBudgetMs: effectiveScanBudgetMs,
           ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
-          ...(ledgerPerf ? this.perfFields('ledger', ledgerPerf) : {}),
           ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
           ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
           ...(sessionResult ? this.sessionDebugExtras(sessions, sessionResult) : {}),
@@ -2567,6 +2643,8 @@ export class StateManager {
         initialRefreshComplete: true,
         historyWarmupPending: keepHistoryWarmupBanner,
         historyWarmupStartsAt: keepHistoryWarmupBanner ? historyWarmupStartsAt : null,
+        usageIndexCoverage: this.usageIndexCoverage,
+        usageIndexHealth: this.usageIndex.getHealth(),
         lastUpdated: Date.now(),
         apiConnected: this.apiConnected,
         apiStatusLabel: this.apiStatusLabel || undefined,
@@ -2579,7 +2657,6 @@ export class StateManager {
         codeOutputStats,
         codeOutputLoading: false,
         allTimeSessions,
-        usageLedgerNeedsRebuild,
       };
       this.publishState();
 
@@ -2593,15 +2670,12 @@ export class StateManager {
         force,
         scannedFiles: totalScannedFiles,
         summaryScannedFiles: loaded.scannedFiles,
-        ledgerScannedFiles: ledgerRefresh.scannedFiles,
         partial: partialHistoryScan,
         summaryPartial: loaded.partial,
         summarySourcePartial: loaded.sourceListPartial,
         summaryScanPartial: loaded.scanPartial,
-        ledgerPartial: ledgerRefresh.partial,
         scanBudgetMs: effectiveScanBudgetMs,
         ...(apiPerf ? this.perfFields('api', apiPerf) : {}),
-        ...(ledgerPerf ? this.perfFields('ledger', ledgerPerf) : {}),
         ...(loadPerf ? this.perfFields('load', loadPerf) : {}),
         ...(sessionPerf ? this.perfFields('sessions', sessionPerf) : {}),
         ...(gitPerf ? this.perfFields('git', gitPerf) : {}),
@@ -2888,66 +2962,15 @@ export class StateManager {
     return merged;
   }
 
-  private async refreshRecentCodexRateLimits(settings: AppSettings = this.getSettings()): Promise<void> {
-    const codexProvider = this.providerRegistry.get('codex');
-    if (!isProviderEnabled(settings, 'codex') || !codexProvider || !isSourceBackedProvider(codexProvider)) return;
-    let merged = this.codexRateLimits;
-    const ctx = this.providerContext({ settings });
-    const recentSources = codexProvider.listRecentSources(ctx, StateManager.CODEX_RATE_LIMIT_FAST_FILE_LIMIT).sources;
-    for (const source of recentSources) {
-      try {
-        merged = this.mergeCodexRateLimits(merged, await scanCodexRateLimitsOnly(source.filePath));
-      } catch { /* skip */ }
-    }
-    this.codexRateLimits = merged;
-  }
-
-  private ledgerSourcesFromSummaries(summaries: Map<string, FileUsageSummary>, settings: AppSettings = this.getSettings()): ProviderLedgerSource[] {
-    const ctx = this.providerContext({ settings });
-    const sources: ProviderLedgerSource[] = [];
-    for (const [filePath, summary] of summaries.entries()) {
-      const provider = this.providerRegistry.get(summary.provider);
-      if (!provider || !isSourceBackedProvider(provider) || !provider.ownsPath(filePath)) continue;
-      const source = this.sourceForPath(provider, filePath, true);
-      const ledgerSource = provider.ledgerSource?.(ctx, source, true);
-      if (ledgerSource) sources.push(ledgerSource);
-    }
-    return sources;
-  }
-
-  private async refreshUsageLedgerSources(sources: ProviderLedgerSource[]): Promise<void> {
-    if (sources.length === 0) return;
-    if ((this.getSettings().excludedProjects?.length ?? 0) > 0) return;
-    let snapshot = this.usageLedgerStore.getSnapshot();
-    let changed = false;
-    let importFailed = false;
-    for (const source of sources) {
-      try {
-        const nextSnapshot = await source.importIntoSnapshot(snapshot, Date.now());
-        if (nextSnapshot !== snapshot) changed = true;
-        snapshot = nextSnapshot;
-      } catch {
-        importFailed = true;
-      }
-    }
-    this.usageLedgerImportFailed = importFailed;
-    if (changed) {
-      this.usageLedgerStore.replaceSnapshot(snapshot);
-      this.usageLedgerStore.compact();
-    }
-  }
-
   private async scanGenericProviderUsage(
     settings: AppSettings,
     ctx: ProviderContext,
   ): Promise<{
     summaries: Map<string, FileUsageSummary>;
-    ledgerSources: ProviderLedgerSource[];
     scannedFiles: number;
     partial: boolean;
   }> {
     const summaries = new Map<string, FileUsageSummary>();
-    const ledgerSources: ProviderLedgerSource[] = [];
     let scannedFiles = 0;
     let partial = false;
 
@@ -2955,123 +2978,33 @@ export class StateManager {
       if (isSourceBackedProvider(provider) || !provider.scanUsage) continue;
       try {
         const result = await provider.scanUsage(ctx);
-        for (const [key, summary] of result.summaries.entries()) {
-          summaries.set(key, summary);
+        this.usageIndex.declareSources(
+          provider.id,
+          result.usageIndexSources.map(source => source.descriptor),
+          !result.partial,
+        );
+        for (const source of result.usageIndexSources) {
+          try {
+            const refreshed = await this.usageIndex.refreshSource(source.descriptor, source.scanner);
+            if (refreshed.status !== 'unchanged') scannedFiles += 1;
+            const [projection] = await this.usageIndex.readSessionProjections([source.descriptor.sourceId]);
+            if (projection) {
+              summaries.set(
+                source.descriptor.sourceId,
+                sessionSummaryFromProjection(projection, source.descriptor),
+              );
+            }
+          } catch {
+            partial = true;
+          }
         }
-        ledgerSources.push(...result.ledgerSources);
-        scannedFiles += result.scannedSources;
         partial = partial || result.partial;
       } catch {
         partial = true;
       }
     }
 
-    return { summaries, ledgerSources, scannedFiles, partial };
-  }
-
-  private async ledgerSourceFiles(
-    settings: AppSettings,
-    includeFullHistory: boolean,
-    priorityFiles?: Iterable<string>,
-  ): Promise<{ files: LedgerSourceFile[]; partial: boolean }> {
-    const files: ProviderLedgerSource[] = [];
-    const seen = new Set<string>();
-    const prioritySourceIds = new Set<string>();
-    for (const filePath of priorityFiles ?? []) prioritySourceIds.add(normalizeFileKey(filePath));
-    const ctx = this.providerContext({
-      settings,
-      includeFullHistory,
-      prioritySourceIds,
-    });
-
-    let partial = false;
-    const pushSource = (provider: SourceBackedProviderAdapter, source: ProviderSource, isPriority = false) => {
-      const sourcePath = source.filePath;
-      const normalized = normalizeFileKey(sourcePath);
-      if (seen.has(normalized)) return;
-      seen.add(normalized);
-      const ledgerSource = provider.ledgerSource?.(
-        ctx,
-        { ...source, filePath: sourcePath },
-        isPriority || source.priority === true || prioritySourceIds.has(normalized),
-      );
-      if (ledgerSource) files.push(ledgerSource);
-    };
-
-    const providers = this.sourceBackedProviders(settings);
-
-    for (const filePath of prioritySourceIds) {
-      const provider = providers.find(candidate => candidate.ownsPath(filePath));
-      if (provider) pushSource(provider, this.sourceForPath(provider, filePath, true), true);
-    }
-
-    for (const provider of this.sourceBackedProviders(settings)) {
-      const sourceList = includeFullHistory
-        ? provider.listAllSources(ctx)
-        : provider.listRecentSources(ctx, this.startupLimitForProvider(provider.id));
-      partial = partial || sourceList.truncated;
-      for (const source of sourceList.sources) {
-        pushSource(provider, source);
-      }
-    }
-
-    return { files, partial };
-  }
-
-  private async refreshUsageLedgerFromDiscoveredSources(
-    budgetMs: number | null,
-    priorityFiles: Iterable<string> | undefined,
-    includeFullHistory: boolean,
-  ): Promise<LedgerRefreshResult> {
-    const settings = this.getSettings();
-    if ((settings.excludedProjects?.length ?? 0) > 0) return { partial: false, scannedFiles: 0 };
-
-    let snapshot = this.usageLedgerStore.getSnapshot();
-    if (includeFullHistory && this.usageLedgerNeedsRebuild(settings, snapshot)) {
-      this.usageLedgerImportFailed = false;
-      return { partial: true, scannedFiles: 0 };
-    }
-    const sourceList = await this.ledgerSourceFiles(settings, includeFullHistory, priorityFiles);
-    const alreadyCompletedFullImport = this.hasCompletedUsageLedgerImport(snapshot, settings, sourceList.files);
-    const startedAt = Date.now();
-    let changed = false;
-    let scannedFiles = 0;
-    let partial = !includeFullHistory && sourceList.partial && !alreadyCompletedFullImport;
-    let stoppedForBudget = false;
-    let importFailed = false;
-
-    const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
-    for (const source of sourceList.files) {
-      if (!source.priority && shouldStopForBudget()) {
-        stoppedForBudget = true;
-        partial = true;
-        break;
-      }
-
-      try {
-        if (source.sourcePath && !fs.statSync(source.sourcePath).isFile()) throw new Error('Ledger source is not a file');
-        const nextSnapshot = await source.importIntoSnapshot(snapshot, Date.now());
-        scannedFiles += 1;
-        if (nextSnapshot !== snapshot) changed = true;
-        snapshot = nextSnapshot;
-      } catch {
-        importFailed = true;
-        if (includeFullHistory) partial = true;
-        // Summary cache remains a fallback for session-local data when an import fails.
-      }
-    }
-
-    const completedFullImport = includeFullHistory && !stoppedForBudget && !importFailed;
-    if (changed) {
-      if (completedFullImport) snapshot = { ...snapshot, lastFullImportAt: Date.now() };
-      this.usageLedgerStore.replaceSnapshot(snapshot);
-      this.usageLedgerStore.compact();
-    } else if (completedFullImport) {
-      this.usageLedgerStore.replaceSnapshot({ ...snapshot, lastFullImportAt: Date.now() });
-    }
-    this.usageLedgerImportFailed = importFailed;
-
-    return { partial, scannedFiles };
+    return { summaries, scannedFiles, partial };
   }
 
   private async loadProviderSummaries(
@@ -3079,9 +3012,9 @@ export class StateManager {
     budgetMs: number | null = null,
     priorityFiles?: Iterable<string>,
     includeFullHistory = false,
+    includeIndexedFullHistory = false,
   ): Promise<{
     summaries: Map<string, FileUsageSummary>;
-    ledgerSources: ProviderLedgerSource[];
     sessionCount: number;
     codexRateLimits: SessionSnapshot['codexRateLimits'] | null;
     scannedFiles: number;
@@ -3090,9 +3023,7 @@ export class StateManager {
     scanPartial: boolean;
   }> {
     const settings = this.getSettings();
-    const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
     const summaries = new Map<string, FileUsageSummary>();
-    let ledgerSources: ProviderLedgerSource[] = [];
     let sessionCount = 0;
     let codexRateLimits: SessionSnapshot['codexRateLimits'] | null = null;
     let scannedFiles = 0;
@@ -3142,40 +3073,16 @@ export class StateManager {
     const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
     const shouldPrioritize = (source: ProviderSource) => source.priority === true || startupPriority.has(normalizeFileKey(source.filePath));
 
-    const scanSummary = async (provider: SourceBackedProviderAdapter, source: ProviderSource): Promise<FileUsageSummary | null> => {
+    const scanSummary = async (
+      indexedSource: { descriptor: UsageSourceDescriptor; scanner: UsageSourceScanner },
+    ): Promise<FileUsageSummary | null> => {
       try {
-        const normalizedPath = normalizeFileKey(source.filePath);
-        const stat = fs.statSync(source.filePath);
-        const priority = shouldPrioritize(source);
-        const allowPersistedReuse = (budgetMs === null || includeFullHistory) && !priority;
-        if (!force && budgetMs !== null) {
-          const cached = this.summaries.get(normalizedPath);
-          if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached;
-          const persisted = allowPersistedReuse ? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size) : null;
-          if (persisted) return persisted;
-          const cachedLoose = allowPersistedReuse ? this.jsonlCache.get(source.filePath) : null;
-          if (cachedLoose && cachedLoose.mtimeMs === stat.mtimeMs && cachedLoose.size === stat.size) return cachedLoose;
-          if (!priority && shouldStopForBudget()) {
-            scanPartial = true;
-            return null;
-          }
-        }
-        if (!force) {
-          const fresh = allowPersistedReuse ? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size) : null;
-          if (fresh) return fresh;
-          const existing = this.summaries.get(normalizedPath);
-          if (existing && existing.mtimeMs === stat.mtimeMs && existing.size === stat.size) return existing;
-        }
-
-        if (!priority && shouldStopForBudget()) {
-          scanPartial = true;
-          const fallback = this.summaries.get(normalizedPath) ?? this.jsonlCache.getFresh(source.filePath, stat.mtimeMs, stat.size);
-          return fallback;
-        }
-
-        scannedFiles += 1;
-        return await provider.scanSourceSummary(ctx, source);
+        const refreshed = await this.usageIndex.refreshSource(indexedSource.descriptor, indexedSource.scanner);
+        if (refreshed.status !== 'unchanged') scannedFiles += 1;
+        const [projection] = await this.usageIndex.readSessionProjections([indexedSource.descriptor.sourceId]);
+        return projection ? sessionSummaryFromProjection(projection, indexedSource.descriptor) : null;
       } catch {
+        scanPartial = true;
         return null;
       }
     };
@@ -3188,7 +3095,7 @@ export class StateManager {
         sourcesByPath.set(normalizeFileKey(source.filePath), source);
       }
 
-      const sourceList = includeFullHistory
+      const sourceList = includeFullHistory || (includeIndexedFullHistory && !!provider.usageIndexSource)
         ? provider.listAllSources(ctx)
         : provider.listRecentSources(ctx, this.startupLimitForProvider(provider.id));
       sourceListPartial = sourceListPartial || sourceList.truncated;
@@ -3200,29 +3107,34 @@ export class StateManager {
       const sources = [...sourcesByPath.values()]
         .sort((a, b) => Number(shouldPrioritize(b)) - Number(shouldPrioritize(a)));
 
+      const preparedSources: Array<{
+        source: ProviderSource;
+        indexedSource: { descriptor: UsageSourceDescriptor; scanner: UsageSourceScanner };
+      }> = [];
+      let providerPreparationPartial = false;
       for (const source of sources) {
+        if (!fs.existsSync(source.filePath)) continue;
+        try {
+          preparedSources.push({ source, indexedSource: provider.usageIndexSource(ctx, source) });
+        } catch {
+          providerPreparationPartial = true;
+          scanPartial = true;
+        }
+      }
+      this.usageIndex.declareSources(
+        provider.id,
+        preparedSources.map(prepared => prepared.indexedSource.descriptor),
+        !sourceList.truncated && !providerPreparationPartial,
+      );
+
+      for (const { source, indexedSource } of preparedSources) {
         const priority = shouldPrioritize(source);
         if (!priority && shouldStopForBudget()) {
           scanPartial = true;
           break;
         }
-        if (provider.isExcludedSource?.(source, isExcluded)) {
-          if (provider.id === 'codex') {
-            try {
-              scannedFiles += 1;
-              codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, await scanCodexRateLimitsOnly(source.filePath));
-            } catch { /* skip */ }
-          }
-          continue;
-        }
-        const summary = await scanSummary(provider, source);
+        const summary = await scanSummary(indexedSource);
         if (!summary) continue;
-        if (provider.id === 'codex'
-          && summary.recentEntries.length === 0
-          && summary.historicalRollup.aggregate.requestCount === 0
-          && !summary.sessionSnapshot.codexRateLimits) {
-          continue;
-        }
         sessionCount += 1;
         if (provider.id === 'codex') {
           codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, summary.sessionSnapshot.codexRateLimits);
@@ -3251,12 +3163,12 @@ export class StateManager {
       }
       scannedFiles += genericUsage.scannedFiles;
       scanPartial = scanPartial || genericUsage.partial;
-      ledgerSources = genericUsage.ledgerSources;
     }
+
+    await this.refreshUsageIndexProjections(settings);
 
     return {
       summaries,
-      ledgerSources,
       sessionCount,
       codexRateLimits,
       scannedFiles,
@@ -3269,23 +3181,27 @@ export class StateManager {
   private async refreshChangedSummaries(changedFiles: Set<string>): Promise<void> {
     const settings = this.getSettings();
     const ctx = this.providerContext({ settings, force: true });
-    const ledgerSources: ProviderLedgerSource[] = [];
     for (const file of changedFiles) {
+      const normalizedPath = normalizeFileKey(file);
       const provider = this.providerForSourcePath(file, settings);
       if (!provider) continue;
       if (!fs.existsSync(file)) {
-        this.summaries.delete(normalizeFileKey(file));
-        this.jsonlCache.invalidate(file);
+        this.summaries.delete(normalizedPath);
         continue;
       }
-      const summary = await provider.scanSourceSummary(ctx, this.sourceForPath(provider, file, true));
-      if (!summary) continue;
-      this.summaries.set(normalizeFileKey(file), summary);
-      const ledgerSource = provider.ledgerSource?.(ctx, this.sourceForPath(provider, file, true), true);
-      if (ledgerSource) ledgerSources.push(ledgerSource);
+      try {
+        const source = this.sourceForPath(provider, file, true);
+        const indexedSource = provider.usageIndexSource(ctx, source);
+        await this.usageIndex.refreshSource(indexedSource.descriptor, indexedSource.scanner);
+        const [projection] = await this.usageIndex.readSessionProjections([indexedSource.descriptor.sourceId]);
+        if (projection) {
+          this.summaries.set(normalizedPath, sessionSummaryFromProjection(projection, indexedSource.descriptor));
+        }
+      } catch {
+        this.dirtySessionFiles.add(normalizedPath);
+      }
     }
-    await this.refreshUsageLedgerSources(ledgerSources);
-    this.jsonlCache.flushPersisted();
+    await this.refreshUsageIndexProjections(settings);
     this.codexRateLimits = this.collectCodexRateLimits();
   }
 
@@ -3295,7 +3211,7 @@ export class StateManager {
   }
 
   private getSummary(filePath: string): FileUsageSummary | null {
-    return this.summaries.get(normalizeFileKey(filePath)) ?? this.jsonlCache.get(filePath);
+    return this.summaries.get(normalizeFileKey(filePath)) ?? null;
   }
 
   private peekCachedGitStats(cwd: string): GitStats | null {
@@ -3588,6 +3504,7 @@ export class StateManager {
     const settings = this.getSettings();
     const providerChanged = this.providerSelectionChanged(settings, this.state.settings);
     const quotaSettingsChanged = this.quotaAffectingSettingsChanged(settings, this.state.settings);
+    const projectExclusionsChanged = this.projectExclusionsChanged(settings, this.state.settings);
     if (providerChanged) {
       const previousEnabled = this.enabledProviderSet(this.state.settings);
       const enabled = this.enabledProviderSet(settings);
@@ -3627,7 +3544,6 @@ export class StateManager {
       const usageTrend = this.buildUsageTrend();
       const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
       const allTimeSessions = this.countAllTimeUsageSessions(settings);
-      const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
       this.state = {
         ...this.state,
         sessions,
@@ -3640,7 +3556,6 @@ export class StateManager {
         codeOutputStats,
         codeOutputLoading: true,
         allTimeSessions,
-        usageLedgerNeedsRebuild,
         stateFreshness: this.currentStateFreshness(),
         lastUpdated: Date.now(),
       };
@@ -3661,7 +3576,6 @@ export class StateManager {
     const sessions = this.state.sessions.filter(session => !isExcluded(this.sessionProjectKeys(session)));
     const codeOutputStats = this.buildCodeOutputStats(sessions, this.state.repoGitStats);
     const allTimeSessions = this.countAllTimeUsageSessions(settings);
-    const usageLedgerNeedsRebuild = this.usageLedgerNeedsRebuild(settings);
     this.state = {
       ...this.state,
       sessions,
@@ -3670,11 +3584,16 @@ export class StateManager {
       codeOutputStats,
       codeOutputLoading: false,
       allTimeSessions,
-      usageLedgerNeedsRebuild,
       stateFreshness: this.currentStateFreshness(),
       lastUpdated: Date.now(),
     };
     this.publishState();
+    if (projectExclusionsChanged) {
+      void this.requestRefresh({
+        mode: 'heavy',
+        reason: 'settings',
+      });
+    }
     if (quotaSettingsChanged && this.enabledProviderSet(settings).has('antigravity')) {
       void this.requestRefresh({
         mode: 'heavy',
@@ -3706,7 +3625,6 @@ export class StateManager {
       };
       const workingSet = info.workingSetSize ?? info.workingSet ?? 0;
       const toMb = (kb: number) => Math.round((kb / 1024) * 10) / 10;
-      const cacheStats = this.jsonlCache.getDebugStats();
       const watched = this.countWatchedPaths();
       console.info('[WhereMyTokens][memory]', {
         label,
@@ -3716,10 +3634,6 @@ export class StateManager {
         summaryCount: this.summaries.size,
         sessionCount: this.state.sessions.length,
         allTimeSessions: this.state.allTimeSessions,
-        cacheSize: this.jsonlCache.size,
-        cacheMemoryEntries: cacheStats.memoryEntries,
-        cachePersistedEntries: cacheStats.persistedEntries,
-        cachePendingPersistedEntries: cacheStats.pendingPersistedEntries,
         watcherProfile: this.watcherProfile,
         watcherTargets: this.watcherTargetCount,
         dirtyFiles: this.dirtySessionFiles.size,
@@ -3748,7 +3662,6 @@ export class StateManager {
           watchedDirectories: watched.watchedDirectories,
           watchedFiles: watched.watchedFiles,
         },
-        jsonlCache: cacheStats,
         scannedFiles,
       });
     } catch {

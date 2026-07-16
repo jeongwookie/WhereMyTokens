@@ -12,6 +12,7 @@ import { compactWidgetSize } from './compactWidgetSizing';
 import { createTaskbarQuotaHelperManager } from './taskbarQuotaHelper';
 import { buildTaskbarQuotaSnapshot } from './taskbarQuotaSnapshot';
 import { addNotification } from './notificationHistory';
+import { openUsageIndex } from './usageIndex';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -142,7 +143,7 @@ function rebuildTrayMenu() {
     { label: widgetLabel, click: widgetAction },
     { label: 'Settings', click: () => showPopup('settings') },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.exit(0); } },
+    { label: 'Quit', click: () => { app.quit(); } },
   ]));
 }
 
@@ -298,7 +299,7 @@ function openWidgetContextMenu() {
     { type: 'separator' },
     { label: 'Hide widget', click: hideCompactWidget },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.exit(0); } },
+    { label: 'Quit', click: () => { app.quit(); } },
   ]).popup({ window: widgetWindow });
 }
 
@@ -311,7 +312,7 @@ function openDashboardContextMenu() {
     { type: 'separator' },
     { label: 'Show widget', click: showCompactWidget },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.exit(0); } },
+    { label: 'Quit', click: () => { app.quit(); } },
   ]).popup({ window: popupWindow });
 }
 
@@ -706,7 +707,7 @@ function markPopupMoving() {
   }, 250);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setAppUserModelId('com.wheremytokens.app');
   initOAuthRefresh(
     store as unknown as { get(key: string): unknown; set(key: string, value: unknown): void; delete(key: string): void },
@@ -721,7 +722,8 @@ app.whenReady().then(() => {
     });
   }
 
-  const manager = new StateManager(store, (state) => updateTray(state));
+  const usageIndex = await openUsageIndex(path.join(app.getPath('userData'), 'usage-index.sqlite'));
+  const manager = new StateManager(store, (state) => updateTray(state), { usageIndex });
   stateManager = manager;
   registerIpcHandlers({
     store,
@@ -732,7 +734,7 @@ app.whenReady().then(() => {
       applyRuntimeSettings();
       taskbarQuotaHelper.syncTaskbarQuotaHelper(manager.getState());
     },
-    rebuildUsageLedger: () => manager.rebuildUsageLedger(),
+    resetUsageIndex: () => manager.resetUsageIndex(),
     getDebugMemSnapshot: () => manager.getDebugMemSnapshot('ipc'),
     windowActions: {
       openDashboard: () => showPopup('main'),
@@ -750,6 +752,7 @@ app.whenReady().then(() => {
   app.once('before-quit', () => {
     taskbarQuotaHelper.stopTaskbarQuotaHelper();
     manager.stop();
+    void manager.close();
   });
 
   // Show popup on first launch (after renderer is ready)
@@ -765,7 +768,7 @@ app.whenReady().then(() => {
   app.setLoginItemSettings({ openAtLogin: settings.openAtLogin });
 
   // App quit IPC
-  ipcMain.handle('app:quit', () => { app.exit(0); });
+  ipcMain.handle('app:quit', () => { app.quit(); });
   ipcMain.handle('debug-renderer-event', (_event, payload: Record<string, unknown>) => {
     if (!isDebugInstrumentationEnabled()) return;
     appendCrashLog('renderer-event', {

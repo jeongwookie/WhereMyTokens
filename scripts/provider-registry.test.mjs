@@ -46,7 +46,7 @@ test('provider registry getEnabled excludes disabled providers', () => {
   assert.deepEqual(registry.getEnabled([]).map(provider => provider.id), []);
 });
 
-test('source-backed Claude and Codex adapters expose discovery and source methods', () => {
+test('source-backed Claude and Codex adapters expose discovery and their canonical ingestion method', () => {
   const registry = providersModule.createProviderRegistry();
   const claude = registry.get('claude');
   const codex = registry.get('codex');
@@ -59,10 +59,14 @@ test('source-backed Claude and Codex adapters expose discovery and source method
     assert.equal(typeof provider.ownsPath, 'function');
     assert.equal(typeof provider.listRecentSources, 'function');
     assert.equal(typeof provider.listAllSources, 'function');
-    assert.equal(typeof provider.scanSourceSummary, 'function');
     assert.equal(typeof provider.buildStartupSession, 'function');
     assert.equal(typeof provider.isExcludedSource, 'function');
     assert.equal(typeof provider.fetchQuota, 'function');
+  }
+  for (const provider of [claude, codex]) {
+    assert.equal(typeof provider.usageIndexSource, 'function');
+    assert.equal(provider.scanSourceSummary, undefined);
+    assert.equal(provider.ledgerSource, undefined);
   }
 });
 

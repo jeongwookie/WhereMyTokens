@@ -58,7 +58,9 @@ function makeMockProvider(id, sessions) {
     ownsPath: () => false,
     listRecentSources: () => ({ sources: [], truncated: false }),
     listAllSources: () => ({ sources: [], truncated: false }),
-    scanSourceSummary: async () => null,
+    usageIndexSource: () => {
+      throw new Error('mock has no usage sources');
+    },
     buildStartupSession: () => null,
     isExcludedSource: () => false,
   };

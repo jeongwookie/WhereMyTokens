@@ -87,7 +87,14 @@ const DEFAULT_STATE: AppState = {
   initialRefreshComplete: false,
   historyWarmupPending: false,
   historyWarmupStartsAt: null,
-  usageLedgerNeedsRebuild: false,
+  usageIndexCoverage: {
+    state: 'incomplete',
+    requiredSourceCount: 0,
+    indexedSourceCount: 0,
+    pendingSourceCount: 0,
+    failedSourceCount: 0,
+  },
+  usageIndexHealth: { state: 'ready' },
   lastUpdated: 0,
   apiConnected: false,
   apiStatusLabel: undefined,
@@ -446,6 +453,34 @@ function normalizeStateFreshness(value: unknown, initialRefreshComplete: boolean
   return initialRefreshComplete ? 'fresh' : 'empty';
 }
 
+function normalizeUsageIndexCoverage(value: unknown): AppState['usageIndexCoverage'] {
+  const record = recordOrNull(value);
+  if (!record) return DEFAULT_STATE.usageIndexCoverage;
+  const count = (field: string) => {
+    const candidate = record[field];
+    return typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0
+      ? Math.floor(candidate)
+      : 0;
+  };
+  return {
+    state: record.state === 'complete' ? 'complete' : 'incomplete',
+    requiredSourceCount: count('requiredSourceCount'),
+    indexedSourceCount: count('indexedSourceCount'),
+    pendingSourceCount: count('pendingSourceCount'),
+    failedSourceCount: count('failedSourceCount'),
+  };
+}
+
+function normalizeUsageIndexHealth(value: unknown): AppState['usageIndexHealth'] {
+  const record = recordOrNull(value);
+  const state = record?.state;
+  return {
+    state: state === 'recovered' || state === 'unavailable' ? state : 'ready',
+    ...(typeof record?.message === 'string' ? { message: record.message } : {}),
+    ...(typeof record?.preservedPath === 'string' ? { preservedPath: record.preservedPath } : {}),
+  };
+}
+
 function normalizeWindowStats(value: unknown): WindowStats {
   const record = recordOrNull(value);
   return { ...EMPTY_WINDOW, ...(record ?? {}) } as WindowStats;
@@ -563,6 +598,8 @@ function normalizeState(next: AppState): AppState {
     ...DEFAULT_STATE,
     ...next,
     stateFreshness: normalizeStateFreshness(next.stateFreshness, next.initialRefreshComplete === true),
+    usageIndexCoverage: normalizeUsageIndexCoverage(next.usageIndexCoverage),
+    usageIndexHealth: normalizeUsageIndexHealth(next.usageIndexHealth),
     sessions: arrayOrEmpty(next.sessions).map(session => normalizeSession(session)),
     usage: {
       ...DEFAULT_STATE.usage,
@@ -609,7 +646,6 @@ function normalizeState(next: AppState): AppState {
     historyWarmupStartsAt: typeof next.historyWarmupStartsAt === 'number' && Number.isFinite(next.historyWarmupStartsAt)
       ? next.historyWarmupStartsAt
       : null,
-    usageLedgerNeedsRebuild: next.usageLedgerNeedsRebuild === true,
     apiStatusLabel: typeof next.apiStatusLabel === 'string' ? next.apiStatusLabel : undefined,
     apiError: typeof next.apiError === 'string' ? next.apiError : undefined,
     codexUsageConnected: next.codexUsageConnected === true,

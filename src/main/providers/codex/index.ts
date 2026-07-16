@@ -8,8 +8,7 @@ import {
   listRecentCodexSources,
   ownsCodexPath,
   readCodexSourceCwd,
-  buildCodexLedgerSource,
-  scanCodexSourceSummary,
+  buildCodexUsageIndexSource,
 } from './sources';
 import { fetchCodexQuota } from './quota';
 
@@ -26,8 +25,7 @@ export const codexProvider: SourceBackedProviderAdapter = {
   ownsPath: ownsCodexPath,
   listRecentSources: listRecentCodexSources,
   listAllSources: listAllCodexSources,
-  scanSourceSummary: scanCodexSourceSummary,
-  ledgerSource: buildCodexLedgerSource,
+  usageIndexSource: buildCodexUsageIndexSource,
   fetchQuota: fetchCodexQuota,
   buildStartupSession: buildStartupCodexSession,
   readSourceCwd: readCodexSourceCwd,

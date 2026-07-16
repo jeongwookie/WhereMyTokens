@@ -44,7 +44,7 @@ WhereMyTokens is an Electron tray app. The renderer never reads local files or c
 
 | Layer | Responsibility |
 |-------|----------------|
-| Electron main | Discovers provider sessions, parses usage sources, fetches provider usage, manages tray/window state, and persists settings. |
+| Electron main | Discovers provider sessions, parses/fetches each usage source once, queries the canonical UsageIndex, manages tray/window state, and persists settings. |
 | Preload bridge | Exposes the typed `window.wmt` IPC surface with `contextIsolation` boundaries. |
 | React renderer | Shows the tray dashboard, settings, notifications, activity charts, and compact quota widget. |
 | `statusLine` bridge | Receives Claude Code JSON on stdin and writes a local bridge snapshot for the main process. |
@@ -57,6 +57,7 @@ src/
     index.ts
     stateManager.ts
     providers/
+    usageIndex/
     usageWindows.ts
     rateLimitFetcher.ts
     codexUsageFetcher.ts
