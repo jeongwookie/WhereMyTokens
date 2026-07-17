@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.22.0 | 2026-07-17 | Add built-in Japanese UI, persist language preference through AppSettings/electron-store, update Japanese download guidance, and credit @restructure-git's PR #37 translation/key-structure groundwork |
 | v1.21.0 | 2026-07-17 | Replace the JSON usage ledger, summary cache, and Antigravity usage cache with a source-attributed SQLite UsageIndex; add destructive Reset index recovery; tighten taskbar mini overflow hit bounds while preserving measured +N cues |
 | v1.20.1 | 2026-07-10 | Make taskbar mini quota rows configurable from 1-3 blocks, preserve hidden-target +N indicators, and fix source/status prefix tones for live, cache, bridge, and local-log fallback data |
 | v1.20.0 | 2026-07-07 | Add Codex reset-credit availability to Plan Usage and a self-contained draggable Windows taskbar mini quota display with 5H/1W rows, overflow indicators, runtime-disable safeguards, and privacy docs |

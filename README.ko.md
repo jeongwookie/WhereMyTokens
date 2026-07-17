@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe"><strong>v1.21.0 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.0/WhereMyTokens-Setup.exe"><strong>v1.22.0 다운로드</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 버전</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.21.0은 사용량 저장소를 source 귀속 SQLite UsageIndex로 통합하고, Reset index 복구와 taskbar mini hit bounds를 개선합니다.</em>
+  <em>v1.22.0은 일본어 UI를 내장하고, Settings의 언어 선택으로 System / English / 日本語를 전환할 수 있습니다.</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.22.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.0)** | 7/17 | 일본어 UI를 내장하고, AppSettings에 저장되는 언어 선택과 일본어 다운로드 안내를 추가. @restructure-git 님의 PR #37 기반 제안을 참고해 통합 |
 | **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 7/17 | 기존 사용량 저장소를 source 귀속 SQLite UsageIndex로 통합하고, Reset index 복구와 taskbar mini overflow hit bounds를 개선 |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 7/10 | Taskbar mini quota 행당 표시 블록 수를 1-3개로 설정할 수 있고, 숨겨진 target `+N` 표시와 live/cache/log prefix 상태 색상을 보정 |
 | **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | 7/7 | Codex reset credit을 Plan Usage target으로 추가하고, 드래그 가능한 self-contained Windows taskbar mini quota 표시를 5H/1W 행으로 제공 |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 6/22 | 짧은 Claude thinking 블록에서 calibration guard가 과하게 실패하지 않도록 조정해 Trend breakdown import를 안정화 |
-| **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | Claude JSONL 발견을 수정해 agent 로그도 사용량 그래프에 포함하되 agent 전용 세션 행은 추가하지 않도록 개선 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +88,11 @@
 macOS 사용자는 별도 공개 저장소를 사용하세요:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
 > **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.0/WhereMyTokens-v1.22.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -102,7 +102,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.21.0-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.22.0-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
