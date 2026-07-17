@@ -191,7 +191,7 @@ export interface ProviderQuotaWindow {
   pct: number;
   resetMs: number | null;
   resetLabel?: string;
-  limitState?: 'unlimited';
+  limitState?: 'unlimited' | 'unreported';
   source?: ProviderQuotaSource;
 }
 

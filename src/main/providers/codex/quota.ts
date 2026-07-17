@@ -44,6 +44,7 @@ function codexQuotaWindow(
   resetMs: number | null,
   resetLabel: string,
   unlimited: boolean,
+  unreported: boolean,
   source: ProviderQuotaSnapshot['source'],
 ): NonNullable<ProviderQuotaSnapshot['windows']>[string] | null {
   if (unlimited) {
@@ -51,6 +52,14 @@ function codexQuotaWindow(
       pct: 0,
       resetMs: null,
       limitState: 'unlimited',
+      source,
+    };
+  }
+  if (unreported) {
+    return {
+      pct: 0,
+      resetMs: null,
+      limitState: 'unreported',
       source,
     };
   }
@@ -107,8 +116,8 @@ export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProvid
   const status: CodexUsageStatus = result?.status ?? { code: 'ok', connected: true, label: '', detail: '' };
   const source = usageSkipped ? 'cache' : quotaSource(status);
   const usage = result?.usage ?? null;
-  const h5Window = usage ? codexQuotaWindow(usage.h5Available, usage.h5Pct, usage.h5ResetMs, 'Codex 5h reset unavailable', usage.h5Unlimited, source) : null;
-  const weekWindow = usage ? codexQuotaWindow(usage.weekAvailable, usage.weekPct, usage.weekResetMs, 'Codex weekly reset unavailable', usage.weekUnlimited, source) : null;
+  const h5Window = usage ? codexQuotaWindow(usage.h5Available, usage.h5Pct, usage.h5ResetMs, 'Codex 5h reset unavailable', usage.h5Unlimited, usage.h5Unreported, source) : null;
+  const weekWindow = usage ? codexQuotaWindow(usage.weekAvailable, usage.weekPct, usage.weekResetMs, 'Codex weekly reset unavailable', usage.weekUnlimited, usage.weekUnreported, source) : null;
 
   let resetCredits: CodexResetCreditsData | null = null;
   if (resetResult == null) {

@@ -112,6 +112,19 @@ test('shows unlimited quota windows as taskbar blocks without usage severity', (
   assert.equal(h5.blocks[0].severity, 'normal');
 });
 
+test('shows unreported quota windows as taskbar no-cap blocks', () => {
+  const quota = accountQuota('codex', 'Codex', 0, 44);
+  quota.windows.h5 = { pct: 0, resetMs: null, limitState: 'unreported', source: 'api' };
+
+  const snapshot = buildTaskbarQuotaSnapshot(state({}, { codex: quota }));
+  const block = snapshot.rows[0].blocks[0];
+
+  assert.equal(block.quotaPct, null);
+  assert.equal(block.elapsedPct, null);
+  assert.equal(block.resetLabel, 'no cap');
+  assert.equal(block.severity, 'normal');
+});
+
 test('uses resolved display theme for taskbar snapshot when app theme is auto', () => {
   assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'auto' }), 'light').theme, 'light');
   assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'auto' }), 'dark').theme, 'dark');

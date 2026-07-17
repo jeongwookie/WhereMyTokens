@@ -36,6 +36,8 @@ export interface CodexUsagePct {
   weekAvailable: boolean;
   h5Unlimited: boolean;
   weekUnlimited: boolean;
+  h5Unreported: boolean;
+  weekUnreported: boolean;
   unlimited: boolean;
   h5Pct: number;
   weekPct: number;
@@ -566,6 +568,8 @@ function parseUsagePayload(payload: unknown, now: number): CodexUsagePct | null 
   const unlimited = credits?.unlimited === true;
   const h5Unlimited = unlimited && !windows.h5;
   const weekUnlimited = unlimited && !windows.week;
+  const h5Unreported = !unlimited && !windows.h5 && !!windows.week;
+  const weekUnreported = !unlimited && !windows.week && !!windows.h5;
   const reachedTypeValues = [
     source.rate_limit_reached_type,
     root.rate_limit_reached_type,
@@ -586,10 +590,12 @@ function parseUsagePayload(payload: unknown, now: number): CodexUsagePct | null 
   if (!windows.h5 && !windows.week && !unlimited) return null;
 
   return {
-    h5Available: !!windows.h5 || h5Unlimited,
-    weekAvailable: !!windows.week || weekUnlimited,
+    h5Available: !!windows.h5 || h5Unlimited || h5Unreported,
+    weekAvailable: !!windows.week || weekUnlimited || weekUnreported,
     h5Unlimited,
     weekUnlimited,
+    h5Unreported,
+    weekUnreported,
     unlimited,
     h5Pct,
     weekPct,
@@ -647,6 +653,8 @@ export function normalizeStoredCodexUsagePct(
     weekAvailable: record.weekAvailable === true,
     h5Unlimited: record.h5Unlimited === true,
     weekUnlimited: record.weekUnlimited === true,
+    h5Unreported: record.h5Unreported === true,
+    weekUnreported: record.weekUnreported === true,
     unlimited: record.unlimited === true,
     h5Pct: normalizePct(record.h5Pct),
     weekPct: normalizePct(record.weekPct),

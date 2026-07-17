@@ -131,7 +131,7 @@ function severity(quotaPct: number | null, elapsedPctValue: number | null): Task
 }
 
 function windowSeverity(window: ProviderQuotaWindow | undefined, quotaPct: number | null, elapsedPctValue: number | null): TaskbarQuotaSeverity {
-  if (window?.limitState === 'unlimited') return 'normal';
+  if (window?.limitState === 'unlimited' || window?.limitState === 'unreported') return 'normal';
   return severity(quotaPct, elapsedPctValue);
 }
 
@@ -195,18 +195,18 @@ function makeBlock(
 ): CandidateBlock {
   const safeResetMs = finiteMs(resetMs);
   const elapsedPctValue = elapsedPct(durationMs, safeResetMs);
-  const unlimited = quotaWindow?.limitState === 'unlimited';
+  const noCap = quotaWindow?.limitState === 'unlimited' || quotaWindow?.limitState === 'unreported';
   return {
     targetId,
     provider,
     abbreviation: resolveQuotaAbbreviation(targetId, provider, label, settings),
     label,
-    quotaPct: unlimited ? null : quotaPctValue,
-    elapsedPct: unlimited ? null : elapsedPctValue,
-    resetLabel: unlimited ? 'no cap' : resetLabel(safeResetMs),
+    quotaPct: noCap ? null : quotaPctValue,
+    elapsedPct: noCap ? null : elapsedPctValue,
+    resetLabel: noCap ? 'no cap' : resetLabel(safeResetMs),
     severity: windowSeverity(quotaWindow, quotaPctValue, elapsedPctValue),
     providerStatusTone: statusTone,
-    risk: unlimited ? Number.NEGATIVE_INFINITY : risk(quotaPctValue, elapsedPctValue),
+    risk: noCap ? Number.NEGATIVE_INFINITY : risk(quotaPctValue, elapsedPctValue),
     configuredOrder: order.get(targetId) ?? Number.MAX_SAFE_INTEGER,
     naturalOrder,
   };
@@ -228,7 +228,7 @@ function addWindowCandidate(
   if (!period) return;
   const window = quota.windows?.[windowKey];
   if (!window) return;
-  const hasWindowSignal = window.source || finiteMs(window.resetMs) != null || window.resetLabel || window.pct > 0 || window.limitState === 'unlimited';
+  const hasWindowSignal = window.source || finiteMs(window.resetMs) != null || window.resetLabel || window.pct > 0 || window.limitState === 'unlimited' || window.limitState === 'unreported';
   if (!hasWindowSignal) return;
   rows[period].push(makeBlock(
     provider,

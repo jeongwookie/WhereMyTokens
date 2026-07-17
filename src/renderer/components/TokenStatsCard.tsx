@@ -48,7 +48,7 @@ interface Props {
   limitSourceTitle?: string;
   limitSourceTone?: LimitSourceTone;
   limitDataState?: LimitDataState;
-  limitState?: 'unlimited';
+  limitState?: 'unlimited' | 'unreported';
   pendingLimit?: boolean;
   pendingLimitLabel?: string;
   pendingLimitTitle?: string;
@@ -224,16 +224,20 @@ function TokenStatsCard({
   const showLimitBar = limitPct != null;
   const barPct = Math.max(0, Math.min(100, limitPct ?? 0));
   const isUnlimited = limitState === 'unlimited';
-  const barColor = pendingLimit || isUnlimited ? C.accent : quotaPctBarColor(barPct, C);
+  const isUnreported = limitState === 'unreported';
+  const noCapState = isUnlimited || isUnreported;
+  const barColor = pendingLimit || noCapState ? C.accent : quotaPctBarColor(barPct, C);
   const timeElapsed = pendingLimit ? null : timeElapsedPct(durationMs, resetMs);
   const resolvedLimitState: LimitDataState = pendingLimit
     ? 'syncing'
     : (limitDataState ?? (apiConnected === false && barPct === 0 && !limitSourceLabel ? 'waiting' : 'ready'));
-  const noData = showLimitBar && !isUnlimited && resolvedLimitState !== 'ready';
+  const noData = showLimitBar && !noCapState && resolvedLimitState !== 'ready';
 
   let resetStr = '';
   if (isUnlimited) {
     resetStr = t('tokenStatsCard.unlimitedReset');
+  } else if (isUnreported) {
+    resetStr = t('tokenStatsCard.unreportedReset');
   } else if (resetMs && resetMs > 0) {
     const approx = apiConnected === false ? '~' : '';
     const durationStr = `↻${approx}${fmtDuration(resetMs)}`;
@@ -306,13 +310,13 @@ function TokenStatsCard({
 
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
           <div style={{ fontSize: 30, fontWeight: 800, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, lineHeight: 1.1, fontFamily: C.fontMono }}>
-            {isUnlimited ? (
-              <span title={t('tokenStatsCard.unlimitedTooltip')} style={{ fontSize: 24 }}>
-                {t('tokenStatsCard.unlimited')}
+            {noCapState ? (
+              <span title={t(isUnlimited ? 'tokenStatsCard.unlimitedTooltip' : 'tokenStatsCard.unreportedTooltip')} style={{ fontSize: 24 }}>
+                {t(isUnlimited ? 'tokenStatsCard.unlimited' : 'tokenStatsCard.unreported')}
               </span>
             ) : noData ? <LimitStatusIndicator state={resolvedLimitState} hero /> : formatUsagePct(barPct)}
           </div>
-          {!isUnlimited && !noData && timeElapsed != null && (
+          {!noCapState && !noData && timeElapsed != null && (
             <div
               title={t('tokenStatsCard.windowElapsedTooltip', { pct: Math.round(timeElapsed), period })}
               style={{
@@ -333,7 +337,7 @@ function TokenStatsCard({
         </div>
 
         <div style={{ marginBottom: 6 }}>
-          {isUnlimited ? (
+          {noCapState ? (
             <UnlimitedLimitBar color={C.accent} />
           ) : noData ? (
             <LimitStatusBar state={resolvedLimitState} color={C.accent} />
@@ -352,7 +356,7 @@ function TokenStatsCard({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
-          {(isUnlimited || !noData) && resetStr ? (
+          {(noCapState || !noData) && resetStr ? (
             <span style={{ fontSize: 10, color: C.textMuted }}>{resetStr}</span>
           ) : <span />}
           {!hideCost && stats.costUSD > 0 && (
@@ -396,7 +400,7 @@ function TokenStatsCard({
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ flex: 1 }}>
-              {isUnlimited ? (
+              {noCapState ? (
                 <UnlimitedLimitBar color={C.accent} />
               ) : noData ? (
                 <LimitStatusBar state={resolvedLimitState} color={C.accent} />
@@ -404,10 +408,10 @@ function TokenStatsCard({
                 <StackedProgressBar quotaPct={barPct} timeElapsedPct={timeElapsed} quotaColor={quotaBarColor} height={8} />
               )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, width: noData || isUnlimited ? 72 : 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
-              {isUnlimited ? t('tokenStatsCard.unlimited') : noData ? <LimitStatusIndicator state={resolvedLimitState} /> : formatUsagePct(barPct)}
+            <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, width: noData || noCapState ? 72 : 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
+              {noCapState ? t(isUnlimited ? 'tokenStatsCard.unlimited' : 'tokenStatsCard.unreported') : noData ? <LimitStatusIndicator state={resolvedLimitState} /> : formatUsagePct(barPct)}
             </span>
-            {(isUnlimited || !noData) && resetStr && (
+            {(noCapState || !noData) && resetStr && (
               <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>
             )}
           </div>

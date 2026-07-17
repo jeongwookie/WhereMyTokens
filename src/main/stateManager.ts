@@ -242,6 +242,8 @@ function ageCodexUsageSample(sample: CodexUsagePct, elapsedMs: number): CodexUsa
     weekAvailable: !weekExpired,
     h5Unlimited: !h5Expired && sample.h5Unlimited,
     weekUnlimited: !weekExpired && sample.weekUnlimited,
+    h5Unreported: !h5Expired && sample.h5Unreported,
+    weekUnreported: !weekExpired && sample.weekUnreported,
     unlimited: sample.unlimited && (!h5Expired || !weekExpired),
     h5Pct: h5Expired ? 0 : sample.h5Pct,
     weekPct: weekExpired ? 0 : sample.weekPct,
@@ -259,6 +261,7 @@ function hasMeaningfulQuotaWindow(window: ProviderQuotaWindow | null | undefined
     || window.resetMs != null
     || !!window.resetLabel
     || window.limitState === 'unlimited'
+    || window.limitState === 'unreported'
     || window.source === 'api'
     || window.source === 'statusLine'
     || window.source === 'localLog';
@@ -337,7 +340,7 @@ function sanitizeQuotaWindow(value: unknown): ProviderQuotaWindow | null {
     pct: Math.max(0, Math.min(100, pct)),
     resetMs: resetMs ?? null,
     resetLabel: quotaString(record.resetLabel),
-    limitState: record.limitState === 'unlimited' ? 'unlimited' : undefined,
+    limitState: record.limitState === 'unlimited' || record.limitState === 'unreported' ? record.limitState : undefined,
     source: typeof record.source === 'string' ? quotaSource(record.source) : undefined,
   };
 }
@@ -2933,12 +2936,21 @@ export class StateManager {
       resetMs: number | null,
       resetLabel: string,
       unlimited: boolean,
+      unreported: boolean,
     ): ProviderQuotaWindow | null => {
       if (unlimited) {
         return {
           pct: 0,
           resetMs: null,
           limitState: 'unlimited',
+          source,
+        };
+      }
+      if (unreported) {
+        return {
+          pct: 0,
+          resetMs: null,
+          limitState: 'unreported',
           source,
         };
       }
@@ -2951,8 +2963,8 @@ export class StateManager {
       };
     };
     return {
-      h5: liveWindow(live.h5Available, live.h5Pct, live.h5ResetMs, 'Codex 5h reset unavailable', live.h5Unlimited) ?? local.h5,
-      week: liveWindow(live.weekAvailable, live.weekPct, live.weekResetMs, 'Codex weekly reset unavailable', live.weekUnlimited) ?? local.week,
+      h5: liveWindow(live.h5Available, live.h5Pct, live.h5ResetMs, 'Codex 5h reset unavailable', live.h5Unlimited, live.h5Unreported) ?? local.h5,
+      week: liveWindow(live.weekAvailable, live.weekPct, live.weekResetMs, 'Codex weekly reset unavailable', live.weekUnlimited, live.weekUnreported) ?? local.week,
     };
   }
 

@@ -590,14 +590,14 @@ function trayH5Stats(state: AppState, provider: ProviderId): WindowStats | null 
   return selected;
 }
 
-function trayH5Pct(state: AppState, provider: ProviderId): { pct: number; provisional: boolean; unlimited: boolean } {
+function trayH5Pct(state: AppState, provider: ProviderId): { pct: number; provisional: boolean; noCap: boolean } {
   const quota = state.providerQuotas[provider];
   let pct = 0;
   let provisional = false;
-  let unlimited = false;
+  let noCap = false;
   const consider = (candidatePct: number, window: ProviderQuotaWindow | null) => {
-    if (window?.limitState === 'unlimited') {
-      unlimited = true;
+    if (window?.limitState === 'unlimited' || window?.limitState === 'unreported') {
+      noCap = true;
       return;
     }
     if (provider === 'codex' && isCodexLimitProvisional(state, window)) {
@@ -616,7 +616,7 @@ function trayH5Pct(state: AppState, provider: ProviderId): { pct: number; provis
       consider(100 - model.remainingPct, { pct: 100 - model.remainingPct, resetMs: model.resetMs ?? null, source: quota?.source });
     }
   }
-  return { pct, provisional, unlimited };
+  return { pct, provisional, noCap };
 }
 
 function buildTrayTitle(state: AppState): string {
@@ -631,11 +631,11 @@ function buildTrayTitle(state: AppState): string {
   const pctRows = enabledProviders.map(provider => trayH5Pct(state, provider));
   const h5Pct = Math.max(0, ...pctRows.map(row => row.pct));
   const provisionalOnly = pctRows.some(row => row.provisional) && h5Pct <= 0;
-  const unlimitedOnly = pctRows.some(row => row.unlimited) && h5Pct <= 0;
+  const noCapOnly = pctRows.some(row => row.noCap) && h5Pct <= 0;
   switch (display) {
     case 'h5pct':
       if (provisionalOnly) return 'scan';
-      if (unlimitedOnly) return '∞';
+      if (noCapOnly) return '∞';
       return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;

@@ -178,6 +178,32 @@ test('quota display groups render unlimited quota rows as ready provider data', 
   assert.equal(rendered.rows[0].apiConnected, true);
 });
 
+test('quota display groups render unreported quota rows without pending state', async () => {
+  const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
+  const options = baseOptions({
+    quotaTargetModes: {
+      'codex.group.account': 'simple',
+    },
+  });
+  options.providerQuotas.codex.windows.burst = {
+    pct: 0,
+    resetMs: null,
+    limitState: 'unreported',
+    source: 'api',
+  };
+  options.usage.byProvider.codex.windows.burst = stats(0);
+  delete options.providerQuotas.codex.windows.durable;
+  options.usage.byProvider.codex.windows.durable = stats(0);
+
+  const models = buildQuotaDisplayModels(options);
+  const rendered = models.simpleGroups.find(group => group.id === 'codex.group.account');
+
+  assert.ok(rendered);
+  assert.deepEqual(rendered.rows.map(row => row.label), ['burst']);
+  assert.equal(rendered.rows[0].pending, false);
+  assert.equal(rendered.rows[0].quota.limitState, 'unreported');
+});
+
 test('quota display modes are group-level settings', async () => {
   const { buildQuotaDisplayModels } = await loadQuotaDisplayModels();
   const models = buildQuotaDisplayModels(baseOptions({
