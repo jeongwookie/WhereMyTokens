@@ -38,6 +38,40 @@ function codexCredits(usage: CodexUsagePct | null): Record<string, ProviderCredi
   };
 }
 
+function codexQuotaWindow(
+  available: boolean,
+  pct: number,
+  resetMs: number | null,
+  resetLabel: string,
+  unlimited: boolean,
+  unreported: boolean,
+  source: ProviderQuotaSnapshot['source'],
+): NonNullable<ProviderQuotaSnapshot['windows']>[string] | null {
+  if (unlimited) {
+    return {
+      pct: 0,
+      resetMs: null,
+      limitState: 'unlimited',
+      source,
+    };
+  }
+  if (unreported) {
+    return {
+      pct: 0,
+      resetMs: null,
+      limitState: 'unreported',
+      source,
+    };
+  }
+  if (!available) return null;
+  return {
+    pct,
+    resetMs,
+    resetLabel: resetMs == null ? resetLabel : undefined,
+    source,
+  };
+}
+
 export function buildCodexQuotaDisplayMetadata(): Pick<ProviderQuotaSnapshot, 'groups' | 'windowDisplay'> {
   return {
     groups: [
@@ -82,6 +116,8 @@ export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProvid
   const status: CodexUsageStatus = result?.status ?? { code: 'ok', connected: true, label: '', detail: '' };
   const source = usageSkipped ? 'cache' : quotaSource(status);
   const usage = result?.usage ?? null;
+  const h5Window = usage ? codexQuotaWindow(usage.h5Available, usage.h5Pct, usage.h5ResetMs, 'Codex 5h reset unavailable', usage.h5Unlimited, usage.h5Unreported, source) : null;
+  const weekWindow = usage ? codexQuotaWindow(usage.weekAvailable, usage.weekPct, usage.weekResetMs, 'Codex weekly reset unavailable', usage.weekUnlimited, usage.weekUnreported, source) : null;
 
   let resetCredits: CodexResetCreditsData | null = null;
   if (resetResult == null) {
@@ -110,28 +146,10 @@ export async function fetchCodexQuota(ctx: ProviderContext): Promise<CodexProvid
     capturedAt: ctx.nowMs,
     planName: usage?.plan || undefined,
     ...buildCodexQuotaDisplayMetadata(),
-    windows: usage
+    windows: usage && (h5Window || weekWindow)
       ? {
-          ...(usage.h5Available
-            ? {
-                h5: {
-                  pct: usage.h5Pct,
-                  resetMs: usage.h5ResetMs,
-                  resetLabel: usage.h5ResetMs == null ? 'Codex 5h reset unavailable' : undefined,
-                  source,
-                },
-              }
-            : {}),
-          ...(usage.weekAvailable
-            ? {
-                week: {
-                  pct: usage.weekPct,
-                  resetMs: usage.weekResetMs,
-                  resetLabel: usage.weekResetMs == null ? 'Codex weekly reset unavailable' : undefined,
-                  source,
-                },
-              }
-            : {}),
+          ...(h5Window ? { h5: h5Window } : {}),
+          ...(weekWindow ? { week: weekWindow } : {}),
         }
       : undefined,
     credits: codexCredits(usage),

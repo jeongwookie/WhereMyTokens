@@ -167,8 +167,14 @@
   "tokenStatsCard": {
     "syncing": "Syncing",
     "waiting": "Waiting",
+    "unlimited": "Unlimited",
+    "unreported": "Unlimited",
     "syncingTooltip": "Limit data is syncing in the background.",
     "waitingTooltip": "Waiting for provider limit data.",
+    "unlimitedTooltip": "The provider currently reports this limit window as unlimited.",
+    "unreportedTooltip": "Limit unreported",
+    "unlimitedReset": "No reset window",
+    "unreportedReset": "No reset",
     "cachedSuffix": "(cached)",
     "usageWindowCost": "Usage window cost",
     "resets": "resets {{day}}",
@@ -356,6 +362,10 @@
     "quota": {
       "waitingReset": "waiting",
       "syncingLabel": "syncing",
+      "unlimitedLabel": "Unlimited",
+      "unlimitedReset": "no reset",
+      "unreportedLabel": "Unlimited",
+      "unreportedReset": "no reset",
       "usedTooltip": "Used",
       "usedElapsedTooltip": "Used / Time elapsed",
       "tokenBadgeSingle": "Total tokens for this quota target",
@@ -497,11 +507,17 @@
     "status": {
       "syncing": "syncing",
       "waiting": "waiting",
+      "unlimited": "Unlimited",
+      "unlimitedBadge": "∞",
+      "unreported": "Unlimited",
+      "unreportedBadge": "∞",
       "scanning": "scanning",
       "waitBadge": "wait"
     },
     "tooltip": {
       "startupLoading": "Startup scan is still loading.",
+      "unlimited": "This limit window is currently reported as unlimited.",
+      "unreported": "Limit unreported",
       "noFiveHourData": "No 5h reset data yet. It will appear after local usage or provider data is detected.",
       "groupUnavailable": "{{group}} limit data has not arrived from provider quota sources yet.",
       "timeUntilReset": "Time until reset: {{resetLabel}}",

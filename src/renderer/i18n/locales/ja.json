@@ -167,8 +167,14 @@
   "tokenStatsCard": {
     "syncing": "同期中",
     "waiting": "待機中",
+    "unlimited": "Unlimited",
+    "unreported": "Unlimited",
     "syncingTooltip": "制限データをバックグラウンドで同期しています。",
     "waitingTooltip": "プロバイダーの制限データを待っています。",
+    "unlimitedTooltip": "この制限ウィンドウは現在 unlimited として報告されています。",
+    "unreportedTooltip": "制限は未報告",
+    "unlimitedReset": "リセットなし",
+    "unreportedReset": "リセットなし",
     "cachedSuffix": "(キャッシュ)",
     "usageWindowCost": "使用ウィンドウのコスト",
     "resets": "{{day}}にリセット",
@@ -356,6 +362,10 @@
     "quota": {
       "waitingReset": "待機中",
       "syncingLabel": "同期中",
+      "unlimitedLabel": "Unlimited",
+      "unlimitedReset": "no reset",
+      "unreportedLabel": "Unlimited",
+      "unreportedReset": "no reset",
       "usedTooltip": "使用量",
       "usedElapsedTooltip": "使用量 / 経過時間",
       "tokenBadgeSingle": "このクォータ対象の合計トークン数",
@@ -497,11 +507,17 @@
     "status": {
       "syncing": "同期中",
       "waiting": "待機中",
+      "unlimited": "Unlimited",
+      "unlimitedBadge": "∞",
+      "unreported": "Unlimited",
+      "unreportedBadge": "∞",
       "scanning": "スキャン中",
       "waitBadge": "待機"
     },
     "tooltip": {
       "startupLoading": "起動時のスキャンを読み込んでいます。",
+      "unlimited": "この制限ウィンドウは現在 unlimited として報告されています。",
+      "unreported": "制限は未報告",
       "noFiveHourData": "5時間リセットのデータはまだありません。ローカルの使用状況またはプロバイダーのデータが検出され次第表示されます。",
       "groupUnavailable": "{{group}}の制限データはまだプロバイダーの割り当てソースから届いていません。",
       "timeUntilReset": "リセットまでの時間: {{resetLabel}}",

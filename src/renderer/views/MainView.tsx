@@ -789,12 +789,17 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
   const { t } = useTranslation();
   const source = limitSourceDisplay(row.quota);
   const dataState = limitDataState(row.quota, row.pending);
+  const isUnlimited = row.quota.limitState === 'unlimited';
+  const isUnreported = row.quota.limitState === 'unreported';
+  const noCapState = isUnlimited || isUnreported;
   const percentOnly = row.visualKind === 'percentOnly';
   const quota = clampSimplePct(row.quotaPct);
-  const elapsed = !row.pending && dataState === 'ready' && !percentOnly
+  const elapsed = !noCapState && !row.pending && dataState === 'ready' && !percentOnly
     ? simpleTimeElapsedPct(row.durationMs, row.resetMs)
     : null;
-  const quotaColor = row.pending
+  const quotaColor = noCapState
+    ? C.accent
+    : row.pending
     ? C.accent
     : dataState === 'waiting'
       ? C.textMuted
@@ -804,9 +809,12 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
     : quotaColor;
   const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
+  const noCapTitleKey = isUnlimited ? 'tokenStatsCard.unlimitedTooltip' : 'tokenStatsCard.unreportedTooltip';
+  const noCapResetKey = isUnlimited ? 'mainView.quota.unlimitedReset' : 'mainView.quota.unreportedReset';
+  const noCapLabelKey = isUnlimited ? 'mainView.quota.unlimitedLabel' : 'mainView.quota.unreportedLabel';
   return (
     <div
-      title={row.pending ? row.pendingTitle : source.title}
+      title={noCapState ? t(noCapTitleKey) : row.pending ? row.pendingTitle : source.title}
       style={{
         display: 'grid',
         gridTemplateColumns: percentOnly
@@ -837,25 +845,27 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
             position: 'absolute',
             left: 0,
             top: 2,
-            width: `${row.pending ? 0 : quota}%`,
+            width: `${noCapState ? 100 : row.pending ? 0 : quota}%`,
             height: 4,
             background: quotaColor,
             borderRadius: 3,
-            opacity: row.pending ? 0.35 : 0.9,
+            opacity: noCapState ? 0.62 : row.pending ? 0.35 : 0.9,
             boxShadow: `0 0 4px ${quotaColor}44`,
           }}
         />
       </div>
       {!percentOnly && (
         <span style={{ color: C.textMuted, fontSize: 9, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
-          {row.pending ? t('mainView.quota.syncingLabel') : formatSimpleReset(row.resetMs, row.resetLabel)}
+          {noCapState ? t(noCapResetKey) : row.pending ? t('mainView.quota.syncingLabel') : formatSimpleReset(row.resetMs, row.resetLabel)}
         </span>
       )}
       <span
         title={percentOnly ? t('mainView.quota.usedTooltip') : t('mainView.quota.usedElapsedTooltip')}
         style={{ color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap', textAlign: 'right', minWidth: 42 }}
       >
-        {row.pending ? (
+        {noCapState ? (
+          <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{t(noCapLabelKey)}</span>
+        ) : row.pending ? (
           <span style={{ color: C.textMuted }}>...</span>
         ) : percentOnly ? (
           <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{formatSimplePct(quota)}</span>
@@ -1526,6 +1536,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
             limitSourceTitle={source.title}
             limitSourceTone={source.tone}
             limitDataState={limitDataState(card.quota, card.pending)}
+            limitState={card.quota.limitState}
             pendingLimit={card.pending}
             pendingLimitLabel={t('mainView.quota.pendingLabel')}
             pendingLimitTitle={card.pendingTitle}

@@ -155,6 +155,7 @@ function normalizeQuotaWindow(value: unknown): ProviderQuotaWindow | null {
     pct,
     resetMs,
     resetLabel: typeof record.resetLabel === 'string' ? record.resetLabel : undefined,
+    limitState: record.limitState === 'unlimited' || record.limitState === 'unreported' ? record.limitState : undefined,
     source: isQuotaSource(record.source) ? record.source : undefined,
   };
 }

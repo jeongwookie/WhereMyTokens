@@ -97,6 +97,34 @@ test('builds exactly fixed 5h and 1w rows with provider default abbreviations an
   assert.match(snapshot.rows[0].blocks[0].resetLabel, /^\d+h/);
 });
 
+test('shows unlimited quota windows as taskbar blocks without usage severity', () => {
+  const quota = accountQuota('codex', 'Codex', 0, 44);
+  quota.windows.h5 = { pct: 0, resetMs: null, limitState: 'unlimited', source: 'api' };
+
+  const snapshot = buildTaskbarQuotaSnapshot(state({}, { codex: quota }));
+  const h5 = snapshot.rows[0];
+
+  assert.equal(h5.statusLabel, null);
+  assert.equal(h5.blocks[0].abbreviation, 'CX');
+  assert.equal(h5.blocks[0].quotaPct, null);
+  assert.equal(h5.blocks[0].elapsedPct, null);
+  assert.equal(h5.blocks[0].resetLabel, 'unlimited');
+  assert.equal(h5.blocks[0].severity, 'normal');
+});
+
+test('shows unreported quota windows as taskbar unlimited blocks', () => {
+  const quota = accountQuota('codex', 'Codex', 0, 44);
+  quota.windows.h5 = { pct: 0, resetMs: null, limitState: 'unreported', source: 'api' };
+
+  const snapshot = buildTaskbarQuotaSnapshot(state({}, { codex: quota }));
+  const block = snapshot.rows[0].blocks[0];
+
+  assert.equal(block.quotaPct, null);
+  assert.equal(block.elapsedPct, null);
+  assert.equal(block.resetLabel, 'unlimited');
+  assert.equal(block.severity, 'normal');
+});
+
 test('uses resolved display theme for taskbar snapshot when app theme is auto', () => {
   assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'auto' }), 'light').theme, 'light');
   assert.equal(buildTaskbarQuotaSnapshot(state({ theme: 'auto' }), 'dark').theme, 'dark');
