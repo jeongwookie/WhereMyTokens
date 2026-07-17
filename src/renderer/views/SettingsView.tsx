@@ -200,8 +200,8 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
   const [recordingHotkey, setRecordingHotkey] = useState(false);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatus | null>(null);
   const [integrationMsg, setIntegrationMsg] = useState('');
-  const [rebuildingLedger, setRebuildingLedger] = useState(false);
-  const [ledgerMsg, setLedgerMsg] = useState('');
+  const [resettingIndex, setResettingIndex] = useState(false);
+  const [resetIndexMsg, setResetIndexMsg] = useState('');
   const latestSettings = useMemo(() => normalizeSettingsDraft(settings), [settings]);
   const settingsToSave = useMemo(() => buildSettingsPatch(s, baseSettings, latestSettings), [s, baseSettings, latestSettings]);
   const quotaTargetOptions = useMemo(() => buildQuotaTargetSettingsOptions(s, providerQuotas), [s, providerQuotas]);
@@ -291,18 +291,24 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
     setTimeout(() => setIntegrationMsg(''), 4000);
   }
 
-  async function handleRebuildLedger() {
-    if (rebuildingLedger) return;
-    setRebuildingLedger(true);
-    setLedgerMsg('Rebuilding...');
+  async function handleResetIndex() {
+    if (resettingIndex) return;
+    const confirmed = window.confirm([
+      'Reset usage index?',
+      'This clears indexed history and rebuilds from available provider logs.',
+      'History from unavailable logs will be permanently lost.',
+    ].join('\n\n'));
+    if (!confirmed) return;
+    setResettingIndex(true);
+    setResetIndexMsg('Resetting...');
     try {
-      await window.wmt.rebuildLedger();
-      setLedgerMsg('Rebuild complete.');
+      await window.wmt.resetIndex();
+      setResetIndexMsg('Reset complete.');
     } catch (e) {
-      setLedgerMsg(`Failed: ${String(e)}`);
+      setResetIndexMsg(`Failed: ${String(e)}`);
     } finally {
-      setRebuildingLedger(false);
-      setTimeout(() => setLedgerMsg(''), 5000);
+      setResettingIndex(false);
+      setTimeout(() => setResetIndexMsg(''), 5000);
     }
   }
 
@@ -713,29 +719,29 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         <SectionHeader label="Data" />
         <div style={row}>
           <div>
-            <div style={labelStyle}>Usage ledger</div>
+            <div style={labelStyle}>Usage history</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Rebuilds local-only aggregates from enabled provider history; totals may change during sync
+              Clears indexed history and rebuilds from available provider logs. Unavailable history will be lost.
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0, justifyContent: 'flex-end' }}>
-            {ledgerMsg && <span title={ledgerMsg} style={{ fontSize: 10, color: C.textMuted, minWidth: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ledgerMsg}</span>}
+            {resetIndexMsg && <span title={resetIndexMsg} style={{ fontSize: 10, color: C.textMuted, minWidth: 0, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resetIndexMsg}</span>}
             <button
               type="button"
-              disabled={rebuildingLedger}
-              onClick={handleRebuildLedger}
+              disabled={resettingIndex}
+              onClick={handleResetIndex}
               style={{
-                background: rebuildingLedger ? C.bgRow : C.accent,
-                color: rebuildingLedger ? C.textMuted : '#fff',
-                border: `1px solid ${rebuildingLedger ? C.border : C.accent}`,
+                background: resettingIndex ? C.bgRow : C.barRed,
+                color: resettingIndex ? C.textMuted : '#fff',
+                border: `1px solid ${resettingIndex ? C.border : C.barRed}`,
                 borderRadius: 4,
                 padding: '4px 10px',
                 fontSize: 11,
-                cursor: rebuildingLedger ? 'wait' : 'pointer',
+                cursor: resettingIndex ? 'wait' : 'pointer',
                 fontWeight: 600,
               }}
             >
-              Rebuild ledger
+              Reset index
             </button>
           </div>
         </div>

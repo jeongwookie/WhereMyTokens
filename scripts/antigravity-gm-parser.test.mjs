@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import * as gmParser from '../dist/main/providers/antigravity/gmParser.js';
-import { buildAntigravitySummary } from '../dist/main/providers/antigravity/summary.js';
+import { antigravityUsageEntryFromCall } from '../dist/main/providers/antigravity/summary.js';
 import {
   estimateAntigravityCacheSavingsUSD,
   estimateAntigravityCostUSD,
@@ -84,7 +84,7 @@ test('Antigravity GM parser prefers quota model id over response alias for stats
   assert.match(call.rawModel, /gemini-pro-default/);
 });
 
-test('Antigravity GM parser skips entries without token fields and summaries carry estimated cost', () => {
+test('Antigravity GM parser skips entries without token fields and usage entries carry estimated cost', () => {
   const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
   const empty = parseAntigravityGmEntry('cascade-1', { chatModel: { usage: {} } }, nowMs);
   const call = parseAntigravityGmEntry('cascade-1', {
@@ -95,20 +95,13 @@ test('Antigravity GM parser skips entries without token fields and summaries car
       messagePrompts: [{ toolCalls: [{ name: 'terminal_command' }] }],
     },
   }, nowMs, new Map([['MODEL_CLAUDE_OPUS', 'Claude Opus']]));
-  const summary = buildAntigravitySummary({
-    cascadeId: 'cascade-1',
-    calls: [call],
-    nowMs,
-    lastModifiedMs: nowMs,
-  });
+  const entry = antigravityUsageEntryFromCall(call);
   const activity = activityBreakdownFromCalls([call]);
 
   assert.equal(empty, null);
-  assert.equal(summary.provider, 'antigravity');
-  assert.equal(summary.recentEntries[0].costUSD, 0.000175);
-  assert.equal(summary.recentEntries[0].cacheSavingsUSD, 0);
-  assert.equal(summary.historicalRollup.aggregate.costUSD, 0);
-  assert.equal(summary.sessionSnapshot.modelName, 'Claude Opus');
+  assert.equal(entry.provider, 'antigravity');
+  assert.equal(entry.costUSD, 0.000175);
+  assert.equal(entry.cacheSavingsUSD, 0);
   assert.equal(activity.terminal, 1);
 });
 

@@ -1,4 +1,4 @@
-import { sourceHashForIdentity } from '../../usageLedgerImporter';
+import * as crypto from 'crypto';
 import type { AntigravityServerInfo } from './types';
 
 export function antigravityServerOwnerKey(
@@ -9,7 +9,7 @@ export function antigravityServerOwnerKey(
     : server.processStartedAtMs != null
       ? `process:${server.pid}:${server.processStartedAtMs}`
       : `endpoint:${server.pid}:${server.port}`;
-  return sourceHashForIdentity(`antigravity:${raw}`);
+  return crypto.createHash('sha256').update(`antigravity:${raw}`).digest('base64url');
 }
 
 export function antigravityCascadeSummaryKey(ownerKey: string, cascadeId: string): string {

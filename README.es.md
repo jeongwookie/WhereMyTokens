@@ -127,7 +127,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Estadísticas del encabezado** — alternancia today/all-time: costo, llamadas API, sesiones, eficiencia de caché, ahorros, metadatos compactos de provider y estado health/fallback por provider. En `all`, el conteo de sesiones viene del historial completo
 - **Snapshots de inicio instantáneo** — restaura al instante el último estado válido de la UI mientras los nuevos escaneos continúan en segundo plano
 - **Sincronización de historial al iniciar** — las sesiones actuales y el uso reciente aparecen primero; el historial antiguo sigue por un budgeted refresh scheduler para mantener responsive el hotkey popup y la UI
-- **Ledger persistente de uso** — agrega el uso local de JSONL en un ledger local para que los totales antiguos dependan menos de la caché JSONL y puedan reconstruirse desde Settings
+- **Índice persistente de uso** — Claude, Codex y Antigravity escriben uso en el `usage-index.sqlite` atribuido por source. El detalle de requests se conserva 8 días, la precisión horaria 35 días, la diaria 180 días y los totales mensuales indefinidamente. El primer indexing no bloquea la UI y muestra cuando la coverage sigue incompleta; **Reset index** borra el historial indexado y reconstruye solo desde los provider logs disponibles
 - **Tarjeta Trend** — muestra tendencias diarias, semanales o mensuales de costo/tokens junto con líneas netas de git; haz clic en un bucket para ver input/output por provider, thinking/response/tool usage, tokens work/billing y categorías de líneas netas git
 - **Pestañas de actividad** — mapa de calor de 7 días, calendario de 5 meses (estilo GitHub), distribución por hora, comparación de 4 semanas
 - **Pestaña Rhythm** — distribución de costos por franja horaria (Morning/Afternoon/Evening/Night) con barras de gradiente, estadísticas detalladas del pico, zona horaria local
@@ -178,17 +178,17 @@ WhereMyTokens es una app de bandeja Electron local-first. El renderer no lee arc
 
 | Capa | Responsabilidad |
 |------|-----------------|
-| Electron main | Descubre sesiones de providers, parsea JSONL/local RPC, obtiene uso del provider, gestiona bandeja/ventanas y persiste ajustes. |
+| Electron main | Descubre sesiones de providers, parsea/obtiene cada usage source una sola vez, consulta el UsageIndex canónico y gestiona bandeja/ventanas y ajustes. |
 | Preload bridge | Expone la superficie IPC typed `window.wmt` mientras mantiene los límites de `contextIsolation`. |
 | React renderer | Muestra el panel de bandeja, ajustes, notificaciones, gráficos de actividad y widget compacto de cuota. |
 | `statusLine` bridge | `src/bridge/bridge.ts` recibe JSON de Claude Code por stdin y escribe un snapshot local que observa el proceso main. |
 
 | Flujo de datos | Fuente | Destino | Red |
 |----------------|--------|---------|-----|
-| Sesiones Claude | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
+| Sesiones Claude | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | Scanner del main process escribe en UsageIndex y publica session projection | No |
 | Puente Claude | stdin de Claude Code `statusLine` | `%APPDATA%\WhereMyTokens\live-session.json` | No |
 | Límites de uso Claude | OAuth token en `~/.claude/.credentials.json` | Anthropic `/api/oauth/usage` | Sí, directo a Anthropic |
-| Sesiones Codex | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Parser/cache del main process, luego renderer state | No |
+| Sesiones Codex | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | Scanner del main process escribe en UsageIndex y publica session projection | No |
 | Límites de uso Codex y reset credits | OAuth token en `~/.codex/auth.json` | ChatGPT/Codex usage endpoint y reset-credit endpoint | Sí, directo a OpenAI/ChatGPT |
 | Sesiones/quota Antigravity | Language server de Antigravity en ejecución | 127.0.0.1 local RPC, luego renderer state | No |
 
@@ -213,6 +213,7 @@ WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicit
 | `%APPDATA%\WhereMyTokens\live-session.json` | Snapshot local escrito por el bridge `statusLine` de Claude Code. |
 | Taskbar mini helper stdin | Cuando el taskbar mini está habilitado, el main process envía datos resumidos de quota 5H/1W y el resolved light/dark theme fallback al native helper. El helper samplea localmente el fondo visible de la barra de tareas para contraste, pero no guarda ni transmite píxeles; tampoco lee credentials, logs ni llama provider APIs directamente. |
 | `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Guarda solo la posición del taskbar mini relativa a la barra de tareas. |
+| `%APPDATA%\WhereMyTokens\usage-index.sqlite` | Índice local de uso para checkpoints incrementales, totales a largo plazo, buckets de Trend y heatmap. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | Ajustes de la app, cachés locales, historial de notificaciones y estado del bridge. |
 
 El manejo de credenciales es deliberadamente estrecho: WhereMyTokens lee los archivos locales oficiales de la CLI, no pide pegar API keys, no guarda una copia de respaldo de credenciales y oculta detalles de credenciales en la salida de estado. Si el access token de Claude expira, la app puede refrescarlo con Anthropic y escribir las credentials actualizadas de forma atómica en `~/.claude/.credentials.json`.
@@ -251,7 +252,7 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 
 ### Seguimiento de Antigravity
 
-El seguimiento de Antigravity se conecta únicamente al language server del IDE Antigravity en ejecución mediante 127.0.0.1 local RPC. Lee cascades de sesión, quota por modelo y generator metadata para alimentar providerQuotas y el usage ledger; no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline.
+El seguimiento de Antigravity se conecta únicamente al language server del IDE Antigravity en ejecución mediante 127.0.0.1 local RPC. Lee cascades de sesión, quota por modelo y generator metadata para alimentar providerQuotas y el UsageIndex atribuido por source; no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline.
 
 Las tarjetas de quota por modelo de Antigravity son percent-only por defecto. Activa **Antigravity quota pace** en Settings para estimar el pacing de 5h/semanal desde los reset times.
 

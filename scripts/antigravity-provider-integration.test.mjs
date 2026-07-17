@@ -6,23 +6,17 @@ import { performance } from 'node:perf_hooks';
 import { fetchAntigravityQuotaFromServers } from '../dist/main/providers/antigravity/quota.js';
 import { discoverAntigravitySessionsFromServers } from '../dist/main/providers/antigravity/sessions.js';
 import { scanAntigravityUsageFromServers } from '../dist/main/providers/antigravity/usage.js';
-import {
-  AntigravityUsageCacheStore,
-  emptyAntigravityUsageCacheSnapshot,
-} from '../dist/main/providers/antigravity/usageCacheStore.js';
+import usageIndexModule from '../dist/main/usageIndex/index.js';
 import {
   antigravityCascadeSummaryKey,
   antigravityServerOwnerKey,
 } from '../dist/main/providers/antigravity/serverIdentity.js';
-import aggregates from '../dist/main/usageLedgerAggregates.js';
-
-const { emptyUsageAggregate, emptyUsageLedgerSnapshot, dayModelKey, monthModelKey } = aggregates;
+const { DefaultUsageIndex, InMemoryUsageIndexStorage } = usageIndexModule;
 
 function context(overrides = {}) {
   return {
     settings: { enabledProviders: ['antigravity'] },
     nowMs: Date.parse('2026-06-01T12:00:00.000Z'),
-    jsonlCache: {},
     scanBudgetMs: null,
     prioritySourceIds: new Set(),
     includeFullHistory: false,
@@ -31,18 +25,29 @@ function context(overrides = {}) {
   };
 }
 
-function memoryAntigravityCacheStore() {
-  let value = emptyAntigravityUsageCacheSnapshot();
-  return new AntigravityUsageCacheStore({
-    get(key) {
-      assert.equal(key, 'cache');
-      return value;
-    },
-    set(key, next) {
-      assert.equal(key, 'cache');
-      value = next;
-    },
-  });
+async function materialize(discovery, index = new DefaultUsageIndex(new InMemoryUsageIndexStorage())) {
+  index.declareSources(
+    'antigravity',
+    discovery.usageIndexSources.map(source => source.descriptor),
+    !discovery.partial,
+  );
+  let partial = discovery.partial;
+  const refreshes = [];
+  for (const source of discovery.usageIndexSources) {
+    try {
+      refreshes.push(await index.refreshSource(source.descriptor, source.scanner));
+    } catch {
+      partial = true;
+    }
+  }
+  return {
+    index,
+    partial,
+    refreshes,
+    projections: await index.readSessionProjections(),
+    entries: await index.readProjectionEntries({ providers: new Set(['antigravity']) }),
+    usage: await index.queryUsage({ grain: 'month', providers: new Set(['antigravity']) }),
+  };
 }
 
 async function withAntigravityServer(handler, run) {
@@ -123,7 +128,8 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
   }, async serverInfo => {
     const ctx = context({ nowMs });
     const quota = await fetchAntigravityQuotaFromServers(ctx, [serverInfo]);
-    const usage = await scanAntigravityUsageFromServers(ctx, [serverInfo], undefined, memoryAntigravityCacheStore());
+    const usage = await scanAntigravityUsageFromServers(ctx, [serverInfo]);
+    const indexed = await materialize(usage);
 
     assert.equal(quota.provider, 'antigravity');
     assert.equal(quota.source, 'localRpc');
@@ -150,9 +156,10 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
     );
     assert.equal(quotaWithPace.models[0].durationMs, 5 * 60 * 60 * 1000);
     assert.equal(quotaWithPace.models[0].visualKind, 'pace');
-    assert.equal(usage.summaries.has(summaryKey(serverInfo, 'c1')), true);
-    assert.equal(usage.ledgerSources.length, 1);
-    assert.equal(usage.scannedSources, 1);
+    assert.equal(usage.usageIndexSources[0].descriptor.sourceId, summaryKey(serverInfo, 'c1'));
+    assert.equal(indexed.usage.aggregate.requestCount, 1);
+    assert.equal(indexed.usage.aggregate.inputTokens, 10);
+    assert.equal(indexed.usage.aggregate.outputTokens, 5);
   });
 });
 
@@ -249,15 +256,11 @@ test('Antigravity usage scan returns partial near deadline instead of waiting fo
     sendJson(res, {});
   }, async serverInfo => {
     const started = performance.now();
-    const usage = await scanAntigravityUsageFromServers(
-      context({ nowMs, scanBudgetMs: 50 }),
-      [serverInfo],
-      undefined,
-      memoryAntigravityCacheStore(),
-    );
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs, scanBudgetMs: 50 }), [serverInfo]);
+    const indexed = await materialize(usage);
     const elapsed = performance.now() - started;
 
-    assert.equal(usage.partial, true);
+    assert.equal(indexed.partial, true);
     assert.ok(elapsed < 500, `scan took ${elapsed}ms`);
   });
 });
@@ -290,9 +293,9 @@ test('Antigravity usage scan marks partial when cascade list exceeds the scan li
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo]);
 
-    assert.equal(usage.scannedSources, 48);
+    assert.equal(usage.usageIndexSources.length, 48);
     assert.equal(usage.partial, true);
   });
 });
@@ -325,14 +328,9 @@ test('Antigravity full-history usage scan raises the cascade limit', async () =>
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(
-      context({ nowMs, includeFullHistory: true }),
-      [serverInfo],
-      undefined,
-      memoryAntigravityCacheStore(),
-    );
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs, includeFullHistory: true }), [serverInfo]);
 
-    assert.equal(usage.scannedSources, 200);
+    assert.equal(usage.usageIndexSources.length, 200);
     assert.equal(usage.partial, true);
   });
 });
@@ -350,11 +348,10 @@ test('Antigravity usage scan marks partial when trajectory summaries RPC fails',
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo]);
 
     assert.equal(usage.partial, true);
-    assert.equal(usage.scannedSources, 0);
-    assert.equal(usage.ledgerSources.length, 1);
+    assert.equal(usage.usageIndexSources.length, 0);
   });
 });
 
@@ -394,10 +391,10 @@ test('Antigravity usage scan uses createdTime as timestamp fallback when lastMod
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
-    const summary = usage.summaries.get(summaryKey(serverInfo, 'createdOnly'));
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo]);
+    const indexed = await materialize(usage);
 
-    assert.equal(summary.recentEntries[0].timestampMs, createdMs);
+    assert.equal(indexed.projections[0].updatedAt, createdMs);
   });
 });
 
@@ -435,11 +432,11 @@ test('Antigravity usage scan falls back to now when cascade and GM timestamps ar
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
-    const summary = usage.summaries.get(summaryKey(serverInfo, 'noTime'));
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo]);
+    const indexed = await materialize(usage);
 
-    assert.equal(summary.recentEntries[0].timestampMs, nowMs);
-    assert.equal(summary.mtimeMs, nowMs);
+    assert.equal(indexed.projections[0].updatedAt, nowMs);
+    assert.equal(usage.usageIndexSources[0].descriptor.version.mtimeMs, nowMs);
   });
 });
 
@@ -503,9 +500,9 @@ test('Antigravity usage scan enriches non-empty lightweight GM with full traject
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
-    const snapshot = await usage.ledgerSources[0].importIntoSnapshot(emptyUsageLedgerSnapshot(), nowMs);
-    const row = snapshot.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')];
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo]);
+    const indexed = await materialize(usage);
+    const row = indexed.usage.aggregate;
 
     assert.equal(row.requestCount, 2);
     assert.equal(row.inputTokens, 120);
@@ -566,9 +563,9 @@ test('Antigravity usage scan keeps repeated execution ids with distinct step ind
     }
     sendJson(res, {});
   }, async serverInfo => {
-    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo], undefined, memoryAntigravityCacheStore());
-    const snapshot = await usage.ledgerSources[0].importIntoSnapshot(emptyUsageLedgerSnapshot(), nowMs);
-    const row = snapshot.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')];
+    const usage = await scanAntigravityUsageFromServers(context({ nowMs }), [serverInfo]);
+    const indexed = await materialize(usage);
+    const row = indexed.usage.aggregate;
 
     assert.equal(row.requestCount, 2);
     assert.equal(row.inputTokens, 30);
@@ -576,10 +573,10 @@ test('Antigravity usage scan keeps repeated execution ids with distinct step ind
   });
 });
 
-test('Antigravity usage scan returns summaries from persisted cache when current RPC omits old cascades', async () => {
+test('Antigravity UsageIndex preserves history when current RPC omits old cascades', async () => {
   const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
   let includeCascade = true;
-  const cacheStore = memoryAntigravityCacheStore();
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   await withAntigravityServer((req, res) => {
     if (req.url.endsWith('/GetUserStatus')) {
       sendJson(res, { userStatus: { cascadeModelConfigData: { clientModelConfigs: [{ label: 'Gemini 3 Pro', modelOrAlias: { model: 'MODEL_GEMINI_3_PRO' } }] } } });
@@ -619,25 +616,26 @@ test('Antigravity usage scan returns summaries from persisted cache when current
       context({ nowMs }),
       [serverInfo],
       Date.now() + 10_000,
-      cacheStore,
     );
+    const firstIndexed = await materialize(first, index);
     includeCascade = false;
     const second = await scanAntigravityUsageFromServers(
       context({ nowMs: nowMs + 20_000 }),
       [serverInfo],
       Date.now() + 10_000,
-      cacheStore,
     );
+    const secondIndexed = await materialize(second, index);
 
-    assert.equal(first.summaries.has(summaryKey(serverInfo, 'cached')), true);
-    assert.equal(second.summaries.has(summaryKey(serverInfo, 'cached')), true);
-    assert.equal(second.ledgerSources.length, 1);
+    assert.equal(firstIndexed.usage.aggregate.requestCount, 1);
+    assert.equal(second.usageIndexSources.length, 0);
+    assert.equal(secondIndexed.usage.aggregate.requestCount, 1);
   });
 });
 
-test('Antigravity cache ledger source is idempotent across repeated scans', async () => {
+test('Antigravity UsageIndex refreshes running cascades but stops rescanning once completed', async () => {
   const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
-  const cacheStore = memoryAntigravityCacheStore();
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  let cascadeStatus = 'CASCADE_RUN_STATUS_RUNNING';
   await withAntigravityServer((req, res) => {
     if (req.url.endsWith('/GetUserStatus')) {
       sendJson(res, { userStatus: { cascadeModelConfigData: { clientModelConfigs: [{ label: 'Gemini 3 Pro', modelOrAlias: { model: 'MODEL_GEMINI_3_PRO' } }] } } });
@@ -649,7 +647,7 @@ test('Antigravity cache ledger source is idempotent across repeated scans', asyn
           stable: {
             lastModifiedTime: new Date(nowMs).toISOString(),
             stepCount: 2,
-            status: 'CASCADE_RUN_STATUS_RUNNING',
+            status: cascadeStatus,
           },
         },
       });
@@ -676,55 +674,36 @@ test('Antigravity cache ledger source is idempotent across repeated scans', asyn
       context({ nowMs }),
       [serverInfo],
       Date.now() + 10_000,
-      cacheStore,
     );
-    const afterFirst = await first.ledgerSources[0].importIntoSnapshot(emptyUsageLedgerSnapshot(), nowMs);
+    const afterFirst = await materialize(first, index);
     const second = await scanAntigravityUsageFromServers(
       context({ nowMs: nowMs + 20_000 }),
       [serverInfo],
       Date.now() + 10_000,
-      cacheStore,
     );
-    const afterSecond = await second.ledgerSources[0].importIntoSnapshot(afterFirst, nowMs + 20_000);
-    const row = afterSecond.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Gemini 3 Pro')];
+    const afterSecond = await materialize(second, index);
 
-    assert.equal(row.requestCount, 1);
-    assert.equal(row.totalTokens, 170);
+    cascadeStatus = 'CASCADE_RUN_STATUS_COMPLETED';
+    const completed = await scanAntigravityUsageFromServers(
+      context({ nowMs: nowMs + 40_000 }),
+      [serverInfo],
+      Date.now() + 10_000,
+    );
+    const afterCompletion = await materialize(completed, index);
+    const stableCompleted = await scanAntigravityUsageFromServers(
+      context({ nowMs: nowMs + 60_000 }),
+      [serverInfo],
+      Date.now() + 10_000,
+    );
+    const afterStableCompletion = await materialize(stableCompleted, index);
+
+    assert.equal(afterFirst.usage.aggregate.requestCount, 1);
+    assert.equal(afterSecond.refreshes[0].status, 'tailed');
+    assert.equal(afterSecond.usage.aggregate.requestCount, 1);
+    assert.equal(afterSecond.usage.aggregate.totalTokens, 170);
+    assert.equal(afterCompletion.refreshes[0].status, 'tailed');
+    assert.equal(afterStableCompletion.refreshes[0].status, 'unchanged');
   });
-});
-
-test('Antigravity empty usage cache clears stale provider ledger rows', async () => {
-  const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
-  const cacheStore = memoryAntigravityCacheStore();
-  const usage = await scanAntigravityUsageFromServers(
-    context({ nowMs }),
-    [],
-    Date.now() + 10_000,
-    cacheStore,
-  );
-  const snapshot = emptyUsageLedgerSnapshot();
-  snapshot.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Old Gemini')] = {
-    ...emptyUsageAggregate(),
-    requestCount: 1,
-    totalTokens: 123,
-  };
-  snapshot.monthlyModel[monthModelKey('2026-06-01', 'antigravity', 'Old Gemini')] = {
-    ...emptyUsageAggregate(),
-    requestCount: 1,
-    totalTokens: 123,
-  };
-  snapshot.dailyModel[dayModelKey('2026-06-01', 'claude', 'Sonnet')] = {
-    ...emptyUsageAggregate(),
-    requestCount: 1,
-    totalTokens: 456,
-  };
-
-  const next = await usage.ledgerSources[0].importIntoSnapshot(snapshot, nowMs);
-
-  assert.equal(usage.ledgerSources.length, 1);
-  assert.equal(next.dailyModel[dayModelKey('2026-06-01', 'antigravity', 'Old Gemini')], undefined);
-  assert.equal(next.monthlyModel[monthModelKey('2026-06-01', 'antigravity', 'Old Gemini')], undefined);
-  assert.equal(next.dailyModel[dayModelKey('2026-06-01', 'claude', 'Sonnet')].totalTokens, 456);
 });
 
 test('Antigravity session discovery returns near deadline when trajectory summaries are slow', async () => {

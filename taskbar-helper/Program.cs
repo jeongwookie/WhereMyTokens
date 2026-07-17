@@ -117,7 +117,7 @@ internal static class Program
 internal sealed class TaskbarQuotaForm : Form
 {
     private const int DefaultPreferredWidth = 520;
-    private const int MinimumReadableWidth = 360;
+    private const int MinimumScreenAwareWidth = 360;
     private const int MaximumPreferredWidth = 920;
     private const int HorizontalHeightPadding = 4;
     private const int VerticalWidthPadding = 8;
@@ -236,9 +236,8 @@ internal sealed class TaskbarQuotaForm : Form
     private int PreferredWidthForTaskbar(int taskbarWidth, int preferredContentWidth)
     {
         var taskbarLimit = Math.Max(Scaled(160), taskbarWidth - Scaled(8));
-        var screenAwareLimit = Math.Min(Scaled(MaximumPreferredWidth), Math.Max(Scaled(MinimumReadableWidth), taskbarWidth / 2));
-        var clampedContentWidth = Math.Max(Scaled(MinimumReadableWidth), preferredContentWidth);
-        return Math.Min(taskbarLimit, Math.Min(screenAwareLimit, clampedContentWidth));
+        var screenAwareLimit = Math.Min(Scaled(MaximumPreferredWidth), Math.Max(Scaled(MinimumScreenAwareWidth), taskbarWidth / 2));
+        return Math.Min(taskbarLimit, Math.Min(screenAwareLimit, preferredContentWidth));
     }
 
     public void Render(TaskbarQuotaSnapshot snapshot)
@@ -433,7 +432,7 @@ internal sealed class TaskbarQuotaCanvas : Control
     private const int VerticalPadding = 2;
     private const int PeriodWidth = 32;
     private const int BlockHorizontalPadding = 2;
-    private const int OverflowBadgeWidth = 24;
+    private const int OverflowBadgeHorizontalPadding = 1;
     private const int MinimumBlockWidth = 112;
     private const int MinimumMaximumBlockWidth = 124;
     private const int MaximumMaximumBlockWidth = 260;
@@ -478,7 +477,7 @@ internal sealed class TaskbarQuotaCanvas : Control
     public int MeasurePreferredWidth(TaskbarQuotaSnapshot snapshot, int taskbarWidth)
     {
         using var graphics = CreateGraphics();
-        var maxBlockWidth = MaximumBlockWidthFor(taskbarWidth, VisibleBlockCount(snapshot));
+        var maxBlockWidth = MaximumBlockWidthFor(taskbarWidth, VisibleQuotaBlockCount(snapshot));
         var blockWidths = MeasureColumnWidths(graphics, snapshot, maxBlockWidth);
         return (Scaled(HorizontalPadding) * 2) + MeasureContentWidth(blockWidths);
     }
@@ -532,7 +531,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         var period = new Rectangle(content.Left, content.Top, Scaled(PeriodWidth), content.Height);
         var periodDivider = new Rectangle(period.Right, content.Top, Scaled(DividerWidth), content.Height);
 
-        var blockWidths = FitBlockWidths(MeasureColumnWidths(graphics, snapshot, MaximumBlockWidthFor(ClientSize.Width, VisibleBlockCount(snapshot))), content.Width);
+        var blockWidths = FitBlockWidths(MeasureColumnWidths(graphics, snapshot, MaximumBlockWidthFor(ClientSize.Width, VisibleQuotaBlockCount(snapshot))), content.Width);
         var blockOneWidth = blockWidths[0];
         var blockTwoWidth = blockWidths[1];
         var blockThreeWidth = blockWidths[2];
@@ -597,33 +596,44 @@ internal sealed class TaskbarQuotaCanvas : Control
     private int MeasureColumnWidth(Graphics graphics, TaskbarQuotaSnapshot snapshot, int blockIndex, int maxBlockWidth)
     {
         var width = 0;
-        var hasBlock = false;
+        var hasQuotaBlock = false;
         foreach (var row in snapshot.Rows.Take(2))
         {
             var block = row.Blocks.ElementAtOrDefault(blockIndex);
             if (block is not null)
             {
-                hasBlock = true;
+                hasQuotaBlock = true;
                 var blockWidth = MeasureBlockWidth(graphics, block, maxBlockWidth);
                 if (row.HiddenCount > 0 && blockIndex == 2)
                 {
-                    blockWidth = Math.Min(maxBlockWidth, blockWidth + Scaled(OverflowBadgeWidth));
+                    blockWidth = Math.Min(maxBlockWidth, blockWidth + MeasureOverflowBadgeWidth(graphics, row.HiddenCount));
                 }
                 width = Math.Max(width, blockWidth);
                 continue;
             }
             if (row.HiddenCount > 0 && blockIndex == row.Blocks.Length && blockIndex < 3)
             {
-                hasBlock = true;
-                width = Math.Max(width, Scaled(OverflowBadgeWidth));
+                width = Math.Max(width, MeasureOverflowBadgeWidth(graphics, row.HiddenCount));
             }
         }
-        if (!hasBlock && blockIndex == 0 && snapshot.Rows.Take(2).Any(row => row.Blocks.Length == 0 && !string.IsNullOrWhiteSpace(row.StatusLabel)))
+        if (!hasQuotaBlock && blockIndex == 0 && snapshot.Rows.Take(2).Any(row => row.Blocks.Length == 0 && !string.IsNullOrWhiteSpace(row.StatusLabel)))
         {
             return Math.Min(maxBlockWidth, Math.Max(Scaled(MinimumBlockWidth), MeasureStatusWidth(graphics, snapshot, maxBlockWidth)));
         }
-        if (!hasBlock) return 0;
-        return Math.Min(maxBlockWidth, Math.Max(Scaled(MinimumBlockWidth), width));
+        if (width <= 0) return 0;
+        return FinalizeMeasuredColumnWidth(width, hasQuotaBlock, maxBlockWidth);
+    }
+
+    private int FinalizeMeasuredColumnWidth(int measuredWidth, bool hasQuotaBlock, int maxBlockWidth)
+    {
+        var minimumWidth = hasQuotaBlock ? Scaled(MinimumBlockWidth) : 0;
+        return Math.Min(maxBlockWidth, Math.Max(minimumWidth, measuredWidth));
+    }
+
+    private int MeasureOverflowBadgeWidth(Graphics graphics, int hiddenCount)
+    {
+        var textWidth = MeasureDrawStringWidth(graphics, $"+{hiddenCount}", _blockFont, Scaled(MaximumMaximumBlockWidth));
+        return textWidth + (Scaled(OverflowBadgeHorizontalPadding) * 2);
     }
 
     private int MeasureStatusWidth(Graphics graphics, TaskbarQuotaSnapshot snapshot, int maxBlockWidth)
@@ -661,8 +671,8 @@ internal sealed class TaskbarQuotaCanvas : Control
         return width;
     }
 
-    private static int VisibleBlockCount(TaskbarQuotaSnapshot snapshot)
-        => Math.Clamp(snapshot.Rows.Take(2).Select(row => Math.Min(3, row.Blocks.Length + (row.HiddenCount > 0 ? 1 : 0))).DefaultIfEmpty(0).Max(), 1, 3);
+    private static int VisibleQuotaBlockCount(TaskbarQuotaSnapshot snapshot)
+        => Math.Clamp(snapshot.Rows.Take(2).Select(row => Math.Min(3, row.Blocks.Length)).DefaultIfEmpty(0).Max(), 1, 3);
 
     private int MaximumBlockWidthFor(int availableWidth, int visibleBlockCount)
     {
@@ -705,7 +715,7 @@ internal sealed class TaskbarQuotaCanvas : Control
         }
         if (row.HiddenCount > 0 && thirdCell.Width > 0)
         {
-            var badgeWidth = Math.Min(Scaled(OverflowBadgeWidth), thirdCell.Width);
+            var badgeWidth = Math.Min(MeasureOverflowBadgeWidth(graphics, row.HiddenCount), thirdCell.Width);
             var blockCell = new Rectangle(thirdCell.Left, thirdCell.Top, Math.Max(0, thirdCell.Width - badgeWidth), thirdCell.Height);
             var badgeCell = new Rectangle(thirdCell.Right - badgeWidth, thirdCell.Top, badgeWidth, thirdCell.Height);
             DrawBlock(graphics, row.Blocks.ElementAtOrDefault(2), blockCell);
@@ -791,7 +801,9 @@ internal sealed class TaskbarQuotaCanvas : Control
     private void DrawOverflowBadge(Graphics graphics, int hiddenCount, Rectangle bounds)
     {
         if (hiddenCount <= 0 || bounds.Width <= 0 || bounds.Height <= 0) return;
-        DrawText(graphics, $"+{hiddenCount}", _blockFont, _palette.Muted, bounds);
+        var horizontalPadding = Math.Min(Scaled(OverflowBadgeHorizontalPadding), bounds.Width / 2);
+        var contentBounds = Rectangle.Inflate(bounds, -horizontalPadding, 0);
+        DrawText(graphics, $"+{hiddenCount}", _blockFont, _palette.Muted, contentBounds);
     }
 
     private Rectangle RowCell(Rectangle column, Rectangle rowBounds)

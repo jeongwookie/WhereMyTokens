@@ -1,18 +1,15 @@
-import type {
-  ProviderContext,
-  ProviderLedgerSource,
-  ProviderUsageScanResult,
-} from '../types';
-import type { FileUsageSummary } from '../../jsonlTypes';
-import { replaceProviderUsageSliceInSnapshot } from '../../usageLedgerIngest';
-import { buildAntigravitySummary } from './summary';
-import { findAntigravityServersCached, getTrajectorySummariesCached } from './runtimeCache';
-import { AntigravityGmTracker } from './gmTracker';
-import { AntigravityUsageCacheStore } from './usageCacheStore';
+import type { ProviderContext, ProviderUsageScanResult } from '../types';
+import { buildModelLabelMap } from './models';
+import { fileUriToPath, parseTimestampMs } from './pathUtils';
+import { findAntigravityServersCached, getTrajectorySummariesCached, getUserStatusCached } from './runtimeCache';
 import { antigravityCascadeSummaryKey, antigravityServerOwnerKey } from './serverIdentity';
-import type { AntigravityServerInfo } from './types';
+import { projectKeysForCwd } from '../shared/repoContext';
+import { createAntigravityUsageIndexScanner } from './usageIndexScanner';
+import type { AntigravityServerInfo, AntigravityTrajectorySummary } from './types';
 
 const DEFAULT_DEADLINE_MS = 8_000;
+const DEFAULT_SCAN_LIMIT = 48;
+const FULL_SCAN_LIMIT = 200;
 
 function deadlineMs(ctx: ProviderContext): number {
   return Date.now() + Math.min(ctx.scanBudgetMs ?? DEFAULT_DEADLINE_MS, DEFAULT_DEADLINE_MS);
@@ -53,49 +50,81 @@ async function selectPrimaryUsageServer(
   return best?.server ?? null;
 }
 
-function buildCacheLedgerSource(cacheStore: AntigravityUsageCacheStore, ownerKey?: string): ProviderLedgerSource {
-  const sourceId = 'antigravity:usage-cache';
-  return {
-    provider: 'antigravity',
-    sourceId,
-    priority: false,
-    importIntoSnapshot: async (snapshot, nowMs) =>
-      replaceProviderUsageSliceInSnapshot(snapshot, cacheStore.buildLedgerSlice(nowMs, ownerKey), nowMs),
-  };
+function status(summary: AntigravityTrajectorySummary): string {
+  return String(summary.status ?? summary.runStatus ?? '');
 }
 
-function summariesFromCache(cacheStore: AntigravityUsageCacheStore, nowMs: number, ownerKey?: string): Map<string, FileUsageSummary> {
-  const summaries = new Map<string, FileUsageSummary>();
-  for (const cascade of cacheStore.listCascades(ownerKey)) {
-    const calls = Object.values(cascade.calls).sort((a, b) => a.timestampMs - b.timestampMs);
-    if (calls.length === 0) continue;
-    summaries.set(antigravityCascadeSummaryKey(cascade.ownerKey, cascade.cascadeId), buildAntigravitySummary({
-      cascadeId: cascade.cascadeId,
-      projectKeys: cascade.projectKeys,
-      calls,
-      nowMs,
-      lastModifiedMs: cascade.lastModifiedMs,
-    }));
+function isRunningStatus(value: string): boolean {
+  return value.toLowerCase().includes('running');
+}
+
+function projectKeys(summary: AntigravityTrajectorySummary): string[] {
+  const keys = new Set<string>();
+  for (const workspace of summary.workspaces ?? []) {
+    const cwd = fileUriToPath(workspace?.workspaceFolderAbsoluteUri);
+    if (!cwd) continue;
+    for (const key of projectKeysForCwd(cwd)) keys.add(key);
   }
-  return summaries;
+  return [...keys];
 }
 
 export async function scanAntigravityUsageFromServers(
   ctx: ProviderContext,
   servers: AntigravityServerInfo[],
   stopAt = deadlineMs(ctx),
-  cacheStore = new AntigravityUsageCacheStore(),
 ): Promise<ProviderUsageScanResult> {
   const primaryServer = await selectPrimaryUsageServer(ctx, servers, stopAt);
-  const ownerKey = primaryServer ? antigravityServerOwnerKey(primaryServer) : undefined;
-  const tracker = new AntigravityGmTracker(cacheStore);
-  const result = await tracker.fetchAllFromServers(ctx, primaryServer ? [primaryServer] : servers, stopAt);
-  const summaries = summariesFromCache(cacheStore, ctx.nowMs, ownerKey);
+  if (!primaryServer) return { usageIndexSources: [], partial: servers.length > 0 };
+  const [userStatus, trajectories] = await Promise.all([
+    getUserStatusCached(primaryServer, ctx.nowMs, remainingTimeoutMs(stopAt)).catch(() => null),
+    getTrajectorySummariesCached(primaryServer, ctx.nowMs, remainingTimeoutMs(stopAt)),
+  ]);
+  if (!trajectories) return { usageIndexSources: [], partial: true };
+
+  const labels = buildModelLabelMap(userStatus?.userStatus?.cascadeModelConfigData?.clientModelConfigs ?? []);
+  const ownerKey = antigravityServerOwnerKey(primaryServer);
+  const limit = ctx.includeFullHistory ? FULL_SCAN_LIMIT : DEFAULT_SCAN_LIMIT;
+  const summaries = Object.entries(trajectories.trajectorySummaries ?? {})
+    .filter((entry): entry is [string, AntigravityTrajectorySummary] =>
+      !!entry[1] && typeof entry[1] === 'object' && !Array.isArray(entry[1]))
+    .map(([cascadeId, summary]) => ({
+      cascadeId,
+      summary,
+      lastModifiedMs: parseTimestampMs(summary.lastModifiedTime ?? summary.createdTime, ctx.nowMs),
+    }))
+    .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
+  const usageIndexSources = summaries
+    .slice(0, limit)
+    .filter(({ summary }) => (typeof summary.stepCount === 'number' ? summary.stepCount : 0) > 0)
+    .map(({ cascadeId, summary, lastModifiedMs }) => {
+      const sourceId = antigravityCascadeSummaryKey(ownerKey, cascadeId);
+      const stepCount = typeof summary.stepCount === 'number' ? summary.stepCount : 0;
+      const runStatus = status(summary);
+      return {
+        descriptor: {
+          sourceId,
+          provider: 'antigravity' as const,
+          kind: 'remote' as const,
+          parserVersion: 1,
+          version: {
+            token: `${stepCount}:${lastModifiedMs}:${runStatus}${isRunningStatus(runStatus) ? `:live:${ctx.nowMs}` : ''}`,
+            mtimeMs: lastModifiedMs,
+          },
+          projectKeys: projectKeys(summary),
+        },
+        scanner: createAntigravityUsageIndexScanner({
+          server: primaryServer,
+          cascadeId,
+          stepCount,
+          lastModifiedMs,
+          modelLabels: labels,
+          stopAt,
+        }),
+      };
+    });
   return {
-    summaries,
-    ledgerSources: [buildCacheLedgerSource(cacheStore, ownerKey)],
-    scannedSources: result.scannedSources,
-    partial: result.partial,
+    usageIndexSources,
+    partial: summaries.length > limit || Date.now() >= stopAt,
   };
 }
 

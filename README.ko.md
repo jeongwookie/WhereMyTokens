@@ -127,7 +127,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 - **헤더 통계** — today/all-time 토글: 비용, API 호출, 세션, 캐시 효율, 절약 비용, 컴팩트한 provider 메타데이터, provider별 health/fallback 상태. `all`의 세션 수는 현재 표시 중인 행이 아니라 전체 사용 기록 기준입니다
 - **즉시 시작 snapshot** — 마지막으로 정상 표시된 UI 상태를 즉시 복원하고, fresh scan은 백그라운드에서 이어서 실행
 - **시작 친화적 히스토리 동기화** — 현재 세션과 최근 사용량을 먼저 보여주고, 오래된 히스토리는 budgeted refresh scheduler를 통해 백그라운드에서 계속 동기화되어 hotkey popup과 UI 반응성을 유지
-- **지속 사용량 ledger** — 로컬 JSONL 사용량을 aggregate ledger로 저장해 오래된 합계가 JSONL cache eviction에 덜 의존하고, 필요하면 Settings에서 재빌드 가능
+- **지속 사용량 인덱스** — Claude, Codex, Antigravity 사용량을 source 귀속 `usage-index.sqlite`에 저장합니다. request 상세는 8일, 시간 단위는 35일, 일 단위는 180일, 월별 합계는 영구 보존하며, 최초 인덱싱 중에는 coverage가 아직 불완전함을 UI에 표시합니다. **Reset index**는 인덱싱된 기록을 지우고 현재 사용 가능한 provider 로그에서만 다시 빌드합니다
 - **Trend 카드** — 일/주/월 cost/token 히스토리와 git 순 라인 산출을 함께 표시하고, 버킷을 클릭하면 provider별 input/output, thinking/response/tool 사용량, work/billing 토큰, git 순 라인 카테고리를 breakdown으로 확인
 - **활동 탭** — 7일 히트맵, 5개월 캘린더(GitHub 스타일), 시간대별 분포, 4주 비교
 - **Rhythm 탭** — 시간대별 비용 분포 (Morning/Afternoon/Evening/Night), 그라데이션 바, 피크 상세 통계, 로컬 타임존
@@ -178,17 +178,17 @@ WhereMyTokens는 local-first Electron 트레이 앱입니다. renderer는 로컬
 
 | 계층 | 역할 |
 |------|------|
-| Electron main | Provider 세션 발견, JSONL/local RPC 사용량 조회, 트레이/창 상태 관리, 앱 설정 저장. |
+| Electron main | Provider 세션을 발견하고 각 사용량 source를 한 번씩 파싱/조회한 뒤 canonical UsageIndex를 쿼리하며, 트레이/창 상태와 앱 설정을 관리합니다. |
 | Preload bridge | `contextIsolation` 경계를 유지하면서 typed `window.wmt` IPC 표면만 노출. |
 | React renderer | 트레이 대시보드, 설정, 알림, 활동 차트, compact quota 위젯 표시. |
 | `statusLine` bridge | `src/bridge/bridge.ts`가 Claude Code stdin JSON을 받아 main process가 감시하는 로컬 bridge snapshot을 기록. |
 
 | 데이터 흐름 | 소스 | 목적지 | 네트워크 |
 |-------------|------|--------|----------|
-| Claude 세션 | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | main process parser/cache, 이후 renderer state | 없음 |
+| Claude 세션 | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | main process scanner가 UsageIndex에 기록하고 session projection 게시 | 없음 |
 | Claude 브리지 | Claude Code `statusLine` stdin | `%APPDATA%\WhereMyTokens\live-session.json` | 없음 |
 | Claude 사용량 한도 | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | 있음, Anthropic 직접 호출 |
-| Codex 세션 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process parser/cache, 이후 renderer state | 없음 |
+| Codex 세션 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner가 UsageIndex에 기록하고 session projection 게시 | 없음 |
 | Codex 사용량 한도 및 reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage 및 reset-credit endpoint | 있음, OpenAI/ChatGPT 직접 호출 |
 | Antigravity 세션/quota | 실행 중인 Antigravity language server | 127.0.0.1 local RPC, 이후 renderer state | 없음 |
 
@@ -213,6 +213,7 @@ WhereMyTokens는 로컬 파일을 읽고, 활성화된 경우 본인 계정의 p
 | `%APPDATA%\WhereMyTokens\live-session.json` | Claude Code `statusLine` bridge가 쓰는 로컬 bridge snapshot. |
 | Taskbar mini helper stdin | taskbar mini를 켠 경우 main process가 요약된 5H/1W quota 표시 데이터와 resolved light/dark theme fallback을 native helper로 전달합니다. helper는 대비를 위해 보이는 작업 표시줄 배경을 로컬에서 샘플링하지만 픽셀을 저장하거나 전송하지 않으며, credentials, 로그 파일, provider API를 직접 읽거나 호출하지 않습니다. |
 | `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | taskbar mini의 작업 표시줄 기준 위치만 저장합니다. |
+| `%APPDATA%\WhereMyTokens\usage-index.sqlite` | 증분 checkpoint, 장기 합계, trend bucket, heatmap에 쓰는 로컬 사용량 인덱스. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | 앱 설정, 로컬 캐시, 알림 기록, bridge 상태. |
 
 자격 증명 처리는 좁게 제한되어 있습니다. WhereMyTokens는 공식 CLI의 로컬 credential 파일을 읽고, API key를 직접 입력받지 않으며, 별도 credential 백업을 저장하지 않습니다. Claude access token이 만료되면 Anthropic을 통해 refresh하고 갱신된 credentials를 `~/.claude/.credentials.json`에 원자적으로 다시 쓸 수 있습니다.
@@ -251,7 +252,7 @@ WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~
 
 ### Antigravity 추적
 
-Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. 세션 cascade, 모델 quota, generator metadata를 읽어 providerQuotas와 사용량 ledger에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
+Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. 세션 cascade, 모델 quota, generator metadata를 읽어 providerQuotas와 source-attributed UsageIndex에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
 
 Antigravity 모델 quota 카드는 기본적으로 percent-only로 표시됩니다. Settings의 **Antigravity quota pace**를 켜면 reset time으로 5h/weekly pacing을 추정합니다.
 

@@ -1,7 +1,6 @@
 import type { AppSettings } from '../ipc';
-import type { JsonlCache } from '../jsonlCache';
-import type { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary } from '../jsonlTypes';
-import type { UsageLedgerSnapshot } from '../usageLedgerTypes';
+import type { ActivityBreakdown, ActivityBreakdownKind } from '../jsonlTypes';
+import type { UsageSourceDescriptor, UsageSourceScanner } from '../usageIndex';
 
 export type ProviderId = 'claude' | 'codex' | 'antigravity';
 
@@ -44,7 +43,6 @@ export type ProviderCapability =
 export interface ProviderContext {
   settings: AppSettings;
   nowMs: number;
-  jsonlCache: JsonlCache;
   scanBudgetMs: number | null;
   prioritySourceIds: Set<string>;
   includeFullHistory: boolean;
@@ -82,12 +80,10 @@ export interface SourceBackedProviderAdapter extends ProviderAdapter {
 
   buildStartupSession?(ctx: ProviderContext, source: ProviderSource): DiscoveredSession | null;
 
-  scanSourceSummary(
+  usageIndexSource(
     ctx: ProviderContext,
     source: ProviderSource,
-  ): Promise<FileUsageSummary | null>;
-
-  ledgerSource?(ctx: ProviderContext, source: ProviderSource, priority?: boolean): ProviderLedgerSource | null;
+  ): { descriptor: UsageSourceDescriptor; scanner: UsageSourceScanner };
 
   readSourceCwd?(source: ProviderSource): string | null;
 
@@ -122,19 +118,11 @@ export interface ProviderSourceList {
 }
 
 export interface ProviderUsageScanResult {
-  summaries: Map<string, FileUsageSummary>;
-  ledgerSources: ProviderLedgerSource[];
-  scannedSources: number;
+  usageIndexSources: Array<{
+    descriptor: UsageSourceDescriptor;
+    scanner: UsageSourceScanner;
+  }>;
   partial: boolean;
-  rateLimits?: unknown;
-}
-
-export interface ProviderLedgerSource {
-  provider: ProviderId;
-  sourceId: string;
-  sourcePath?: string;
-  priority: boolean;
-  importIntoSnapshot: (snapshot: UsageLedgerSnapshot, nowMs: number) => Promise<UsageLedgerSnapshot>;
 }
 
 export interface ProviderQuotaSnapshot {

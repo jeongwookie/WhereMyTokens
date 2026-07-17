@@ -5,7 +5,6 @@ import {
   type ToolCategory,
 } from '../shared/breakdownTypes';
 import {
-  assertCalibInBand,
   compositionToDelta,
   signatureProxyThinkingChars,
   splitOutput,
@@ -101,7 +100,7 @@ export function claudeBlockWeights(content: unknown[]): OutputWeights {
     if (item.type === 'thinking') {
       const text = item.thinking ?? '';
       const signature = item.signature ?? '';
-      if (text.length > 0 && signature.length > 0) assertCalibInBand(signature.length, text.length);
+      // Plaintext thinking is authoritative; signatures are only a proxy when text is absent.
       weights.thinkingChars += text.length > 0 ? text.length : signatureProxyThinkingChars(signature.length);
     } else if (item.type === 'redacted_thinking') {
       weights.thinkingChars += signatureProxyThinkingChars((item.data ?? '').length);
@@ -117,7 +116,7 @@ export function claudeBlockWeights(content: unknown[]): OutputWeights {
 }
 
 /**
- * LEDGER shape (usage-ledger ingest). output = thinking/response/toolOutput TOKENS;
+ * UsageIndex breakdown shape. output = thinking/response/toolOutput TOKENS;
  * tool keys = COUNTS of tool_use blocks per classifyToolUse category.
  */
 export function claudeLedgerBreakdown(content: unknown[], outputTokens: number): BreakdownDelta {

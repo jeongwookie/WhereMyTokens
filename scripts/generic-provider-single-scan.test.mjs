@@ -10,7 +10,7 @@ import jsonlTypesModule from '../dist/main/jsonlTypes.js';
 
 const { StateManager } = stateManagerModule;
 const { ProviderRegistry } = providersModule;
-const { emptyHistoricalRollup, emptySessionSnapshot } = jsonlTypesModule;
+const { emptySessionSnapshot } = jsonlTypesModule;
 
 const source = fs.readFileSync('src/main/stateManager.ts', 'utf8');
 
@@ -25,17 +25,16 @@ function methodBody(name) {
   return source.slice(start, nextPrivate === -1 ? undefined : nextPrivate);
 }
 
-test('generic provider scanUsage results are reused for summary and ledger refresh in one heavy refresh', () => {
+test('generic provider scanUsage results are committed to UsageIndex in one heavy refresh', () => {
   const loadBody = methodBody('loadProviderSummaries');
-  const ledgerBody = methodBody('ledgerSourceFiles');
-  const heavyBody = methodBody('heavyRefresh');
+  const genericBody = methodBody('scanGenericProviderUsage');
 
-  assert.match(loadBody, /ledgerSources: ProviderLedgerSource\[\]/);
   assert.match(loadBody, /const remainingBudgetMs = budgetMs === null \? null : Math\.max\(0, budgetMs - elapsedMs\)/);
   assert.match(loadBody, /const genericUsage = await this\.scanGenericProviderUsage\(settings, genericCtx\)/);
-  assert.match(loadBody, /ledgerSources = genericUsage\.ledgerSources/);
-  assert.doesNotMatch(ledgerBody, /scanGenericProviderUsage/);
-  assert.match(heavyBody, /\.\.\.loaded\.ledgerSources/);
+  assert.match(genericBody, /result\.usageIndexSources/);
+  assert.match(genericBody, /this\.usageIndex\.declareSources/);
+  assert.match(genericBody, /this\.usageIndex\.refreshSource/);
+  assert.doesNotMatch(source, /ledgerSourceFiles|refreshUsageLedger|usageLedgerStore/);
 });
 
 function makeStore(settings) {
@@ -58,33 +57,8 @@ function makeSummary(provider) {
   return {
     provider,
     sessionSnapshot: emptySessionSnapshot('tokens'),
-    recentEntries: [],
-    historicalRollup: emptyHistoricalRollup(),
-    byteOffset: 0,
     mtimeMs: 1,
     size: 1,
-    lastAccessedAt: Date.now(),
-    rehydratedFromPersistence: false,
-  };
-}
-
-function installFakeLedgerStore(manager) {
-  let snapshot = {
-    schemaVersion: 1,
-    minuteRecent: {},
-    recentRequestIndex: {},
-    hourlyActivity: {},
-    dailyModel: {},
-    monthlyModel: {},
-    sourceCheckpoints: {},
-    sourceRepairRollup: {},
-  };
-  manager.usageLedgerStore = {
-    getSnapshot: () => snapshot,
-    replaceSnapshot: next => {
-      snapshot = next;
-    },
-    compact: () => {},
   };
 }
 
@@ -103,10 +77,33 @@ test('generic provider scanUsage is skipped when source-backed scans exhaust the
     ownsPath: filePath => filePath === sourcePath,
     listRecentSources: () => ({ sources: [{ provider: 'claude', sourceId: sourcePath, filePath: sourcePath }], truncated: false }),
     listAllSources: () => ({ sources: [{ provider: 'claude', sourceId: sourcePath, filePath: sourcePath }], truncated: false }),
-    scanSourceSummary: async () => {
-      await delay(40);
-      return makeSummary('claude');
-    },
+    usageIndexSource: (_ctx, providerSource) => ({
+      descriptor: {
+        sourceId: `claude:${providerSource.filePath}`,
+        provider: 'claude',
+        kind: 'file',
+        parserVersion: 1,
+        version: { token: 'v1', size: 3, mtimeMs: 1 },
+        projectKeys: [],
+      },
+      scanner: {
+        scan: async plan => {
+          await delay(40);
+          return {
+            checkpoint: { byteOffset: 3 },
+            entries: [],
+            rebuildCoverage: { kind: 'full' },
+            sessionProjection: {
+              sourceId: plan.source.sourceId,
+              provider: 'claude',
+              updatedAt: Date.now(),
+              byteSize: 3,
+              payload: { sessionSnapshot: makeSummary('claude').sessionSnapshot },
+            },
+          };
+        },
+      },
+    }),
   };
   const antigravityProvider = {
     id: 'antigravity',
@@ -115,7 +112,7 @@ test('generic provider scanUsage is skipped when source-backed scans exhaust the
     isAvailable: async () => true,
     scanUsage: async () => {
       genericScanCalls += 1;
-      return { summaries: new Map(), ledgerSources: [], scannedSources: 0, partial: false };
+      return { usageIndexSources: [], partial: false };
     },
   };
 
@@ -127,38 +124,201 @@ test('generic provider scanUsage is skipped when source-backed scans exhaust the
     () => {},
     { providerRegistry: registry },
   );
-  installFakeLedgerStore(manager);
-
   const loaded = await manager.loadProviderSummaries(false, 20);
 
   assert.equal(genericScanCalls, 0);
   assert.equal(loaded.partial, true);
 });
 
-test('generic provider scanUsage results can feed summaries and ledger import without rescanning', async () => {
-  let genericScanCalls = 0;
-  let ledgerImports = 0;
-  const summary = makeSummary('antigravity');
-  const ledgerSource = {
-    provider: 'antigravity',
-    sourceId: 'antigravity:cascade:single',
-    priority: false,
-    importIntoSnapshot: async snapshot => {
-      ledgerImports += 1;
+test('source-backed scanner failures mark the refresh partial and retain failed coverage', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-source-failure-'));
+  const sourcePath = path.join(tempDir, 'source.jsonl');
+  fs.writeFileSync(sourcePath, '{}\n');
+  const provider = {
+    id: 'claude',
+    displayName: 'Claude',
+    capabilities: new Set(['usage']),
+    isAvailable: async () => true,
+    ownsPath: filePath => filePath === sourcePath,
+    listRecentSources: () => ({ sources: [{ provider: 'claude', sourceId: sourcePath, filePath: sourcePath }], truncated: false }),
+    listAllSources: () => ({ sources: [{ provider: 'claude', sourceId: sourcePath, filePath: sourcePath }], truncated: false }),
+    usageIndexSource: () => ({
+      descriptor: {
+        sourceId: 'claude:failed-source',
+        provider: 'claude',
+        kind: 'file',
+        parserVersion: 1,
+        version: { token: 'v1', size: 1, mtimeMs: 1 },
+      },
+      scanner: { scan: async () => { throw new Error('intentional scanner failure'); } },
+    }),
+  };
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+  const manager = new StateManager(
+    makeStore({ enabledProviders: ['claude'] }),
+    () => {},
+    { providerRegistry: registry },
+  );
+
+  const loaded = await manager.loadProviderSummaries(false, null);
+  const indexed = await manager.usageIndex.queryUsage({ grain: 'month', providers: new Set(['claude']) });
+
+  assert.equal(loaded.scanPartial, true);
+  assert.equal(loaded.partial, true);
+  assert.equal(indexed.coverage.failedSourceCount, 1);
+  assert.equal(indexed.coverage.state, 'incomplete');
+});
+
+test('source preparation isolates disappeared and unreadable files without blocking valid sources', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-source-preparation-'));
+  const stalePath = path.join(tempDir, 'stale.jsonl');
+  const unreadablePath = path.join(tempDir, 'unreadable.jsonl');
+  const validPath = path.join(tempDir, 'valid.jsonl');
+  fs.writeFileSync(unreadablePath, '{}\n');
+  fs.writeFileSync(validPath, '{}\n');
+  let validScans = 0;
+
+  const provider = {
+    id: 'claude',
+    displayName: 'Claude',
+    capabilities: new Set(['usage']),
+    isAvailable: async () => true,
+    ownsPath: filePath => filePath.startsWith(tempDir),
+    listRecentSources: () => ({
+      sources: [unreadablePath, validPath].map(filePath => ({
+        provider: 'claude',
+        sourceId: filePath,
+        filePath,
+      })),
+      truncated: false,
+    }),
+    listAllSources: () => ({ sources: [], truncated: false }),
+    usageIndexSource: (_ctx, source) => {
+      assert.notEqual(source.filePath, stalePath, 'disappeared priority sources must be skipped before stat');
+      if (source.filePath === unreadablePath) throw new Error('simulated stat failure');
+      const stat = fs.statSync(source.filePath);
       return {
-        ...snapshot,
-        sourceCheckpoints: {
-          ...snapshot.sourceCheckpoints,
-          single: {
-            provider: 'antigravity',
-            sourceHash: 'single',
-            lastImportedAt: Date.now(),
-            hasUsage: true,
+        descriptor: {
+          sourceId: `claude:${source.filePath}`,
+          provider: 'claude',
+          kind: 'file',
+          parserVersion: 1,
+          version: { token: `${stat.size}:${stat.mtimeMs}`, size: stat.size, mtimeMs: stat.mtimeMs },
+          projectKeys: [],
+        },
+        scanner: {
+          scan: async plan => {
+            validScans += 1;
+            return {
+              checkpoint: { byteOffset: stat.size },
+              entries: [{
+                requestId: 'valid-request',
+                timestampMs: Date.now(),
+                provider: 'claude',
+                model: 'Claude',
+                inputTokens: 1,
+                outputTokens: 1,
+                cacheCreationTokens: 0,
+                cacheReadTokens: 0,
+                costUSD: 0,
+                cacheSavingsUSD: 0,
+              }],
+              rebuildCoverage: { kind: 'full' },
+              sessionProjection: {
+                sourceId: plan.source.sourceId,
+                provider: 'claude',
+                updatedAt: Date.now(),
+                byteSize: stat.size,
+                payload: { sessionSnapshot: makeSummary('claude').sessionSnapshot },
+              },
+            };
           },
         },
       };
     },
   };
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+  const manager = new StateManager(
+    makeStore({ enabledProviders: ['claude'] }),
+    () => {},
+    { providerRegistry: registry },
+  );
+
+  const loaded = await manager.loadProviderSummaries(false, null, [stalePath]);
+  const indexed = await manager.usageIndex.queryUsage({ grain: 'month', providers: new Set(['claude']) });
+
+  assert.equal(validScans, 1);
+  assert.equal(loaded.scanPartial, true);
+  assert.equal(indexed.aggregate.requestCount, 1);
+});
+
+test('changed-file refresh contains one scanner failure and retains it for a later retry', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-changed-source-'));
+  const failedPath = path.join(tempDir, 'failed.jsonl');
+  const validPath = path.join(tempDir, 'valid.jsonl');
+  fs.writeFileSync(failedPath, '{}\n');
+  fs.writeFileSync(validPath, '{}\n');
+
+  const provider = {
+    id: 'claude',
+    displayName: 'Claude',
+    capabilities: new Set(['usage']),
+    isAvailable: async () => true,
+    ownsPath: filePath => filePath.startsWith(tempDir),
+    listRecentSources: () => ({ sources: [], truncated: false }),
+    listAllSources: () => ({ sources: [], truncated: false }),
+    usageIndexSource: (_ctx, source) => {
+      const stat = fs.statSync(source.filePath);
+      return {
+        descriptor: {
+          sourceId: `claude:${source.filePath}`,
+          provider: 'claude',
+          kind: 'file',
+          parserVersion: 1,
+          version: { token: `${stat.size}:${stat.mtimeMs}`, size: stat.size, mtimeMs: stat.mtimeMs },
+          projectKeys: [],
+        },
+        scanner: {
+          scan: async plan => {
+            if (source.filePath === failedPath) throw new Error('simulated scan failure');
+            return {
+              checkpoint: { byteOffset: stat.size },
+              entries: [],
+              rebuildCoverage: { kind: 'full' },
+              sessionProjection: {
+                sourceId: plan.source.sourceId,
+                provider: 'claude',
+                updatedAt: Date.now(),
+                byteSize: stat.size,
+                payload: { sessionSnapshot: makeSummary('claude').sessionSnapshot },
+              },
+            };
+          },
+        },
+      };
+    },
+  };
+  const registry = new ProviderRegistry();
+  registry.register(provider);
+  const manager = new StateManager(
+    makeStore({ enabledProviders: ['claude'] }),
+    () => {},
+    { providerRegistry: registry },
+  );
+
+  await manager.refreshChangedSummaries(new Set([failedPath, validPath]));
+
+  assert.equal(manager.summaries.has(validPath), true);
+  assert.equal(manager.summaries.has(failedPath), false);
+  assert.equal(manager.dirtySessionFiles.has(failedPath), true);
+});
+
+test('generic provider scanUsage results feed summaries and UsageIndex without rescanning', async () => {
+  let genericScanCalls = 0;
+  const summary = makeSummary('antigravity');
+  let sourceScans = 0;
   const antigravityProvider = {
     id: 'antigravity',
     displayName: 'Antigravity',
@@ -167,9 +327,44 @@ test('generic provider scanUsage results can feed summaries and ledger import wi
     scanUsage: async () => {
       genericScanCalls += 1;
       return {
-        summaries: new Map([['antigravity:cascade:single', summary]]),
-        ledgerSources: [ledgerSource],
-        scannedSources: 1,
+        usageIndexSources: [{
+          descriptor: {
+            sourceId: 'antigravity:cascade:single',
+            provider: 'antigravity',
+            kind: 'remote',
+            parserVersion: 1,
+            version: { token: 'v1' },
+            projectKeys: [],
+          },
+          scanner: {
+            scan: async plan => {
+              sourceScans += 1;
+              return {
+                checkpoint: { cursor: 'v1' },
+                entries: [{
+                  requestId: 'single-request',
+                  timestampMs: Date.now(),
+                  provider: 'antigravity',
+                  model: 'Gemini',
+                  inputTokens: 10,
+                  outputTokens: 5,
+                  cacheCreationTokens: 0,
+                  cacheReadTokens: 0,
+                  costUSD: 0,
+                  cacheSavingsUSD: 0,
+                }],
+                rebuildCoverage: { kind: 'full' },
+                sessionProjection: {
+                  sourceId: plan.source.sourceId,
+                  provider: 'antigravity',
+                  updatedAt: Date.now(),
+                  byteSize: 1,
+                  payload: { sessionSnapshot: summary.sessionSnapshot },
+                },
+              };
+            },
+          },
+        }],
         partial: false,
       };
     },
@@ -182,12 +377,13 @@ test('generic provider scanUsage results can feed summaries and ledger import wi
     () => {},
     { providerRegistry: registry },
   );
-  installFakeLedgerStore(manager);
-
   const loaded = await manager.loadProviderSummaries(false, null);
-  await manager.refreshUsageLedgerSources(loaded.ledgerSources);
 
   assert.equal(genericScanCalls, 1);
-  assert.equal(loaded.summaries.get('antigravity:cascade:single'), summary);
-  assert.equal(ledgerImports, 1);
+  assert.equal(sourceScans, 1);
+  assert.deepEqual(
+    loaded.summaries.get('antigravity:cascade:single').sessionSnapshot,
+    summary.sessionSnapshot,
+  );
+  assert.equal((await manager.usageIndex.queryUsage({ grain: 'month' })).aggregate.requestCount, 1);
 });

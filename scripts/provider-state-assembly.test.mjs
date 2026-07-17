@@ -28,7 +28,10 @@ test('StateManager summary loading iterates source-backed providers instead of h
   const body = methodBody('loadProviderSummaries');
 
   assert.match(body, /for \(const provider of this\.sourceBackedProviders\(settings\)\)/);
-  assert.match(body, /provider\.scanSourceSummary\(ctx, source\)/);
+  assert.match(body, /provider\.usageIndexSource\(ctx, source\)/);
+  assert.match(body, /this\.usageIndex\.declareSources\(\s*provider\.id,/);
+  assert.match(body, /this\.usageIndex\.refreshSource\(indexedSource\.descriptor, indexedSource\.scanner\)/);
+  assert.doesNotMatch(body, /scanSourceSummary|usageLedger/);
   assert.doesNotMatch(body, /settings\.provider/);
 });
 
@@ -78,7 +81,8 @@ test('Plan Usage no longer carries usageLimits or token burn-rate ETA state', ()
     'src/main/ipc.ts',
     'src/main/stateManager.ts',
     'src/main/usageWindows.ts',
-    'src/main/usageLedgerUsage.ts',
+    'src/main/usageIndexPresentation.ts',
+    'src/main/usageTrendTypes.ts',
     'src/main/providers/claude/quota.ts',
     'src/main/rateLimitFetcher.ts',
     'src/renderer/App.tsx',
@@ -92,16 +96,15 @@ test('Plan Usage no longer carries usageLimits or token burn-rate ETA state', ()
   }
 });
 
-test('StateManager ledger source discovery uses provider ledger sources', () => {
-  const body = methodBody('ledgerSourceFiles');
+test('StateManager uses UsageIndex as the sole usage-history authority', () => {
+  const loadBody = methodBody('loadProviderSummaries');
+  const genericBody = methodBody('scanGenericProviderUsage');
 
-  assert.match(body, /ProviderLedgerSource/);
-  assert.match(body, /for \(const provider of this\.sourceBackedProviders\(settings\)\)/);
-  assert.match(body, /provider\.ledgerSource/);
-  assert.doesNotMatch(body, /provider\.id === 'codex' \? 'codex' : 'claude'/);
-
-  const refreshBody = methodBody('refreshUsageLedgerSources');
-  assert.match(refreshBody, /source\.importIntoSnapshot\(snapshot, Date\.now\(\)\)/);
+  assert.match(loadBody, /provider\.usageIndexSource\(ctx, source\)/);
+  assert.match(loadBody, /this\.usageIndex\.declareSources\(\s*provider\.id,/);
+  assert.match(genericBody, /result\.usageIndexSources/);
+  assert.match(genericBody, /this\.usageIndex\.refreshSource/);
+  assert.doesNotMatch(stateManagerSource, /ledgerSourceFiles|refreshUsageLedger|usageLedgerStore|jsonlCache/);
 });
 
 test('StateManager session discovery and startup bootstrap use provider adapters', () => {

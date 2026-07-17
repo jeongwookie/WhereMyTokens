@@ -320,7 +320,7 @@ test('fetchCodexResetCredits maps a 404 (endpoint removed/moved) to schema-chang
 // --- Step 5c: fetchCodexQuota-level independence + no-launder (R2-1 / R2-2) ---
 
 const nowMs = Date.parse('2026-07-04T00:00:00Z');
-const ctx = { nowMs, settings: {}, jsonlCache: {}, scanBudgetMs: null, prioritySourceIds: new Set(), includeFullHistory: false, force: false };
+const ctx = { nowMs, settings: {}, scanBudgetMs: null, prioritySourceIds: new Set(), includeFullHistory: false, force: false };
 
 test('usage-ok + reset-429: count may show but status stays rate-limited (backoff will fire)', async () => {
   makeTempCodexHome({ tokens: { access_token: 'test-access-token' } });
