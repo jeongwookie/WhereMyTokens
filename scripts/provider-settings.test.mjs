@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import ipcModule from '../dist/main/ipc.js';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 const { DEFAULT_SETTINGS, normalizeSettings } = ipcModule;
 
@@ -82,6 +83,20 @@ test('Antigravity quota duration pace setting defaults off and normalizes boolea
   assert.equal(normalizeSettings({ antigravityQuotaDurationPaceEnabled: 'true' }).antigravityQuotaDurationPaceEnabled, false);
 });
 
+test('language preference is stored through AppSettings, not renderer localStorage', () => {
+  const i18nSource = fs.readFileSync('src/renderer/i18n/index.ts', 'utf8');
+
+  assert.equal(DEFAULT_SETTINGS.language, 'system');
+  assert.equal(normalizeSettings({}).language, 'system');
+  assert.equal(normalizeSettings({ language: 'en' }).language, 'en');
+  assert.equal(normalizeSettings({ language: 'ja' }).language, 'ja');
+  assert.equal(normalizeSettings({ language: 'system' }).language, 'system');
+  assert.equal(normalizeSettings({ language: 'ko' }).language, 'system');
+  assert.equal(normalizeSettings({ language: true }).language, 'system');
+  assert.match(i18nSource, /applyLanguagePreference/);
+  assert.doesNotMatch(i18nSource, /localStorage|LANGUAGE_STORAGE_KEY|setItem|getItem/);
+});
+
 test('taskbar quota settings default off and normalize abbreviation overrides', () => {
   const settings = normalizeSettings({
     taskbarQuotaEnabled: true,
@@ -137,6 +152,7 @@ test('settings:set persists taskbar quota settings through the explicit allowlis
   let saved = setSettings(null, {
     taskbarQuotaEnabled: true,
     taskbarQuotaMaxBlocks: 1,
+    language: 'ja',
     quotaTargetAbbreviations: {
       'claude.group.account': ' cc ',
       'codex.group.account': 'x',
@@ -144,18 +160,22 @@ test('settings:set persists taskbar quota settings through the explicit allowlis
   });
   assert.equal(saved.taskbarQuotaEnabled, true);
   assert.equal(saved.taskbarQuotaMaxBlocks, 1);
+  assert.equal(saved.language, 'ja');
   assert.deepEqual(saved.quotaTargetAbbreviations, {
     'claude.group.account': 'CC',
     'codex.group.account': 'X',
   });
   assert.equal(store.store.taskbarQuotaEnabled, true);
   assert.equal(store.store.taskbarQuotaMaxBlocks, 1);
+  assert.equal(store.store.language, 'ja');
 
-  saved = setSettings(null, { taskbarQuotaEnabled: false, taskbarQuotaMaxBlocks: 99 });
+  saved = setSettings(null, { taskbarQuotaEnabled: false, taskbarQuotaMaxBlocks: 99, language: 'bogus' });
   assert.equal(saved.taskbarQuotaEnabled, false);
   assert.equal(saved.taskbarQuotaMaxBlocks, 3);
+  assert.equal(saved.language, 'ja');
   assert.equal(store.store.taskbarQuotaEnabled, false);
   assert.equal(store.store.taskbarQuotaMaxBlocks, 3);
+  assert.equal(store.store.language, 'ja');
 
   saved = setSettings(null, { taskbarQuotaEnabled: 'true', taskbarQuotaMaxBlocks: '2' });
   assert.equal(saved.taskbarQuotaEnabled, false);
@@ -176,6 +196,7 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(types, /taskbarQuotaMaxBlocks: number/);
   assert.match(types, /quotaTargetAbbreviations: Partial<Record<string, string>>/);
   assert.match(types, /antigravityQuotaDurationPaceEnabled: boolean/);
+  assert.match(types, /language: 'system' \| 'en' \| 'ja'/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
   assert.match(settingsView, /'enabledProviders'/);
   assert.match(settingsView, /'quotaTargetModes'/);
@@ -184,9 +205,14 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(settingsView, /'taskbarQuotaMaxBlocks'/);
   assert.match(settingsView, /'quotaTargetAbbreviations'/);
   assert.match(settingsView, /'antigravityQuotaDurationPaceEnabled'/);
-  assert.match(settingsView, /Antigravity quota pace/);
+  assert.match(settingsView, /'language'/);
+  assert.match(settingsView, /normalizeLanguagePreference\(s\.language\)/);
+  assert.doesNotMatch(settingsView, /localStorage/);
+  assert.match(settingsView, tCallRegex('settingsView.providers.antigravityPace'));
   assert.match(app, /taskbarQuotaEnabled: false/);
   assert.match(app, /taskbarQuotaMaxBlocks: 2/);
+  assert.match(app, /language: 'system'/);
+  assert.match(app, /applyLanguagePreference\(state\.settings\.language\)/);
   assert.match(app, /quotaTargetAbbreviations: \{\}/);
   assert.doesNotMatch(settingsView, /'plan'/);
   assert.doesNotMatch(settingsView, /'provider'/);
@@ -196,17 +222,17 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
 
   assert.match(settingsView, /const PROVIDER_OPTIONS/);
-  assert.match(settingsView, /<SectionHeader label="Providers" \/>/);
+  assert.match(settingsView, tCallRegex('settingsView.providers.heading'));
   assert.doesNotMatch(settingsView, /<SectionHeader label="Tracking" \/>/);
-  assert.match(settingsView, /Quota display/);
-  assert.match(settingsView, /Taskbar mini quota display/);
-  assert.match(settingsView, /Taskbar max blocks/);
-  assert.match(settingsView, /Shows fixed 5h \/ 1w quota rows inside the Windows taskbar when supported/);
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.heading'));
+  assert.match(settingsView, tCallRegex('settingsView.general.taskbarQuota'));
+  assert.match(settingsView, tCallRegex('settingsView.general.taskbarMaxBlocks'));
+  assert.match(settingsView, tCallRegex('settingsView.general.taskbarQuotaHint'));
   assert.match(settingsView, /setQuotaTargetAbbreviation/);
   assert.match(settingsView, /normalizeQuotaTargetAbbreviationInput/);
-  assert.match(settingsView, /Rich/);
-  assert.match(settingsView, /Simple/);
-  assert.match(settingsView, /None/);
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.modeRich'));
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.modeSimple'));
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.modeNone'));
   assert.match(settingsView, /setQuotaTargetMode/);
   assert.match(settingsView, /target\.period/);
   assert.match(settingsView, /target\.taskbarEligible/);
@@ -215,9 +241,9 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /s\.taskbarQuotaEnabled && isTaskbarEligibleQuotaTarget\(target\)/);
   assert.match(settingsView, /moveQuotaTarget/);
   assert.match(settingsView, /quotaTargetOrder/);
-  assert.match(settingsView, /Move up/);
-  assert.match(settingsView, /Move down/);
-  assert.match(settingsView, /Reset order/);
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.moveUp'));
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.moveDown'));
+  assert.match(settingsView, tCallRegex('settingsView.quotaDisplay.resetOrder'));
   assert.match(settingsView, /quotaSourceBadgeToneStyle/);
   assert.match(settingsView, /function toggleProvider/);
   assert.match(settingsView, /enabledProviders/);
@@ -227,8 +253,8 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
   assert.match(settingsView, /ACTIVE_PROVIDER_OPTIONS/);
   assert.match(settingsView, /id: 'antigravity'/);
   assert.match(settingsView, /label: 'Antigravity'/);
-  assert.match(settingsView, /Requires Antigravity IDE running and signed in\. Uses local RPC only\./);
-  assert.match(settingsView, /At least one provider must stay enabled\./);
+  assert.match(settingsView, tCallRegex('settingsView.providers.antigravityDetail'));
+  assert.match(settingsView, tCallRegex('settingsView.providers.atLeastOneProvider'));
   assert.doesNotMatch(settingsView, /Coming soon, not tracked yet/);
   assert.doesNotMatch(settingsView, /credit/i);
   assert.doesNotMatch(settingsView, /legacyProviderFromEnabled/);
@@ -238,15 +264,17 @@ test('renderer provider settings use provider checkboxes backed by enabledProvid
 test('quota display target ordering controls are placed after display mode controls', () => {
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
   const targetStart = settingsView.indexOf('{quotaTargetOptions.map((target, index)');
-  const targetEnd = settingsView.indexOf('Reset order', targetStart);
+  const targetEnd = settingsView.indexOf("t('settingsView.quotaDisplay.resetOrder')", targetStart);
   const targetBody = settingsView.slice(targetStart, targetEnd);
+  const moveUpTitle = tCallRegex('settingsView.quotaDisplay.moveUp').source;
+  const moveDownTitle = tCallRegex('settingsView.quotaDisplay.moveDown').source;
 
   assert.notEqual(targetStart, -1);
   assert.notEqual(targetEnd, -1);
-  assert.ok(targetBody.indexOf('aria-label={`Taskbar abbreviation for ${target.label}`}') < targetBody.indexOf("(['rich', 'simple', 'none'] as const).map"));
+  assert.ok(targetBody.indexOf("aria-label={t('settingsView.quotaDisplay.abbreviationLabel'") < targetBody.indexOf("(['rich', 'simple', 'none'] as const).map"));
   assert.ok(targetBody.indexOf('value={s.quotaTargetAbbreviations?.[target.id] ?? \'\'}') < targetBody.indexOf("(['rich', 'simple', 'none'] as const).map"));
-  assert.ok(targetBody.indexOf("(['rich', 'simple', 'none'] as const).map") < targetBody.indexOf('title="Move up"'));
-  assert.ok(targetBody.indexOf('title="Move up"') < targetBody.indexOf('title="Move down"'));
+  assert.ok(targetBody.indexOf("(['rich', 'simple', 'none'] as const).map") < targetBody.search(moveUpTitle));
+  assert.ok(targetBody.search(moveUpTitle) < targetBody.search(moveDownTitle));
 });
 
 test('compact widget height uses visible quota target count', () => {
@@ -310,8 +338,8 @@ test('help and notification copy match provider checkbox and Codex live fallback
   assert.doesNotMatch(helpView, /provider mode/);
   assert.match(helpView, /provider checkboxes/);
   assert.match(helpView, /Disabled providers are not scanned locally/);
-  assert.match(notificationsView, /Codex live usage, cache, or local log 5-hour window/);
-  assert.match(notificationsView, /Codex live usage, cache, or local log weekly window/);
+  assert.match(notificationsView, tCallRegex('notificationsView.targets.codexFiveHour.detail'));
+  assert.match(notificationsView, tCallRegex('notificationsView.targets.codexWeekly.detail'));
 });
 
 test('public README copy matches provider checkbox settings', () => {

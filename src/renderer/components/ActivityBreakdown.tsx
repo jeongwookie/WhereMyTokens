@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SessionInfo } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens } from '../theme';
@@ -25,6 +26,7 @@ interface Props {
 
 function ActivityBreakdown({ session }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const bd = session.activityBreakdown;
   const kind = session.activityBreakdownKind ?? 'tokens';
 
@@ -41,7 +43,7 @@ function ActivityBreakdown({ session }: Props) {
   if (total === 0) return null;
 
   const fmtValue = (value: number) => kind === 'events' ? String(Math.round(value)) : fmtTokens(value);
-  const totalLabel = kind === 'events' ? 'tool events this session' : 'output tokens this session';
+  const totalLabel = kind === 'events' ? t('activityBreakdown.totalLabel.events') : t('activityBreakdown.totalLabel.tokens');
 
   return (
     <div style={{
@@ -67,7 +69,7 @@ function ActivityBreakdown({ session }: Props) {
           return (
             <div
               key={cat.key}
-              title={`${cat.label}: ${Math.round(pct)}%`}
+              title={t('activityBreakdown.categoryTooltip', { label: t(`activityBreakdown.categories.${cat.key}`), pct: Math.round(pct) })}
               style={{ flex: bd[cat.key] ?? 0, background: cat.color, minWidth: pct > 2 ? 2 : 0 }}
             />
           );
@@ -83,7 +85,7 @@ function ActivityBreakdown({ session }: Props) {
             <div key={cat.key}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
                 <span style={{ fontSize: 11, width: 14, textAlign: 'center', flexShrink: 0 }}>{cat.icon}</span>
-                <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{cat.label}</span>
+                <span style={{ fontSize: 11, color: C.textDim, flex: 1 }}>{t(`activityBreakdown.categories.${cat.key}`)}</span>
                 <span style={{ fontSize: 10, fontFamily: C.fontMono, color: C.textMuted, width: 42, textAlign: 'right', flexShrink: 0 }}>
                   {fmtValue(tokens)}
                 </span>

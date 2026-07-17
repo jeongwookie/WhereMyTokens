@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppSettings, AppState, IntegrationStatus, QuotaDisplayMode } from '../types';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
-import { DEFAULT_MAIN_SECTION_ORDER, MAIN_SECTION_LABELS, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
+import { DEFAULT_MAIN_SECTION_ORDER, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 import { buildQuotaTargetSettingsOptions } from '../quotaDisplayModels';
 import { quotaSourceBadgeToneStyle } from '../theme';
+import i18n, { LanguagePreference, normalizeLanguagePreference } from '../i18n';
 
 interface Props {
   settings: AppSettings;
@@ -70,14 +72,10 @@ function shortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string
 type EditableSettingKey = Exclude<keyof AppSettings, 'compactWidgetBounds'>;
 type ProviderId = AppSettings['enabledProviders'][number];
 
-const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string; detail?: string }> = [
+const PROVIDER_OPTIONS: Array<{ id: ProviderId; label: string }> = [
   { id: 'claude', label: 'Claude Code' },
   { id: 'codex', label: 'Codex' },
-  {
-    id: 'antigravity',
-    label: 'Antigravity',
-    detail: 'Requires Antigravity IDE running and signed in. Uses local RPC only.',
-  },
+  { id: 'antigravity', label: 'Antigravity' },
 ];
 const ACTIVE_PROVIDER_OPTIONS = PROVIDER_OPTIONS;
 
@@ -87,6 +85,7 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'currency',
   'usdToKrw',
   'globalHotkey',
+  'language',
   'openAtLogin',
   'alwaysOnTop',
   'enableAlerts',
@@ -116,6 +115,7 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     taskbarQuotaMaxBlocks: Math.max(1, Math.min(3, Math.round(settings.taskbarQuotaMaxBlocks || 2))),
     quotaTargetAbbreviations: settings.quotaTargetAbbreviations ?? {},
     antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
+    language: normalizeLanguagePreference(settings.language),
     mainSectionOrder,
     hiddenMainSections: normalizeHiddenMainSections(settings.hiddenMainSections, mainSectionOrder),
   };
@@ -195,6 +195,7 @@ function buildSettingsPatch(current: AppSettings, base: AppSettings, latest: App
 
 export default function SettingsView({ settings, providerQuotas, onSave, onBack }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const [baseSettings] = useState(() => normalizeSettingsDraft(settings));
   const [s, setS] = useState(() => normalizeSettingsDraft(settings));
   const [recordingHotkey, setRecordingHotkey] = useState(false);
@@ -260,33 +261,33 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
   }
 
   async function handleSetupIntegration() {
-    setIntegrationMsg('Setting up...');
+    setIntegrationMsg(t('settingsView.integration.settingUp'));
     try {
       const r = await window.wmt.setupIntegration();
       updateIntegrationStatus(r);
       if (r.ok) {
-        setIntegrationMsg('Done. Restart Claude Code to activate.');
+        setIntegrationMsg(t('settingsView.integration.setupDone'));
       } else {
-        setIntegrationMsg(`Failed: ${r.error ?? 'unknown error'}`);
+        setIntegrationMsg(t('settingsView.integration.setupFailed', { error: r.error ?? 'unknown error' }));
       }
     } catch (e) {
-      setIntegrationMsg(`Error: ${String(e)}`);
+      setIntegrationMsg(t('settingsView.integration.setupError', { error: String(e) }));
     }
     setTimeout(() => setIntegrationMsg(''), 4000);
   }
 
   async function handleDisableIntegration() {
-    setIntegrationMsg('Disabling...');
+    setIntegrationMsg(t('settingsView.integration.disabling'));
     try {
       const r = await window.wmt.disableIntegration();
       updateIntegrationStatus(r);
       if (r.ok) {
-        setIntegrationMsg('Disabled. Restart Claude Code to stop the bridge.');
+        setIntegrationMsg(t('settingsView.integration.disableDone'));
       } else {
-        setIntegrationMsg(`Failed: ${r.error ?? 'unknown error'}`);
+        setIntegrationMsg(t('settingsView.integration.disableFailed', { error: r.error ?? 'unknown error' }));
       }
     } catch (e) {
-      setIntegrationMsg(`Error: ${String(e)}`);
+      setIntegrationMsg(t('settingsView.integration.disableError', { error: String(e) }));
     }
     setTimeout(() => setIntegrationMsg(''), 4000);
   }
@@ -294,18 +295,18 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
   async function handleResetIndex() {
     if (resettingIndex) return;
     const confirmed = window.confirm([
-      'Reset usage index?',
-      'This clears indexed history and rebuilds from available provider logs.',
-      'History from unavailable logs will be permanently lost.',
+      t('settingsView.data.resetConfirmTitle'),
+      t('settingsView.data.resetConfirmBody'),
+      t('settingsView.data.resetConfirmLoss'),
     ].join('\n\n'));
     if (!confirmed) return;
     setResettingIndex(true);
-    setResetIndexMsg('Resetting...');
+    setResetIndexMsg(t('settingsView.data.resetting'));
     try {
       await window.wmt.resetIndex();
-      setResetIndexMsg('Reset complete.');
+      setResetIndexMsg(t('settingsView.data.resetComplete'));
     } catch (e) {
-      setResetIndexMsg(`Failed: ${String(e)}`);
+      setResetIndexMsg(t('settingsView.data.resetFailed', { error: String(e) }));
     } finally {
       setResettingIndex(false);
       setTimeout(() => setResetIndexMsg(''), 5000);
@@ -314,9 +315,9 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
 
   function integrationLabel(status: IntegrationStatus | null): string {
     if (!status) return '';
-    if (status.owner === 'wmt') return 'Connected';
-    if (status.owner === 'other') return 'Other statusLine';
-    return 'Not configured';
+    if (status.owner === 'wmt') return i18n.t('settingsView.integration.connected');
+    if (status.owner === 'other') return i18n.t('settingsView.integration.otherStatusLine');
+    return i18n.t('settingsView.integration.notConfigured');
   }
 
   function SectionHeader({ label }: { label: string }) {
@@ -377,16 +378,16 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
-      <ViewHeader title="Settings" onBack={onBack} />
+      <ViewHeader title={t('settingsView.title')} onBack={onBack} />
       <div style={{ overflowY: 'auto', flex: 1, padding: '4px 16px' }}>
 
-        <SectionHeader label="Claude Code Integration" />
+        <SectionHeader label={t('settingsView.integration.heading')} />
         <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: 12, color: C.text }}>Real-time data via statusLine</div>
+              <div style={{ fontSize: 12, color: C.text }}>{t('settingsView.integration.realtimeLabel')}</div>
               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
-                Registers WhereMyTokens as a Claude Code plugin for live rate limits
+                {t('settingsView.integration.description')}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -407,7 +408,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                 onClick={handleSetupIntegration}
                 style={{ background: C.accent, color: '#fff', border: 'none', borderRadius: 4, padding: '4px 10px', fontSize: 11, cursor: 'pointer', fontWeight: 600 }}
               >
-                Setup
+                {t('settingsView.integration.setupButton')}
               </button>
               <button
                 onClick={handleDisableIntegration}
@@ -423,7 +424,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                   fontWeight: 600,
                 }}
               >
-                Disable
+                {t('settingsView.integration.disableButton')}
               </button>
             </div>
           </div>
@@ -432,34 +433,46 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
           )}
         </div>
 
-        <SectionHeader label="General" />
+        <SectionHeader label={t('settingsView.general.heading')} />
         <div style={row}>
-          <span style={labelStyle}>Start with Windows</span>
+          <span style={labelStyle}>{t('settingsView.general.language')}</span>
+          <select
+            value={normalizeLanguagePreference(s.language)}
+            onChange={e => setS({ ...s, language: normalizeLanguagePreference(e.target.value as LanguagePreference) })}
+            style={{ ...sel, width: 140 }}
+          >
+            <option value="system">{t('settingsView.general.languageSystem')}</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+          </select>
+        </div>
+        <div style={row}>
+          <span style={labelStyle}>{t('settingsView.general.startWithWindows')}</span>
           <input type="checkbox" style={chk} checked={s.openAtLogin} onChange={e => setS({ ...s, openAtLogin: e.target.checked })} />
         </div>
         <div style={row}>
           <div>
-            <div style={labelStyle}>Dashboard always on top</div>
+            <div style={labelStyle}>{t('settingsView.general.alwaysOnTop')}</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Applies to the dashboard only
+              {t('settingsView.general.alwaysOnTopHint')}
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.alwaysOnTop} onChange={e => setS({ ...s, alwaysOnTop: e.target.checked })} />
         </div>
         <div style={row}>
           <div>
-            <div style={labelStyle}>Floating usage widget</div>
+            <div style={labelStyle}>{t('settingsView.general.floatingWidget')}</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Always stays on top; shows quota pace at a glance
+              {t('settingsView.general.floatingWidgetHint')}
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.compactWidgetEnabled} onChange={e => setS({ ...s, compactWidgetEnabled: e.target.checked })} />
         </div>
         <div style={row}>
           <div>
-            <div style={labelStyle}>Taskbar mini quota display</div>
+            <div style={labelStyle}>{t('settingsView.general.taskbarQuota')}</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Shows fixed 5h / 1w quota rows inside the Windows taskbar when supported
+              {t('settingsView.general.taskbarQuotaHint')}
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.taskbarQuotaEnabled} onChange={e => setS({ ...s, taskbarQuotaEnabled: e.target.checked })} />
@@ -467,9 +480,9 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         {s.taskbarQuotaEnabled && (
           <div style={row}>
             <div>
-              <div style={labelStyle}>Taskbar max blocks</div>
+              <div style={labelStyle}>{t('settingsView.general.taskbarMaxBlocks')}</div>
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-                Limits how many quota blocks each taskbar row shows
+                {t('settingsView.general.taskbarMaxBlocksHint')}
               </div>
             </div>
             <select
@@ -477,28 +490,28 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
               value={s.taskbarQuotaMaxBlocks}
               onChange={e => setS({ ...s, taskbarQuotaMaxBlocks: Number(e.target.value) })}
             >
-              <option value={1}>1 block</option>
-              <option value={2}>2 blocks</option>
-              <option value={3}>3 blocks</option>
+              <option value={1}>{t('settingsView.general.blocksOption', { count: 1 })}</option>
+              <option value={2}>{t('settingsView.general.blocksOption', { count: 2 })}</option>
+              <option value={3}>{t('settingsView.general.blocksOption', { count: 3 })}</option>
             </select>
           </div>
         )}
         <div style={row}>
           <div>
-            <div style={labelStyle}>Waiting animation</div>
+            <div style={labelStyle}>{t('settingsView.general.waitingAnimation')}</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Animates floating-widget waiting bars when limit data is missing
+              {t('settingsView.general.waitingAnimationHint')}
             </div>
           </div>
           <input type="checkbox" style={chk} checked={s.compactWidgetWaitingAnimationEnabled} onChange={e => setS({ ...s, compactWidgetWaitingAnimationEnabled: e.target.checked })} />
         </div>
         <div style={row}>
-          <span style={labelStyle}>Global shortcut</span>
+          <span style={labelStyle}>{t('settingsView.general.globalShortcut')}</span>
           <input
             readOnly
-            aria-label="Global shortcut"
-            title="Click, then press a shortcut. Esc cancels, Backspace clears."
-            placeholder={recordingHotkey ? 'Press shortcut...' : 'Click to record'}
+            aria-label={t('settingsView.general.globalShortcut')}
+            title={t('settingsView.general.globalShortcutTitle')}
+            placeholder={recordingHotkey ? t('settingsView.general.pressShortcut') : t('settingsView.general.clickToRecord')}
             style={{
               ...inp,
               width: 176,
@@ -515,12 +528,12 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
           />
           {recordingHotkey && (
             <span style={{ fontSize: 10, color: C.textMuted, marginLeft: 8 }}>
-              Use Ctrl+Shift or Ctrl+Alt
+              {t('settingsView.general.shortcutHint')}
             </span>
           )}
         </div>
 
-        <SectionHeader label="Providers" />
+        <SectionHeader label={t('settingsView.providers.heading')} />
         <div style={{ padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'grid', gap: 6 }}>
             {PROVIDER_OPTIONS.map(option => {
@@ -528,7 +541,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
               const checked = enabledProviders.includes(option.id);
               const lockedLastProvider = checked && enabledProviders.length <= 1;
               const disabled = lockedLastProvider;
-              const title = lockedLastProvider ? 'At least one provider must stay enabled.' : undefined;
+              const title = lockedLastProvider ? t('settingsView.providers.atLeastOneProvider') : undefined;
               return (
                 <label
                   key={option.id}
@@ -542,14 +555,14 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                 >
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                     <span style={labelStyle}>{option.label}</span>
-                    {option.detail && (
+                    {option.id === 'antigravity' && (
                       <span style={{ fontSize: 10, color: C.textMuted }}>
-                        {option.detail}
+                        {t('settingsView.providers.antigravityDetail')}
                       </span>
                     )}
                     {lockedLastProvider && (
                       <span style={{ fontSize: 10, color: C.textMuted }}>
-                        At least one provider must stay enabled.
+                        {title}
                       </span>
                     )}
                   </span>
@@ -569,9 +582,9 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         {enabledProvidersFromSettings(s).includes('antigravity') && (
           <div style={row}>
             <div>
-              <div style={labelStyle}>Antigravity quota pace estimate</div>
+              <div style={labelStyle}>{t('settingsView.providers.antigravityPace')}</div>
               <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-                Estimate 5h or weekly pacing from reset times; off keeps Antigravity model quotas percent-only
+                {t('settingsView.providers.antigravityPaceHint')}
               </div>
             </div>
             <input
@@ -584,10 +597,10 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         )}
         {quotaTargetOptions.length > 0 && (
           <div style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 6 }}>Quota display</div>
+            <div style={{ ...labelStyle, marginBottom: 6 }}>{t('settingsView.quotaDisplay.heading')}</div>
             {s.taskbarQuotaEnabled && (
               <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 7 }}>
-                The small text box customizes the taskbar label for 5h / 1w targets.
+                {t('settingsView.quotaDisplay.hint')}
               </div>
             )}
             <div style={{ display: 'grid', gap: 6 }}>
@@ -599,7 +612,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, marginTop: 2 }}>
                       <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {target.period || `${target.rowCount} row${target.rowCount === 1 ? '' : 's'}`}
+                        {target.period || t('settingsView.quotaDisplay.rowsFallback', { count: target.rowCount })}
                       </span>
                       <span style={{ fontSize: 9, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
                         {target.defaultMode}
@@ -626,8 +639,8 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     {s.taskbarQuotaEnabled && isTaskbarEligibleQuotaTarget(target) && (
                       <input
-                        aria-label={`Taskbar abbreviation for ${target.label}`}
-                        title={`Default: ${defaultQuotaTargetAbbreviation(target.provider, target.label)}`}
+                        aria-label={t('settingsView.quotaDisplay.abbreviationLabel', { label: target.label })}
+                        title={t('settingsView.quotaDisplay.abbreviationTitle', { abbrev: defaultQuotaTargetAbbreviation(target.provider, target.label) })}
                         placeholder={defaultQuotaTargetAbbreviation(target.provider, target.label)}
                         value={s.quotaTargetAbbreviations?.[target.id] ?? ''}
                         onChange={e => setQuotaTargetAbbreviation(target.id, e.target.value)}
@@ -637,7 +650,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                     <div style={{ display: 'flex', gap: 2 }}>
                       {(['rich', 'simple', 'none'] as const).map(mode => {
                         const active = target.mode === mode;
-                        const label = mode === 'rich' ? 'Rich' : mode === 'simple' ? 'Simple' : 'None';
+                        const label = mode === 'rich' ? t('settingsView.quotaDisplay.modeRich') : mode === 'simple' ? t('settingsView.quotaDisplay.modeSimple') : t('settingsView.quotaDisplay.modeNone');
                         return (
                           <button
                             key={mode}
@@ -663,7 +676,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                     <div style={{ display: 'flex', gap: 2 }}>
                       <button
                         type="button"
-                        title="Move up"
+                        title={t('settingsView.quotaDisplay.moveUp')}
                         disabled={index === 0}
                         onClick={() => moveQuotaTarget(target.id, -1)}
                         style={{
@@ -683,7 +696,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                       </button>
                       <button
                         type="button"
-                        title="Move down"
+                        title={t('settingsView.quotaDisplay.moveDown')}
                         disabled={index === quotaTargetOptions.length - 1}
                         onClick={() => moveQuotaTarget(target.id, 1)}
                         style={{
@@ -711,17 +724,17 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
               onClick={() => setS({ ...s, quotaTargetOrder: [] })}
               style={{ marginTop: 6, background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
             >
-              Reset order
+              {t('settingsView.quotaDisplay.resetOrder')}
             </button>
           </div>
         )}
 
-        <SectionHeader label="Data" />
+        <SectionHeader label={t('settingsView.data.heading')} />
         <div style={row}>
           <div>
-            <div style={labelStyle}>Usage history</div>
+            <div style={labelStyle}>{t('settingsView.data.usageHistory')}</div>
             <div style={{ fontSize: 10, color: C.textMuted, marginTop: 2 }}>
-              Clears indexed history and rebuilds from available provider logs. Unavailable history will be lost.
+              {t('settingsView.data.usageHistoryHint')}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0, justifyContent: 'flex-end' }}>
@@ -741,47 +754,47 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                 fontWeight: 600,
               }}
             >
-              Reset index
+              {t('settingsView.data.resetButton')}
             </button>
           </div>
         </div>
 
-        <SectionHeader label="Currency" />
+        <SectionHeader label={t('settingsView.currency.heading')} />
         <div style={row}>
-          <span style={labelStyle}>Currency</span>
+          <span style={labelStyle}>{t('settingsView.currency.label')}</span>
           <select style={sel} value={s.currency} onChange={e => setS({ ...s, currency: e.target.value as 'USD' | 'KRW' })}>
-            <option value="USD">USD ($)</option>
-            <option value="KRW">KRW (₩)</option>
+            <option value="USD">{t('settingsView.currency.usd')}</option>
+            <option value="KRW">{t('settingsView.currency.krw')}</option>
           </select>
         </div>
         {s.currency === 'KRW' && (
           <div style={row}>
-            <span style={labelStyle}>Exchange rate (1 USD)</span>
+            <span style={labelStyle}>{t('settingsView.currency.exchangeRate')}</span>
             <input style={inp} type="number" value={s.usdToKrw} onChange={e => setS({ ...s, usdToKrw: Number(e.target.value) })} />
           </div>
         )}
 
-        <SectionHeader label="Tray" />
+        <SectionHeader label={t('settingsView.tray.heading')} />
         <div style={row}>
-          <span style={labelStyle}>Tray label</span>
+          <span style={labelStyle}>{t('settingsView.tray.label')}</span>
           <select style={sel} value={s.trayDisplay ?? 'h5pct'} onChange={e => setS({ ...s, trayDisplay: e.target.value as AppSettings['trayDisplay'] })}>
-            <option value="none">None</option>
-            <option value="h5pct">5h usage %</option>
-            <option value="tokens">5h tokens</option>
-            <option value="cost">5h cost</option>
+            <option value="none">{t('settingsView.tray.none')}</option>
+            <option value="h5pct">{t('settingsView.tray.h5pct')}</option>
+            <option value="tokens">{t('settingsView.tray.tokens')}</option>
+            <option value="cost">{t('settingsView.tray.cost')}</option>
           </select>
         </div>
 
-        <SectionHeader label="Main Layout" />
+        <SectionHeader label={t('settingsView.mainLayout.heading')} />
         <div style={{ padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'grid', gap: 4 }}>
             {mainSectionOrder.map((id, index) => (
               <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 0' }}>
-                <span style={{ fontSize: 12, color: hiddenMainSections.includes(id) ? C.textMuted : C.textDim, minWidth: 0 }}>{MAIN_SECTION_LABELS[id]}</span>
+                <span style={{ fontSize: 12, color: hiddenMainSections.includes(id) ? C.textMuted : C.textDim, minWidth: 0 }}>{t(`common.mainSections.${id}`)}</span>
                 <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                   <button
                     type="button"
-                    title={hiddenMainSections.includes(id) ? 'Show card' : 'Hide card'}
+                    title={hiddenMainSections.includes(id) ? t('settingsView.mainLayout.showCardTitle') : t('settingsView.mainLayout.hideCardTitle')}
                     disabled={!hiddenMainSections.includes(id) && visibleSectionCount <= 1}
                     onClick={() => toggleMainSectionHidden(id)}
                     style={{
@@ -797,11 +810,11 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                       fontFamily: C.fontMono,
                     }}
                   >
-                    {hiddenMainSections.includes(id) ? 'Show' : 'Hide'}
+                    {hiddenMainSections.includes(id) ? t('settingsView.mainLayout.show') : t('settingsView.mainLayout.hide')}
                   </button>
                   <button
                     type="button"
-                    title="Move up"
+                    title={t('settingsView.mainLayout.moveUp')}
                     disabled={index === 0}
                     onClick={() => moveMainSection(id, -1)}
                     style={{
@@ -820,7 +833,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                   </button>
                   <button
                     type="button"
-                    title="Move down"
+                    title={t('settingsView.mainLayout.moveDown')}
                     disabled={index === mainSectionOrder.length - 1}
                     onClick={() => moveMainSection(id, 1)}
                     style={{
@@ -847,30 +860,30 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
               onClick={() => setS({ ...s, mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER })}
               style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
             >
-              Reset order
+              {t('settingsView.mainLayout.resetOrder')}
             </button>
             <button
               type="button"
               onClick={() => setS({ ...s, hiddenMainSections: [] })}
               style={{ background: 'none', border: `1px solid ${C.border}`, color: C.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 8px', borderRadius: 4 }}
             >
-              Show all
+              {t('settingsView.mainLayout.showAll')}
             </button>
           </div>
         </div>
 
-        <SectionHeader label="Appearance" />
+        <SectionHeader label={t('settingsView.appearance.heading')} />
         <div style={row}>
-          <span style={labelStyle}>Theme</span>
+          <span style={labelStyle}>{t('settingsView.appearance.theme')}</span>
           <div style={{ display: 'flex', gap: 2 }}>
-            {(['auto', 'light', 'dark'] as const).map(t => (
-              <button key={t} onClick={() => setS({ ...s, theme: t })} style={{
-                padding: '3px 10px', fontSize: 11, border: `1px solid ${(s.theme ?? 'auto') === t ? C.accent + '88' : C.border}`,
-                borderRadius: 4, cursor: 'pointer', fontWeight: (s.theme ?? 'auto') === t ? 700 : 400,
-                background: (s.theme ?? 'auto') === t ? C.accent + '22' : 'transparent',
-                color: (s.theme ?? 'auto') === t ? C.accent : C.textDim,
+            {(['auto', 'light', 'dark'] as const).map(themeOption => (
+              <button key={themeOption} onClick={() => setS({ ...s, theme: themeOption })} style={{
+                padding: '3px 10px', fontSize: 11, border: `1px solid ${(s.theme ?? 'auto') === themeOption ? C.accent + '88' : C.border}`,
+                borderRadius: 4, cursor: 'pointer', fontWeight: (s.theme ?? 'auto') === themeOption ? 700 : 400,
+                background: (s.theme ?? 'auto') === themeOption ? C.accent + '22' : 'transparent',
+                color: (s.theme ?? 'auto') === themeOption ? C.accent : C.textDim,
               }}>
-                {t === 'auto' ? 'Auto' : t === 'light' ? 'Light' : 'Dark'}
+                {themeOption === 'auto' ? t('settingsView.appearance.auto') : themeOption === 'light' ? t('settingsView.appearance.light') : t('settingsView.appearance.dark')}
               </button>
             ))}
           </div>
@@ -886,7 +899,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         }}
         style={{ margin: '12px 16px', background: C.accent, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 13, cursor: isDirty ? 'pointer' : 'default', fontWeight: 700, flexShrink: 0, opacity: isDirty ? 1 : 0.4, pointerEvents: isDirty ? 'auto' : 'none' }}
       >
-        Save
+        {t('settingsView.save')}
       </button>
     </div>
   );

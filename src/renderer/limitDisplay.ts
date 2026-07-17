@@ -1,4 +1,10 @@
 import type { ProviderId, ProviderQuotaWindow } from './types';
+// This is a plain (non-React) utility module, so it uses the i18next singleton's `.t()`
+// directly instead of the `useTranslation()` hook. Callers that memoize results built from
+// this (e.g. useMemo(() => buildQuotaDisplayModels(...), deps)) must include the active
+// language (e.g. i18n.language from useTranslation()) in their dependency array, or the
+// memoized title strings will go stale after a language switch.
+import i18n from './i18n';
 
 export type LimitWindow = ProviderQuotaWindow;
 export type LimitDataState = 'ready' | 'syncing' | 'waiting';
@@ -22,35 +28,37 @@ export function limitDataState(limit: LimitWindow, syncing = false): LimitDataSt
 }
 
 export function limitSourceDisplay(limit: LimitWindow): LimitSourceDisplay {
+  // Source badge labels (API/Bridge/Cache/Log/RPC) stay in English: they're short technical
+  // status tokens, not sentences — a JA-reading developer audience expects them as-is.
   switch (limit.source) {
     case 'api':
       return {
         label: 'API',
-        title: 'Account usage snapshot. Refreshed every few minutes.',
+        title: i18n.t('common.limitSource.api.title'),
         tone: 'good',
       };
     case 'statusLine':
       return {
         label: 'Bridge',
-        title: 'Local status-line fallback while the API is unavailable.',
+        title: i18n.t('common.limitSource.bridge.title'),
         tone: 'neutral',
       };
     case 'cache':
       return {
         label: hasLimitData(limit) ? 'Cache' : undefined,
-        title: 'Last trusted usage snapshot. It ages out automatically.',
+        title: i18n.t('common.limitSource.cache.title'),
         tone: 'neutral',
       };
     case 'localLog':
       return {
         label: 'Log',
-        title: 'Local session-log estimate. It can lag account-level limits.',
+        title: i18n.t('common.limitSource.localLog.title'),
         tone: 'warning',
       };
     case 'localRpc':
       return {
         label: 'RPC',
-        title: 'Local provider runtime snapshot.',
+        title: i18n.t('common.limitSource.localRpc.title'),
         tone: 'neutral',
       };
     default:

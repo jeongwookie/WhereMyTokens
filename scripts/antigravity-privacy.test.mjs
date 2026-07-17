@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { tCallRegex, enText } from './test-support/i18n.mjs';
 
 function listFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -26,7 +27,10 @@ test('Antigravity provider stays local-only and does not add OAuth, cloud, credi
   assert.doesNotMatch(providerSource, /console\.(log|debug|info|warn|error)/);
 
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
-  assert.match(settingsView, /Requires Antigravity IDE running and signed in\. Uses local RPC only\./);
+  assert.match(settingsView, tCallRegex('settingsView.providers.antigravityDetail'));
+  // The disclosure wording itself is privacy-relevant (users are told Antigravity is
+  // local-RPC-only, no cloud/credits), so pin its English content, not just the key.
+  assert.equal(enText('settingsView.providers.antigravityDetail'), 'Requires Antigravity IDE running and signed in. Uses local RPC only.');
   assert.doesNotMatch(settingsView, /Antigravity[\s\S]{0,240}credits?/i);
 });
 
