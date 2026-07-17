@@ -203,7 +203,7 @@ function makeBlock(
     label,
     quotaPct: noCap ? null : quotaPctValue,
     elapsedPct: noCap ? null : elapsedPctValue,
-    resetLabel: noCap ? 'no cap' : resetLabel(safeResetMs),
+    resetLabel: noCap ? 'unlimited' : resetLabel(safeResetMs),
     severity: windowSeverity(quotaWindow, quotaPctValue, elapsedPctValue),
     providerStatusTone: statusTone,
     risk: noCap ? Number.NEGATIVE_INFINITY : risk(quotaPctValue, elapsedPctValue),

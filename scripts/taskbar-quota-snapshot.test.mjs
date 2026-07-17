@@ -108,11 +108,11 @@ test('shows unlimited quota windows as taskbar blocks without usage severity', (
   assert.equal(h5.blocks[0].abbreviation, 'CX');
   assert.equal(h5.blocks[0].quotaPct, null);
   assert.equal(h5.blocks[0].elapsedPct, null);
-  assert.equal(h5.blocks[0].resetLabel, 'no cap');
+  assert.equal(h5.blocks[0].resetLabel, 'unlimited');
   assert.equal(h5.blocks[0].severity, 'normal');
 });
 
-test('shows unreported quota windows as taskbar no-cap blocks', () => {
+test('shows unreported quota windows as taskbar unlimited blocks', () => {
   const quota = accountQuota('codex', 'Codex', 0, 44);
   quota.windows.h5 = { pct: 0, resetMs: null, limitState: 'unreported', source: 'api' };
 
@@ -121,7 +121,7 @@ test('shows unreported quota windows as taskbar no-cap blocks', () => {
 
   assert.equal(block.quotaPct, null);
   assert.equal(block.elapsedPct, null);
-  assert.equal(block.resetLabel, 'no cap');
+  assert.equal(block.resetLabel, 'unlimited');
   assert.equal(block.severity, 'normal');
 });
 
