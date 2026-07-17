@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.0/WhereMyTokens-Setup.exe"><strong>下载 v1.22.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-Setup.exe"><strong>下载 v1.22.1</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.22.0 内置日语 UI，并可在 Settings 的语言选项中切换 System / English / 日本語。</em>
+  <em>v1.22.1 会在 Codex 暂时不报告限制 window 时，将 quota 显示为 Unlimited。</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.22.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1)** | 7/17 | 当 Codex 暂时不报告 5h/1w 限制 window 时显示为 `Unlimited`，避免界面停留在 Syncing 状态 |
 | **[v1.22.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.0)** | 7/17 | 内置日语 UI，新增保存到 AppSettings 的语言选择，以及面向日语用户的下载说明；整合了 @restructure-git 在 PR #37 中的翻译和 key 结构建议 |
 | **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 7/17 | 将旧使用量存储统一到按 source 归属的 SQLite UsageIndex，加入 Reset index 恢复流程，并收紧 taskbar mini overflow hit bounds |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 7/10 | Taskbar mini quota 每行可配置 1-3 个显示块，并修正隐藏 target 的 `+N` 与 live/cache/log 前缀状态色 |
 | **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | 7/7 | 新增 Codex reset credit 作为 Plan Usage target，并提供可拖动的 self-contained Windows taskbar mini quota 5H/1W 行 |
-| **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 6/22 | 调整 calibration guard，避免短 Claude thinking block 被误判，从而稳定 Trend breakdown import |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.0/WhereMyTokens-v1.22.0-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-v1.22.1-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -99,7 +99,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.22.0-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.22.1-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -116,7 +116,7 @@ macOS 用户请使用单独的公开仓库:
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
-- **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都通过 `providerQuotas` 发布有效 quota snapshot；Claude 按 Anthropic API/statusLine/cache 优先级显示，Codex 使用 5h/1w live usage 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用 local RPC model quota snapshot
+- **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都通过 `providerQuotas` 发布有效 quota snapshot；Claude 按 Anthropic API/statusLine/cache 优先级显示，Codex 使用 5h/1w live usage 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用 local RPC model quota snapshot。Codex 已连接但某个限制 window 未报告时会显示 `Unlimited`，当 Codex 再次报告限制时恢复普通百分比显示
 - **按 target 配置 quota 展示** — 每个 provider window 和 model target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 可配置每行 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。Codex Resets target 仅用于 Plan Usage
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示使用节奏快于重置窗口
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
