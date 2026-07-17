@@ -116,6 +116,31 @@ test('Codex live usage reads auth.json, sends safe headers, and parses windows',
   assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
 });
 
+test('Codex live usage treats unlimited credits without windows as unlimited quota windows', async () => {
+  makeTempCodexHome({
+    tokens: {
+      access_token: 'test-access-token',
+      account_id: 'acct_test',
+    },
+  });
+  withHttpResponse(200, {
+    plan_type: 'pro',
+    credits: { has_credits: true, unlimited: true, balance: 'unlimited' },
+  });
+
+  const result = await fetchCodexUsagePct();
+
+  assert.equal(result.status.code, 'ok');
+  assert.equal(result.usage?.unlimited, true);
+  assert.equal(result.usage?.h5Available, true);
+  assert.equal(result.usage?.weekAvailable, true);
+  assert.equal(result.usage?.h5Unlimited, true);
+  assert.equal(result.usage?.weekUnlimited, true);
+  assert.equal(result.usage?.h5Pct, 0);
+  assert.equal(result.usage?.weekPct, 0);
+  assert.equal(result.usage?.credits?.unlimited, true);
+});
+
 test('Codex live usage rejects non-OpenAI custom base URLs before sending auth headers', async () => {
   makeTempCodexHome({
     tokens: {
@@ -269,6 +294,9 @@ test('stored Codex usage cache is rejected after auth file changes', () => {
     authIdentityHash,
     h5Available: true,
     weekAvailable: true,
+    h5Unlimited: false,
+    weekUnlimited: false,
+    unlimited: false,
     h5Pct: 5,
     weekPct: 17,
     h5ResetMs: 60_000,

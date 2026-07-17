@@ -34,6 +34,9 @@ export interface CodexCreditsSnapshot {
 export interface CodexUsagePct {
   h5Available: boolean;
   weekAvailable: boolean;
+  h5Unlimited: boolean;
+  weekUnlimited: boolean;
+  unlimited: boolean;
   h5Pct: number;
   weekPct: number;
   h5ResetMs: CodexResetMs;
@@ -559,6 +562,10 @@ function parseUsagePayload(payload: unknown, now: number): CodexUsagePct | null 
   const source = status ?? root;
   const rateLimit = asRecord(source.rate_limit) ?? asRecord(root.rate_limit);
   const windows = normalizeWindowRoles(rateLimit, now);
+  const credits = creditsSnapshot(source.credits ?? root.credits);
+  const unlimited = credits?.unlimited === true;
+  const h5Unlimited = unlimited && !windows.h5;
+  const weekUnlimited = unlimited && !windows.week;
   const reachedTypeValues = [
     source.rate_limit_reached_type,
     root.rate_limit_reached_type,
@@ -576,11 +583,14 @@ function parseUsagePayload(payload: unknown, now: number): CodexUsagePct | null 
   const h5Pct = windows.h5 ? (h5LimitReached ? 100 : windows.h5.pct) : 0;
   const weekPct = windows.week ? (weekLimitReached ? 100 : windows.week.pct) : 0;
 
-  if (!windows.h5 && !windows.week) return null;
+  if (!windows.h5 && !windows.week && !unlimited) return null;
 
   return {
-    h5Available: !!windows.h5,
-    weekAvailable: !!windows.week,
+    h5Available: !!windows.h5 || h5Unlimited,
+    weekAvailable: !!windows.week || weekUnlimited,
+    h5Unlimited,
+    weekUnlimited,
+    unlimited,
     h5Pct,
     weekPct,
     h5ResetMs: windows.h5?.resetMs ?? null,
@@ -588,7 +598,7 @@ function parseUsagePayload(payload: unknown, now: number): CodexUsagePct | null 
     h5LimitReached,
     weekLimitReached,
     plan: stringValue(source, 'plan_type') || stringValue(root, 'plan_type') || '',
-    credits: creditsSnapshot(source.credits ?? root.credits),
+    credits,
     limitReached,
     rateLimitReachedType: reachedType,
   };
@@ -635,6 +645,9 @@ export function normalizeStoredCodexUsagePct(
     authIdentityHash,
     h5Available: record.h5Available === true,
     weekAvailable: record.weekAvailable === true,
+    h5Unlimited: record.h5Unlimited === true,
+    weekUnlimited: record.weekUnlimited === true,
+    unlimited: record.unlimited === true,
     h5Pct: normalizePct(record.h5Pct),
     weekPct: normalizePct(record.weekPct),
     h5ResetMs: normalizeResetValue(record.h5ResetMs),

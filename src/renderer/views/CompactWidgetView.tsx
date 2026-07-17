@@ -33,6 +33,7 @@ type WidgetAgent = {
     quotaPct: number;
     resetMs: number | null;
     durationMs?: number;
+    limitState?: 'unlimited';
     pending?: boolean;
     pendingTitle?: string;
     unknown?: boolean;
@@ -316,9 +317,10 @@ function buildWidgetAgents(state: AppState): WidgetAgent[] {
         quotaPct: row.quotaPct,
         resetMs: row.resetMs,
         durationMs: row.durationMs,
+        limitState: row.quota.limitState,
         pending: row.pending,
         pendingTitle: row.pendingTitle,
-        ...(!row.pending && row.visualKind === 'pace' ? missingLimitStatus(row.quotaPct, row.resetMs, bootPending, unavailableTitle, row.label, row.resetLabel) : {}),
+        ...(!row.pending && row.quota.limitState !== 'unlimited' && row.visualKind === 'pace' ? missingLimitStatus(row.quotaPct, row.resetMs, bootPending, unavailableTitle, row.label, row.resetLabel) : {}),
       };
     };
     const rows: WidgetAgent['rows'] = group.rows.map(rowFor);
@@ -358,6 +360,7 @@ function ProgressRow({
   quotaPct,
   resetMs,
   durationMs,
+  limitState,
   pending = false,
   pendingTitle,
   unknown = false,
@@ -371,6 +374,7 @@ function ProgressRow({
   quotaPct: number;
   resetMs: number | null;
   durationMs?: number;
+  limitState?: 'unlimited';
   pending?: boolean;
   pendingTitle?: string;
   unknown?: boolean;
@@ -383,6 +387,7 @@ function ProgressRow({
   const { t } = useTranslation();
   const percentOnly = visualKind === 'percentOnly';
   const quota = clampPct(quotaPct);
+  const isUnlimited = limitState === 'unlimited';
   // unknownLabel 'unavailable' (provider explicitly has no data for this window) falls through
   // to null here on purpose — it renders as a static row like a known/empty value, not the
   // animated 'waiting' dots reserved for "still expecting data soon".
@@ -390,10 +395,10 @@ function ProgressRow({
     ? 'syncing'
     : unknown ? (unknownLabel === 'loading' ? 'syncing' : unknownLabel === 'waiting' ? 'waiting' : null) : null;
   const suppressWaitingAnimation = visualState === 'waiting' && !animateWaiting;
-  const elapsed = visualState || percentOnly ? null : timeElapsedPct(durationMs, resetMs);
+  const elapsed = visualState || percentOnly || isUnlimited ? null : timeElapsedPct(durationMs, resetMs);
   const elapsedWidth = elapsed ?? 0;
-  const resetLabel = percentOnly ? '' : pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
-  const usedColor = visualState ? (visualState === 'syncing' ? C.accent : C.textMuted) : quotaPctBarColor(quota, C);
+  const resetLabel = percentOnly ? '' : isUnlimited ? t('compactWidgetView.status.unlimitedBadge') : pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
+  const usedColor = isUnlimited ? C.accent : visualState ? (visualState === 'syncing' ? C.accent : C.textMuted) : quotaPctBarColor(quota, C);
   const quotaColor = usedColor;
   // pace 색상: 사용량이 경과 시간보다 빠르면 경고
   const paceColor = (elapsed != null && elapsed >= 5 && quota > 0)
@@ -402,10 +407,11 @@ function ProgressRow({
   const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
   const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
+  const resolvedTitle = isUnlimited ? t('compactWidgetView.tooltip.unlimited') : rowTitle;
 
   return (
     <div
-      title={rowTitle}
+      title={resolvedTitle}
       style={{ display: 'grid', gridTemplateColumns: percentOnly ? '24px minmax(0, 1fr) 64px' : '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
     >
       <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
@@ -426,10 +432,11 @@ function ProgressRow({
             position: 'absolute',
             left: 0,
             top: 2,
-            width: `${visualState ? 0 : quota}%`,
+            width: `${isUnlimited ? 100 : visualState ? 0 : quota}%`,
             height: 4,
             background: quotaColor,
             borderRadius: 3,
+            opacity: isUnlimited ? 0.62 : undefined,
             boxShadow: `0 0 4px ${quotaColor}44`,
           }}
         />
@@ -466,7 +473,9 @@ function ProgressRow({
         title={percentOnly ? t('compactWidgetView.tooltip.used') : t('compactWidgetView.tooltip.usedElapsed')}
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
-        {visualState ? (
+        {isUnlimited ? (
+          <span style={{ color: paceColor }}>{t('compactWidgetView.status.unlimited')}</span>
+        ) : visualState ? (
           <MiniLimitStatus state={visualState} animate={!suppressWaitingAnimation} />
         ) : percentOnly ? (
           <span style={{ color: paceColor }}>{formatPct(quota)}</span>
@@ -541,6 +550,7 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
             quotaPct={row.quotaPct}
             resetMs={row.resetMs}
             durationMs={row.durationMs}
+            limitState={row.limitState}
             pending={row.pending}
             pendingTitle={row.pendingTitle}
             unknown={row.unknown}

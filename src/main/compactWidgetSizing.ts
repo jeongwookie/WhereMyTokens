@@ -30,7 +30,7 @@ function targetMode(settings: AppSettings, groupId: string, defaultMode: QuotaDi
 }
 
 function hasLimitData(window: ProviderQuotaWindow | undefined): boolean {
-  return !!window && (window.pct > 0 || window.resetMs != null || !!window.resetLabel);
+  return !!window && (window.pct > 0 || window.resetMs != null || !!window.resetLabel || window.limitState === 'unlimited');
 }
 
 function hasUsageData(stats: WindowStats | undefined): boolean {

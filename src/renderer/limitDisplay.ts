@@ -19,7 +19,8 @@ export interface LimitSourceDisplay {
 export function hasLimitData(limit: LimitWindow): boolean {
   return limit.pct > 0
     || limit.resetMs != null
-    || !!limit.resetLabel;
+    || !!limit.resetLabel
+    || limit.limitState === 'unlimited';
 }
 
 export function limitDataState(limit: LimitWindow, syncing = false): LimitDataState {

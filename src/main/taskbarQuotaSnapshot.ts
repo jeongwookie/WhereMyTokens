@@ -130,6 +130,11 @@ function severity(quotaPct: number | null, elapsedPctValue: number | null): Task
   return 'normal';
 }
 
+function windowSeverity(window: ProviderQuotaWindow | undefined, quotaPct: number | null, elapsedPctValue: number | null): TaskbarQuotaSeverity {
+  if (window?.limitState === 'unlimited') return 'normal';
+  return severity(quotaPct, elapsedPctValue);
+}
+
 function risk(quotaPct: number | null, elapsedPctValue: number | null): number {
   if (quotaPct == null) return Number.NEGATIVE_INFINITY;
   if (elapsedPctValue == null) return quotaPct;
@@ -182,6 +187,7 @@ function makeBlock(
   quotaPctValue: number | null,
   durationMs: number | undefined,
   resetMs: number | null | undefined,
+  quotaWindow: ProviderQuotaWindow | undefined,
   statusTone: ProviderStatusTone,
   settings: AppSettings,
   order: Map<string, number>,
@@ -189,17 +195,18 @@ function makeBlock(
 ): CandidateBlock {
   const safeResetMs = finiteMs(resetMs);
   const elapsedPctValue = elapsedPct(durationMs, safeResetMs);
+  const unlimited = quotaWindow?.limitState === 'unlimited';
   return {
     targetId,
     provider,
     abbreviation: resolveQuotaAbbreviation(targetId, provider, label, settings),
     label,
-    quotaPct: quotaPctValue,
-    elapsedPct: elapsedPctValue,
-    resetLabel: resetLabel(safeResetMs),
-    severity: severity(quotaPctValue, elapsedPctValue),
+    quotaPct: unlimited ? null : quotaPctValue,
+    elapsedPct: unlimited ? null : elapsedPctValue,
+    resetLabel: unlimited ? 'no cap' : resetLabel(safeResetMs),
+    severity: windowSeverity(quotaWindow, quotaPctValue, elapsedPctValue),
     providerStatusTone: statusTone,
-    risk: risk(quotaPctValue, elapsedPctValue),
+    risk: unlimited ? Number.NEGATIVE_INFINITY : risk(quotaPctValue, elapsedPctValue),
     configuredOrder: order.get(targetId) ?? Number.MAX_SAFE_INTEGER,
     naturalOrder,
   };
@@ -221,7 +228,7 @@ function addWindowCandidate(
   if (!period) return;
   const window = quota.windows?.[windowKey];
   if (!window) return;
-  const hasWindowSignal = window.source || finiteMs(window.resetMs) != null || window.resetLabel || window.pct > 0;
+  const hasWindowSignal = window.source || finiteMs(window.resetMs) != null || window.resetLabel || window.pct > 0 || window.limitState === 'unlimited';
   if (!hasWindowSignal) return;
   rows[period].push(makeBlock(
     provider,
@@ -230,6 +237,7 @@ function addWindowCandidate(
     nullablePct(window.pct),
     display?.durationMs,
     window.resetMs,
+    window,
     providerStatusTone(quota, window.source ?? quota.source),
     settings,
     order,
@@ -258,6 +266,7 @@ function addModelCandidate(
     quotaPctFromModel(model),
     model.durationMs,
     model.resetMs ?? null,
+    undefined,
     providerStatusTone(quota, quota.source),
     settings,
     order,
