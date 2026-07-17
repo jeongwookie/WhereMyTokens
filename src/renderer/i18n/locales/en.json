@@ -1,0 +1,716 @@
+{
+  "common": {
+    "state": {
+      "active": "active",
+      "waiting": "waiting",
+      "idle": "idle",
+      "compacting": "compacting"
+    },
+    "mainSections": {
+      "planUsage": "Plan Usage",
+      "codeOutput": "Code Output",
+      "trend": "Trend",
+      "sessions": "Sessions",
+      "activity": "Activity",
+      "modelUsage": "Model Usage"
+    },
+    "limitSource": {
+      "api": {
+        "title": "Account usage snapshot. Refreshed every few minutes."
+      },
+      "bridge": {
+        "title": "Local status-line fallback while the API is unavailable."
+      },
+      "cache": {
+        "title": "Last trusted usage snapshot. It ages out automatically."
+      },
+      "localLog": {
+        "title": "Local session-log estimate. It can lag account-level limits."
+      },
+      "localRpc": {
+        "title": "Local provider runtime snapshot."
+      }
+    }
+  },
+  "app": {
+    "bootFallback": {
+      "eyebrow": "Startup Recovery",
+      "title": "WhereMyTokens is still loading.",
+      "retry": "Retry",
+      "minimize": "Minimize",
+      "quit": "Quit",
+      "messageInitial": "Still waiting for initial session and usage data.",
+      "messageEmptyState": "The app returned an empty startup state. Try refreshing once.",
+      "messageGetStateFailed": "The main process did not return startup data. Try refreshing or reopen the tray window.",
+      "messageTimeout": "Showing a recovery view while recent sessions and usage continue loading in the background."
+    }
+  },
+  "help": {
+    "title": "Help"
+  },
+  "activityBreakdown": {
+    "categories": {
+      "read": "Read",
+      "editWrite": "Edit / Write",
+      "search": "Search",
+      "git": "Git",
+      "buildTest": "Build / Test",
+      "terminal": "Terminal",
+      "subagents": "Subagents",
+      "thinking": "Thinking",
+      "response": "Response",
+      "web": "Web"
+    },
+    "categoryTooltip": "{{label}}: {{pct}}%",
+    "totalLabel": {
+      "events": "tool events this session",
+      "tokens": "output tokens this session"
+    }
+  },
+  "activityChart": {
+    "noData": "No data",
+    "noTokens": "none",
+    "tokensValue": "{{value}} tok",
+    "captions": {
+      "fiveMonth": "5mo activity",
+      "hourly30d": "Hourly (30d)",
+      "weekly4w": "Weekly (4w)"
+    },
+    "legend": {
+      "less": "less",
+      "more": "more"
+    },
+    "weekly": {
+      "current": "current",
+      "weeksAgo": "{{count}}w ago",
+      "fourWeekTotal": "4-week total",
+      "peak": "peak"
+    },
+    "tod": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening",
+      "night": "Night",
+      "peakLabel": "Peak:",
+      "rangeTotal": "30d · {{cost}} total",
+      "pctOfTotal": "{{pct}}% of total",
+      "columns": {
+        "tokens": "Tokens",
+        "cost": "Cost",
+        "requests": "Requests"
+      }
+    }
+  },
+  "codeOutputCard": {
+    "period": {
+      "today": "today",
+      "all": "all"
+    },
+    "kpi": {
+      "commits": "Commits",
+      "netLines": "Net Lines",
+      "costPerHundredAdded": "$/100 Added"
+    },
+    "totalLines": "{{value}} lines",
+    "avgCost": "avg {{cost}}",
+    "commitsSub": {
+      "totalCount": "{{count}} total",
+      "allTime": "all time"
+    },
+    "scanningGitHistory": "Scanning git history",
+    "loadingHint": "Code Output will appear after local repo stats finish.",
+    "outputGrowth": {
+      "title": "Output Growth",
+      "caption": "Last 7 days on all-time baseline",
+      "totalNetSuffix": "total net",
+      "totalSuffix": "total",
+      "daySuffix": "day"
+    },
+    "summary": {
+      "commits_one": "{{count}} commit",
+      "commits_other": "{{count}} commits",
+      "netLines": "{{value}} net lines",
+      "costPerHundred": "{{cost}}/100 added"
+    }
+  },
+  "extraUsageCard": {
+    "title": {
+      "overCap": "Claude Extra Usage over monthly cap",
+      "nearCap": "Claude Extra Usage near monthly cap",
+      "monthly": "Claude Extra Usage - monthly"
+    }
+  },
+  "modelBreakdown": {
+    "top4AllTime": "Top 4 - All time",
+    "otherProvider": "Other"
+  },
+  "renderErrorBoundary": {
+    "rendererError": "Renderer Error",
+    "renderingFailed": "{{label}} rendering failed.",
+    "reload": "Reload",
+    "minimize": "Minimize",
+    "quit": "Quit"
+  },
+  "sessionRow": {
+    "hideBreakdown": "Hide breakdown",
+    "showBreakdown": "Show breakdown",
+    "hideSessionBreakdown": "Hide session breakdown",
+    "showSessionBreakdown": "Show session breakdown",
+    "hide": "Hide",
+    "details": "Details",
+    "context": "Context {{pct}}%",
+    "atLimit": "at limit",
+    "nearLimit": "near limit",
+    "compactSoon": "compact soon",
+    "tokensLeft": "{{tokens}} left"
+  },
+  "tokenStatsCard": {
+    "syncing": "Syncing",
+    "waiting": "Waiting",
+    "syncingTooltip": "Limit data is syncing in the background.",
+    "waitingTooltip": "Waiting for provider limit data.",
+    "cachedSuffix": "(cached)",
+    "usageWindowCost": "Usage window cost",
+    "resets": "resets {{day}}",
+    "timeElapsed": "time elapsed",
+    "windowElapsedTooltip": "{{pct}}% of this {{period}} window has elapsed",
+    "providerCacheMetric": "Provider cache metric"
+  },
+  "trendBreakdownCard": {
+    "unavailable": "Breakdown unavailable",
+    "loading": "Loading breakdown...",
+    "breakdownSince": "Breakdown data since {{date}}",
+    "tokenPanorama": "Token panorama",
+    "inputOutputNoCache": "input + output · no-cache",
+    "noTokenData": "No token data",
+    "toolUsage": "Tool usage",
+    "toolUsageAllProviders": "Tool usage · all providers",
+    "callsApproxTok": "calls · ≈tok",
+    "netLinesCommitted": "Net lines committed",
+    "gitLines": "git · lines",
+    "noCommits": "No commits for this period",
+    "input": "Input",
+    "output": "Output",
+    "thinking": "Thinking",
+    "response": "Response",
+    "showMore": "Show {{count}} more",
+    "collapse": "Collapse",
+    "noToolData": "No tool data",
+    "callsCount": "{{count}} calls",
+    "toolCallsApprox": "Tool calls · ≈{{tokens}} tok",
+    "callsApproxTokValue": "{{count}} calls · ≈{{tokens}} tok",
+    "addedRemoved": "{{added}} added / {{removed}} removed",
+    "netPrefix": "Net:{{value}}",
+    "tools": {
+      "read": "Read",
+      "editWrite": "Edit / Write",
+      "search": "Search",
+      "git": "Git",
+      "buildTest": "Build / Test",
+      "terminal": "Terminal",
+      "subagents": "Subagents",
+      "web": "Web"
+    },
+    "paths": {
+      "product_code": "Product code",
+      "test_code": "Tests",
+      "docs_spec": "Docs / Spec",
+      "config_build": "Config / Build",
+      "schema_migration": "Schema / Migration",
+      "vendor": "Vendor",
+      "asset": "Assets"
+    }
+  },
+  "trendCard": {
+    "trend": "Trend",
+    "noTrendDataYet": "no trend data yet",
+    "noTrendDataYetSvg": "No trend data yet",
+    "usagePending": "usage pending",
+    "outputPending": "output pending",
+    "netSuffix": "net",
+    "metricLabel": "Metric",
+    "cacheLabel": "Cache",
+    "rangeLabel": "Range",
+    "metric": {
+      "cost": "cost",
+      "tokens": "tokens"
+    },
+    "cacheView": {
+      "work": "Work",
+      "billing": "Billing"
+    },
+    "grain": {
+      "day": "day",
+      "week": "week",
+      "month": "month"
+    },
+    "selectBucketAriaLabel": "Select a trend bucket for breakdown",
+    "netLines": "net lines",
+    "requestsCount_one": "{{count}} request",
+    "requestsCount_other": "{{count}} requests",
+    "weekPrefix": "Week {{label}}"
+  },
+  "mainView": {
+    "refresh": {
+      "label": "Refresh",
+      "justNow": "just now",
+      "secondsAgo": "{{n}}s ago",
+      "minutesAgo": "{{n}}m ago",
+      "hoursAgo": "{{n}}h ago",
+      "lastRun": "last run · {{age}}",
+      "refreshing": "refreshing...",
+      "scan": "scan {{eta}}"
+    },
+    "warmup": {
+      "queued": "queued",
+      "syncing": "syncing...",
+      "inMinutesSeconds": "in {{minutes}}m {{seconds}}s",
+      "inSeconds": "in {{seconds}}s",
+      "statusQueued": "is queued",
+      "statusSyncing": "is syncing now",
+      "statusStarts": "starts {{eta}}",
+      "bannerTitle": "Partial History",
+      "bannerBody": "Showing current sessions and recent usage first. Full history sync {{status}}. Trend and totals may keep changing until this banner disappears."
+    },
+    "cacheMetric": {
+      "singleSimple": "{{provider}}: cache read / prompt tokens",
+      "singleClaude": "{{provider}}: cache read / (cache read + cache creation)",
+      "combined": "Combined view: provider-specific cache metrics are aggregated"
+    },
+    "status": {
+      "claude": {
+        "localLabel": "Claude local",
+        "localTitle": "Using local Claude status-line data while API status is {{status}}{{errorSuffix}}",
+        "limitedLabel": "Claude limited",
+        "limitedTitleDefault": "Claude API returned HTTP 429.",
+        "refreshLabel": "Claude refresh",
+        "refreshLimitedTitleDefault": "Claude OAuth refresh is rate limited.",
+        "refreshFailedTitleDefault": "Claude OAuth refresh failed.",
+        "schemaLabel": "Claude schema",
+        "schemaTitleDefault": "Claude API response changed shape.",
+        "partialLabel": "Claude partial",
+        "partialTitleDefault": "Claude API usage loaded without reset timing.",
+        "localOnlyTitleDefault": "Claude credentials were not found. Showing local data only.",
+        "authLabel": "Claude auth",
+        "authTitleDefault": "Claude CLI token was rejected or expired.",
+        "loginLabel": "Claude login",
+        "loginTitleDefault": "Refresh token rejected. Run `claude /login` to re-authenticate.",
+        "blockedLabel": "Claude blocked",
+        "blockedTitleDefault": "Claude API denied this account or beta surface.",
+        "offlineLabel": "Claude offline",
+        "offlineTitleDefault": "Claude API request failed."
+      },
+      "codex": {
+        "limitedLabel": "Codex limited",
+        "limitedTitleDefault": "Codex usage endpoint returned HTTP 429.",
+        "schemaLabel": "Codex schema",
+        "schemaTitleDefault": "Codex usage response changed shape.",
+        "endpointLabel": "Codex endpoint",
+        "endpointTitleDefault": "Custom Codex base URLs are not monitored for token safety.",
+        "localLabel": "Codex local",
+        "localTitleDefault": "Codex credentials were not found. Showing local log estimates only.",
+        "authLabel": "Codex auth",
+        "authTitleDefault": "Codex usage token was rejected or expired.",
+        "blockedLabel": "Codex blocked",
+        "blockedTitleDefault": "Codex usage access was denied for this account.",
+        "timeoutLabel": "Codex timeout",
+        "timeoutTitleDefault": "Codex usage request timed out.",
+        "offlineLabel": "Codex offline",
+        "offlineTitleDefault": "Codex usage request failed.",
+        "cacheLabel": "Codex cache",
+        "logLabel": "Codex log",
+        "fallbackSourceCache": "last cached usage snapshot",
+        "fallbackSourceLog": "local log estimates",
+        "fallbackTitle": "Codex live usage is unavailable; using {{source}}.",
+        "offlineNoDetail": "Codex live usage is unavailable."
+      },
+      "provider": {
+        "unavailable": "unavailable",
+        "startAntigravity": "Start Antigravity",
+        "offCompact": "{{label}} off",
+        "offlineCompact": "{{label}} offline",
+        "genericCompact": "{{label}} {{status}}",
+        "genericTitle": "{{label}} provider status: {{status}}."
+      }
+    },
+    "header": {
+      "periodToday": "today",
+      "periodAll": "all",
+      "hideCompactWidget": "Hide floating Quota Pace widget",
+      "showCompactWidget": "Show floating Quota Pace widget",
+      "hideTaskbarQuota": "Hide taskbar mini quota display",
+      "showTaskbarQuota": "Show taskbar mini quota display",
+      "minimize": "Minimize",
+      "quit": "Quit",
+      "allTimeCost": "All-time Cost",
+      "todayCost": "Today Cost",
+      "claudePlanTooltip": "Claude plan: {{plan}}",
+      "codexTierTooltip": "Codex service tier: {{tier}}",
+      "calls": "calls",
+      "sessions": "sessions",
+      "avgCacheEfficiency": "Avg Cache Efficiency",
+      "cacheEfficiency": "Cache Efficiency",
+      "savedTotal": "+ {{saved}} saved total",
+      "savedToday": "+ {{saved}} saved today"
+    },
+    "quota": {
+      "waitingReset": "waiting",
+      "syncingLabel": "syncing",
+      "usedTooltip": "Used",
+      "usedElapsedTooltip": "Used / Time elapsed",
+      "tokenBadgeSingle": "Total tokens for this quota target",
+      "tokenBadgeMulti": "Largest window token count for this quota target",
+      "tokenBadgeSuffix": "{{tokens}} tok",
+      "pendingLabel": "Syncing"
+    },
+    "resetCredits": {
+      "heading": "Codex reset credits",
+      "cardHeading": "CODEX RESETS",
+      "rowHeading": "Codex Resets",
+      "detailsAriaLabel": "Codex reset credits details",
+      "badge": {
+        "error": "Error",
+        "limited": "Limited",
+        "stale": "Stale",
+        "usage": "Usage",
+        "partial": "Partial",
+        "api": "API",
+        "cache": "Cache",
+        "fromApi": "from API",
+        "fromCache": "from cached data",
+        "usageOnlyTitle": "Count from live usage; expiry list unavailable",
+        "partialOnlyTitle": "Count-only reset credits; expiry list unavailable",
+        "degradedTitle": "Reset credits {{sourceDesc}}; status: {{code}}",
+        "okTitle": "Reset credits {{sourceDesc}}"
+      },
+      "status": {
+        "unsupported": "Reset endpoint unsupported",
+        "loginRequired": "Codex login required",
+        "loginExpired": "Codex login expired",
+        "accessDenied": "Codex access denied",
+        "limited": "Reset check limited",
+        "changed": "Reset check changed",
+        "offline": "Reset check offline",
+        "unavailable": "Reset data unavailable"
+      },
+      "tooltip": {
+        "unknown": "unknown",
+        "listUnavailable": "list unavailable",
+        "statusLabel": "Status",
+        "lastUpdate": "last update",
+        "sourceLabel": "Source",
+        "countOnlyNote": "Count-only availability; expiry list unavailable.",
+        "available": "Available",
+        "nextExpires": "Next expires",
+        "earned": "Earned",
+        "expiresIn": "expires in {{duration}}",
+        "updatedFooter": "Updated: {{date}}",
+        "sourceFooter": "Source: {{source}}"
+      },
+      "card": {
+        "available": "available",
+        "nextExpiresLabel": "next expires",
+        "noResets": "No resets available",
+        "moreCount": "+{{n}} more",
+        "countOnlyShort": "Count only · expiry list unavailable"
+      },
+      "row": {
+        "noResetsAvailable": "no resets available",
+        "available": "available",
+        "nextIn": "next in {{duration}}",
+        "countOnly": "count only"
+      }
+    },
+    "ledgerRebuild": {
+      "title": "Ledger Needs Rebuild",
+      "body": "Historical totals are using recent fallback data until the local usage ledger is rebuilt from Settings."
+    },
+    "usageIndexCoverage": {
+      "title": "Indexing Usage History",
+      "discovering": "Discovering usage sources.",
+      "progress": "{{indexed}}/{{required}} sources indexed.",
+      "failures_one": "{{count}} source failed and will be retried.",
+      "failures_other": "{{count}} sources failed and will be retried.",
+      "body": "Totals are incomplete until indexing finishes. {{progress}}{{failures}}"
+    },
+    "usageIndexHealth": {
+      "recoveredTitle": "Usage History Recovered",
+      "recoveredBody": "The damaged database was preserved and a recovered index is active.",
+      "unavailableTitle": "Usage History Unavailable",
+      "unavailableBody": "The local index could not be opened. Use Reset index in Settings only if you accept losing unavailable history."
+    },
+    "sessions": {
+      "providersTwo": "{{a}} or {{b}}",
+      "providersList": "{{list}}, or {{last}}",
+      "enabledProviderFallback": "enabled provider",
+      "stackCount_one": "{{count}} {{state}} session",
+      "stackCount_other": "{{count}} {{state}} sessions",
+      "latest": "latest",
+      "maxCtx": "max ctx",
+      "chipOpen": "open",
+      "chipStack": "stack",
+      "filterAll": "All",
+      "filterActive": "Active",
+      "commitCount_one": "{{count}} commit",
+      "commitCount_other": "{{count}} commits",
+      "projectActionsTitle": "Project actions",
+      "hide": "Hide",
+      "exclude": "Exclude",
+      "showMore": "Show {{n}} more",
+      "showLess": "Show less",
+      "noActive": "No active {{providers}} sessions",
+      "hideIdleSessions_one": "Hide {{count}} idle session",
+      "hideIdleSessions_other": "Hide {{count}} idle sessions",
+      "showIdleSessions_one": "Show {{count}} idle session",
+      "showIdleSessions_other": "Show {{count}} idle sessions",
+      "hiddenProjectsCount_one": "{{count}} hidden project",
+      "hiddenProjectsCount_other": "{{count}} hidden projects",
+      "show": "show"
+    },
+    "nav": {
+      "settings": "Settings",
+      "alerts": "Alerts"
+    },
+    "errorBoundary": {
+      "planUsagePanel": "Plan Usage Panel",
+      "codeOutputCard": "Code Output Card",
+      "trendCard": "Trend Card",
+      "sessionsPanel": "Sessions Panel",
+      "activitySection": "Activity Section",
+      "modelSection": "Model Section",
+      "headerMetrics": "Header Metrics",
+      "usageLedgerRebuildBanner": "Usage Ledger Rebuild Banner",
+      "usageIndexCoverageBanner": "Usage Index Coverage Banner",
+      "usageIndexHealthBanner": "Usage Index Health Banner",
+      "historyWarmupBanner": "History Warmup Banner",
+      "bottomNavigation": "Bottom Navigation"
+    }
+  },
+  "compactWidgetView": {
+    "refresh": {
+      "default": "refresh",
+      "now": "now",
+      "ageMinutes": "{{n}}m",
+      "ageHours": "{{n}}h",
+      "lastRun": "last run · {{age}}"
+    },
+    "status": {
+      "syncing": "syncing",
+      "waiting": "waiting",
+      "scanning": "scanning",
+      "waitBadge": "wait"
+    },
+    "tooltip": {
+      "startupLoading": "Startup scan is still loading.",
+      "noFiveHourData": "No 5h reset data yet. It will appear after local usage or provider data is detected.",
+      "groupUnavailable": "{{group}} limit data has not arrived from provider quota sources yet.",
+      "timeUntilReset": "Time until reset: {{resetLabel}}",
+      "used": "Used",
+      "usedElapsed": "Used / Time elapsed"
+    },
+    "header": {
+      "title": "Quota Pace",
+      "subtitle": "used / elapsed"
+    },
+    "button": {
+      "refreshNow": "Refresh now",
+      "openDashboard": "Open dashboard",
+      "hideWidget": "Hide widget"
+    },
+    "health": {
+      "sectionTitle": "Provider limit-data health",
+      "label": "Health",
+      "syncing": {
+        "label": "{{provider}} syncing",
+        "title": "{{provider}} limit data is syncing in the background."
+      },
+      "statusLabel": {
+        "label": "{{provider}} {{statusLabel}}",
+        "title": "{{provider}} provider quota status: {{statusLabel}}."
+      },
+      "offline": {
+        "label": "{{provider}} offline",
+        "title": "{{provider}} provider quota is unavailable."
+      },
+      "log": {
+        "label": "{{provider}} Log",
+        "title": "{{provider}} is using local log estimates for at least one limit window."
+      },
+      "cache": {
+        "label": "{{provider}} Cache",
+        "title": "{{provider}} is using the last trusted cached usage snapshot."
+      },
+      "bridge": {
+        "label": "{{provider}} Bridge",
+        "title": "{{provider}} is using the local status-line bridge."
+      },
+      "waiting": {
+        "label": "{{provider}} waiting",
+        "title": "{{provider}} limit data has not arrived yet."
+      },
+      "ok": {
+        "label": "{{provider}} OK",
+        "title": "{{provider}} account limit data is current."
+      }
+    },
+    "hint": {
+      "fiveHourLimits": "5h limits appear after first usage event"
+    }
+  },
+  "notificationsView": {
+    "title": "Alerts",
+    "sections": {
+      "usageAlerts": "Usage Alerts",
+      "alertTargets": "Alert Targets"
+    },
+    "enableAlerts": {
+      "label": "Enable usage alerts",
+      "description": "Send Windows notifications when a tracked limit reaches a threshold"
+    },
+    "thresholds": {
+      "heading": "Alert thresholds - notify when usage reaches:"
+    },
+    "targets": {
+      "claudeFiveHour": {
+        "label": "Claude 5h limit",
+        "detail": "Claude usage in the current 5-hour window"
+      },
+      "claudeWeekly": {
+        "label": "Claude weekly limit",
+        "detail": "Claude usage in the weekly window"
+      },
+      "claudeSonnetWeekly": {
+        "label": "Claude Sonnet weekly",
+        "detail": "Sonnet-specific weekly usage"
+      },
+      "codexFiveHour": {
+        "label": "Codex 5h limit",
+        "detail": "Codex live usage, cache, or local log 5-hour window"
+      },
+      "codexWeekly": {
+        "label": "Codex weekly limit",
+        "detail": "Codex live usage, cache, or local log weekly window"
+      },
+      "antigravityModelQuotas": {
+        "label": "Antigravity model quotas",
+        "detail": "Local RPC model quota usage when Antigravity is running"
+      }
+    },
+    "footerNote": "Alerts follow enabled providers and quota/model targets. Auto-refreshed every 60s, 1-hour cooldown per alert.",
+    "button": {
+      "save": "Save",
+      "saved": "Saved"
+    }
+  },
+  "settingsView": {
+    "title": "Settings",
+    "integration": {
+      "heading": "Claude Code Integration",
+      "realtimeLabel": "Real-time data via statusLine",
+      "description": "Registers WhereMyTokens as a Claude Code plugin for live rate limits",
+      "connected": "Connected",
+      "otherStatusLine": "Other statusLine",
+      "notConfigured": "Not configured",
+      "setupButton": "Setup",
+      "disableButton": "Disable",
+      "settingUp": "Setting up...",
+      "setupDone": "Done. Restart Claude Code to activate.",
+      "setupFailed": "Failed: {{error}}",
+      "setupError": "Error: {{error}}",
+      "disabling": "Disabling...",
+      "disableDone": "Disabled. Restart Claude Code to stop the bridge.",
+      "disableFailed": "Failed: {{error}}",
+      "disableError": "Error: {{error}}"
+    },
+    "general": {
+      "heading": "General",
+      "language": "Language",
+      "languageSystem": "System default",
+      "startWithWindows": "Start with Windows",
+      "alwaysOnTop": "Dashboard always on top",
+      "alwaysOnTopHint": "Applies to the dashboard only",
+      "floatingWidget": "Floating usage widget",
+      "floatingWidgetHint": "Always stays on top; shows quota pace at a glance",
+      "taskbarQuota": "Taskbar mini quota display",
+      "taskbarQuotaHint": "Shows fixed 5h / 1w quota rows inside the Windows taskbar when supported",
+      "taskbarMaxBlocks": "Taskbar max blocks",
+      "taskbarMaxBlocksHint": "Limits how many quota blocks each taskbar row shows",
+      "blocksOption_one": "{{count}} block",
+      "blocksOption_other": "{{count}} blocks",
+      "waitingAnimation": "Waiting animation",
+      "waitingAnimationHint": "Animates floating-widget waiting bars when limit data is missing",
+      "globalShortcut": "Global shortcut",
+      "globalShortcutTitle": "Click, then press a shortcut. Esc cancels, Backspace clears.",
+      "pressShortcut": "Press shortcut...",
+      "clickToRecord": "Click to record",
+      "shortcutHint": "Use Ctrl+Shift or Ctrl+Alt"
+    },
+    "providers": {
+      "heading": "Providers",
+      "atLeastOneProvider": "At least one provider must stay enabled.",
+      "antigravityDetail": "Requires Antigravity IDE running and signed in. Uses local RPC only.",
+      "antigravityPace": "Antigravity quota pace estimate",
+      "antigravityPaceHint": "Estimate 5h or weekly pacing from reset times; off keeps Antigravity model quotas percent-only"
+    },
+    "quotaDisplay": {
+      "heading": "Quota display",
+      "hint": "The small text box customizes the taskbar label for 5h / 1w targets.",
+      "rowsFallback_one": "{{count}} row",
+      "rowsFallback_other": "{{count}} rows",
+      "abbreviationLabel": "Taskbar abbreviation for {{label}}",
+      "abbreviationTitle": "Default: {{abbrev}}",
+      "modeRich": "Rich",
+      "modeSimple": "Simple",
+      "modeNone": "None",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "resetOrder": "Reset order"
+    },
+    "data": {
+      "heading": "Data",
+      "usageHistory": "Usage history",
+      "usageHistoryHint": "Clears indexed history and rebuilds from available provider logs. Unavailable history will be lost.",
+      "resetButton": "Reset index",
+      "resetting": "Resetting...",
+      "resetComplete": "Reset complete.",
+      "resetFailed": "Failed: {{error}}",
+      "resetConfirmTitle": "Reset usage index?",
+      "resetConfirmBody": "This clears indexed history and rebuilds from available provider logs.",
+      "resetConfirmLoss": "History from unavailable logs will be permanently lost."
+    },
+    "currency": {
+      "heading": "Currency",
+      "label": "Currency",
+      "usd": "USD ($)",
+      "krw": "KRW (₩)",
+      "exchangeRate": "Exchange rate (1 USD)"
+    },
+    "tray": {
+      "heading": "Tray",
+      "label": "Tray label",
+      "none": "None",
+      "h5pct": "5h usage %",
+      "tokens": "5h tokens",
+      "cost": "5h cost"
+    },
+    "mainLayout": {
+      "heading": "Main Layout",
+      "showCardTitle": "Show card",
+      "hideCardTitle": "Hide card",
+      "show": "Show",
+      "hide": "Hide",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "resetOrder": "Reset order",
+      "showAll": "Show all"
+    },
+    "appearance": {
+      "heading": "Appearance",
+      "theme": "Theme",
+      "auto": "Auto",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "save": "Save"
+  }
+}

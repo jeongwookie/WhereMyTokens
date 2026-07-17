@@ -27,11 +27,17 @@ test('IPC and preload expose only the UsageIndex reset contract', () => {
 
 test('SettingsView labels reset as destructive and requires confirmation', () => {
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
+  const en = JSON.parse(fs.readFileSync('src/renderer/i18n/locales/en.json', 'utf8'));
+  const ja = JSON.parse(fs.readFileSync('src/renderer/i18n/locales/ja.json', 'utf8'));
   assert.match(settingsView, /handleResetIndex/);
   assert.match(settingsView, /window\.confirm/);
   assert.match(settingsView, /window\.wmt\.resetIndex/);
-  assert.match(settingsView, /Reset index/);
-  assert.match(settingsView, /Unavailable history will be lost/);
+  assert.match(settingsView, /settingsView\.data\.resetButton/);
+  assert.match(settingsView, /settingsView\.data\.resetConfirmLoss/);
+  assert.equal(en.settingsView.data.resetButton, 'Reset index');
+  assert.match(en.settingsView.data.resetConfirmLoss, /unavailable logs will be permanently lost/i);
+  assert.equal(ja.settingsView.data.resetButton, 'Reset index');
+  assert.match(ja.settingsView.data.resetConfirmLoss, /完全に失われます/);
   assert.doesNotMatch(settingsView, /Rebuild ledger/);
 });
 

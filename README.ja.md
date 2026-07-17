@@ -5,13 +5,14 @@
 <h1 align="center">WhereMyTokens</h1>
 
 <p align="center">
-  <strong>Codex と Antigravity の追跡に対応しました。</strong>
+  <strong>Claude Code、Codex、Antigravity の使用状況を日本語 UI で確認できます。</strong>
 </p>
 
 <p align="center">
   <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-supported-4f46e5?style=for-the-badge">
   <img alt="Antigravity" src="https://img.shields.io/badge/Antigravity-new-0f766e?style=for-the-badge">
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
+  <img alt="日本語 UI" src="https://img.shields.io/badge/日本語_UI-搭載-db2777?style=for-the-badge">
   <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
 </p>
 
@@ -89,6 +90,8 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 
 **[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
+> **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
+
 **[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
@@ -146,6 +149,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 
 ### カスタマイズ
 - **Auto/Light/Dark テーマ** — デフォルトはシステム設定に従う
+- **言語** — デフォルトはシステム設定に従い、English / 日本語に固定できます
 - **コスト表示** — USD または KRW、為替レート設定可能
 - **Floating usage widget** — 常に最前面に表示される小さな Quota Pace ウィンドウ；メインヘッダー、トレイメニュー、Settings、ウィジェットボタンから表示/非表示を切替。Waiting animation はデフォルトでオフで、Settings から再有効化できます
 - **トレイラベル** — 使用量 %、トークン数、コストを直接表示
@@ -167,6 +171,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **通貨** — USD または KRW
 - **アラート** — 使用量しきい値の設定（50% / 80% / 90%）
 - **テーマ** — Auto（システム設定に従う）/ Light / Dark
+- **言語** — システム設定 / English / 日本語
 - **トレイラベル** — タスクバーに表示する情報を選択
 - **Floating usage widget** — 小さな Quota Pace ウィンドウを有効化できます。あとからメインヘッダーのトグルやトレイメニューで表示/非表示を切り替えられます
 

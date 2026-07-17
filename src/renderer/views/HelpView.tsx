@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Hash, Activity, Signal, GitBranch, Code } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 
@@ -242,6 +243,7 @@ function ContentEN() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Providers uses provider checkboxes. Disabled providers are not scanned locally and do not make live usage requests.</InfoRow>
+          <InfoRow label="Language">Settings → General → Language follows your system language by default. Choose English or 日本語 to override the UI language.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display controls Rich, Simple, or hidden presentation per provider window or model target. It also affects Plan Usage, the floating widget, and taskbar mini order/visibility; Codex Resets is Plan Usage only.</InfoRow>
           <InfoRow label="Taskbar mini">Enable it from the header taskbar button or Settings. It renders fixed 5H/1W rows inside the Windows taskbar and can be dragged to reposition. Target prefixes use source/status tone, quota numbers keep pace/severity colors, and +N marks targets hidden by the per-row block limit. The helper receives summarized quota display data plus the resolved light/dark theme fallback; its taskbar-relative layout is saved locally. It locally samples the visible taskbar background for contrast and does not store or transmit pixels. If the helper repeatedly fails, WhereMyTokens turns it off and shows a notification.</InfoRow>
           <InfoRow label="Claude OAuth">Expired Claude access tokens may be refreshed through Anthropic for usage polling. WhereMyTokens does not keep a separate credential backup.</InfoRow>
@@ -362,6 +364,7 @@ function ContentKO() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Providers의 provider 체크박스로 선택합니다. 꺼진 provider는 로컬 스캔과 live usage 요청을 모두 하지 않습니다.</InfoRow>
+          <InfoRow label="Language">Settings → General → Language는 기본적으로 시스템 언어를 따릅니다. English 또는 日本語를 선택해 UI 언어를 고정할 수 있습니다.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display에서 provider window 또는 model target별 Rich, Simple, 숨김 표시를 선택합니다. Plan Usage, Floating widget, taskbar mini의 순서와 노출에도 반영되며, Codex Resets는 Plan Usage 전용입니다.</InfoRow>
           <InfoRow label="Taskbar mini">상단 taskbar 버튼이나 Settings에서 켤 수 있습니다. Windows 작업 표시줄 안에 고정 5H/1W 행을 표시하고 드래그로 위치를 옮길 수 있습니다. 대상 prefix 색은 source/status 상태를, quota 숫자 색은 pace/severity를 뜻하며, 행 제한으로 숨겨진 target은 +N으로 표시됩니다. helper에는 요약 quota 표시 데이터와 resolved light/dark theme fallback이 전달되며, 작업 표시줄 기준 layout은 로컬에만 저장됩니다. 대비를 위해 보이는 taskbar 배경을 로컬에서 샘플링하지만 픽셀은 저장하거나 전송하지 않습니다. helper가 반복 실패하면 WhereMyTokens가 기능을 끄고 알림을 표시합니다.</InfoRow>
           <InfoRow label="Claude OAuth">만료된 Claude access token은 사용량 조회를 위해 Anthropic을 통해 refresh될 수 있습니다. WhereMyTokens는 별도 credentials 백업을 보관하지 않습니다.</InfoRow>
@@ -482,6 +485,7 @@ function ContentJA() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Providers の provider チェックボックスで選択します。無効な provider はローカルスキャンも live usage request も行いません。</InfoRow>
+          <InfoRow label="言語">Settings → 一般 → 言語はデフォルトでシステム言語に従います。English または 日本語を選択して UI 言語を固定できます。</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display で provider window または model target ごとの Rich、Simple、非表示を選択します。Plan Usage、Floating widget、taskbar mini の順序と表示対象にも反映され、Codex Resets は Plan Usage 専用です。</InfoRow>
           <InfoRow label="Taskbar mini">ヘッダーの taskbar ボタンまたは Settings から有効にできます。Windows タスクバー内に固定 5H/1W 行を表示し、ドラッグで位置を調整できます。target prefix の色は source/status、quota 数値の色は pace/severity を示し、行の上限で隠れた target は +N で表示されます。helper には要約 quota 表示データと resolved light/dark theme fallback が渡され、タスクバー相対の layout はローカルにだけ保存されます。読みやすい contrast のため表示中のタスクバー背景をローカルでサンプリングしますが、pixel は保存も送信もしません。helper が繰り返し失敗すると WhereMyTokens は機能をオフにして通知します。</InfoRow>
           <InfoRow label="Claude OAuth">期限切れの Claude access token は、使用量 polling のため Anthropic で refresh されることがあります。WhereMyTokens は別の credentials backup を保持しません。</InfoRow>
@@ -495,11 +499,14 @@ function ContentJA() {
 
 export default function HelpView({ onBack }: Props) {
   const C = useTheme();
-  const [lang, setLang] = useState<Lang>('en');
+  const { t, i18n } = useTranslation();
+  // Help content is a self-contained EN/KO/JA switcher (predates app-wide i18n); default its
+  // panel to the app's current UI language instead of always starting on English.
+  const [lang, setLang] = useState<Lang>(() => (i18n.language.startsWith('ja') ? 'ja' : 'en'));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
-      <ViewHeader title="Help" onBack={onBack} />
+      <ViewHeader title={t('help.title')} onBack={onBack} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 0', gap: 4, flexShrink: 0 }}>
         {(['en', 'ko', 'ja'] as Lang[]).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{

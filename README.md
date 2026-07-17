@@ -12,6 +12,7 @@
   <img alt="Codex tracking supported" src="https://img.shields.io/badge/Codex_tracking-supported-4f46e5?style=for-the-badge">
   <img alt="Antigravity supported" src="https://img.shields.io/badge/Antigravity-supported-0f766e?style=for-the-badge">
   <img alt="Claude Code supported" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
+  <img alt="Japanese UI included" src="https://img.shields.io/badge/Japanese_UI-included-db2777?style=for-the-badge">
   <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
 </p>
 
@@ -61,12 +62,15 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 | Platform | Download | Best For |
 |----------|----------|----------|
 | Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
 | Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.0.0)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
 
 By downloading or installing, you agree to the [End-User License Agreement](EULA.txt).
+
+Japanese UI is built into the Windows app. It follows your system language by default on Japanese Windows, and you can override it from Settings → General → Language. Thanks to [@restructure-git](https://github.com/restructure-git) for the translation and key-structure groundwork in [PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37).
 
 ## First Run
 
@@ -93,6 +97,7 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 - Provider adapters live under `src/main/providers/` so future providers can join the same quota/session/usage shape.
 - Live Claude Code, Codex, and Antigravity quota cards with reset windows.
 - Optional draggable Windows taskbar mini display for configurable 1-3 quota blocks per row, compact `+N` hidden-target cues, and transparent taskbar-background-aware rendering.
+- Built-in Japanese UI with a Settings → General → Language selector.
 - Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.
 - Active and recent session tracking from local provider data.
 - Today and all-time token, cost, cache, model, and call summaries.

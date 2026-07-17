@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppSettings } from '../types';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
@@ -7,6 +8,7 @@ interface Props { onBack: () => void }
 
 export default function NotificationsView({ onBack }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -74,15 +76,15 @@ export default function NotificationsView({ onBack }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
-      <ViewHeader title="Alerts" onBack={onBack} />
+      <ViewHeader title={t('notificationsView.title')} onBack={onBack} />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px' }}>
-        <SectionHeader text="Usage Alerts" />
+        <SectionHeader text={t('notificationsView.sections.usageAlerts')} />
 
         <div style={row}>
           <div>
-            <div style={labelStyle}>Enable usage alerts</div>
-            <div style={sub}>Send Windows notifications when a tracked limit reaches a threshold</div>
+            <div style={labelStyle}>{t('notificationsView.enableAlerts.label')}</div>
+            <div style={sub}>{t('notificationsView.enableAlerts.description')}</div>
           </div>
           <input
             type="checkbox"
@@ -98,7 +100,7 @@ export default function NotificationsView({ onBack }: Props) {
           opacity: settings.enableAlerts ? 1 : 0.4,
           pointerEvents: settings.enableAlerts ? 'auto' : 'none',
         }}>
-          <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>Alert thresholds - notify when usage reaches:</div>
+          <div style={{ fontSize: 11, color: C.textDim, marginBottom: 8 }}>{t('notificationsView.thresholds.heading')}</div>
           <div style={{ display: 'flex', gap: 16 }}>
             {[50, 80, 90].map(v => (
               <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: C.text }}>
@@ -114,28 +116,28 @@ export default function NotificationsView({ onBack }: Props) {
           </div>
         </div>
 
-        <SectionHeader text="Alert Targets" />
+        <SectionHeader text={t('notificationsView.sections.alertTargets')} />
         <div style={{ padding: '8px 0', fontSize: 11, color: C.textDim, lineHeight: 1.8 }}>
           {showClaudeTargets && (
             <>
-              <TargetLine label="Claude 5h limit" detail="Claude usage in the current 5-hour window" />
-              <TargetLine label="Claude weekly limit" detail="Claude usage in the weekly window" />
-              <TargetLine label="Claude Sonnet weekly" detail="Sonnet-specific weekly usage" />
+              <TargetLine label={t('notificationsView.targets.claudeFiveHour.label')} detail={t('notificationsView.targets.claudeFiveHour.detail')} />
+              <TargetLine label={t('notificationsView.targets.claudeWeekly.label')} detail={t('notificationsView.targets.claudeWeekly.detail')} />
+              <TargetLine label={t('notificationsView.targets.claudeSonnetWeekly.label')} detail={t('notificationsView.targets.claudeSonnetWeekly.detail')} />
             </>
           )}
           {showCodexTargets && (
             <>
-              <TargetLine label="Codex 5h limit" detail="Codex live usage, cache, or local log 5-hour window" />
-              <TargetLine label="Codex weekly limit" detail="Codex live usage, cache, or local log weekly window" />
+              <TargetLine label={t('notificationsView.targets.codexFiveHour.label')} detail={t('notificationsView.targets.codexFiveHour.detail')} />
+              <TargetLine label={t('notificationsView.targets.codexWeekly.label')} detail={t('notificationsView.targets.codexWeekly.detail')} />
             </>
           )}
           {showAntigravityTargets && (
             <>
-              <TargetLine label="Antigravity model quotas" detail="Local RPC model quota usage when Antigravity is running" />
+              <TargetLine label={t('notificationsView.targets.antigravityModelQuotas.label')} detail={t('notificationsView.targets.antigravityModelQuotas.detail')} />
             </>
           )}
           <div style={{ marginTop: 8, color: C.textMuted }}>
-            Alerts follow enabled providers and quota/model targets. Auto-refreshed every 60s, 1-hour cooldown per alert.
+            {t('notificationsView.footerNote')}
           </div>
         </div>
       </div>
@@ -156,7 +158,7 @@ export default function NotificationsView({ onBack }: Props) {
           transition: 'background 0.3s',
         }}
       >
-        {saved ? 'Saved' : 'Save'}
+        {saved ? t('notificationsView.button.saved') : t('notificationsView.button.save')}
       </button>
     </div>
   );

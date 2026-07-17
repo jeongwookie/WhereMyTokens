@@ -24,6 +24,7 @@ export interface CompactWidgetBounds {
 }
 
 export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
+export type LanguagePreference = 'system' | 'en' | 'ja';
 
 export interface AppSettings {
   enabledProviders: ProviderId[];
@@ -36,6 +37,7 @@ export interface AppSettings {
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
+  language: LanguagePreference;
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   mainSectionOrder: string[];
   hiddenMainSections: string[];
@@ -120,6 +122,10 @@ function normalizeCompactWidgetBounds(value: unknown): CompactWidgetBounds | nul
 
 function isQuotaDisplayMode(value: unknown): value is QuotaDisplayMode {
   return value === 'rich' || value === 'simple' || value === 'none';
+}
+
+function isLanguagePreference(value: unknown): value is LanguagePreference {
+  return value === 'system' || value === 'en' || value === 'ja';
 }
 
 function isProviderId(value: unknown): value is ProviderId {
@@ -208,6 +214,7 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (usdToKrw != null) next.usdToKrw = usdToKrw;
   if (typeof record.globalHotkey === 'string') next.globalHotkey = record.globalHotkey.slice(0, 80);
   if (typeof record.enableAlerts === 'boolean') next.enableAlerts = record.enableAlerts;
+  if (isLanguagePreference(record.language)) next.language = record.language;
   if (record.trayDisplay === 'none' || record.trayDisplay === 'h5pct' || record.trayDisplay === 'tokens' || record.trayDisplay === 'cost') next.trayDisplay = record.trayDisplay;
   const mainSectionOrder = normalizeMainSectionOrder(record.mainSectionOrder);
   if (mainSectionOrder) next.mainSectionOrder = mainSectionOrder;
@@ -274,6 +281,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   usdToKrw: 1380,
   globalHotkey: 'CommandOrControl+Shift+D',
   enableAlerts: true,
+  language: 'system',
   trayDisplay: 'h5pct',
   mainSectionOrder: DEFAULT_MAIN_SECTION_ORDER,
   hiddenMainSections: [],

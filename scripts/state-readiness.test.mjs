@@ -9,6 +9,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import stateManager from '../dist/main/stateManager.js';
 import * as gitStatsKeys from '../dist/main/gitStatsKeys.js';
+import { tCallRegex } from './test-support/i18n.mjs';
 
 const { StateManager, resolveSessionRepoKeys } = stateManager;
 const { normalizeGitPathKey } = gitStatsKeys;
@@ -35,6 +36,33 @@ function repoStatsFor(root) {
   };
 }
 
+function flattenTranslationKeys(value, prefix = '', out = new Set()) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    if (prefix) out.add(prefix);
+    return out;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    flattenTranslationKeys(entry, prefix ? `${prefix}.${key}` : key, out);
+  }
+  return out;
+}
+
+function staticTranslationKeysFromSource(source) {
+  const keys = new Set();
+  const re = /(?:\bt|i18n\.t)\(\s*(['"`])((?:(?!\1).)+)\1/g;
+  let match;
+  while ((match = re.exec(source))) {
+    const key = match[2];
+    if (key.includes('${')) continue;
+    keys.add(key);
+  }
+  return keys;
+}
+
+function translationKeyExists(catalogKeys, key) {
+  return catalogKeys.has(key) || catalogKeys.has(`${key}_one`) || catalogKeys.has(`${key}_other`);
+}
+
 async function importRendererComponent(entryPoint, name) {
   const outdir = fs.mkdtempSync(path.resolve(`.tmp-${name}-`));
   const outfile = path.join(outdir, `${name}.mjs`);
@@ -44,7 +72,11 @@ async function importRendererComponent(entryPoint, name) {
     bundle: true,
     format: 'esm',
     platform: 'node',
-    external: ['react'],
+    // packages:'external' (not just external:['react']) leaves react-i18next/i18next/lucide-react
+    // external too — since TokenStatsCard.tsx now imports useTranslation(), bundling
+    // react-i18next's use-sync-external-store dependency in ESM output caused
+    // "Dynamic require of react is not supported" (a CJS-require-in-ESM interop failure).
+    packages: 'external',
     logLevel: 'silent',
   });
   const mod = await import(pathToFileURL(outfile).href);
@@ -174,14 +206,13 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(cardSource, /displayLimitSourceLabel = pendingLimit/);
   assert.match(modelSource, /isPendingQuotaWindow/);
   assert.match(widgetSource, /unknownLabel: 'waiting'/);
-  assert.match(widgetSource, /No 5h reset data yet/);
-  assert.match(widgetSource, /It will appear after local usage or provider data is detected/);
+  assert.match(widgetSource, tCallRegex('compactWidgetView.tooltip.noFiveHourData'));
   assert.match(widgetSource, /target instanceof Element && !!target\.closest\('\[data-no-drag="true"\]'\)/);
   assert.match(widgetSource, /const scanning = rows\.some\(row => row\.pending\)/);
   assert.match(widgetSource, /agent\.scanning \? \(/);
   assert.match(widgetSource, /MiniLimitStatus/);
-  assert.match(widgetSource, /Provider limit-data health/);
-  assert.match(widgetSource, /\`\$\{providerLabel\} OK\`/);
+  assert.match(widgetSource, tCallRegex('compactWidgetView.health.sectionTitle'));
+  assert.match(widgetSource, tCallRegex('compactWidgetView.health.ok.label'));
   assert.match(widgetSource, /tone: 'good'/);
   assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
@@ -192,7 +223,7 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(stateSource, /refreshProviderQuotas\(settingsForApi, force \|\| forceProviderUsage\)/);
   assert.match(stateSource, /provider\.fetchQuota/);
   assert.match(mainSource, /codexStatusLabel/);
-  assert.match(mainSource, /Codex limited/);
+  assert.match(mainSource, tCallRegex('mainView.status.codex.limitedLabel'));
   assert.match(mainSource, /historyWarmupPending/);
   assert.match(alertSource, /deferCodexLocalLog/);
   assert.match(alertSource, /provider === 'codex' && source === 'localLog'/);
@@ -297,9 +328,9 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(mainViewSource, /PictureInPicture2/);
   assert.match(mainViewSource, /PanelBottom/);
   assert.match(mainViewSource, /aria-pressed=\{compactWidgetEnabled\}/);
-  assert.match(mainViewSource, /Show floating Quota Pace widget/);
+  assert.match(mainViewSource, tCallRegex('mainView.header.showCompactWidget'));
   assert.match(mainViewSource, /aria-pressed=\{taskbarQuotaEnabled\}/);
-  assert.match(mainViewSource, /Show taskbar mini quota display/);
+  assert.match(mainViewSource, tCallRegex('mainView.header.showTaskbarQuota'));
   assert.match(mainViewSource, /quotaSourceBadgeToneStyle/);
   const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   assert.match(stateManagerSource, /return normalizeSettings\(this\.store\.store\)/);
@@ -318,11 +349,11 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(sectionsSource, /Array\.isArray\(value\) \? value : \[\]/);
   assert.match(settingsSource, /buildSettingsPatch\(s, baseSettings, latestSettings\)/);
   assert.match(settingsSource, /compactWidgetWaitingAnimationEnabled/);
-  assert.match(settingsSource, /Waiting animation/);
+  assert.match(settingsSource, tCallRegex('settingsView.general.waitingAnimation'));
   assert.match(settingsSource, /moveQuotaTarget/);
   assert.match(settingsSource, /quotaTargetOrder/);
   assert.match(settingsSource, /if \(sameSettingValue\(currentValue, settingValue\(latest, key\)\)\) continue/);
-  assert.match(settingsSource, /Use Ctrl\+Shift or Ctrl\+Alt/);
+  assert.match(settingsSource, tCallRegex('settingsView.general.shortcutHint'));
 });
 
 test('popup show path sends cached state without forcing refresh', () => {
@@ -391,9 +422,9 @@ test('Codex account limit collection is separated from visible usage filters', (
 test('bottom refresh label distinguishes scan countdown from update age', () => {
   const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
 
-  assert.match(source, /\$\{elapsed\}s ago/);
-  assert.match(source, /scan \$\{formatWarmupEta\(historyWarmupStartsAt\)\}/);
-  assert.match(source, /last run ·/);
+  assert.match(source, tCallRegex('mainView.refresh.secondsAgo'));
+  assert.match(source, tCallRegex('mainView.refresh.scan'));
+  assert.match(source, tCallRegex('mainView.refresh.lastRun'));
   assert.doesNotMatch(source, /Restoring/);
   assert.doesNotMatch(source, /Restored/);
 });
@@ -430,7 +461,7 @@ test('tray and header status derive provider data from enabled providers', () =>
   assert.match(rendererSource, /function buildProviderQuotaHeaderStatus/);
   assert.match(rendererSource, /enabledProviders: enabledProviderList/);
   assert.match(rendererSource, /args\.enabledProviders/);
-  assert.match(settingsSource, /Usage history/);
+  assert.match(settingsSource, tCallRegex('settingsView.data.usageHistoryHint'));
 });
 
 test('startup refresh uses lightweight session bootstrapping and API status labels', () => {
@@ -474,7 +505,11 @@ test('README release blocks stay compact and screenshots are full width', () => 
     'README.es.md',
   ];
   const packageJson = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
-  const currentVersion = `v${packageJson.version}`;
+  // The ja fork tags its builds as `<upstream-version>-ja.<n>` (e.g. 1.20.1-ja.1); the
+  // README changelog tracks the upstream feature/fix history it was built from, not a
+  // separate per-locale-build version, so compare against the base X.Y.Z only.
+  const baseVersion = packageJson.version.split('-')[0];
+  const currentVersion = `v${baseVersion}`;
 
   for (const file of readmes) {
     const source = fs.readFileSync(path.resolve(file), 'utf8');
@@ -485,6 +520,40 @@ test('README release blocks stay compact and screenshots are full width', () => 
     assert.match(source, /<th>.*?(Dark|다크|ダーク|深色|oscura).*?<\/th>[\s\S]*screenshot-overview-dark\.png/);
     assert.match(source, /<th>.*?(Light|라이트|ライト|浅色|clara).*?<\/th>[\s\S]*screenshot-overview-light\.png/);
   }
+});
+
+test('renderer translation catalogs cover every static app key', () => {
+  const rendererFiles = [];
+  function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'i18n') continue;
+        walk(fullPath);
+      } else if (/\.(ts|tsx)$/.test(entry.name)) {
+        rendererFiles.push(fullPath);
+      }
+    }
+  }
+  walk(path.resolve('src', 'renderer'));
+
+  const en = JSON.parse(fs.readFileSync(path.resolve('src', 'renderer', 'i18n', 'locales', 'en.json'), 'utf8'));
+  const ja = JSON.parse(fs.readFileSync(path.resolve('src', 'renderer', 'i18n', 'locales', 'ja.json'), 'utf8'));
+  const enKeys = flattenTranslationKeys(en);
+  const jaKeys = flattenTranslationKeys(ja);
+  const jaSource = fs.readFileSync(path.resolve('src', 'renderer', 'i18n', 'locales', 'ja.json'), 'utf8');
+
+  assert.deepEqual([...jaKeys].sort(), [...enKeys].sort(), 'ja.json should expose the same key set as en.json');
+  assert.doesNotMatch(jaSource, /\?{3,}/, 'ja.json should not contain mojibake replacement markers');
+
+  const usedKeys = new Set();
+  for (const file of rendererFiles) {
+    const source = fs.readFileSync(file, 'utf8');
+    for (const key of staticTranslationKeysFromSource(source)) usedKeys.add(key);
+  }
+
+  const missing = [...usedKeys].filter(key => !translationKeyExists(enKeys, key) || !translationKeyExists(jaKeys, key)).sort();
+  assert.deepEqual(missing, []);
 });
 
 test('session cwd under a repo root scopes that repo output', () => {

@@ -295,6 +295,7 @@ export interface AppSettings {
   usdToKrw: number;
   globalHotkey: string;
   enableAlerts: boolean;
+  language: 'system' | 'en' | 'ja';
   trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
   mainSectionOrder: MainSectionId[];
   hiddenMainSections: MainSectionId[];

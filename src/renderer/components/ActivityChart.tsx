@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { HourlyBucket, WeeklyTotal, TimeOfDayBucket } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost } from '../theme';
@@ -20,6 +21,7 @@ function blueIntensity(i: number): string {
 // --- 7-day heatmap (7 rows × 24 cols) ---
 function Heatmap7({ data }: { data: HourlyBucket[] }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; day: string; hour: number; tokens: number } | null>(null);
 
@@ -120,7 +122,7 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
         }}>
           <span style={{ color: C.textMuted }}>{tooltip.day} {tooltip.hour}h </span>
           <span style={{ color: tooltip.tokens > 0 ? C.text : C.textMuted, fontWeight: 600 }}>
-            {tooltip.tokens > 0 ? fmtTokens(tooltip.tokens) + ' tok' : 'none'}
+            {tooltip.tokens > 0 ? t('activityChart.tokensValue', { value: fmtTokens(tooltip.tokens) }) : t('activityChart.noTokens')}
           </span>
         </div>
       )}
@@ -131,6 +133,7 @@ function Heatmap7({ data }: { data: HourlyBucket[] }) {
 // --- 90-day heatmap: GitHub-style calendar grid (weeks × weekdays) ---
 function Heatmap90({ data }: { data: HourlyBucket[] }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; date: string; tokens: number } | null>(null);
 
@@ -266,7 +269,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
         }}>
           <span style={{ color: C.textMuted }}>{tooltip.date} </span>
           <span style={{ color: tooltip.tokens > 0 ? C.text : C.textMuted, fontWeight: 600 }}>
-            {tooltip.tokens > 0 ? fmtTokens(tooltip.tokens) + ' tok' : 'none'}
+            {tooltip.tokens > 0 ? t('activityChart.tokensValue', { value: fmtTokens(tooltip.tokens) }) : t('activityChart.noTokens')}
           </span>
         </div>
       )}
@@ -277,6 +280,7 @@ function Heatmap90({ data }: { data: HourlyBucket[] }) {
 // --- Hourly distribution bar chart ---
 function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; hour: number; tokens: number } | null>(null);
 
@@ -363,7 +367,7 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
           borderRadius: 4, padding: '3px 7px', fontSize: 11, pointerEvents: 'none', zIndex: 10,
         }}>
           <span style={{ color: C.textMuted }}>{tooltip.hour}h </span>
-          <span style={{ color: C.text, fontWeight: 600 }}>{fmtTokens(tooltip.tokens)} tok</span>
+          <span style={{ color: C.text, fontWeight: 600 }}>{t('activityChart.tokensValue', { value: fmtTokens(tooltip.tokens) })}</span>
         </div>
       )}
     </div>
@@ -373,12 +377,13 @@ function HourlyDistribution({ data }: { data: HourlyBucket[] }) {
 // --- Weekly growth chart (last 4 weeks) ---
 function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
   const C = useTheme();
+  const { t } = useTranslation();
   const recent = data.slice(-4);
 
   if (recent.length === 0) {
     return (
       <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.textMuted }}>
-        No data
+        {t('activityChart.noData')}
       </div>
     );
   }
@@ -390,7 +395,7 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
 
   function rowLabel(i: number): string {
     const ago = n - 1 - i;
-    return ago === 0 ? 'current' : `${ago}w ago`;
+    return ago === 0 ? t('activityChart.weekly.current') : t('activityChart.weekly.weeksAgo', { count: ago });
   }
 
   function weekRange(i: number): string {
@@ -451,11 +456,11 @@ function WeeklyGrowthChart({ data }: { data: WeeklyTotal[] }) {
         fontSize: 10, color: C.textMuted,
       }}>
         <span>
-          <span style={{ color: C.textDim }}>4-week total </span>
+          <span style={{ color: C.textDim }}>{t('activityChart.weekly.fourWeekTotal')} </span>
           <span style={{ color: C.text, fontWeight: 600 }}>{fmtTokens(totalTokens)}</span>
         </span>
         <span>
-          <span style={{ color: C.textDim }}>peak </span>
+          <span style={{ color: C.textDim }}>{t('activityChart.weekly.peak')} </span>
           <span style={{ color: C.accent, fontWeight: 600 }}>
             {rowLabel(recent.indexOf(peakEntry))} ({fmtTokens(peakEntry.tokens)})
           </span>
@@ -477,11 +482,12 @@ const TOD_INFO: Record<string, { icon: string; name: string; time: string; gradi
 
 export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]; currency: string; usdToKrw: number }) {
   const C = useTheme();
+  const { t } = useTranslation();
 
   if (data.every(b => b.tokens === 0)) {
     return (
       <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.textMuted }}>
-        No data
+        {t('activityChart.noData')}
       </div>
     );
   }
@@ -506,7 +512,7 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
               fontSize: 11, width: 52, flexShrink: 0, fontFamily: C.fontMono,
               color: isPeak ? info.color : C.textDim,
               fontWeight: isPeak ? 600 : 400,
-            }}>{info.name}</span>
+            }}>{t(`activityChart.tod.${bucket.period}`)}</span>
             <span style={{ fontSize: 9, width: 34, flexShrink: 0, color: C.textMuted, fontFamily: C.fontMono }}>{info.time}</span>
             <div style={{ flex: 1, height: 8, background: C.bgRow, borderRadius: 4, overflow: 'hidden' }}>
               <div style={{
@@ -540,12 +546,12 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
             {/* Peak 헤더 + 30d total */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
-                🔥 Peak: <strong style={{ color: peakColor }}>
-                  {peakInfo?.name ?? peakPeriod.label}
+                {'🔥 '}{t('activityChart.tod.peakLabel')} <strong style={{ color: peakColor }}>
+                  {peakInfo ? t(`activityChart.tod.${peakPeriod.period}`) : peakPeriod.label}
                 </strong>
               </span>
               <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>
-                30d · {fmtCost(totalCost, currency, usdToKrw)} total
+                {t('activityChart.tod.rangeTotal', { cost: fmtCost(totalCost, currency, usdToKrw) })}
               </span>
             </div>
             {/* Peak 상세 3열 */}
@@ -555,11 +561,11 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
               border: `1px solid ${C.border}`,
             }}>
               {[
-                { label: 'Tokens', value: fmtTokens(peakPeriod.tokens), sub: `${peakPct}% of total` },
-                { label: 'Cost', value: fmtCost(peakPeriod.costUSD, currency, usdToKrw), sub: `${peakInfo?.time ?? ''}` },
-                { label: 'Requests', value: `${peakPeriod.requestCount}`, sub: `${totalRequests > 0 ? Math.round(peakPeriod.requestCount / totalRequests * 100) : 0}% of total` },
+                { key: 'tokens', label: t('activityChart.tod.columns.tokens'), value: fmtTokens(peakPeriod.tokens), sub: t('activityChart.tod.pctOfTotal', { pct: peakPct }) },
+                { key: 'cost', label: t('activityChart.tod.columns.cost'), value: fmtCost(peakPeriod.costUSD, currency, usdToKrw), sub: `${peakInfo?.time ?? ''}` },
+                { key: 'requests', label: t('activityChart.tod.columns.requests'), value: `${peakPeriod.requestCount}`, sub: t('activityChart.tod.pctOfTotal', { pct: totalRequests > 0 ? Math.round(peakPeriod.requestCount / totalRequests * 100) : 0 }) },
               ].map((item, i) => (
-                <div key={item.label} style={{
+                <div key={item.key} style={{
                   padding: '6px 8px', textAlign: 'center',
                   borderRight: i < 2 ? `1px solid ${C.border}` : 'none',
                 }}>
@@ -579,13 +585,14 @@ export function TODPanel({ data, currency, usdToKrw }: { data: TimeOfDayBucket[]
 // 색상 범례
 function ColorLegend() {
   const C = useTheme();
+  const { t } = useTranslation();
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 3 }}>
-      <span style={{ fontSize: 10, color: C.textMuted }}>less</span>
+      <span style={{ fontSize: 10, color: C.textMuted }}>{t('activityChart.legend.less')}</span>
       {[0, 0.25, 0.5, 0.75, 1].map(i => (
         <div key={i} style={{ width: 7, height: 7, borderRadius: 1, background: blueIntensity(i) }} />
       ))}
-      <span style={{ fontSize: 10, color: C.textMuted }}>more</span>
+      <span style={{ fontSize: 10, color: C.textMuted }}>{t('activityChart.legend.more')}</span>
     </div>
   );
 }
@@ -602,6 +609,7 @@ interface Props {
 
 function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBuckets, currency, usdToKrw }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<ChartTab>('7d');
 
   return (
@@ -609,7 +617,7 @@ function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBucke
       {/* 헤더: 제목 + 탭 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Activity</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('common.mainSections.activity')}</span>
           <span style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono, background: C.bgRow, padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
             {LOCAL_TIME_ZONE_LABEL}
           </span>
@@ -647,20 +655,20 @@ function ActivityChart({ heatmap, heatmap30, heatmap90, weeklyTimeline, todBucke
         )}
         {tab === '5mo' && (
           <>
-            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>5mo activity</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>{t('activityChart.captions.fiveMonth')}</div>
             <Heatmap90 data={heatmap90} />
             <ColorLegend />
           </>
         )}
         {tab === 'Hourly' && (
           <>
-            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>Hourly (30d)</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>{t('activityChart.captions.hourly30d')}</div>
             <HourlyDistribution data={heatmap30} />
           </>
         )}
         {tab === 'Weekly' && (
           <>
-            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>Weekly (4w)</div>
+            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 3 }}>{t('activityChart.captions.weekly4w')}</div>
             <WeeklyGrowthChart data={weeklyTimeline} />
           </>
         )}

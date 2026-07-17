@@ -12,6 +12,7 @@
   <img alt="Codex tracking" src="https://img.shields.io/badge/Codex_tracking-supported-4f46e5?style=for-the-badge">
   <img alt="Antigravity" src="https://img.shields.io/badge/Antigravity-new-0f766e?style=for-the-badge">
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude_Code-supported-d97706?style=for-the-badge">
+  <img alt="Japanese UI" src="https://img.shields.io/badge/Japanese_UI-included-db2777?style=for-the-badge">
   <img alt="Local only" src="https://img.shields.io/badge/Local_only-no_cloud_sync-0f766e?style=for-the-badge">
 </p>
 
@@ -89,6 +90,8 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 
 **[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
+> **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
+
 **[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
@@ -146,6 +149,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 
 ### 커스터마이징
 - **Auto/Light/Dark 테마** — 기본값은 시스템 설정 따름
+- **언어** — 시스템 설정을 따르거나 English / 日本語로 고정
 - **비용 표시** — USD 또는 KRW, 환율 설정 가능
 - **Floating usage widget** — 항상 위에 표시되는 작은 Quota Pace 창; 메인 헤더, 트레이 메뉴, Settings, 위젯 버튼에서 표시/숨김 가능. Waiting 애니메이션은 기본 꺼짐이며 Settings에서 다시 켤 수 있습니다
 - **트레이 라벨** — 사용량 %, 토큰 수, 비용 직접 표시

@@ -73,9 +73,11 @@
     "@fontsource/noto-sans-kr": "^5.2.9",
     "chokidar": "^3.6.0",
     "electron-store": "^8.2.0",
+    "i18next": "^26.3.6",
     "lucide-react": "^1.7.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-i18next": "^17.0.10",
     "recharts": "^3.8.1"
   },
   "devDependencies": {

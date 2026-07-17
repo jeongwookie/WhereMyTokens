@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CodeOutputStats, GitDailyStats } from '../types';
 import { useTheme } from '../ThemeContext';
 import { fmtCost } from '../theme';
@@ -17,6 +18,7 @@ interface Props {
 
 function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, currency, usdToKrw }: Props) {
   const C = useTheme();
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>('today');
 
   if (!loading && stats.all.commits === 0 && stats.today.commits === 0) return null;
@@ -35,23 +37,23 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
   })();
 
   const totalLinesFormatted = stats.all.added >= 1000
-    ? `+${(stats.all.added / 1000).toFixed(0)}K lines`
-    : `+${stats.all.added} lines`;
+    ? t('codeOutputCard.totalLines', { value: `+${(stats.all.added / 1000).toFixed(0)}K` })
+    : t('codeOutputCard.totalLines', { value: `+${stats.all.added}` });
 
   const effSub = (() => {
     if (period === 'all') return totalLinesFormatted;
     if (avgPerLine === null) return '';
-    return `avg ${fmtCost(avgPerLine * 100, currency, usdToKrw)}`;
+    return t('codeOutputCard.avgCost', { cost: fmtCost(avgPerLine * 100, currency, usdToKrw) });
   })();
 
   const perLine = data.added > 0 && periodCost > 0 ? (periodCost / data.added) * 100 : null;
-  const commitsSub = period === 'today' ? `${stats.all.commits} total` : 'all time';
+  const commitsSub = period === 'today' ? t('codeOutputCard.commitsSub.totalCount', { count: stats.all.commits }) : t('codeOutputCard.commitsSub.allTime');
 
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
         <div style={{ minWidth: 0, marginRight: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>Code Output</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.8 }}>{t('common.mainSections.codeOutput')}</div>
           <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {stats.scopeLabel}
           </div>
@@ -66,7 +68,7 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
               color: period === p ? C.accent : C.textMuted,
               fontWeight: period === p ? 700 : 400,
             }}>
-              {p}
+              {t(`codeOutputCard.period.${p}`)}
             </button>
           ))}
         </div>
@@ -77,9 +79,9 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0 }}>
-            <KPI label="Commits" value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
-            <KPI label="Net Lines" value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
-            <KPI label="$/100 Added"
+            <KPI label={t('codeOutputCard.kpi.commits')} value={`${data.commits}`} sub={commitsSub} color={C.accent} C={C} borderRight />
+            <KPI label={t('codeOutputCard.kpi.netLines')} value={`${netLines >= 0 ? '+' : ''}${netLines}`} sub={`+${data.added} / -${data.removed}`} color={C.active} C={C} borderRight />
+            <KPI label={t('codeOutputCard.kpi.costPerHundredAdded')}
               value={effInfo.text}
               sub={effSub} color={effInfo.color} C={C} />
           </div>
@@ -93,8 +95,8 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
               borderTop: `1px solid ${C.border}`,
             }}>
               <span style={{ fontSize: 10, color: C.textDim, fontFamily: C.fontMono }}>
-                {data.commits} commit{data.commits > 1 ? 's' : ''} - {netLines >= 0 ? '+' : ''}{netLines} net lines
-                {perLine ? ` - ${fmtCost(perLine, currency, usdToKrw)}/100 added` : ''}
+                {t('codeOutputCard.summary.commits', { count: data.commits })} - {t('codeOutputCard.summary.netLines', { value: `${netLines >= 0 ? '+' : ''}${netLines}` })}
+                {perLine ? ` - ${t('codeOutputCard.summary.costPerHundred', { cost: fmtCost(perLine, currency, usdToKrw) })}` : ''}
               </span>
             </div>
           )}
@@ -107,15 +109,16 @@ function CodeOutputCard({ stats, loading = false, todayCost, allTimeCost, curren
 export default React.memo(CodeOutputCard);
 
 function CodeOutputLoading({ C }: { C: ReturnType<typeof useTheme> }) {
+  const { t } = useTranslation();
   return (
     <div style={{ padding: '18px 14px 16px', borderTop: `1px solid ${C.border}`, color: C.textMuted }}>
       <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700, marginBottom: 8 }}>
-        Scanning git history
+        {t('codeOutputCard.scanningGitHistory')}
       </div>
       <div style={{ height: 4, background: C.bgRow, borderRadius: 999, overflow: 'hidden' }}>
         <div style={{ width: '44%', height: '100%', background: C.accent, opacity: 0.7, borderRadius: 999 }} />
       </div>
-      <div style={{ marginTop: 8, fontSize: 10, fontFamily: C.fontMono }}>Code Output will appear after local repo stats finish.</div>
+      <div style={{ marginTop: 8, fontSize: 10, fontFamily: C.fontMono }}>{t('codeOutputCard.loadingHint')}</div>
     </div>
   );
 }
@@ -137,6 +140,7 @@ function OutputGrowth({
   total: CodeOutputStats['all'];
   C: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<{ point: GrowthPoint } | null>(null);
   const points = buildGrowthPoints(data, total);
@@ -245,14 +249,14 @@ function OutputGrowth({
   return (
     <div style={{ borderTop: `1px solid ${C.border}`, padding: '6px 12px 5px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 }}>
-        <span style={{ fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700 }}>Output Growth</span>
+        <span style={{ fontSize: 10, color: C.textDim, textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700 }}>{t('codeOutputCard.outputGrowth.title')}</span>
         <span style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono }}>
-          <span style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(totalNet)}</span> total net
-          <span> - {total.commits} commits</span>
+          <span style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(totalNet)}</span> {t('codeOutputCard.outputGrowth.totalNetSuffix')}
+          <span> - {t('codeOutputCard.summary.commits', { count: total.commits })}</span>
         </span>
       </div>
       <div style={{ fontSize: 10, color: C.textMuted, fontFamily: C.fontMono, marginBottom: 1 }}>
-        Last 7 days on all-time baseline
+        {t('codeOutputCard.outputGrowth.caption')}
       </div>
       <div style={{ position: 'relative' }}>
         <canvas
@@ -278,9 +282,9 @@ function OutputGrowth({
         {detailPoint && (
           <>
             <span style={{ color: C.textMuted }}>{detailPoint.label}</span>
-            <span style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(detailPoint.totalNet)} total</span>
+            <span style={{ color: progressColor, fontWeight: 700 }}>{fmtSigned(detailPoint.totalNet)} {t('codeOutputCard.outputGrowth.totalSuffix')}</span>
             <span>
-              {fmtSigned(detailPoint.dayNet)} day · {detailPoint.commits} commit{detailPoint.commits === 1 ? '' : 's'}
+              {fmtSigned(detailPoint.dayNet)} {t('codeOutputCard.outputGrowth.daySuffix')} · {t('codeOutputCard.summary.commits', { count: detailPoint.commits })}
             </span>
           </>
         )}
