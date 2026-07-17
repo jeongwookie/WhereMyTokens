@@ -17,7 +17,7 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1"><img alt="Release v1.20.1" src="https://img.shields.io/badge/release-v1.20.1-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0"><img alt="Release v1.21.0" src="https://img.shields.io/badge/release-v1.21.0-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
@@ -60,8 +60,8 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-v1.20.1-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.0.0)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -79,11 +79,11 @@ By downloading or installing, you agree to the [End-User License Agreement](EULA
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | Jul 17 | Replace legacy usage ledgers with the source-attributed SQLite UsageIndex, add Reset index recovery, and tighten taskbar mini overflow hit bounds |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | Jul 10 | Make taskbar mini quota rows configurable from 1-3 blocks, keep hidden-target `+N` cues, and separate source/status prefix tones from quota severity colors |
 | **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | Jul 7 | Add Codex reset-credit availability in Plan Usage and an optional self-contained Windows taskbar mini quota display with draggable 5H/1W rows |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | Jun 22 | Stabilize Trend breakdown imports for short Claude thinking blocks by widening the calibration guard |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | Jun 22 | Fix Claude JSONL discovery so agent logs contribute to usage graphs without adding agent-only session rows |
-| **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | Jun 17 | Add clickable Trend breakdowns with provider input/output, thinking/response/tool usage, cache-aware work/billing tokens, and git net-line categories |
 
 [Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 

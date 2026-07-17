@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.20.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.21.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.20.1 permite configurar 1-3 bloques por fila en el taskbar mini y corrige `+N` oculto y colores de prefix source/status.</em>
+  <em>v1.21.0 unifica los stores de uso en un UsageIndex SQLite atribuido por source, añade recuperación con Reset index y ajusta los hit bounds del taskbar mini.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 17 jul | Unifica los stores de uso anteriores en un UsageIndex SQLite atribuido por source, añade recuperación con Reset index y ajusta los overflow hit bounds del taskbar mini |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 10 jul | Permite configurar 1-3 bloques por fila en el taskbar mini quota, conserva `+N` para targets ocultos y corrige los colores de prefix live/cache/log |
 | **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | 7 jul | Añade Codex reset credits como target de Plan Usage y un taskbar mini quota display self-contained y arrastrable con filas 5H/1W |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 22 jun | Estabiliza el import de Trend breakdown para bloques cortos de thinking de Claude ajustando el calibration guard |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 22 jun | Corrige el descubrimiento JSONL de Claude para incluir logs de agentes en las gráficas de uso sin añadir filas de sesión solo de agentes |
-| **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 17 jun | Añade breakdowns clicables en Trend con input/output por provider, thinking/response/tool usage, tokens work/billing y categorías de líneas netas git |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-v1.20.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -99,7 +99,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.20.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.21.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

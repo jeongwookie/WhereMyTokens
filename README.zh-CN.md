@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe"><strong>下载 v1.20.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe"><strong>下载 v1.21.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.20.1 可配置 taskbar mini 每行 1-3 个 quota 块，并修正隐藏 `+N` 与 source/status 前缀颜色。</em>
+  <em>v1.21.0 将使用量存储统一到按 source 归属的 SQLite UsageIndex，加入 Reset index 恢复流程，并收紧 taskbar mini hit bounds。</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 7/17 | 将旧使用量存储统一到按 source 归属的 SQLite UsageIndex，加入 Reset index 恢复流程，并收紧 taskbar mini overflow hit bounds |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 7/10 | Taskbar mini quota 每行可配置 1-3 个显示块，并修正隐藏 target 的 `+N` 与 live/cache/log 前缀状态色 |
 | **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | 7/7 | 新增 Codex reset credit 作为 Plan Usage target，并提供可拖动的 self-contained Windows taskbar mini quota 5H/1W 行 |
 | **[v1.19.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.2)** | 6/22 | 调整 calibration guard，避免短 Claude thinking block 被误判，从而稳定 Trend breakdown import |
 | **[v1.19.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.1)** | 6/22 | 修复 Claude JSONL 发现，让 agent 日志计入使用量图表，同时不新增仅 agent 的会话行 |
-| **[v1.19.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.19.0)** | 6/17 | 新增可点击的 Trend breakdown，按 provider 展示 input/output、thinking/response/tool 用量、work/billing token 和 git 净行数分类 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.20.1/WhereMyTokens-v1.20.1-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.21.0/WhereMyTokens-v1.21.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -99,7 +99,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.20.1-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.21.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
