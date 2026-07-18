@@ -12,7 +12,7 @@ import {
   type UsageVisibilityFilter,
 } from './usageVisibilityFilter';
 import type {
-  UsageEntry,
+  UsageEntryProjection,
   UsageIndex,
   UsageMetrics,
   UsageQueryResult,
@@ -24,7 +24,7 @@ const WEEK_MS = 7 * DAY_MS;
 
 export interface UsageIndexProjection {
   provider: ProviderId;
-  recentEntries: UsageEntry[];
+  recentEntryData: UsageEntryProjection;
   hourly: UsageQueryResult;
   daily: UsageQueryResult;
   monthly: UsageQueryResult;
@@ -73,16 +73,19 @@ function addMetrics(target: WindowStats, metrics: UsageMetrics): void {
   target.cacheSavingsUSD += metrics.cacheSavingsUSD;
 }
 
-function metricsFromEntry(entry: UsageEntry): UsageMetrics {
+function metricsFromProjectionEntry(entries: UsageEntryProjection, index: number): UsageMetrics {
   return {
     requestCount: 1,
-    inputTokens: entry.inputTokens,
-    outputTokens: entry.outputTokens,
-    cacheCreationTokens: entry.cacheCreationTokens,
-    cacheReadTokens: entry.cacheReadTokens,
-    totalTokens: entry.inputTokens + entry.outputTokens + entry.cacheCreationTokens + entry.cacheReadTokens,
-    costUSD: entry.costUSD,
-    cacheSavingsUSD: entry.cacheSavingsUSD,
+    inputTokens: entries.inputTokens[index],
+    outputTokens: entries.outputTokens[index],
+    cacheCreationTokens: entries.cacheCreationTokens[index],
+    cacheReadTokens: entries.cacheReadTokens[index],
+    totalTokens: entries.inputTokens[index]
+      + entries.outputTokens[index]
+      + entries.cacheCreationTokens[index]
+      + entries.cacheReadTokens[index],
+    costUSD: entries.costUSD[index],
+    cacheSavingsUSD: entries.cacheSavingsUSD[index],
   };
 }
 
@@ -99,13 +102,13 @@ export async function loadUsageIndexProjection(
     ? Math.max(cutoffs.requestMs, Math.floor(recentEntriesFromMs))
     : cutoffs.requestMs;
   const filter = { providers, excludedProjectKeys };
-  const [recentEntries, hourly, daily, monthly] = await Promise.all([
-    usageIndex.readProjectionEntries({ ...filter, fromMs: recentFromMs }),
+  const [recentEntryData, hourly, daily, monthly] = await Promise.all([
+    usageIndex.readProjectionEntryData({ ...filter, fromMs: recentFromMs }),
     usageIndex.queryUsage({ ...filter, grain: 'hour', fromMs: cutoffs.hourMs }),
     usageIndex.queryUsage({ ...filter, grain: 'day', fromMs: cutoffs.dayMs }),
     usageIndex.queryUsage({ ...filter, grain: 'month' }),
   ]);
-  return { provider, recentEntries, hourly, daily, monthly };
+  return { provider, recentEntryData, hourly, daily, monthly };
 }
 
 export function computeUsageFromUsageIndex(
@@ -244,9 +247,13 @@ export function computeUsageFromUsageIndex(
       }
     }
 
-    for (const entry of projection.recentEntries) {
-      const metrics = metricsFromEntry(entry);
-      if (entry.timestampMs >= todayStart) {
+    const entries = projection.recentEntryData;
+    for (let index = 0; index < entries.count; index += 1) {
+      const metrics = metricsFromProjectionEntry(entries, index);
+      const timestampMs = entries.timestampMs[index];
+      const provider = entries.providers[entries.providerIndexes[index]] ?? projection.provider;
+      const model = entries.models[entries.modelIndexes[index]] ?? '';
+      if (timestampMs >= todayStart) {
         todayTokens += metrics.totalTokens;
         todayCost += metrics.costUSD;
         todayRequestCount += 1;
@@ -255,19 +262,19 @@ export function computeUsageFromUsageIndex(
         todayCacheTokens += metrics.cacheReadTokens + metrics.cacheCreationTokens;
         todayCacheReadTokens += metrics.cacheReadTokens;
         todayCacheSavingsUSD += metrics.cacheSavingsUSD;
-        todayCacheDenominator += cacheEfficiencyDenominator(entry.provider, metrics);
+        todayCacheDenominator += cacheEfficiencyDenominator(provider, metrics);
       }
 
-      const usage = getProviderWindowUsage(entry.provider);
+      const usage = getProviderWindowUsage(provider);
       const addedWindowKeys = new Set<string>();
-      for (const target of providerWindowTargets.get(entry.provider) ?? []) {
-        if (entry.timestampMs < target.startMs || !targetAcceptsModel(target, entry.model)) continue;
-        const key = `${target.windowKey}\0${entry.model}`;
+      for (const target of providerWindowTargets.get(provider) ?? []) {
+        if (timestampMs < target.startMs || !targetAcceptsModel(target, model)) continue;
+        const key = `${target.windowKey}\0${model}`;
         if (addedWindowKeys.has(key)) continue;
         addedWindowKeys.add(key);
         usage.windows[target.windowKey] ??= emptyWindow();
         addMetrics(usage.windows[target.windowKey], metrics);
-        addMetrics(getProviderModelWindow(entry.provider, target.windowKey, entry.model), metrics);
+        addMetrics(getProviderModelWindow(provider, target.windowKey, model), metrics);
       }
     }
   }

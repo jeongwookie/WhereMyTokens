@@ -5,11 +5,13 @@ import { emptyBreakdownDelta } from '../../shared/breakdownTypes';
 import { DefaultUsageIndex } from './usageIndex';
 import { SqliteUsageIndexStorage } from './sqliteUsageIndexStorage';
 import { emptyUsageMetrics } from './types';
+import { emptyUsageEntryProjection } from './entryProjection';
 import type {
   UsageBreakdownQuery,
   UsageBreakdownResult,
   UsageEntry,
   UsageEntryQuery,
+  UsageEntryProjection,
   UsageIndex,
   UsageIndexCoverage,
   UsageIndexHealth,
@@ -168,6 +170,10 @@ export class ResilientUsageIndex implements UsageIndex {
 
   async readProjectionEntries(request: UsageEntryQuery): Promise<UsageEntry[]> {
     return this.delegate ? this.delegate.readProjectionEntries(request) : [];
+  }
+
+  async readProjectionEntryData(request: UsageEntryQuery): Promise<UsageEntryProjection> {
+    return this.delegate ? this.delegate.readProjectionEntryData(request) : emptyUsageEntryProjection();
   }
 
   async readSessionProjections(sourceIds?: readonly string[]): Promise<UsageSessionProjection[]> {

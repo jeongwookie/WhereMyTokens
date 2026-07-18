@@ -20,6 +20,7 @@ const {
   SqliteUsageIndexStorage,
   openUsageIndex,
   USAGE_COMPACTION_INTERVAL_MS,
+  emptyUsageEntryProjection,
   usageIndexSchemaVersion,
 } = usageIndexModule;
 const { createCodexUsageIndexScanner } = codexScannerModule;
@@ -187,15 +188,15 @@ test('mtime-only append-only source changes update descriptor without rescanning
   assert.equal((await storage.getSource(second.sourceId)).descriptor.version.token, '10:2000');
 });
 
-test('usage projection reads raw entries only from the requested recent window', async () => {
+test('usage projection reads compact entries only from the requested recent window', async () => {
   const now = Date.parse('2026-07-18T06:00:00Z');
   const recentFromMs = Date.parse('2026-07-18T00:00:00Z');
   let rawEntryQuery = null;
   const aggregateQueries = [];
   const usageIndex = {
-    readProjectionEntries: async query => {
+    readProjectionEntryData: async query => {
       rawEntryQuery = query;
-      return [];
+      return emptyUsageEntryProjection();
     },
     queryUsage: async query => {
       aggregateQueries.push(query);
@@ -468,7 +469,11 @@ test('canonical projection preserves totals while exposing only retained tempora
   });
 
   const projection = await loadUsageIndexProjection(index, 'codex', [], now);
-  assert.equal(projection.recentEntries.length, 1);
+  assert.equal(projection.recentEntryData.count, 1);
+  assert.deepEqual(projection.recentEntryData.providers, ['codex']);
+  assert.equal(projection.recentEntryData.providerIndexes instanceof Uint32Array, true);
+  assert.equal(projection.recentEntryData.timestampMs instanceof Float64Array, true);
+  assert.equal(projection.recentEntryData.modelIndexes instanceof Uint32Array, true);
   assert.equal(projection.hourly.aggregate.requestCount, 2);
   assert.equal(projection.daily.aggregate.requestCount, 4);
   assert.equal(projection.monthly.aggregate.requestCount, 5);
@@ -482,6 +487,55 @@ test('canonical projection preserves totals while exposing only retained tempora
   assert.equal(trend.daily.reduce((sum, row) => sum + row.requestCount, 0), 4);
   assert.equal(trend.monthly.reduce((sum, row) => sum + row.requestCount, 0), 5);
   await index.close();
+});
+
+test('compact projection preserves dynamic window calculations across storage adapters', async () => {
+  const now = Date.parse('2026-07-16T12:00:00Z');
+  const hourMs = 60 * 60 * 1_000;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-compact-projection-'));
+  const adapters = [
+    {
+      name: 'memory',
+      storage: new InMemoryUsageIndexStorage(),
+    },
+    {
+      name: 'sqlite',
+      storage: new SqliteUsageIndexStorage(path.join(tempDir, 'usage-index.sqlite')),
+    },
+  ];
+
+  try {
+    for (const adapter of adapters) {
+      const index = new DefaultUsageIndex(adapter.storage, () => now);
+      try {
+        await index.refreshSource(source(`codex:compact-${adapter.name}`, 'v1', 10), {
+          scan: async () => batch(10, [
+            entry(`${adapter.name}-outside-h5`, now - 6 * hourMs, 100, { model: 'gpt-5-codex' }),
+            entry(`${adapter.name}-inside-h5`, now - 2 * hourMs, 30, { model: 'gpt-5-codex' }),
+            entry(`${adapter.name}-inside-h5-mini`, now - hourMs, 20, { model: 'gpt-5-codex-mini' }),
+          ]),
+        });
+
+        const projection = await loadUsageIndexProjection(index, 'codex', [], now, now - 7 * hourMs);
+        assert.equal(projection.recentEntryData.count, 3, `${adapter.name} compact rows`);
+        assert.deepEqual(projection.recentEntryData.providers, ['codex'], `${adapter.name} compact providers`);
+        assert.equal(projection.recentEntryData.providerIndexes instanceof Uint32Array, true, `${adapter.name} provider column`);
+        assert.equal(projection.recentEntryData.timestampMs instanceof Float64Array, true, `${adapter.name} timestamp column`);
+        assert.equal(projection.recentEntryData.modelIndexes instanceof Uint32Array, true, `${adapter.name} model column`);
+
+        const usage = computeUsageFromUsageIndex([projection], {}, now);
+        assert.equal(usage.todayTokens, 150, `${adapter.name} today tokens`);
+        assert.equal(usage.byProvider.codex.windows.h5.totalTokens, 50, `${adapter.name} h5 window`);
+        assert.equal(usage.byProvider.codex.windows.week.totalTokens, 150, `${adapter.name} week window`);
+        assert.equal(usage.modelWindows.codex.windows.h5['gpt-5-codex'].totalTokens, 30, `${adapter.name} h5 model`);
+        assert.equal(usage.modelWindows.codex.windows.h5['gpt-5-codex-mini'].totalTokens, 20, `${adapter.name} h5 mini model`);
+      } finally {
+        await index.close();
+      }
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('append selects tail and rewrite replaces only the affected source', async () => {
