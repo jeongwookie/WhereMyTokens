@@ -7,6 +7,7 @@ import {
   type UsageBreakdownQuery,
   type UsageCompactionResult,
   type UsageEntry,
+  type UsageEntryProjection,
   type UsageEntryQuery,
   type UsageFilter,
   type UsageIndexStorage,
@@ -19,6 +20,7 @@ import {
   type UsageSourceDescriptor,
   type UsageTimeBucketTotal,
 } from './types';
+import { UsageEntryProjectionBuilder } from './entryProjection';
 import { usageRetentionCutoffs } from './retention';
 import {
   addUsageBreakdown,
@@ -242,6 +244,20 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
       }
     }
     return result.sort((a, b) => a.timestampMs - b.timestampMs || a.requestId.localeCompare(b.requestId));
+  }
+
+  async queryEntryProjection(query: UsageEntryQuery): Promise<UsageEntryProjection> {
+    this.assertOpen();
+    const excludedProjects = new Set((query.excludedProjectKeys ?? []).map(key => key.toLowerCase()));
+    const builder = new UsageEntryProjectionBuilder();
+    for (const [sourceId, entries] of this.entries) {
+      const source = this.sources.get(sourceId);
+      if (!source) continue;
+      for (const entry of entries.values()) {
+        if (queryAccepts(query, source, entry, excludedProjects)) builder.add(entry);
+      }
+    }
+    return builder.build();
   }
 
   async queryBreakdown(query: UsageBreakdownQuery): Promise<UsageBreakdownData> {

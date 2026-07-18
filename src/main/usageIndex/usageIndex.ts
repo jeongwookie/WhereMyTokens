@@ -4,6 +4,7 @@ import type {
   UsageBreakdownResult,
   UsageEntry,
   UsageEntryQuery,
+  UsageEntryProjection,
   UsageIndex,
   UsageIndexCoverage,
   UsageIndexHealth,
@@ -325,6 +326,12 @@ export class DefaultUsageIndex implements UsageIndex {
     this.assertOpen();
     await this.compactCommittedUsage();
     return this.storage.queryEntries(normalizeQuery(request));
+  }
+
+  async readProjectionEntryData(request: UsageEntryQuery): Promise<UsageEntryProjection> {
+    this.assertOpen();
+    await this.compactCommittedUsage();
+    return this.storage.queryEntryProjection(normalizeQuery(request));
   }
 
   readSessionProjections(sourceIds?: readonly string[]): Promise<UsageSessionProjection[]> {

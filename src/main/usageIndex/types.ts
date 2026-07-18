@@ -54,6 +54,21 @@ export interface UsageEntry {
   breakdown?: BreakdownDelta;
 }
 
+export interface UsageEntryProjection {
+  count: number;
+  providers: ProviderId[];
+  models: string[];
+  providerIndexes: Uint32Array<ArrayBufferLike>;
+  timestampMs: Float64Array<ArrayBufferLike>;
+  modelIndexes: Uint32Array<ArrayBufferLike>;
+  inputTokens: Float64Array<ArrayBufferLike>;
+  outputTokens: Float64Array<ArrayBufferLike>;
+  cacheCreationTokens: Float64Array<ArrayBufferLike>;
+  cacheReadTokens: Float64Array<ArrayBufferLike>;
+  costUSD: Float64Array<ArrayBufferLike>;
+  cacheSavingsUSD: Float64Array<ArrayBufferLike>;
+}
+
 export interface UsageSessionProjection {
   sourceId: string;
   provider: ProviderId;
@@ -190,6 +205,7 @@ export interface UsageIndexStorage {
   queryUsage(query: UsageQuery): Promise<UsageQueryData>;
   queryBreakdown(query: UsageBreakdownQuery): Promise<UsageBreakdownData>;
   queryEntries(query: UsageEntryQuery): Promise<UsageEntry[]>;
+  queryEntryProjection(query: UsageEntryQuery): Promise<UsageEntryProjection>;
   readSessionProjections(sourceIds?: readonly string[]): Promise<UsageSessionProjection[]>;
   compact(nowMs: number): Promise<UsageCompactionResult>;
   reset(): Promise<void>;
@@ -210,6 +226,7 @@ export interface UsageIndex {
   queryUsage(request: UsageQuery): Promise<UsageQueryResult>;
   queryBreakdown(request: UsageBreakdownQuery): Promise<UsageBreakdownResult>;
   readProjectionEntries(request: UsageEntryQuery): Promise<UsageEntry[]>;
+  readProjectionEntryData(request: UsageEntryQuery): Promise<UsageEntryProjection>;
   readSessionProjections(sourceIds?: readonly string[]): Promise<UsageSessionProjection[]>;
   reset(): Promise<void>;
   close(): Promise<void>;

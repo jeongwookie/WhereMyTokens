@@ -15,6 +15,7 @@ import {
   type UsageBreakdownQuery,
   type UsageCompactionResult,
   type UsageEntry,
+  type UsageEntryProjection,
   type UsageEntryQuery,
   type UsageFilter,
   type UsageIndexStorage,
@@ -29,6 +30,7 @@ import {
   type UsageSourceVersion,
   type UsageTimeBucketTotal,
 } from './types';
+import { UsageEntryProjectionBuilder } from './entryProjection';
 import { usageRetentionCutoffs } from './retention';
 import {
   addUsageBreakdown,
@@ -93,6 +95,22 @@ interface EntryRow {
   cost_usd: number;
   cache_savings_usd: number;
   breakdown_json: string | null;
+}
+
+interface EntryProjectionRow {
+  timestamp_ms: number;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
+  cost_usd: number;
+  cache_savings_usd: number;
+}
+
+interface CountRow {
+  row_count: number;
 }
 
 interface SessionRow {
@@ -198,7 +216,7 @@ function metricsFromBucketRow(row: BucketRow): UsageMetrics {
   };
 }
 
-function entryQuerySql(query: UsageFilter): { sql: string; params: SQLInputValue[] } {
+function entryQuerySql(query: UsageFilter, selectSql = 'e.*', orderSql = ''): { sql: string; params: SQLInputValue[] } {
   const clauses: string[] = [];
   const params: SQLInputValue[] = [];
   if (query.fromMs !== undefined) {
@@ -222,7 +240,7 @@ function entryQuerySql(query: UsageFilter): { sql: string; params: SQLInputValue
     params.push(...query.excludedProjectKeys);
   }
   return {
-    sql: `SELECT e.* FROM usage_entry e${clauses.length ? ` WHERE ${clauses.join(' AND ')}` : ''}`,
+    sql: `SELECT ${selectSql} FROM usage_entry e${clauses.length ? ` WHERE ${clauses.join(' AND ')}` : ''}${orderSql}`,
     params,
   };
 }
@@ -524,6 +542,38 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
     const rows = this.database.prepare(sql).all(...params) as unknown as EntryRow[];
     return rows.map(entryFromRow)
       .sort((a, b) => a.timestampMs - b.timestampMs || a.requestId.localeCompare(b.requestId));
+  }
+
+  async queryEntryProjection(query: UsageEntryQuery): Promise<UsageEntryProjection> {
+    this.assertOpen();
+    const count = entryQuerySql(query, 'COUNT(*) AS row_count');
+    const countRow = this.database.prepare(count.sql).get(...count.params) as CountRow | undefined;
+    const select = entryQuerySql(query, [
+      'e.timestamp_ms',
+      'e.provider',
+      'e.model',
+      'e.input_tokens',
+      'e.output_tokens',
+      'e.cache_creation_tokens',
+      'e.cache_read_tokens',
+      'e.cost_usd',
+      'e.cache_savings_usd',
+    ].join(', '));
+    const statement = this.database.prepare(select.sql);
+    const builder = new UsageEntryProjectionBuilder(countRow?.row_count ?? 0);
+    const iterate = (statement as unknown as {
+      iterate?: (...params: SQLInputValue[]) => Iterable<EntryProjectionRow>;
+    }).iterate;
+
+    if (typeof iterate === 'function') {
+      for (const row of iterate.call(statement, ...select.params)) this.addEntryProjectionRow(builder, row);
+    } else {
+      for (const row of statement.all(...select.params) as unknown as EntryProjectionRow[]) {
+        this.addEntryProjectionRow(builder, row);
+      }
+    }
+
+    return builder.build();
   }
 
   async queryBreakdown(query: UsageBreakdownQuery): Promise<UsageBreakdownData> {
@@ -887,6 +937,21 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
 
   private assertOpen(): void {
     if (this.closed) throw new Error('SqliteUsageIndexStorage is closed');
+  }
+
+  private addEntryProjectionRow(builder: UsageEntryProjectionBuilder, row: EntryProjectionRow): void {
+    if (!isProviderId(row.provider)) throw new Error(`Invalid provider ${row.provider} in UsageIndex entry`);
+    builder.add({
+      timestampMs: row.timestamp_ms,
+      provider: row.provider,
+      model: row.model,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cacheCreationTokens: row.cache_creation_tokens,
+      cacheReadTokens: row.cache_read_tokens,
+      costUSD: row.cost_usd,
+      cacheSavingsUSD: row.cache_savings_usd,
+    });
   }
 }
 
