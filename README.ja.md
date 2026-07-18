@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-Setup.exe"><strong>v1.22.2 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-Setup.exe"><strong>v1.22.3 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.22.2 は、タスクバーの点滅を抑え、Compact widget のボタン操作と大きな使用履歴のメモリ使用を安定させます。</em>
+  <em>v1.22.3 は、大きな使用履歴をより軽く読み込み、ダッシュボードのメモリ使用を大きく抑えます。</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.22.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.3)** | 7/18 | SQLite 使用履歴を compact projection として読み込み、大きな履歴でもダッシュボードのメモリ使用を大きく下げつつ、today/5h/weekly/モデル別 quota 計算を維持 |
 | **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | 7/18 | tray-owned dashboard/widget window でタスクバーの点滅を抑え、Compact widget のボタンと hide 保存を修正し、大きな使用履歴のメモリ負荷を下げつつ Codex `Unlimited` 表示を維持 |
 | **[v1.22.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1)** | 7/17 | Codex が一時的に 5h/1w 制限 window を報告しない場合は `Unlimited` として表示し、Syncing のまま残らないよう改善 |
 | **[v1.22.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.0)** | 7/17 | 日本語 UI を内蔵し、AppSettings に保存される言語選択と日本語向けダウンロード案内を追加。@restructure-git さんの PR #37 を参考に統合 |
 | **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 7/17 | 既存の使用量ストアを source-attributed SQLite UsageIndex に統合し、Reset index recovery と taskbar mini overflow hit bounds を改善 |
-| **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 7/10 | Taskbar mini quota 行ごとの表示ブロック数を 1-3 個に設定でき、非表示 target の `+N` と live/cache/log prefix 状態色を補正 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +88,11 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-v1.22.2-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-v1.22.3-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -102,7 +102,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.22.2-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.22.3-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
