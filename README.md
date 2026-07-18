@@ -64,7 +64,7 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 | Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
 | Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
 | Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-v1.22.3-win-x64.zip)** | No installer, keep it anywhere |
-| macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.0)** | Menu bar app with DMG/ZIP packaging |
+| macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.1)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
 
