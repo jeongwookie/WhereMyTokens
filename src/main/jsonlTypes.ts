@@ -1,4 +1,4 @@
-import type { ProviderId } from './providers/types';
+import type { ProviderId, QuotaEntry } from '../shared/quotaTypes';
 
 export type UsageProvider = ProviderId | 'other';
 
@@ -13,12 +13,6 @@ export interface CompactRecentEntry {
   cacheReadTokens: number;
   costUSD: number;
   cacheSavingsUSD: number;
-}
-
-export interface CodexRateLimitWindow {
-  pct: number;
-  resetsAt: number;
-  observedAt: number;
 }
 
 export interface ActivityBreakdown {
@@ -44,8 +38,10 @@ export interface SessionSnapshot {
   latestCacheReadTokens: number;
   contextMax?: number;
   codexRateLimits?: {
-    h5?: CodexRateLimitWindow;
-    week?: CodexRateLimitWindow;
+    capturedAt: number;
+    position: number;
+    sourceId: string;
+    entries: QuotaEntry[];
   };
   toolCounts: Record<string, number>;
   activityBreakdown: ActivityBreakdown;

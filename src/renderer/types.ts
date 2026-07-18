@@ -1,5 +1,10 @@
 import type { MainSectionId } from './mainSections';
 import type {
+  ProviderId,
+  ProviderQuotaSnapshot,
+  QuotaDisplayMode,
+} from '../shared/quotaTypes';
+import type {
   BucketBreakdown,
   BreakdownGrain,
   ProviderBreakdown,
@@ -130,17 +135,9 @@ export interface TimeOfDayBucket {
   requestCount: number;
 }
 
-export interface ProviderWindowUsage {
-  windows: Record<string, WindowStats>;
-}
-
-export interface ProviderModelWindowUsage {
-  windows: Record<string, Record<string, WindowStats>>;
-}
-
 export interface UsageData {
-  byProvider: Partial<Record<'claude' | 'codex' | 'antigravity', ProviderWindowUsage>>;
-  modelWindows: Partial<Record<'claude' | 'codex' | 'antigravity', ProviderModelWindowUsage>>;
+  fixedPeriodByProvider: Partial<Record<ProviderId, { periods: Partial<Record<'5h', WindowStats>> }>>;
+  entryStats: Record<string, WindowStats>;
   models: ModelUsage[];
   heatmap: HourlyBucket[];       // 7 days × 24 hours
   heatmap30: HourlyBucket[];     // 30 days × 24 hours
@@ -182,113 +179,8 @@ export interface UsageTrendData {
 
 export type StateFreshness = 'empty' | 'restored' | 'fresh';
 
-export type ProviderId = 'claude' | 'codex' | 'antigravity';
-export type ProviderQuotaSource = 'api' | 'statusLine' | 'localLog' | 'localRpc' | 'cache';
-export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
-export type ProviderQuotaRowVisualKind = 'pace' | 'percentOnly';
-
-export interface ProviderQuotaWindow {
-  pct: number;
-  resetMs: number | null;
-  resetLabel?: string;
-  limitState?: 'unlimited' | 'unreported';
-  source?: ProviderQuotaSource;
-}
-
-export interface ProviderQuotaStatus {
-  connected: boolean;
-  code: string;
-  label?: string;
-  detail?: string;
-  severity?: 'ok' | 'warning' | 'danger';
-}
-
-export interface ProviderCreditBalance {
-  available: number;
-  used?: number;
-  total?: number;
-  remainingPct?: number;
-  resetMs?: number | null;
-}
-
-export interface ProviderModelQuota {
-  model: string;
-  label: string;
-  usageModel?: string;
-  statsWindowKey?: string;
-  remainingPct: number;
-  resetMs?: number | null;
-  groupKey?: string;
-  defaultMode?: QuotaDisplayMode;
-  visualKind?: ProviderQuotaRowVisualKind;
-  cacheMetricTitle?: string;
-  durationMs?: number;
-  hideCost?: boolean;
-  accentColor?: string;
-  badges?: ProviderQuotaDisplayBadge[];
-}
-
-export interface ProviderQuotaDisplayBadge {
-  key: string;
-  label: string;
-  title?: string;
-  tone?: 'good' | 'neutral' | 'warning';
-}
-
-export interface ProviderQuotaWindowDisplay {
-  label: string;
-  visualKind?: ProviderQuotaRowVisualKind;
-  cacheMetricTitle?: string;
-  durationMs?: number;
-  modelIncludes?: string[];
-  hideCost?: boolean;
-  badges?: ProviderQuotaDisplayBadge[];
-}
-
-export interface ProviderQuotaGroupSpec {
-  key: string;
-  label: string;
-  windowKeys: string[];
-  defaultMode: QuotaDisplayMode;
-  accentColor?: string;
-  badges?: ProviderQuotaDisplayBadge[];
-  sortOrder?: number;
-}
-
-export interface ProviderQuotaSnapshot {
-  provider: ProviderId;
-  source: ProviderQuotaSource;
-  capturedAt: number;
-  accountLabel?: string;
-  accountTooltip?: string;
-  planName?: string;
-  windows?: Record<string, ProviderQuotaWindow>;
-  models?: ProviderModelQuota[];
-  groups?: ProviderQuotaGroupSpec[];
-  windowDisplay?: Record<string, ProviderQuotaWindowDisplay>;
-  credits?: Record<string, ProviderCreditBalance>;
-  status?: ProviderQuotaStatus;
-  resetCredits?: ProviderResetCreditsData | null;
-}
-
-export interface ProviderResetCredit {
-  idSuffix: string | null;
-  status: string;
-  expiresAtUtc: string | null;
-}
-
-export interface ProviderResetCreditsData {
-  credits: ProviderResetCredit[];
-  availableCount: number;
-  totalEarnedCount: number;
-  checkedAt: number;
-  countOnly: boolean;
-  source: 'api' | 'cache' | 'usage';
-  status: ProviderQuotaStatus;
-}
-
 export interface AppSettings {
-  enabledProviders: Array<'claude' | 'codex' | 'antigravity'>;
+  enabledProviders: ProviderId[];
   alertThresholds: number[];
   openAtLogin: boolean;
   alwaysOnTop: boolean;
@@ -297,7 +189,7 @@ export interface AppSettings {
   globalHotkey: string;
   enableAlerts: boolean;
   language: 'system' | 'en' | 'ja';
-  trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
+  trayDisplay: 'none' | 'h5pct' | 'd7pct' | 'tokens' | 'cost';
   mainSectionOrder: MainSectionId[];
   hiddenMainSections: MainSectionId[];
   hiddenProjects: string[];

@@ -85,7 +85,7 @@ function manager(options = {}) {
     },
     buildSnapshot: appState => {
       builtSnapshots.push(appState);
-      return { updatedAt: 1, rows: [{ period: '5h', blocks: [] }, { period: '1w', blocks: [] }] };
+      return { updatedAt: 1, theme: 'dark', lines: [{ period: '5h', label: '5h', blocks: [], hiddenCount: 0 }, { period: '5h', label: '5h', blocks: [], hiddenCount: 0 }] };
     },
     openDashboard: () => opened.push('main'),
     onRuntimeDisabled: () => runtimeDisabled.push('disabled'),
@@ -296,6 +296,7 @@ test('runtime disable callback exceptions do not escape helper manager', () => {
     resolveHelperPath: () => 'helper.exe',
     helperExists: () => false,
     spawnHelper: () => new FakeChild(),
+    buildSnapshot: () => ({ updatedAt: 1, theme: 'dark', lines: [{ period: '5h', label: '5h', blocks: [], hiddenCount: 0 }, { period: '5h', label: '5h', blocks: [], hiddenCount: 0 }] }),
     onRuntimeDisabled: () => {
       throw new Error('notification store failed');
     },

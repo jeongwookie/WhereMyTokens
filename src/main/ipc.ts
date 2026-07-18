@@ -12,7 +12,7 @@ import {
   getIntegrationStatus,
   setupIntegration,
 } from './integration';
-import type { ProviderId } from './providers/types';
+import type { ProviderId } from '../shared/quotaTypes';
 import { PROVIDER_IDS, normalizeEnabledProviders } from './providers/settings';
 
 const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'];
@@ -38,7 +38,7 @@ export interface AppSettings {
   globalHotkey: string;
   enableAlerts: boolean;
   language: LanguagePreference;
-  trayDisplay: 'none' | 'h5pct' | 'tokens' | 'cost';
+  trayDisplay: 'none' | 'h5pct' | 'd7pct' | 'tokens' | 'cost';
   mainSectionOrder: string[];
   hiddenMainSections: string[];
   hiddenProjects: string[];
@@ -145,12 +145,14 @@ function isQuotaTargetId(value: string): boolean {
     && isSafeQuotaGroupKey(encodedGroupKey);
 }
 
+const RETIRED_QUOTA_TARGET_ID = 'claude.group.sonnet';
+
 function normalizeQuotaTargetModes(value: unknown): Partial<Record<string, QuotaDisplayMode>> | null {
   const record = asRecord(value);
   if (!record) return null;
   const normalized: Partial<Record<string, QuotaDisplayMode>> = {};
   for (const [targetId, mode] of Object.entries(record)) {
-    if (!isQuotaTargetId(targetId) || !isQuotaDisplayMode(mode)) continue;
+    if (targetId === RETIRED_QUOTA_TARGET_ID || !isQuotaTargetId(targetId) || !isQuotaDisplayMode(mode)) continue;
     normalized[targetId] = mode;
   }
   return normalized;
@@ -161,7 +163,7 @@ function normalizeQuotaTargetOrder(value: unknown): string[] | null {
   const seen = new Set<string>();
   const normalized: string[] = [];
   for (const targetId of value) {
-    if (typeof targetId !== 'string' || !isQuotaTargetId(targetId) || seen.has(targetId)) continue;
+    if (typeof targetId !== 'string' || targetId === RETIRED_QUOTA_TARGET_ID || !isQuotaTargetId(targetId) || seen.has(targetId)) continue;
     seen.add(targetId);
     normalized.push(targetId);
   }
@@ -173,7 +175,7 @@ function normalizeQuotaTargetAbbreviations(value: unknown): Partial<Record<strin
   if (!record) return null;
   const normalized: Partial<Record<string, string>> = {};
   for (const [targetId, abbreviation] of Object.entries(record)) {
-    if (!isQuotaTargetId(targetId) || typeof abbreviation !== 'string') continue;
+    if (targetId === RETIRED_QUOTA_TARGET_ID || !isQuotaTargetId(targetId) || typeof abbreviation !== 'string') continue;
     const trimmed = abbreviation.trim().toUpperCase();
     if (!/^[A-Z0-9]{1,3}$/.test(trimmed)) continue;
     normalized[targetId] = trimmed;
@@ -215,7 +217,7 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (typeof record.globalHotkey === 'string') next.globalHotkey = record.globalHotkey.slice(0, 80);
   if (typeof record.enableAlerts === 'boolean') next.enableAlerts = record.enableAlerts;
   if (isLanguagePreference(record.language)) next.language = record.language;
-  if (record.trayDisplay === 'none' || record.trayDisplay === 'h5pct' || record.trayDisplay === 'tokens' || record.trayDisplay === 'cost') next.trayDisplay = record.trayDisplay;
+  if (record.trayDisplay === 'none' || record.trayDisplay === 'h5pct' || record.trayDisplay === 'd7pct' || record.trayDisplay === 'tokens' || record.trayDisplay === 'cost') next.trayDisplay = record.trayDisplay;
   const mainSectionOrder = normalizeMainSectionOrder(record.mainSectionOrder);
   if (mainSectionOrder) next.mainSectionOrder = mainSectionOrder;
   const hiddenMainSections = normalizeHiddenMainSections(record.hiddenMainSections, mainSectionOrder ?? DEFAULT_MAIN_SECTION_ORDER);

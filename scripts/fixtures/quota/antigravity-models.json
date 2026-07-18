@@ -1,0 +1,15 @@
+{
+  "nowMs": 1784340000000,
+  "models": [
+    {
+      "label": "Gemini Pro",
+      "modelOrAlias": { "model": "gemini-pro" },
+      "quotaInfo": { "remainingFraction": 0.7, "resetTime": "2026-07-18T06:00:00.000Z" }
+    },
+    {
+      "label": "Gemini Weekly",
+      "modelOrAlias": { "model": "gemini-weekly" },
+      "quotaInfo": { "remainingFraction": 0.4, "resetTime": "2026-07-22T06:00:00.000Z" }
+    }
+  ]
+}

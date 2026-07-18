@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppSettings, AppState, IntegrationStatus, QuotaDisplayMode } from '../types';
+import { AppSettings, AppState, IntegrationStatus } from '../types';
+import type { QuotaDisplayMode } from '../../shared/quotaTypes';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 import { DEFAULT_MAIN_SECTION_ORDER, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
@@ -780,6 +781,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
           <select style={sel} value={s.trayDisplay ?? 'h5pct'} onChange={e => setS({ ...s, trayDisplay: e.target.value as AppSettings['trayDisplay'] })}>
             <option value="none">{t('settingsView.tray.none')}</option>
             <option value="h5pct">{t('settingsView.tray.h5pct')}</option>
+            <option value="d7pct">{t('settingsView.tray.d7pct')}</option>
             <option value="tokens">{t('settingsView.tray.tokens')}</option>
             <option value="cost">{t('settingsView.tray.cost')}</option>
           </select>

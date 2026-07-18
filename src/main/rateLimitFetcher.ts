@@ -4,15 +4,12 @@ import * as path from 'path';
 import * as os from 'os';
 import { getOAuthCredentialState, refreshNow, RefreshOutcome } from './oauthRefresh';
 
-export const API_USAGE_CACHE_SCHEMA_VERSION = 3;
 export const CLAUDE_API_MAX_BACKOFF_MS = 600_000;
 
 const CLAUDE_USER_AGENT = 'claude-code/1.0';
 const CLAUDE_OAUTH_REFRESH_USER_AGENT = 'claude-code/1.0';
 const MAX_SERVER_MESSAGE_LENGTH = 240;
 const MAX_CLAUDE_API_RESPONSE_BYTES = 256 * 1024;
-
-export type ApiResetMs = number | null;
 
 export interface ApiExtraUsage {
   isEnabled: boolean;
@@ -22,21 +19,21 @@ export interface ApiExtraUsage {
   currency: string | null;
 }
 
-export interface ApiUsagePct {
-  h5Pct: number;
-  weekPct: number;
-  soPct: number;
-  h5ResetMs: ApiResetMs;
-  weekResetMs: ApiResetMs;
-  soResetMs: ApiResetMs;
-  plan: string;
-  extraUsage: ApiExtraUsage | null;
+export interface ClaudeAccountQuotaWindow {
+  usedPct: number;
+  resetsAt: number | null;
 }
 
-export interface StoredApiUsagePct extends ApiUsagePct {
-  storedAt: number;
-  schemaVersion: number;
-  credentialMarker: string | null;
+export interface ClaudeUsagePayload {
+  accountWindows: {
+    fiveHour: ClaudeAccountQuotaWindow | null;
+    sevenDay: ClaudeAccountQuotaWindow | null;
+  };
+  accountWindowCandidates: number;
+  invalidAccountWindows: number;
+  limits: unknown[];
+  plan: string;
+  extraUsage: ApiExtraUsage | null;
 }
 
 export type ClaudeApiStatusCode =
@@ -51,8 +48,6 @@ export type ClaudeApiStatusCode =
   | 'http-error'
   | 'reset-unavailable';
 
-export type ResetFieldState = 'present' | 'null' | 'missing';
-
 export interface ClaudeApiStatus {
   code: ClaudeApiStatusCode;
   connected: boolean;
@@ -62,27 +57,69 @@ export interface ClaudeApiStatus {
   retryAfterMs?: number;
   serverMessage?: string;
   responseKeys?: string[];
-  resetFields?: {
-    fiveHour: ResetFieldState;
-    sevenDay: ResetFieldState;
-    sevenDaySonnet: ResetFieldState;
-  };
 }
 
 export interface ApiUsageFetchResult {
-  usage: ApiUsagePct | null;
+  usage: ClaudeUsagePayload | null;
   status: ClaudeApiStatus;
+}
+
+function parseAccountQuotaWindow(value: unknown): {
+  candidate: boolean;
+  invalid: boolean;
+  window: ClaudeAccountQuotaWindow | null;
+} {
+  if (value === undefined || value === null) {
+    return { candidate: false, invalid: false, window: null };
+  }
+  const record = asRecord(value);
+  if (!record) return { candidate: true, invalid: true, window: null };
+  const utilization = record.utilization;
+  if (typeof utilization !== 'number' || !Number.isFinite(utilization)) {
+    return { candidate: true, invalid: true, window: null };
+  }
+  const resetValue = record.resets_at;
+  let resetsAt: number | null;
+  if (resetValue === null) {
+    resetsAt = null;
+  } else if (typeof resetValue === 'string' && resetValue.trim() !== '') {
+    const timestamp = Date.parse(resetValue);
+    if (!Number.isFinite(timestamp)) return { candidate: true, invalid: true, window: null };
+    resetsAt = timestamp;
+  } else {
+    return { candidate: true, invalid: true, window: null };
+  }
+  return {
+    candidate: true,
+    invalid: false,
+    window: { usedPct: Math.max(0, Math.min(100, utilization)), resetsAt },
+  };
+}
+
+export function parseClaudeUsagePayload(payload: unknown, plan = ''): ClaudeUsagePayload | null {
+  const data = asRecord(payload);
+  if (!data) return null;
+  const fiveHour = parseAccountQuotaWindow(data.five_hour);
+  const sevenDay = parseAccountQuotaWindow(data.seven_day);
+  const hasLimits = Array.isArray(data.limits);
+  if (!hasLimits && !fiveHour.candidate && !sevenDay.candidate) return null;
+  return {
+    accountWindows: {
+      fiveHour: fiveHour.window,
+      sevenDay: sevenDay.window,
+    },
+    accountWindowCandidates: Number(fiveHour.candidate) + Number(sevenDay.candidate),
+    invalidAccountWindows: Number(fiveHour.invalid) + Number(sevenDay.invalid),
+    limits: hasLimits ? data.limits as unknown[] : [],
+    plan,
+    extraUsage: extraUsageSnapshot(data.extra_usage),
+  };
 }
 
 interface Credentials {
   accessToken: string;
   rateLimitTier: string;
   subscriptionType: string;
-}
-
-interface UsageWindowResponse {
-  utilization?: unknown;
-  resets_at?: unknown;
 }
 
 class HttpResponseError extends Error {
@@ -142,7 +179,6 @@ function logStatus(status: ClaudeApiStatus): void {
     retryAfterMs: status.retryAfterMs,
     serverMessage: status.serverMessage,
     responseKeys: status.responseKeys,
-    resetFields: status.resetFields,
   });
 }
 
@@ -200,38 +236,9 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function asUsageWindow(value: unknown): UsageWindowResponse | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  return record;
-}
-
 function normalizePct(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
-}
-
-function resetMs(iso: unknown, now: number): ApiResetMs {
-  if (typeof iso !== 'string' || !iso) return null;
-  const timestamp = new Date(iso).getTime();
-  if (!Number.isFinite(timestamp)) return null;
-  return Math.max(0, timestamp - now);
-}
-
-function resetFieldState(window: UsageWindowResponse | null): ResetFieldState {
-  if (!window || !Object.prototype.hasOwnProperty.call(window, 'resets_at')) return 'missing';
-  if (window.resets_at === null) return 'null';
-  return typeof window.resets_at === 'string' && window.resets_at ? 'present' : 'missing';
-}
-
-function hasValidUtilization(window: UsageWindowResponse | null): boolean {
-  return !!window && typeof window.utilization === 'number' && Number.isFinite(window.utilization);
-}
-
-function hasValidResetField(window: UsageWindowResponse | null): boolean {
-  return !!window
-    && Object.prototype.hasOwnProperty.call(window, 'resets_at')
-    && (window.resets_at === null || (typeof window.resets_at === 'string' && window.resets_at.length > 0));
 }
 
 function extraUsageSnapshot(value: unknown): ApiExtraUsage | null {
@@ -251,42 +258,6 @@ function extraUsageSnapshot(value: unknown): ApiExtraUsage | null {
     usedCredits: Math.max(0, usedCreditsRaw),
     utilization: utilizationValue,
     currency,
-  };
-}
-
-function normalizeResetValue(value: unknown): ApiResetMs {
-  if (value == null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.max(0, value);
-}
-
-export function normalizeStoredApiUsagePct(value: unknown, currentCredentialMarker: string | null = null): StoredApiUsagePct | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  if (record.schemaVersion !== API_USAGE_CACHE_SCHEMA_VERSION) return null;
-  if (typeof record.plan !== 'string') return null;
-  const credentialMarker = typeof record.credentialMarker === 'string' && record.credentialMarker.length > 0
-    ? record.credentialMarker
-    : null;
-  if (currentCredentialMarker != null && credentialMarker !== currentCredentialMarker) return null;
-
-  const storedAt = typeof record.storedAt === 'number' && Number.isFinite(record.storedAt)
-    ? record.storedAt
-    : null;
-  if (storedAt == null || storedAt <= 0 || storedAt > Date.now()) return null;
-
-  return {
-    schemaVersion: API_USAGE_CACHE_SCHEMA_VERSION,
-    h5Pct: normalizePct(record.h5Pct),
-    weekPct: normalizePct(record.weekPct),
-    soPct: normalizePct(record.soPct),
-    h5ResetMs: normalizeResetValue(record.h5ResetMs),
-    weekResetMs: normalizeResetValue(record.weekResetMs),
-    soResetMs: normalizeResetValue(record.soResetMs),
-    plan: record.plan,
-    extraUsage: extraUsageSnapshot(record.extraUsage),
-    storedAt,
-    credentialMarker,
   };
 }
 
@@ -409,30 +380,6 @@ function classifyRuntimeError(error: unknown): ClaudeApiStatus {
   return buildStatus('http-error', false, 'api disconnected', 'Claude API request failed.');
 }
 
-function missingCoreWindowStatus(responseKeys: string[], resetFields: ClaudeApiStatus['resetFields']): ClaudeApiStatus {
-  return buildStatus(
-    'schema-changed',
-    false,
-    'schema changed',
-    'Claude API response is missing expected usage windows.',
-    { responseKeys, resetFields },
-  );
-}
-
-function invalidCoreWindowStatus(
-  responseKeys: string[],
-  resetFields: ClaudeApiStatus['resetFields'],
-  invalidFields: string[],
-): ClaudeApiStatus {
-  return buildStatus(
-    'schema-changed',
-    false,
-    'schema changed',
-    `Claude API response has invalid core usage fields: ${invalidFields.join(', ')}.`,
-    { responseKeys, resetFields },
-  );
-}
-
 function planFromTier(tier: string, sub: string): string {
   const t = tier.toLowerCase();
   const s = sub.toLowerCase();
@@ -460,65 +407,20 @@ async function performUsageFetch(cred: Credentials): Promise<ApiUsageFetchResult
     return { usage: null, status };
   }
 
-  const fiveHour = asUsageWindow(data.five_hour);
-  const sevenDay = asUsageWindow(data.seven_day);
-  const sevenDaySonnet = asUsageWindow(data.seven_day_sonnet);
   const responseKeys = Object.keys(data).sort();
-  const resetFields = {
-    fiveHour: resetFieldState(fiveHour),
-    sevenDay: resetFieldState(sevenDay),
-    sevenDaySonnet: resetFieldState(sevenDaySonnet),
-  } satisfies NonNullable<ClaudeApiStatus['resetFields']>;
-
-  if (!fiveHour || !sevenDay) {
-    const status = missingCoreWindowStatus(responseKeys, resetFields);
+  const usage = parseClaudeUsagePayload(data, planFromTier(cred.rateLimitTier, cred.subscriptionType));
+  if (!usage) {
+    const status = buildStatus(
+      'schema-changed',
+      false,
+      'schema changed',
+      'Claude API response has no recognized account windows or scoped limits collection.',
+      { responseKeys },
+    );
     logStatus(status);
     return { usage: null, status };
   }
-
-  const invalidCoreFields: string[] = [];
-  if (!hasValidUtilization(fiveHour)) invalidCoreFields.push('five_hour.utilization');
-  if (!hasValidUtilization(sevenDay)) invalidCoreFields.push('seven_day.utilization');
-  if (!hasValidResetField(fiveHour)) invalidCoreFields.push('five_hour.resets_at');
-  if (!hasValidResetField(sevenDay)) invalidCoreFields.push('seven_day.resets_at');
-  if (invalidCoreFields.length > 0) {
-    const status = invalidCoreWindowStatus(responseKeys, resetFields, invalidCoreFields);
-    logStatus(status);
-    return { usage: null, status };
-  }
-
-  const validSonnetWindow = sevenDaySonnet && hasValidUtilization(sevenDaySonnet) && hasValidResetField(sevenDaySonnet)
-    ? sevenDaySonnet
-    : null;
-  const now = Date.now();
-  const usage: ApiUsagePct = {
-    h5Pct: normalizePct(fiveHour?.utilization),
-    weekPct: normalizePct(sevenDay?.utilization),
-    soPct: normalizePct(validSonnetWindow?.utilization),
-    h5ResetMs: resetMs(fiveHour?.resets_at, now),
-    weekResetMs: resetMs(sevenDay?.resets_at, now),
-    soResetMs: resetMs(validSonnetWindow?.resets_at, now),
-    plan: planFromTier(cred.rateLimitTier, cred.subscriptionType),
-    extraUsage: extraUsageSnapshot(data.extra_usage),
-  };
-
-  const coreUnknownResetFields = [
-    resetFields.fiveHour === 'null' ? 'five_hour' : null,
-    resetFields.sevenDay === 'null' ? 'seven_day' : null,
-  ].filter((field): field is string => !!field);
-  const optionalUnknownResetFields = [
-    resetFields.sevenDaySonnet !== 'present' || (sevenDaySonnet && !validSonnetWindow) ? 'seven_day_sonnet' : null,
-  ].filter((field): field is string => !!field);
-
-  const status = coreUnknownResetFields.length > 0
-    ? buildStatus(
-        'reset-unavailable',
-        true,
-        'reset partial',
-        `${coreUnknownResetFields.join(', ')} reset is unavailable.`,
-        { responseKeys, resetFields },
-      )
-    : buildStatus('ok', true, optionalUnknownResetFields.length > 0 ? 'sonnet reset unavailable' : '', '', { responseKeys, resetFields });
+  const status = buildStatus('ok', true, '', '', { responseKeys });
 
   logStatus(status);
   return { usage, status };
@@ -570,7 +472,7 @@ function refreshFailedStatus(outcome: Extract<RefreshOutcome, { kind: 'network' 
   );
 }
 
-export async function fetchApiUsagePct(): Promise<ApiUsageFetchResult> {
+export async function fetchClaudeUsage(): Promise<ApiUsageFetchResult> {
   const cred = readCredentials();
   if (!cred) {
     const status = buildStatus('no-credentials', false, 'local only', 'Claude credentials were not found.');

@@ -18,7 +18,7 @@ import type {
   UsageSourceRefreshResult,
   UsageSourceScanner,
 } from './types';
-import type { ProviderId } from '../providers/types';
+import type { ProviderId } from '../../shared/quotaTypes';
 
 type CoverageSourceStatus = 'queued' | 'scanning' | 'indexed' | 'failed';
 

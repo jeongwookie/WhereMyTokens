@@ -1,8 +1,7 @@
 import type { AppSettings } from '../ipc';
 import type { ActivityBreakdown, ActivityBreakdownKind } from '../jsonlTypes';
 import type { UsageSourceDescriptor, UsageSourceScanner } from '../usageIndex';
-
-export type ProviderId = 'claude' | 'codex' | 'antigravity';
+import type { ProviderId, ProviderQuotaSnapshot } from '../../shared/quotaTypes';
 
 export type SessionState = 'active' | 'waiting' | 'idle' | 'compacting';
 export type SessionProvider = ProviderId;
@@ -123,109 +122,6 @@ export interface ProviderUsageScanResult {
     scanner: UsageSourceScanner;
   }>;
   partial: boolean;
-}
-
-export interface ProviderQuotaSnapshot {
-  provider: ProviderId;
-  source: 'api' | 'statusLine' | 'localLog' | 'localRpc' | 'cache';
-  capturedAt: number;
-  accountLabel?: string;
-  accountTooltip?: string;
-  planName?: string;
-  windows?: Record<string, ProviderQuotaWindow>;
-  models?: ProviderModelQuota[];
-  groups?: ProviderQuotaGroupSpec[];
-  windowDisplay?: Record<string, ProviderQuotaWindowDisplay>;
-  credits?: Record<string, ProviderCreditBalance>;
-  status?: ProviderQuotaStatus;
-  resetCredits?: ProviderResetCreditsData | null;
-}
-
-export interface ProviderResetCredit {
-  idSuffix: string | null;
-  status: string;
-  expiresAtUtc: string | null;
-}
-
-export interface ProviderResetCreditsData {
-  credits: ProviderResetCredit[];
-  availableCount: number;
-  totalEarnedCount: number;
-  checkedAt: number;
-  countOnly: boolean;
-  source: 'api' | 'cache' | 'usage';
-  status: ProviderQuotaStatus;   // public status shape (connected/code/label/detail)
-}
-
-export interface ProviderQuotaWindow {
-  pct: number;
-  resetMs: number | null;
-  resetLabel?: string;
-  limitState?: 'unlimited' | 'unreported';
-  source?: ProviderQuotaSnapshot['source'];
-}
-
-export interface ProviderQuotaStatus {
-  connected: boolean;
-  code: string;
-  label?: string;
-  detail?: string;
-  severity?: 'ok' | 'warning' | 'danger';
-}
-
-export interface ProviderModelQuota {
-  model: string;
-  label: string;
-  usageModel?: string;
-  statsWindowKey?: string;
-  remainingPct: number;
-  resetMs?: number | null;
-  groupKey?: string;
-  defaultMode?: QuotaDisplayMode;
-  visualKind?: ProviderQuotaRowVisualKind;
-  cacheMetricTitle?: string;
-  durationMs?: number;
-  hideCost?: boolean;
-  accentColor?: string;
-  badges?: ProviderQuotaDisplayBadge[];
-}
-
-export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
-export type ProviderQuotaRowVisualKind = 'pace' | 'percentOnly';
-
-export interface ProviderQuotaDisplayBadge {
-  key: string;
-  label: string;
-  title?: string;
-  tone?: 'good' | 'neutral' | 'warning';
-}
-
-export interface ProviderQuotaWindowDisplay {
-  label: string;
-  visualKind?: ProviderQuotaRowVisualKind;
-  cacheMetricTitle?: string;
-  durationMs?: number;
-  modelIncludes?: string[];
-  hideCost?: boolean;
-  badges?: ProviderQuotaDisplayBadge[];
-}
-
-export interface ProviderQuotaGroupSpec {
-  key: string;
-  label: string;
-  windowKeys: string[];
-  defaultMode: QuotaDisplayMode;
-  accentColor?: string;
-  badges?: ProviderQuotaDisplayBadge[];
-  sortOrder?: number;
-}
-
-export interface ProviderCreditBalance {
-  available: number;
-  used?: number;
-  total?: number;
-  remainingPct?: number;
-  resetMs?: number | null;
 }
 
 export interface ProviderArtifact {

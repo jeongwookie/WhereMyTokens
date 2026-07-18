@@ -478,7 +478,7 @@ test('canonical projection preserves totals while exposing only retained tempora
   assert.equal(projection.daily.aggregate.requestCount, 4);
   assert.equal(projection.monthly.aggregate.requestCount, 5);
 
-  const usage = computeUsageFromUsageIndex([projection], {}, now);
+  const usage = computeUsageFromUsageIndex([projection], now, undefined, {});
   assert.equal(usage.allTimeRequestCount, 5);
   assert.equal(usage.weeklyTimeline.reduce((sum, row) => sum + row.tokens, 0), 4);
   assert.equal(usage.heatmap90.reduce((sum, row) => sum + row.tokens, 0), 4);
@@ -492,6 +492,28 @@ test('canonical projection preserves totals while exposing only retained tempora
 test('compact projection preserves dynamic window calculations across storage adapters', async () => {
   const now = Date.parse('2026-07-16T12:00:00Z');
   const hourMs = 60 * 60 * 1_000;
+  const providerQuotas = {
+    codex: {
+      entries: [
+        {
+          key: 'codex.account.5h',
+          scope: { kind: 'account' },
+          period: '5h',
+          durationMs: 5 * hourMs,
+          resetsAt: now + 3 * hourMs,
+          usageBinding: { kind: 'all-provider-models' },
+        },
+        {
+          key: 'codex.account.7d',
+          scope: { kind: 'account' },
+          period: '7d',
+          durationMs: 7 * 24 * hourMs,
+          resetsAt: now,
+          usageBinding: { kind: 'all-provider-models' },
+        },
+      ],
+    },
+  };
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-compact-projection-'));
   const adapters = [
     {
@@ -523,12 +545,11 @@ test('compact projection preserves dynamic window calculations across storage ad
         assert.equal(projection.recentEntryData.timestampMs instanceof Float64Array, true, `${adapter.name} timestamp column`);
         assert.equal(projection.recentEntryData.modelIndexes instanceof Uint32Array, true, `${adapter.name} model column`);
 
-        const usage = computeUsageFromUsageIndex([projection], {}, now);
+        const usage = computeUsageFromUsageIndex([projection], now, undefined, providerQuotas);
         assert.equal(usage.todayTokens, 150, `${adapter.name} today tokens`);
-        assert.equal(usage.byProvider.codex.windows.h5.totalTokens, 50, `${adapter.name} h5 window`);
-        assert.equal(usage.byProvider.codex.windows.week.totalTokens, 150, `${adapter.name} week window`);
-        assert.equal(usage.modelWindows.codex.windows.h5['gpt-5-codex'].totalTokens, 30, `${adapter.name} h5 model`);
-        assert.equal(usage.modelWindows.codex.windows.h5['gpt-5-codex-mini'].totalTokens, 20, `${adapter.name} h5 mini model`);
+        assert.equal(usage.fixedPeriodByProvider.codex.periods['5h'].totalTokens, 50, `${adapter.name} fixed h5 window`);
+        assert.equal(usage.entryStats['codex.account.5h'].totalTokens, 50, `${adapter.name} account h5 entry`);
+        assert.equal(usage.entryStats['codex.account.7d'].totalTokens, 150, `${adapter.name} account 7d entry`);
       } finally {
         await index.close();
       }
@@ -756,7 +777,10 @@ test('Codex scanner reads one payload stream and commits usage plus session proj
   assert.equal(projection.payload.sessionSnapshot.latestInputTokens, 60);
   assert.equal(projection.payload.sessionSnapshot.toolCounts.shell_command, 1);
   assert.equal(projection.payload.sessionSnapshot.activityBreakdown.buildTest, 1);
-  assert.equal(projection.payload.sessionSnapshot.codexRateLimits.h5.pct, 25);
+  assert.equal(
+    projection.payload.sessionSnapshot.codexRateLimits.entries.find(entry => entry.period === '5h').usedPct,
+    25,
+  );
 
   const bytesAfterFirst = bytesRead;
   const unchanged = await index.refreshSource(descriptor, scanner);

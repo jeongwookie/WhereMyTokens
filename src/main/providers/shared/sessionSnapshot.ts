@@ -7,8 +7,13 @@ export function cloneSessionSnapshot(snapshot: SessionSnapshot): SessionSnapshot
     activityBreakdown: { ...snapshot.activityBreakdown },
     codexRateLimits: snapshot.codexRateLimits
       ? {
-        ...(snapshot.codexRateLimits.h5 ? { h5: { ...snapshot.codexRateLimits.h5 } } : {}),
-        ...(snapshot.codexRateLimits.week ? { week: { ...snapshot.codexRateLimits.week } } : {}),
+        ...snapshot.codexRateLimits,
+        entries: snapshot.codexRateLimits.entries.map(entry => ({
+          ...entry,
+          target: { ...entry.target },
+          scope: { ...entry.scope },
+          ...(entry.usageBinding ? { usageBinding: JSON.parse(JSON.stringify(entry.usageBinding)) } : {}),
+        })),
       }
       : undefined,
   };

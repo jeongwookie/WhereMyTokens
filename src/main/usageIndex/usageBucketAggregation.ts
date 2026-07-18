@@ -3,7 +3,7 @@ import {
   emptyBreakdownDelta,
   type BreakdownDelta,
 } from '../../shared/breakdownTypes';
-import type { ProviderId } from '../providers/types';
+import type { ProviderId } from '../../shared/quotaTypes';
 import {
   emptyUsageMetrics,
   type UsageEntry,

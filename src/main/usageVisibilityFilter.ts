@@ -1,5 +1,5 @@
 import type { AppSettings } from './ipc';
-import type { ProviderId } from './providers/types';
+import type { ProviderId } from '../shared/quotaTypes';
 
 export interface UsageVisibilityFilter {
   providerScopes: ReadonlySet<ProviderId>;

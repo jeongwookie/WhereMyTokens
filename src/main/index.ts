@@ -7,7 +7,8 @@ import { Notification } from 'electron';
 import { appendCrashLog, buildErrorPayload, buildQuitTrace, collectRuntimeMemorySnapshot, getCrashLogPath, getDebugMemLogPath, isDebugInstrumentationEnabled, setListenerTargetsProvider } from './debugInstrumentation';
 import { initOAuthRefresh } from './oauthRefresh';
 import type { WindowStats } from './usageWindows';
-import type { ProviderId, ProviderQuotaWindow } from './providers/types';
+import type { ProviderId, QuotaPeriod } from '../shared/quotaTypes';
+import { selectFixedPeriodQuota } from '../shared/quotaDomain';
 import { compactWidgetSize } from './compactWidgetSizing';
 import { createTaskbarQuotaHelperManager } from './taskbarQuotaHelper';
 import { buildTaskbarQuotaSnapshot } from './taskbarQuotaSnapshot';
@@ -593,82 +594,13 @@ function applyRuntimeSettings() {
   }
 }
 
-function quotaWindow(state: AppState, provider: ProviderId, window: string): ProviderQuotaWindow | null {
-  return state.providerQuotas[provider]?.windows?.[window] ?? null;
-}
-
-const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
-
-function isCodexLimitProvisional(state: AppState, limit: ProviderQuotaWindow | null): boolean {
-  return state.historyWarmupPending && limit?.source === 'localLog';
-}
-
-function usageWindow(state: AppState, provider: ProviderId, window: string): WindowStats | null {
-  return state.usage.byProvider[provider]?.windows[window] ?? null;
-}
-
-function isFiveHourDuration(durationMs: number | null | undefined): boolean {
-  return typeof durationMs === 'number' && Number.isFinite(durationMs) && Math.abs(durationMs - FIVE_HOURS_MS) < 1000;
-}
-
-function modelStatsWindowKey(model: { statsWindowKey?: string; model: string }): string {
-  return model.statsWindowKey || `model.${model.model}`;
-}
-
-function trayH5WindowKeys(state: AppState, provider: ProviderId): string[] {
-  const keys = new Set<string>();
-  const providerUsage = state.usage.byProvider[provider]?.windows ?? {};
-  const quota = state.providerQuotas[provider];
-  if (providerUsage.h5 || quota?.windows?.h5) keys.add('h5');
-
-  for (const [windowKey, display] of Object.entries(quota?.windowDisplay ?? {})) {
-    if (windowKey === 'h5' || isFiveHourDuration(display.durationMs)) keys.add(windowKey);
-  }
-  for (const model of quota?.models ?? []) {
-    if (isFiveHourDuration(model.durationMs)) {
-      keys.add(modelStatsWindowKey(model));
-    }
-  }
-  return [...keys];
-}
-
 function trayH5Stats(state: AppState, provider: ProviderId): WindowStats | null {
-  let selected: WindowStats | null = null;
-  for (const windowKey of trayH5WindowKeys(state, provider)) {
-    const stats = usageWindow(state, provider, windowKey);
-    if (!stats) continue;
-    if (!selected || stats.totalTokens > selected.totalTokens) selected = stats;
-  }
-  return selected;
+  return state.usage.fixedPeriodByProvider[provider]?.periods['5h'] ?? null;
 }
 
-function trayH5Pct(state: AppState, provider: ProviderId): { pct: number; provisional: boolean; noCap: boolean } {
-  const quota = state.providerQuotas[provider];
-  let pct = 0;
-  let provisional = false;
-  let noCap = false;
-  const consider = (candidatePct: number, window: ProviderQuotaWindow | null) => {
-    if (window?.limitState === 'unlimited' || window?.limitState === 'unreported') {
-      noCap = true;
-      return;
-    }
-    if (provider === 'codex' && isCodexLimitProvisional(state, window)) {
-      provisional = true;
-      return;
-    }
-    if (Number.isFinite(candidatePct)) pct = Math.max(pct, Math.max(0, Math.min(100, candidatePct)));
-  };
-
-  for (const windowKey of trayH5WindowKeys(state, provider)) {
-    const window = quotaWindow(state, provider, windowKey);
-    if (window) consider(window.pct, window);
-  }
-  for (const model of quota?.models ?? []) {
-    if (isFiveHourDuration(model.durationMs)) {
-      consider(100 - model.remainingPct, { pct: 100 - model.remainingPct, resetMs: model.resetMs ?? null, source: quota?.source });
-    }
-  }
-  return { pct, provisional, noCap };
+function trayQuotaSelection(state: AppState, period: QuotaPeriod) {
+  const entries = state.settings.enabledProviders.flatMap(provider => state.providerQuotas[provider]?.entries ?? []);
+  return selectFixedPeriodQuota(entries, period);
 }
 
 function buildTrayTitle(state: AppState): string {
@@ -680,15 +612,13 @@ function buildTrayTitle(state: AppState): string {
     .filter((stats): stats is WindowStats => !!stats);
   const h5Tokens = h5Stats.reduce((total, stats) => total + stats.totalTokens, 0);
   const h5Cost = h5Stats.reduce((total, stats) => total + stats.costUSD, 0);
-  const pctRows = enabledProviders.map(provider => trayH5Pct(state, provider));
-  const h5Pct = Math.max(0, ...pctRows.map(row => row.pct));
-  const provisionalOnly = pctRows.some(row => row.provisional) && h5Pct <= 0;
-  const noCapOnly = pctRows.some(row => row.noCap) && h5Pct <= 0;
+  const quotaSelection = trayQuotaSelection(state, display === 'd7pct' ? '7d' : '5h');
   switch (display) {
     case 'h5pct':
-      if (provisionalOnly) return 'scan';
-      if (noCapOnly) return '∞';
-      return h5Pct > 0 ? `${Math.round(h5Pct)}%` : '';
+    case 'd7pct':
+      if (quotaSelection.state === 'provisional') return 'scan';
+      if (quotaSelection.state === 'unlimited') return '∞';
+      return quotaSelection.state === 'limited' ? `${Math.round(quotaSelection.usedPct)}%` : '';
     case 'tokens': {
       const t = h5Tokens;
       if (t >= 1_000_000) return `${(t/1_000_000).toFixed(1)}M`;

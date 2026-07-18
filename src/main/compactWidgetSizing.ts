@@ -1,7 +1,7 @@
 import type { AppSettings } from './ipc';
 import type { AppState } from './stateManager';
-import type { ProviderId, ProviderQuotaWindow, QuotaDisplayMode } from './providers/types';
-import type { WindowStats } from './usageWindows';
+import type { QuotaDisplayMode } from '../shared/quotaTypes';
+import { groupQuotaEntries } from '../shared/quotaDomain';
 
 export const WIDGET_WIDTH = 320;
 
@@ -17,32 +17,8 @@ export interface CompactWidgetTargetSummary {
   rowCount: number;
 }
 
-function quotaGroupId(provider: ProviderId, groupKey: string): string {
-  return `${provider}.group.${encodeURIComponent(groupKey)}`;
-}
-
-function modelQuotaGroupKey(model: string): string {
-  return `model.${model}`;
-}
-
 function targetMode(settings: AppSettings, groupId: string, defaultMode: QuotaDisplayMode): QuotaDisplayMode {
   return settings.quotaTargetModes?.[groupId] ?? defaultMode;
-}
-
-function hasLimitData(window: ProviderQuotaWindow | undefined): boolean {
-  return !!window && (window.pct > 0 || window.resetMs != null || !!window.resetLabel || window.limitState === 'unlimited' || window.limitState === 'unreported');
-}
-
-function hasUsageData(stats: WindowStats | undefined): boolean {
-  return !!stats && stats.totalTokens > 0;
-}
-
-function hasQuotaSignal(window: ProviderQuotaWindow | undefined): boolean {
-  return hasLimitData(window) || !!window?.source;
-}
-
-function hasDisplayRowSignal(window: ProviderQuotaWindow | undefined, stats: WindowStats | undefined): boolean {
-  return hasQuotaSignal(window) || hasUsageData(stats);
 }
 
 export function compactWidgetTargetSummary(settings: AppSettings, state?: AppState | null): CompactWidgetTargetSummary {
@@ -52,29 +28,10 @@ export function compactWidgetTargetSummary(settings: AppSettings, state?: AppSta
   for (const provider of settings.enabledProviders) {
     const quota = state?.providerQuotas?.[provider];
     if (!quota) continue;
-    const coveredModelGroups = new Set<string>();
-    for (const group of quota.groups ?? []) {
-      coveredModelGroups.add(group.key);
-      const groupId = quotaGroupId(provider, group.key);
-      if (targetMode(settings, groupId, group.defaultMode) === 'none') continue;
-      const rows = group.windowKeys.filter(windowKey => {
-        if (!state) return true;
-        return hasDisplayRowSignal(
-          quota.windows?.[windowKey],
-          state.usage?.byProvider?.[provider]?.windows?.[windowKey],
-        );
-      });
-      if (rows.length === 0) continue;
+    for (const group of groupQuotaEntries(quota.entries)) {
+      if (targetMode(settings, group.target.id, group.target.defaultMode) === 'none') continue;
       groupCount += 1;
-      rowCount += rows.length;
-    }
-    for (const model of quota.models ?? []) {
-      const groupKey = model.groupKey ?? modelQuotaGroupKey(model.model);
-      if (coveredModelGroups.has(groupKey)) continue;
-      const groupId = quotaGroupId(provider, groupKey);
-      if (targetMode(settings, groupId, model.defaultMode ?? 'simple') === 'none') continue;
-      groupCount += 1;
-      rowCount += 1;
+      rowCount += group.entries.length;
     }
   }
 

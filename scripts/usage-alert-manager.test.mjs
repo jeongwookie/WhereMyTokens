@@ -1,133 +1,58 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
+import alerts from '../dist/main/usageAlertManager.js';
 
-test('quota alert checks include model-only provider quotas', async () => {
-  const alerts = await import('../dist/main/usageAlertManager.js');
+const { quotaChecks, checkAlerts } = alerts;
+const NOW = Date.parse('2026-07-18T00:00:00Z');
 
-  assert.equal(typeof alerts.quotaChecks, 'function');
+function entry(key, targetId, label, period, usedPct, resetsAt = NOW + 60_000) {
+  const durationMs = period === '5h' ? 18_000_000 : 604_800_000;
+  return {
+    key,
+    target: { id: targetId, label, defaultMode: 'simple', defaultOrder: 0, taskbarAbbreviation: label[0] },
+    scope: targetId.includes('fable') ? { kind: 'model', label } : { kind: 'account' },
+    state: 'limited', usedPct, resetsAt, durationMs, durationInferred: false, period,
+  };
+}
 
-  const checks = alerts.quotaChecks({
-    antigravity: {
-      provider: 'antigravity',
-      source: 'localRpc',
-      capturedAt: Date.now(),
-      status: { connected: true, code: 'connected' },
-      models: [
-        {
-          model: 'MODEL_GEMINI_3_PRO',
-          label: 'Gemini 3 Pro',
-          remainingPct: 10,
-          resetMs: 60 * 60 * 1000,
-          visualKind: 'pace',
-          durationMs: 5 * 60 * 60 * 1000,
-        },
-      ],
-    },
-  }, new Set(['antigravity']));
+function snapshot(entries, source = 'api') {
+  return { provider: 'claude', source, capturedAt: NOW, entries };
+}
 
+test('quota checks key account 5h, account 7d, and Fable independently', () => {
+  const checks = quotaChecks({ claude: snapshot([
+    entry('alert.a.5h', 'claude.group.account', 'Claude', '5h', 51),
+    entry('alert.a.7d', 'claude.group.account', 'Claude', '7d', 81),
+    entry('alert.f.7d', 'claude.group.fable', 'Fable', '7d', 91),
+  ]) }, new Set(['claude']));
+  assert.deepEqual(checks.map(check => check.key), ['alert.a.5h', 'alert.a.7d', 'alert.f.7d']);
+  assert.deepEqual(checks.map(check => check.label), ['Claude 5h usage', 'Claude weekly usage', 'Fable weekly usage']);
+});
+
+test('display mode none does not suppress alerts', () => {
+  const checks = quotaChecks({ claude: snapshot([
+    entry('alert.none.5h', 'claude.group.account', 'Claude', '5h', 60),
+  ]) }, new Set(['claude']), { quotaTargetModes: { 'claude.group.account': 'none' } });
   assert.equal(checks.length, 1);
-  assert.equal(checks[0].key, 'antigravity-model-MODEL_GEMINI_3_PRO-5h');
-  assert.equal(checks[0].pct, 90);
-  assert.equal(checks[0].label, 'Antigravity Gemini 3 Pro 5h usage');
-  assert.equal(checks[0].source, 'localRpc');
 });
 
-test('quota alert checks keep quota targets even when display mode is none', async () => {
-  const alerts = await import('../dist/main/usageAlertManager.js');
-
-  const checks = alerts.quotaChecks({
-    claude: {
-      provider: 'claude',
-      source: 'api',
-      capturedAt: Date.now(),
-      groups: [
-        { key: 'account', label: 'Claude', defaultMode: 'rich', windowKeys: ['h5', 'week'] },
-      ],
-      windows: {
-        h5: { pct: 85, resetMs: 60 * 60 * 1000, source: 'api' },
-        week: { pct: 91, resetMs: 6 * 24 * 60 * 60 * 1000, source: 'api' },
-      },
-    },
-    antigravity: {
-      provider: 'antigravity',
-      source: 'localRpc',
-      capturedAt: Date.now(),
-      status: { connected: true, code: 'connected' },
-      models: [
-        {
-          model: 'MODEL_GEMINI_3_PRO',
-          label: 'Gemini 3 Pro',
-          remainingPct: 5,
-          resetMs: 60 * 60 * 1000,
-          visualKind: 'pace',
-          durationMs: 5 * 60 * 60 * 1000,
-        },
-      ],
-    },
-  }, new Set(['claude', 'antigravity']), {
-    quotaTargetModes: {
-      'claude.group.account': 'none',
-      'antigravity.group.model.MODEL_GEMINI_3_PRO': 'none',
-    },
-  });
-
-  assert.deepEqual(checks.map(check => check.key), [
-    'claude-h5',
-    'claude-week',
-    'antigravity-model-MODEL_GEMINI_3_PRO-5h',
-  ]);
+test('explicit unlimited and absent entries never alert', () => {
+  const unlimited = entry('alert.unlimited.5h', 'claude.group.account', 'Claude', '5h', 0);
+  unlimited.state = 'unlimited';
+  delete unlimited.usedPct;
+  assert.deepEqual(quotaChecks({ claude: snapshot([unlimited]) }, new Set(['claude'])), []);
+  assert.deepEqual(quotaChecks({}, new Set(['claude'])), []);
 });
 
-test('checkAlerts preserves the single alert notification format', async () => {
-  const alerts = await import('../dist/main/usageAlertManager.js');
+test('reset boundary re-arms only the matching entry key', () => {
   const emitted = [];
-
-  alerts.checkAlerts({
-    codex: {
-      provider: 'codex',
-      source: 'api',
-      capturedAt: Date.now(),
-      groups: [
-        { key: 'account', label: 'Codex', defaultMode: 'rich', windowKeys: ['h5'] },
-      ],
-      windows: {
-        h5: { pct: 84, resetMs: 60 * 60 * 1000, source: 'api' },
-      },
-    },
-  }, [50, 80, 90], true, new Set(['codex']), {
-    nowMs: 10_000_000,
-    emitNotification: (title, body) => emitted.push({ title, body }),
-  });
-
+  const emitNotification = (title, body) => emitted.push({ title, body });
+  const first = snapshot([entry('alert.reset.5h', 'claude.group.account', 'Claude', '5h', 60, NOW + 60_000)]);
+  checkAlerts({ claude: first }, [50], true, new Set(['claude']), { nowMs: NOW, emitNotification });
+  checkAlerts({ claude: first }, [50], true, new Set(['claude']), { nowMs: NOW + 3_600_001, emitNotification });
   assert.equal(emitted.length, 1);
-  assert.equal(emitted[0].title, 'Usage alert: Codex 5h usage reached 80%');
-  assert.equal(emitted[0].body, 'Currently at 84% usage · resets in 1h · source: API');
-});
-
-test('checkAlerts batches multiple threshold hits into one notification', async () => {
-  const alerts = await import('../dist/main/usageAlertManager.js');
-  const emitted = [];
-
-  alerts.checkAlerts({
-    claude: {
-      provider: 'claude',
-      source: 'api',
-      capturedAt: Date.now(),
-      groups: [
-        { key: 'account', label: 'Claude', defaultMode: 'rich', windowKeys: ['h5', 'week'] },
-      ],
-      windows: {
-        h5: { pct: 82, resetMs: 2 * 60 * 60 * 1000, source: 'api' },
-        week: { pct: 93, resetMs: 6 * 24 * 60 * 60 * 1000, source: 'api' },
-      },
-    },
-  }, [50, 80, 90], true, new Set(['claude']), {
-    nowMs: 10_000_000,
-    emitNotification: (title, body) => emitted.push({ title, body }),
-  });
-
-  assert.equal(emitted.length, 1);
-  assert.equal(emitted[0].title, 'Usage alerts: 2 limits reached thresholds');
-  assert.match(emitted[0].body, /Claude 5h usage reached 80%/);
-  assert.match(emitted[0].body, /Claude weekly usage reached 90%/);
+  const nextCycle = snapshot([entry('alert.reset.5h', 'claude.group.account', 'Claude', '5h', 60, NOW + 7_200_000)]);
+  checkAlerts({ claude: nextCycle }, [50], true, new Set(['claude']), { nowMs: NOW + 3_600_002, emitNotification });
+  assert.equal(emitted.length, 2);
+  assert.match(emitted[1].body, /resets in/);
 });

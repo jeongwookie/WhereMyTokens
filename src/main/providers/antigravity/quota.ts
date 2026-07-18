@@ -1,8 +1,8 @@
 import type {
   ProviderContext,
-  ProviderModelQuota,
-  ProviderQuotaSnapshot,
 } from '../types';
+import type { ProviderQuotaSnapshot, QuotaEntry } from '../../../shared/quotaTypes';
+import { normalizeQuotaPeriod } from '../../../shared/quotaDomain';
 import { defaultQuotaModeForModel, normalizeAntigravityModel } from './models';
 import { maskEmail, parseTimestampMs } from './pathUtils';
 import { resolveAntigravityPriceForModel } from './pricing';
@@ -38,47 +38,61 @@ function remainingPctFromFraction(value: unknown): number | null {
   return clampPercent(Math.max(0, Math.min(1, value)) * 100);
 }
 
-function resetMsFromValue(value: unknown, nowMs: number): number | null {
+function resetAtFromValue(value: unknown): number | null {
   if (value == null) return null;
   const parsed = parseTimestampMs(value, NaN);
-  return Number.isFinite(parsed) ? Math.max(0, parsed - nowMs) : null;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function durationMsFromReset(resetMs: number | null, enabled: boolean): number | undefined {
-  if (!enabled || resetMs == null || resetMs <= 0) return undefined;
-  return resetMs <= FIVE_HOURS_MS ? FIVE_HOURS_MS : WEEK_MS;
+function durationMsFromReset(resetsAt: number | null, nowMs: number, enabled: boolean): number | null {
+  if (!enabled || resetsAt == null || resetsAt <= nowMs) return null;
+  return resetsAt - nowMs <= FIVE_HOURS_MS ? FIVE_HOURS_MS : WEEK_MS;
+}
+
+function stableModelId(model: string): string {
+  return model.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
 }
 
 export function parseAntigravityModelQuotas(
   configs: AntigravityModelConfig[],
   nowMs: number,
   options: AntigravityQuotaParseOptions = {},
-): ProviderModelQuota[] {
+): QuotaEntry[] {
   return configs
     .filter(config => !!config.quotaInfo)
-    .map((config): ProviderModelQuota | null => {
+    .map((config, index): QuotaEntry | null => {
       const remainingPct = remainingPctFromFraction(config.quotaInfo?.remainingFraction);
       if (remainingPct == null) return null;
       const model = config.modelOrAlias?.model || config.label || 'unknown';
       const label = config.label || model;
-      const resetMs = resetMsFromValue(config.quotaInfo?.resetTime, nowMs);
-      const durationMs = durationMsFromReset(resetMs, options.inferDurationFromReset === true);
+      const resetsAt = resetAtFromValue(config.quotaInfo?.resetTime);
+      const durationMs = durationMsFromReset(resetsAt, nowMs, options.inferDurationFromReset === true);
       const usageModel = normalizeAntigravityModel(model, new Map([[model, label]]));
+      const modelId = stableModelId(model);
       return {
-        model,
-        label,
-        statsWindowKey: `model.${model}`,
-        remainingPct,
-        resetMs,
-        defaultMode: defaultQuotaModeForModel(label, model),
-        usageModel,
-        visualKind: durationMs ? 'pace' : 'percentOnly',
-        cacheMetricTitle: 'Cache read / prompt tokens',
+        key: `antigravity.model.${modelId}`,
+        target: {
+          id: `antigravity.group.model.${modelId}`,
+          label,
+          defaultMode: defaultQuotaModeForModel(label, model),
+          defaultOrder: 100 + index,
+          taskbarAbbreviation: label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? 'A',
+          cacheMetricTitle: 'Cache read / prompt tokens',
+          hideCost: !resolveAntigravityPriceForModel(usageModel, `${model} ${label}`),
+        },
+        scope: { kind: 'model', label },
+        state: 'limited',
+        usedPct: clampPercent(100 - remainingPct),
+        resetsAt,
         durationMs,
-        hideCost: !resolveAntigravityPriceForModel(usageModel, `${model} ${label}`),
+        durationInferred: durationMs != null,
+        period: normalizeQuotaPeriod(durationMs),
+        ...(durationMs != null ? {
+          usageBinding: { kind: 'models' as const, matchers: [{ kind: 'exact' as const, value: usageModel }] },
+        } : {}),
       };
     })
-    .filter((quota): quota is ProviderModelQuota => !!quota);
+    .filter((quota): quota is QuotaEntry => !!quota);
 }
 
 function newestCascadeMs(value: AntigravityTrajectorySummariesResponse | null): number {
@@ -127,7 +141,7 @@ function snapshotFromStatus(
     accountLabel,
     accountTooltip: accountLabel,
     planName: userStatus?.planStatus?.planInfo?.planName,
-    models: parseAntigravityModelQuotas(configs, nowMs, options),
+    entries: parseAntigravityModelQuotas(configs, nowMs, options),
     status: {
       connected: true,
       code: 'connected',
@@ -142,7 +156,7 @@ function unavailableSnapshot(ctx: ProviderContext, code: string, label: string, 
     provider: 'antigravity',
     source: 'localRpc',
     capturedAt: ctx.nowMs,
-    models: [],
+    entries: [],
     status: {
       connected: false,
       code,

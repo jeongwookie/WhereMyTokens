@@ -1,32 +1,28 @@
 import type { AppSettings } from './ipc';
 import type { AppState } from './stateManager';
+import { quotaElapsedPct } from '../shared/quotaDomain';
 import type {
   ProviderId,
-  ProviderModelQuota,
   ProviderQuotaSnapshot,
-  ProviderQuotaWindow,
-  ProviderQuotaWindowDisplay,
   QuotaDisplayMode,
-} from './providers/types';
+  QuotaEntry,
+  QuotaPeriod,
+} from '../shared/quotaTypes';
 
-const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-export type TaskbarQuotaPeriod = '5h' | '1w';
 export type TaskbarQuotaSeverity = 'normal' | 'warning' | 'danger' | 'unknown';
 export type ProviderStatusTone = 'normal' | 'warning' | 'danger' | 'unknown';
 
 export interface TaskbarQuotaSnapshot {
   updatedAt: number;
   theme: 'light' | 'dark';
-  rows: TaskbarQuotaPeriodRow[];
+  lines: [TaskbarQuotaDisplayLine, TaskbarQuotaDisplayLine];
 }
 
-export interface TaskbarQuotaPeriodRow {
-  period: TaskbarQuotaPeriod;
+export interface TaskbarQuotaDisplayLine {
+  period: QuotaPeriod;
+  label: '5h' | '1w';
   blocks: TaskbarQuotaBlock[];
   hiddenCount: number;
-  statusLabel: string | null;
 }
 
 export interface TaskbarQuotaBlock {
@@ -34,111 +30,19 @@ export interface TaskbarQuotaBlock {
   provider: ProviderId;
   abbreviation: string;
   label: string;
-  quotaPct: number | null;
+  state: 'limited' | 'unlimited';
+  usedPct: number | null;
   elapsedPct: number | null;
+  durationInferred: boolean;
   resetLabel: string | null;
   severity: TaskbarQuotaSeverity;
   providerStatusTone: ProviderStatusTone;
 }
 
 interface CandidateBlock extends TaskbarQuotaBlock {
-  risk: number;
   configuredOrder: number;
-  naturalOrder: number;
-}
-
-function quotaGroupId(provider: ProviderId, groupKey: string): string {
-  return `${provider}.group.${encodeURIComponent(groupKey)}`;
-}
-
-function modelQuotaGroupKey(model: string): string {
-  return `model.${model}`;
-}
-
-function clampPct(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, value));
-}
-
-function nullablePct(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? clampPct(value) : null;
-}
-
-function finiteMs(value: number | null | undefined): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function quotaPctFromModel(model: ProviderModelQuota): number | null {
-  return typeof model.remainingPct === 'number' && Number.isFinite(model.remainingPct)
-    ? clampPct(100 - model.remainingPct)
-    : null;
-}
-
-function periodFromDuration(durationMs: number | undefined): TaskbarQuotaPeriod | null {
-  if (durationMs === FIVE_HOURS_MS) return '5h';
-  if (durationMs === WEEK_MS) return '1w';
-  return null;
-}
-
-function periodFromDisplay(display: ProviderQuotaWindowDisplay | undefined, fallbackLabel?: string): TaskbarQuotaPeriod | null {
-  const durationPeriod = periodFromDuration(display?.durationMs);
-  if (durationPeriod) return durationPeriod;
-  const label = display?.label ?? fallbackLabel;
-  if (label === '5h') return '5h';
-  if (label === '1w') return '1w';
-  return null;
-}
-
-function elapsedPct(durationMs: number | undefined, resetMs: number | null | undefined): number | null {
-  if (!durationMs || resetMs == null || !Number.isFinite(resetMs) || resetMs < 0 || resetMs > durationMs) return null;
-  return Math.round(clampPct(((durationMs - resetMs) / durationMs) * 100));
-}
-
-function resetLabel(resetMs: number | null | undefined): string | null {
-  if (resetMs == null || !Number.isFinite(resetMs) || resetMs <= 0) return null;
-  const totalMinutes = Math.max(1, Math.round(resetMs / 60000));
-  if (totalMinutes < 60) return `${totalMinutes}m`;
-  const totalHours = Math.floor(totalMinutes / 60);
-  if (totalHours < 24) return `${totalHours}h`;
-  const days = Math.max(1, Math.round(totalHours / 24));
-  return `${days}d`;
-}
-
-function sourceStatusTone(source: ProviderQuotaSnapshot['source'] | undefined): ProviderStatusTone | null {
-  if (source === 'localLog') return 'warning';
-  if (source === 'api' || source === 'localRpc' || source === 'statusLine' || source === 'cache') return 'normal';
-  return null;
-}
-
-function providerStatusTone(quota: ProviderQuotaSnapshot, source: ProviderQuotaSnapshot['source'] | undefined): ProviderStatusTone {
-  const effectiveSource = source ?? quota.source;
-  if (quota.status?.connected === false) {
-    if (effectiveSource === 'statusLine') return 'normal';
-    if (effectiveSource === 'cache' || effectiveSource === 'localLog') return 'warning';
-    return 'danger';
-  }
-  const sourceTone = sourceStatusTone(effectiveSource);
-  if (sourceTone) return sourceTone;
-  if (!quota.status) return 'unknown';
-  return 'unknown';
-}
-
-function severity(quotaPct: number | null, elapsedPctValue: number | null): TaskbarQuotaSeverity {
-  if (quotaPct == null || elapsedPctValue == null) return 'unknown';
-  if (quotaPct >= 90 || quotaPct > elapsedPctValue + 25) return 'danger';
-  if (quotaPct > elapsedPctValue + 10) return 'warning';
-  return 'normal';
-}
-
-function windowSeverity(window: ProviderQuotaWindow | undefined, quotaPct: number | null, elapsedPctValue: number | null): TaskbarQuotaSeverity {
-  if (window?.limitState === 'unlimited' || window?.limitState === 'unreported') return 'normal';
-  return severity(quotaPct, elapsedPctValue);
-}
-
-function risk(quotaPct: number | null, elapsedPctValue: number | null): number {
-  if (quotaPct == null) return Number.NEGATIVE_INFINITY;
-  if (elapsedPctValue == null) return quotaPct;
-  return quotaPct - elapsedPctValue;
+  defaultOrder: number;
+  entryKey: string;
 }
 
 function targetMode(settings: AppSettings, targetId: string, defaultMode: QuotaDisplayMode): QuotaDisplayMode {
@@ -149,228 +53,143 @@ function configuredOrder(settings: AppSettings): Map<string, number> {
   return new Map((settings.quotaTargetOrder ?? []).map((targetId, index) => [targetId, index]));
 }
 
-function labelInitial(label: string): string {
-  return label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? '?';
-}
-
-function shortLabelCode(label: string, fallback: string): string {
-  const words = label
-    .toUpperCase()
-    .match(/[A-Z0-9]+/g) ?? [];
-  const initials = words.map(word => word[0]).join('');
-  if (initials.length >= 2) return initials.slice(0, 3);
-  const compact = words.join('');
-  if (compact.length >= 2) return compact.slice(0, 3);
-  return initials || compact || fallback;
-}
-
 export function resolveQuotaAbbreviation(
   targetId: string,
-  provider: string,
-  label: string,
+  defaultAbbreviation: string,
   settings: Pick<AppSettings, 'quotaTargetAbbreviations'>,
 ): string {
   const override = settings.quotaTargetAbbreviations?.[targetId];
   if (typeof override === 'string' && /^[A-Z0-9]{1,3}$/.test(override)) return override;
-  const normalizedLabel = label.trim().toLowerCase();
-  if (provider === 'claude') return normalizedLabel.includes('sonnet') ? 'S' : 'C';
-  if (provider === 'codex') return 'CX';
-  if (provider === 'antigravity') return shortLabelCode(label, 'AG');
-  if (provider === 'gemini') return 'G';
-  return labelInitial(label);
+  return /^[A-Z0-9]{1,3}$/.test(defaultAbbreviation) ? defaultAbbreviation : '?';
 }
 
-function makeBlock(
+function compactResetLabel(resetsAt: number | null, now: number): string | null {
+  if (resetsAt == null || !Number.isFinite(resetsAt) || resetsAt <= now) return null;
+  const totalMinutes = Math.max(1, Math.round((resetsAt - now) / 60_000));
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) return `${totalHours}h`;
+  return `${Math.max(1, Math.round(totalHours / 24))}d`;
+}
+
+function statusTone(snapshot: ProviderQuotaSnapshot): ProviderStatusTone {
+  if (snapshot.status?.connected === false) {
+    if (snapshot.source === 'cache' || snapshot.source === 'localLog') return 'warning';
+    if (snapshot.source === 'statusLine') return 'normal';
+    return 'danger';
+  }
+  if (snapshot.source === 'localLog') return 'warning';
+  if (snapshot.source === 'api' || snapshot.source === 'localRpc' || snapshot.source === 'statusLine' || snapshot.source === 'cache') return 'normal';
+  return 'unknown';
+}
+
+function severity(entry: QuotaEntry, elapsedPct: number | null): TaskbarQuotaSeverity {
+  if (entry.state === 'unlimited') return 'normal';
+  if (elapsedPct == null) {
+    if (entry.usedPct >= 90) return 'danger';
+    if (entry.usedPct >= 75) return 'warning';
+    return 'normal';
+  }
+  if (entry.usedPct >= 90 || entry.usedPct > elapsedPct + 25) return 'danger';
+  if (entry.usedPct > elapsedPct + 10) return 'warning';
+  return 'normal';
+}
+
+function candidate(
   provider: ProviderId,
-  targetId: string,
-  label: string,
-  quotaPctValue: number | null,
-  durationMs: number | undefined,
-  resetMs: number | null | undefined,
-  quotaWindow: ProviderQuotaWindow | undefined,
-  statusTone: ProviderStatusTone,
+  snapshot: ProviderQuotaSnapshot,
+  entry: QuotaEntry,
   settings: AppSettings,
   order: Map<string, number>,
-  naturalOrder: number,
+  now: number,
 ): CandidateBlock {
-  const safeResetMs = finiteMs(resetMs);
-  const elapsedPctValue = elapsedPct(durationMs, safeResetMs);
-  const noCap = quotaWindow?.limitState === 'unlimited' || quotaWindow?.limitState === 'unreported';
+  const elapsedPct = quotaElapsedPct(entry, now);
   return {
-    targetId,
+    targetId: entry.target.id,
     provider,
-    abbreviation: resolveQuotaAbbreviation(targetId, provider, label, settings),
-    label,
-    quotaPct: noCap ? null : quotaPctValue,
-    elapsedPct: noCap ? null : elapsedPctValue,
-    resetLabel: noCap ? 'unlimited' : resetLabel(safeResetMs),
-    severity: windowSeverity(quotaWindow, quotaPctValue, elapsedPctValue),
-    providerStatusTone: statusTone,
-    risk: noCap ? Number.NEGATIVE_INFINITY : risk(quotaPctValue, elapsedPctValue),
-    configuredOrder: order.get(targetId) ?? Number.MAX_SAFE_INTEGER,
-    naturalOrder,
+    abbreviation: resolveQuotaAbbreviation(entry.target.id, entry.target.taskbarAbbreviation, settings),
+    label: entry.target.label,
+    state: entry.state,
+    usedPct: entry.state === 'limited' ? entry.usedPct : null,
+    elapsedPct,
+    durationInferred: entry.durationInferred,
+    resetLabel: compactResetLabel(entry.resetsAt, now),
+    severity: severity(entry, elapsedPct),
+    providerStatusTone: statusTone(snapshot),
+    configuredOrder: order.get(entry.target.id) ?? Number.MAX_SAFE_INTEGER,
+    defaultOrder: entry.target.defaultOrder,
+    entryKey: entry.key,
   };
 }
 
-function addWindowCandidate(
-  rows: Record<TaskbarQuotaPeriod, CandidateBlock[]>,
-  provider: ProviderId,
-  quota: ProviderQuotaSnapshot,
-  targetId: string,
-  label: string,
-  windowKey: string,
-  settings: AppSettings,
-  order: Map<string, number>,
-  naturalOrder: number,
-): void {
-  const display = quota.windowDisplay?.[windowKey];
-  const period = periodFromDisplay(display, windowKey);
-  if (!period) return;
-  const window = quota.windows?.[windowKey];
-  if (!window) return;
-  const hasWindowSignal = window.source || finiteMs(window.resetMs) != null || window.resetLabel || window.pct > 0 || window.limitState === 'unlimited' || window.limitState === 'unreported';
-  if (!hasWindowSignal) return;
-  rows[period].push(makeBlock(
-    provider,
-    targetId,
-    label,
-    nullablePct(window.pct),
-    display?.durationMs,
-    window.resetMs,
-    window,
-    providerStatusTone(quota, window.source ?? quota.source),
-    settings,
-    order,
-    naturalOrder,
-  ));
-}
-
-function addModelCandidate(
-  rows: Record<TaskbarQuotaPeriod, CandidateBlock[]>,
-  provider: ProviderId,
-  quota: ProviderQuotaSnapshot,
-  model: ProviderModelQuota,
-  settings: AppSettings,
-  order: Map<string, number>,
-  naturalOrder: number,
-): void {
-  const period = periodFromDuration(model.durationMs) ?? (model.label === '5h' || model.label === '1w' ? model.label : null);
-  if (!period) return;
-  const groupKey = model.groupKey ?? modelQuotaGroupKey(model.model);
-  const targetId = quotaGroupId(provider, groupKey);
-  if (targetMode(settings, targetId, model.defaultMode ?? 'simple') === 'none') return;
-  rows[period].push(makeBlock(
-    provider,
-    targetId,
-    model.label || model.model,
-    quotaPctFromModel(model),
-    model.durationMs,
-    model.resetMs ?? null,
-    undefined,
-    providerStatusTone(quota, quota.source),
-    settings,
-    order,
-    naturalOrder,
-  ));
-}
-
-function markHiddenWindowTargets(
-  hiddenPeriods: Record<TaskbarQuotaPeriod, boolean>,
-  quota: ProviderQuotaSnapshot,
-  windowKeys: readonly string[],
-): void {
-  for (const windowKey of windowKeys) {
-    const period = periodFromDisplay(quota.windowDisplay?.[windowKey], windowKey);
-    if (period) hiddenPeriods[period] = true;
-  }
-}
-
-function modelPeriod(model: ProviderModelQuota): TaskbarQuotaPeriod | null {
-  return periodFromDuration(model.durationMs) ?? (model.label === '5h' || model.label === '1w' ? model.label : null);
-}
-
 function sortBlocks(blocks: CandidateBlock[]): CandidateBlock[] {
-  return [...blocks].sort((a, b) => {
-    if (a.configuredOrder !== b.configuredOrder) return a.configuredOrder - b.configuredOrder;
-    if (a.risk !== b.risk) return b.risk - a.risk;
-    return a.naturalOrder - b.naturalOrder;
-  });
+  return [...blocks].sort((left, right) => (
+    left.configuredOrder - right.configuredOrder
+    || left.defaultOrder - right.defaultOrder
+    || left.provider.localeCompare(right.provider)
+    || left.targetId.localeCompare(right.targetId)
+    || left.entryKey.localeCompare(right.entryKey)
+  ));
 }
 
-function taskbarQuotaMaxBlocks(settings: AppSettings): number {
+function publicBlock(block: CandidateBlock): TaskbarQuotaBlock {
+  const { configuredOrder: _configuredOrder, defaultOrder: _defaultOrder, entryKey: _entryKey, ...value } = block;
+  return value;
+}
+
+function maxBlocks(settings: AppSettings): number {
   const value = settings.taskbarQuotaMaxBlocks;
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.max(1, Math.min(3, Math.round(value)))
     : 2;
 }
 
-function publicBlock(block: CandidateBlock): TaskbarQuotaBlock {
-  const {
-    risk: _risk,
-    configuredOrder: _configuredOrder,
-    naturalOrder: _naturalOrder,
-    ...rest
-  } = block;
-  return rest;
+function line(period: QuotaPeriod, blocks: CandidateBlock[], hiddenCount = 0): TaskbarQuotaDisplayLine {
+  return {
+    period,
+    label: period === '5h' ? '5h' : '1w',
+    blocks: blocks.map(publicBlock),
+    hiddenCount,
+  };
 }
 
 export function buildTaskbarQuotaSnapshot(
-  state: Pick<AppState, 'settings' | 'providerQuotas' | 'lastUpdated'> & Partial<Pick<AppState, 'initialRefreshComplete'>>,
+  state: Pick<AppState, 'settings' | 'providerQuotas' | 'lastUpdated'>,
   resolvedTheme?: 'light' | 'dark',
-): TaskbarQuotaSnapshot {
+): TaskbarQuotaSnapshot | null {
   const settings = state.settings;
-  const maxBlocks = taskbarQuotaMaxBlocks(settings);
   const order = configuredOrder(settings);
-  const rows: Record<TaskbarQuotaPeriod, CandidateBlock[]> = { '5h': [], '1w': [] };
-  const hiddenPeriods: Record<TaskbarQuotaPeriod, boolean> = { '5h': false, '1w': false };
-  let naturalOrder = 0;
-  const waiting = state.initialRefreshComplete === false;
-  const hasOfflineProvider = settings.enabledProviders.some(provider => state.providerQuotas?.[provider]?.status?.connected === false);
-
+  const updatedAt = state.lastUpdated || Date.now();
+  const byPeriod: Record<QuotaPeriod, CandidateBlock[]> = { '5h': [], '7d': [] };
   for (const provider of settings.enabledProviders) {
-    const quota = state.providerQuotas?.[provider];
-    if (!quota) continue;
-    const coveredModelGroups = new Set<string>();
-    for (const group of quota.groups ?? []) {
-      coveredModelGroups.add(group.key);
-      const targetId = quotaGroupId(provider, group.key);
-      const groupOrder = naturalOrder;
-      naturalOrder += 1;
-      if (targetMode(settings, targetId, group.defaultMode) === 'none') {
-        markHiddenWindowTargets(hiddenPeriods, quota, group.windowKeys);
-        continue;
-      }
-      for (const windowKey of group.windowKeys) {
-        addWindowCandidate(rows, provider, quota, targetId, group.label, windowKey, settings, order, groupOrder);
-      }
-    }
-    for (const model of quota.models ?? []) {
-      const groupKey = model.groupKey ?? modelQuotaGroupKey(model.model);
-      if (coveredModelGroups.has(groupKey)) continue;
-      const modelOrder = naturalOrder;
-      naturalOrder += 1;
-      const targetId = quotaGroupId(provider, groupKey);
-      if (targetMode(settings, targetId, model.defaultMode ?? 'simple') === 'none') {
-        const period = modelPeriod(model);
-        if (period) hiddenPeriods[period] = true;
-        continue;
-      }
-      addModelCandidate(rows, provider, quota, model, settings, order, modelOrder);
+    const snapshot = state.providerQuotas[provider];
+    if (!snapshot) continue;
+    for (const entry of snapshot.entries) {
+      if (entry.period == null || targetMode(settings, entry.target.id, entry.target.defaultMode) === 'none') continue;
+      byPeriod[entry.period].push(candidate(provider, snapshot, entry, settings, order, updatedAt));
     }
   }
-
+  const periods = (['5h', '7d'] as const).filter(period => byPeriod[period].length > 0);
+  if (periods.length === 0) return null;
+  const cap = maxBlocks(settings);
+  let lines: [TaskbarQuotaDisplayLine, TaskbarQuotaDisplayLine];
+  if (periods.length === 2) {
+    const h5 = sortBlocks(byPeriod['5h']);
+    const d7 = sortBlocks(byPeriod['7d']);
+    lines = [line('5h', h5.slice(0, cap), Math.max(0, h5.length - cap)), line('7d', d7.slice(0, cap), Math.max(0, d7.length - cap))];
+  } else {
+    const period = periods[0];
+    const sorted = sortBlocks(byPeriod[period]);
+    const selected = sorted.slice(0, cap * 2);
+    const splitAt = Math.ceil(selected.length / 2);
+    lines = [
+      line(period, selected.slice(0, splitAt)),
+      line(period, selected.slice(splitAt), Math.max(0, sorted.length - selected.length)),
+    ];
+  }
   return {
-    updatedAt: state.lastUpdated || Date.now(),
+    updatedAt,
     theme: settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : (resolvedTheme ?? 'dark'),
-    rows: (['5h', '1w'] as const).map(period => {
-      const sorted = sortBlocks(rows[period]);
-      const blocks = sorted.slice(0, maxBlocks).map(publicBlock);
-      return {
-        period,
-        blocks,
-        hiddenCount: Math.max(0, sorted.length - blocks.length),
-        statusLabel: blocks.length > 0 ? null : waiting ? 'waiting' : hiddenPeriods[period] ? 'hidden' : hasOfflineProvider ? 'offline' : 'no data',
-      };
-    }),
+    lines,
   };
 }

@@ -15,14 +15,14 @@ async function loadModels() {
 }
 
 function resetSnapshot(overrides = {}) {
+  const capturedAt = Date.now();
+  const target = { id: 'codex.group.account', label: 'Codex', defaultMode: 'rich', defaultOrder: 0, taskbarAbbreviation: 'X' };
   return {
-    provider: 'codex', source: 'api', capturedAt: Date.now(),
-    groups: [
-      { key: 'account', label: 'Codex', windowKeys: ['h5', 'week'], defaultMode: 'rich', sortOrder: 0 },
-      { key: 'resets', label: 'Codex Resets', windowKeys: [], defaultMode: 'simple', sortOrder: 1 },
+    provider: 'codex', source: 'api', capturedAt,
+    entries: [
+      { key: 'codex.account.5h', target, scope: { kind: 'account' }, state: 'limited', usedPct: 23, resetsAt: capturedAt + 3_600_000, durationMs: 18_000_000, durationInferred: false, period: '5h', usageBinding: { kind: 'all-provider-models' } },
+      { key: 'codex.account.7d', target, scope: { kind: 'account' }, state: 'limited', usedPct: 58, resetsAt: capturedAt + 86_400_000, durationMs: 604_800_000, durationInferred: false, period: '7d', usageBinding: { kind: 'all-provider-models' } },
     ],
-    windowDisplay: { h5: { label: '5h' }, week: { label: '1w' } },
-    windows: { h5: { pct: 23, resetMs: 3600000, source: 'api' }, week: { pct: 58, resetMs: 86400000, source: 'api' } },
     status: { connected: true, code: 'ok' },
     resetCredits: {
       credits: [
@@ -38,19 +38,18 @@ function resetSnapshot(overrides = {}) {
 
 function baseOptions(snapshot) {
   return {
-    usage: { byProvider: {}, modelWindows: {} },
+    usage: { entryStats: {} },
     providerQuotas: { codex: snapshot },
     settings: { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
     historyWarmupPending: false, historyWarmupStartsAt: null, formatWarmupEta: () => '',
   };
 }
 
-test('resets group appears as a settings target when resetCredits present', async () => {
+test('reset credits stay outside dynamic quota settings targets', async () => {
   const M = await loadModels();
   const models = M.buildQuotaDisplayModels(baseOptions(resetSnapshot()));
   const resets = models.settingsTargets.find(g => g.label === 'Codex Resets');
-  assert.ok(resets, 'Codex Resets target should exist');
-  assert.equal(resets.provider, 'codex');
+  assert.equal(resets, undefined, 'only targets from canonical entries appear in settings');
 });
 
 test('resets group is dropped when resetCredits is null', async () => {
@@ -155,6 +154,7 @@ test('renderer normalizeProviderQuotas preserves resetCredits (R7-1 anti-假接�
   const out = normalizeProviderQuotas({
     codex: {
       provider: 'codex', source: 'api', capturedAt: 1,
+      entries: [],
       resetCredits: {
         credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z', title: 'leak' }],
         availableCount: 1, totalEarnedCount: 0, checkedAt: 123, countOnly: false, source: 'api',
@@ -370,7 +370,7 @@ test('PlanUsagePanel renders CODEX RESETS as a sibling row AFTER 5H/1W, not nest
   const mod = await mainView();
   const groupId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
   const props = {
-    usage: { byProvider: {}, modelWindows: {} },
+    usage: { entryStats: {} },
     providerQuotas: { codex: resetSnapshot() },
     settings: { enabledProviders: ['codex'], quotaTargetModes: { [groupId]: 'rich' }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
     historyWarmupPending: false, historyWarmupStartsAt: null,
@@ -433,17 +433,15 @@ test('PlanUsagePanel renders CODEX RESETS as a sibling row AFTER 5H/1W, not nest
 // F1 (BLOCKER): the `resets` group has empty windowKeys; the renderer IPC normalizer must
 // NOT drop it, else the "Codex Resets" settings row is invisible in the running app. Drives
 // the REAL App.tsx normalizer (anti-假接入), unlike the Task 6 test which bypasses it.
-test('renderer normalizeProviderQuotas keeps the empty-windowKeys resets group (F1)', async () => {
+test('renderer normalizeProviderQuotas keeps reset credits without synthesizing a quota group', async () => {
   const app = await importComponent(path.resolve('src', 'renderer', 'App.tsx'), 'AppGroupNorm');
   const out = app.normalizeProviderQuotas({ codex: resetSnapshot() });
-  const groups = out.codex.groups ?? [];
-  const resets = groups.find(g => g.key === 'resets');
-  assert.ok(resets, 'resets group survives renderer IPC normalization');
-  assert.deepEqual(resets.windowKeys, [], 'resets keeps its empty windowKeys');
-  // End-to-end: the normalized snapshot must still surface the settings target.
+  assert.ok(out.codex.resetCredits, 'reset credits survive renderer IPC normalization');
+  assert.equal('groups' in out.codex, false, 'legacy group shape is not recreated');
   const M = await loadModels();
   const models = M.buildQuotaDisplayModels(baseOptions(out.codex));
-  assert.ok(models.settingsTargets.find(g => g.label === 'Codex Resets'), 'settings target present after real IPC normalization');
+  assert.equal(models.settingsTargets.some(g => g.label === 'Codex Resets'), false);
+  assert.ok(models.resetCredits, 'sibling reset card remains available');
 });
 
 // F2 (MAJOR): reset card routing must respect the enabledProviders gate like every other group.
@@ -488,7 +486,7 @@ test('PlanUsagePanel renders the simple reset row when mode is simple (F5 integr
   const mod = await mainView();
   const groupId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
   const props = {
-    usage: { byProvider: {}, modelWindows: {} },
+    usage: { entryStats: {} },
     providerQuotas: { codex: resetSnapshot() },
     settings: { enabledProviders: ['codex'], quotaTargetModes: { [groupId]: 'simple' }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
     historyWarmupPending: false, historyWarmupStartsAt: null,
@@ -503,30 +501,28 @@ test('PlanUsagePanel renders the simple reset row when mode is simple (F5 integr
 
 // --- Task 10: settings row (rich/simple/none) — zero-new-UI reuse (visual contract §9.6) ---
 
-test('settings quota list yields a Codex Resets target with rich/simple/none controls', async () => {
+test('settings quota list excludes reset credits because they are not quota entries', async () => {
   const M = await loadModels();
   const options = M.buildQuotaTargetSettingsOptions(
     { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
     { codex: resetSnapshot() },
   );
   const row = options.find(o => o.label === 'Codex Resets');
-  assert.ok(row, 'Codex Resets settings row present');
-  assert.equal(row.defaultMode, 'simple');
-  assert.equal(row.period, 'reset credits');
-  assert.equal(row.taskbarEligible, false);
+  assert.equal(row, undefined);
+  assert.ok(options.find(o => o.label === 'Codex'), 'canonical account target remains configurable');
 });
 
-test('mode none hides the reset card (models.resetCredits null) but the settings row stays', async () => {
+test('retained reset mode none hides the sibling reset card without creating a settings target', async () => {
   const M = await loadModels();
   const groupId = M.quotaGroupId('codex', 'resets');
   const opts = baseOptions(resetSnapshot());
   opts.settings = { ...opts.settings, quotaTargetModes: { [groupId]: 'none' } };
   const hidden = M.buildQuotaDisplayModels(opts);
   assert.equal(hidden.resetCredits, null, 'none nulls the rendered card');
-  assert.ok(hidden.settingsTargets.find(g => g.label === 'Codex Resets'), 'settings target survives so the user can re-enable');
+  assert.equal(hidden.settingsTargets.some(g => g.label === 'Codex Resets'), false);
 });
 
-test('SettingsView DOM: Codex Resets row renders with Rich/Simple/None buttons (F10)', async () => {
+test('SettingsView DOM lists canonical quota targets only', async () => {
   const mod = await mainView();
   const SettingsView = mod.SettingsView;
   assert.ok(SettingsView, 'SettingsView exported from the bundle');
@@ -536,7 +532,8 @@ test('SettingsView DOM: Codex Resets row renders with Rich/Simple/None buttons (
     onSave: () => {}, onBack: () => {},
   };
   const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(SettingsView, props)));
-  assert.match(html, /Codex Resets/, 'settings row label present');
+  assert.doesNotMatch(html, /Codex Resets/, 'reset credits are not exposed as a dynamic quota target');
+  assert.match(html, /Codex/, 'canonical Codex account target is present');
   assert.match(html, />Rich<\/button>/);
   assert.match(html, />Simple<\/button>/);
   assert.match(html, />None<\/button>/);
@@ -622,7 +619,7 @@ test('reset simple row anchors to the Codex simple group when Codex has no rich 
   const accountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
   const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
   const props = {
-    usage: { byProvider: {}, modelWindows: {} },
+    usage: { entryStats: {} },
     providerQuotas: { codex: resetSnapshot() },
     // Force the Codex 5H/1W (account) group to simple, so there is no codex rich row to anchor after.
     settings: { enabledProviders: ['codex'], quotaTargetModes: { [accountId]: 'simple', [resetsId]: 'simple' }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
@@ -634,12 +631,12 @@ test('reset simple row anchors to the Codex simple group when Codex has no rich 
   assert.match(html.slice(bodyStart), /data-testid="reset-simple-line"/, 'reset simple line still rendered when Codex account is simple');
 });
 
-test('PlanUsagePanel honors Codex Resets target order', async () => {
+test('PlanUsagePanel keeps reset credits outside quota target ordering', async () => {
   const mod = await mainView();
   const accountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
   const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
   const props = {
-    usage: { byProvider: {}, modelWindows: {} },
+    usage: { entryStats: {} },
     providerQuotas: { codex: resetSnapshot() },
     settings: { enabledProviders: ['codex'], quotaTargetModes: { [resetsId]: 'simple', [accountId]: 'rich' }, quotaTargetOrder: [resetsId, accountId], currency: 'USD', usdToKrw: 1300 },
     historyWarmupPending: false, historyWarmupStartsAt: null,
@@ -648,23 +645,27 @@ test('PlanUsagePanel honors Codex Resets target order', async () => {
   const bodyStart = html.indexOf('data-testid="plan-usage-body"');
   const resetStart = html.indexOf('data-testid="reset-simple-line"', bodyStart);
   const richStart = html.indexOf('data-testid="plan-usage-rich-row"', bodyStart);
-  assert.ok(resetStart !== -1 && richStart !== -1 && resetStart < richStart, 'reset row follows target order before account');
+  assert.ok(resetStart !== -1 && richStart !== -1 && richStart < resetStart, 'sibling reset row follows dynamic quota targets');
 });
 
-test('PlanUsagePanel honors mixed simple-reset-rich target order', async () => {
+test('PlanUsagePanel appends reset credits after mixed dynamic quota targets', async () => {
   const mod = await mainView();
   const codexAccountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
   const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
   const claudeAccountId = mod.quotaGroupId ? mod.quotaGroupId('claude', 'account') : 'claude.group.account';
   const props = {
-    usage: { byProvider: {}, modelWindows: {} },
+    usage: { entryStats: {} },
     providerQuotas: {
       codex: resetSnapshot(),
       claude: {
         provider: 'claude', source: 'api', capturedAt: Date.now(),
-        groups: [{ key: 'account', label: 'Claude', windowKeys: ['h5'], defaultMode: 'rich', sortOrder: 0 }],
-        windowDisplay: { h5: { label: '5h' } },
-        windows: { h5: { pct: 11, resetMs: 3600000, source: 'api' } },
+        entries: [{
+          key: 'claude.account.5h',
+          target: { id: 'claude.group.account', label: 'Claude', defaultMode: 'rich', defaultOrder: 0, taskbarAbbreviation: 'C' },
+          scope: { kind: 'account' }, state: 'limited', usedPct: 11,
+          resetsAt: Date.now() + 3_600_000, durationMs: 18_000_000,
+          durationInferred: false, period: '5h', usageBinding: { kind: 'all-provider-models' },
+        }],
         status: { connected: true, code: 'ok' },
       },
     },
@@ -683,5 +684,5 @@ test('PlanUsagePanel honors mixed simple-reset-rich target order', async () => {
   const resetStart = html.indexOf('data-testid="reset-simple-line"', bodyStart);
   const richStart = html.indexOf('data-testid="plan-usage-rich-row"', bodyStart);
   assert.ok(simpleStart !== -1 && resetStart !== -1 && richStart !== -1);
-  assert.ok(simpleStart < resetStart && resetStart < richStart, 'mixed target order is simple group, reset row, then rich row');
+  assert.ok(simpleStart < richStart && richStart < resetStart, 'dynamic targets retain order and reset stays a trailing sibling');
 });

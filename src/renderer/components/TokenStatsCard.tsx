@@ -2,6 +2,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import { WindowStats } from '../types';
+import type { QuotaEntry } from '../../shared/quotaTypes';
+import { quotaElapsedPct } from '../../shared/quotaDomain';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtDuration, quotaPctBarColor, quotaSourceBadgeToneStyle, Theme } from '../theme';
 import type { LimitDataState, LimitSourceTone } from '../limitDisplay';
@@ -26,20 +28,14 @@ function formatUsagePct(pct: number): string {
   return `${Math.round(pct)}%`;
 }
 
-function timeElapsedPct(durationMs: number | null | undefined, resetMs: number | null | undefined): number | null {
-  if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
-  return Math.max(0, Math.min(100, ((durationMs - resetMs) / durationMs) * 100));
-}
-
 interface Props {
   provider: string;
   period: string;
   stats: WindowStats;
+  showLocalStats: boolean;
   currency: string;
   usdToKrw: number;
-  limitPct?: number;
-  resetMs?: number | null;
-  resetLabel?: string;
+  quotaEntry: QuotaEntry;
   apiConnected?: boolean;
   hideCost?: boolean;
   hero?: boolean;
@@ -48,12 +44,10 @@ interface Props {
   limitSourceTitle?: string;
   limitSourceTone?: LimitSourceTone;
   limitDataState?: LimitDataState;
-  limitState?: 'unlimited' | 'unreported';
   pendingLimit?: boolean;
   pendingLimitLabel?: string;
   pendingLimitTitle?: string;
   cacheMetricTitle?: string;
-  durationMs?: number;
   accountTooltip?: string;
 }
 
@@ -193,11 +187,10 @@ function TokenStatsCard({
   provider,
   period,
   stats,
+  showLocalStats,
   currency,
   usdToKrw,
-  limitPct,
-  resetMs,
-  resetLabel,
+  quotaEntry,
   apiConnected,
   hideCost,
   hero,
@@ -206,12 +199,10 @@ function TokenStatsCard({
   limitSourceTitle,
   limitSourceTone = 'neutral',
   limitDataState,
-  limitState,
   pendingLimit = false,
   pendingLimitLabel,
   pendingLimitTitle,
   cacheMetricTitle,
-  durationMs,
   accountTooltip,
 }: Props) {
   const C = useTheme();
@@ -221,13 +212,13 @@ function TokenStatsCard({
 
   const costStr = fmtCost(stats.costUSD, currency, usdToKrw);
   const costColor = stats.costUSD > 5 ? C.barRed : stats.costUSD > 2 ? C.barYellow : C.textDim;
-  const showLimitBar = limitPct != null;
-  const barPct = Math.max(0, Math.min(100, limitPct ?? 0));
-  const isUnlimited = limitState === 'unlimited';
-  const isUnreported = limitState === 'unreported';
-  const noCapState = isUnlimited || isUnreported;
+  const showLimitBar = true;
+  const barPct = quotaEntry.state === 'limited' ? Math.max(0, Math.min(100, quotaEntry.usedPct)) : 0;
+  const isUnlimited = quotaEntry.state === 'unlimited';
+  const noCapState = isUnlimited;
   const barColor = pendingLimit || noCapState ? C.accent : quotaPctBarColor(barPct, C);
-  const timeElapsed = pendingLimit ? null : timeElapsedPct(durationMs, resetMs);
+  const timeElapsed = pendingLimit ? null : quotaElapsedPct(quotaEntry, Date.now());
+  const resetMs = quotaEntry.resetsAt == null ? null : Math.max(0, quotaEntry.resetsAt - Date.now());
   const resolvedLimitState: LimitDataState = pendingLimit
     ? 'syncing'
     : (limitDataState ?? (apiConnected === false && barPct === 0 && !limitSourceLabel ? 'waiting' : 'ready'));
@@ -236,8 +227,6 @@ function TokenStatsCard({
   let resetStr = '';
   if (isUnlimited) {
     resetStr = t('tokenStatsCard.unlimitedReset');
-  } else if (isUnreported) {
-    resetStr = t('tokenStatsCard.unreportedReset');
   } else if (resetMs && resetMs > 0) {
     const approx = apiConnected === false ? '~' : '';
     const durationStr = `↻${approx}${fmtDuration(resetMs)}`;
@@ -247,8 +236,6 @@ function TokenStatsCard({
     } else {
       resetStr = durationStr;
     }
-  } else if (resetLabel) {
-    resetStr = resetLabel;
   }
 
   const cache = cacheBadge(stats.cacheEfficiency, C);
@@ -294,13 +281,13 @@ function TokenStatsCard({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, marginBottom: 2 }}>
           <span title={displayTitleTooltip} style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {displayTitle}
-            {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
+            {!displayLimitSourceLabel && apiConnected === false && barPct > 0 && (
               <span style={{ opacity: 0.6, fontWeight: 400, marginLeft: 4 }}>{t('tokenStatsCard.cachedSuffix')}</span>
             )}
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flexShrink: 0 }}>
             {sourceChip}
-            {cache && (
+            {showLocalStats && cache && (
               <span title={cacheTitle} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5, background: cache.bg, color: cache.color, flexShrink: 0, maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {cache.label}
               </span>
@@ -311,8 +298,8 @@ function TokenStatsCard({
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
           <div style={{ fontSize: 30, fontWeight: 800, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, lineHeight: 1.1, fontFamily: C.fontMono }}>
             {noCapState ? (
-              <span title={t(isUnlimited ? 'tokenStatsCard.unlimitedTooltip' : 'tokenStatsCard.unreportedTooltip')} style={{ fontSize: 24 }}>
-                {t(isUnlimited ? 'tokenStatsCard.unlimited' : 'tokenStatsCard.unreported')}
+              <span title={t('tokenStatsCard.unlimitedTooltip')} style={{ fontSize: 24 }}>
+                {t('tokenStatsCard.unlimited')}
               </span>
             ) : noData ? <LimitStatusIndicator state={resolvedLimitState} hero /> : formatUsagePct(barPct)}
           </div>
@@ -331,7 +318,9 @@ function TokenStatsCard({
               }}
             >
               <div style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('tokenStatsCard.timeElapsed')}</div>
-              <div style={{ fontSize: 12, color: C.textDim }}>{Math.round(timeElapsed)}%</div>
+              <div title={quotaEntry.durationInferred ? t('mainView.quota.estimatedDuration') : undefined} style={{ fontSize: 12, color: C.textDim }}>
+                {quotaEntry.durationInferred ? '~' : ''}{Math.round(timeElapsed)}%
+              </div>
             </div>
           )}
         </div>
@@ -346,20 +335,22 @@ function TokenStatsCard({
           )}
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', marginBottom: 4 }}>
-          <TokenDotRow label="In" value={stats.inputTokens} color={C.input} />
-          <TokenDotRow label="Out" value={stats.outputTokens} color={C.output} />
-          <TokenDotRow label="Cache" value={stats.cacheReadTokens + stats.cacheCreationTokens} color={C.cacheR} />
-          {breakdownTokens === 0 && stats.totalTokens > 0 && (
-            <TokenDotRow label="Tok" value={stats.totalTokens} color={C.textMuted} />
-          )}
-        </div>
+        {showLocalStats && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', marginBottom: 4 }}>
+            <TokenDotRow label="In" value={stats.inputTokens} color={C.input} />
+            <TokenDotRow label="Out" value={stats.outputTokens} color={C.output} />
+            <TokenDotRow label="Cache" value={stats.cacheReadTokens + stats.cacheCreationTokens} color={C.cacheR} />
+            {breakdownTokens === 0 && stats.totalTokens > 0 && (
+              <TokenDotRow label="Tok" value={stats.totalTokens} color={C.textMuted} />
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
           {(noCapState || !noData) && resetStr ? (
             <span style={{ fontSize: 10, color: C.textMuted }}>{resetStr}</span>
           ) : <span />}
-          {!hideCost && stats.costUSD > 0 && (
+          {showLocalStats && !hideCost && stats.costUSD > 0 && (
             <span title={t('tokenStatsCard.usageWindowCost')} style={{ fontSize: 12, fontWeight: 700, color: costColor, fontFamily: C.fontMono }}>{costStr}</span>
           )}
         </div>
@@ -375,22 +366,22 @@ function TokenStatsCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: showLimitBar ? 5 : 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontSize: 11, color: C.textMuted }}>{provider} · {period}</span>
-          {!displayLimitSourceLabel && apiConnected === false && limitPct != null && limitPct > 0 && (
+          {!displayLimitSourceLabel && apiConnected === false && barPct > 0 && (
             <span style={{ fontSize: 8, color: C.textMuted, opacity: 0.6 }}>{t('tokenStatsCard.cachedSuffix')}</span>
           )}
           {sourceChip}
-          {cache && (
+          {showLocalStats && cache && (
             <span title={cacheTitle} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: cache.bg, color: cache.color }}>
               {cache.label}
             </span>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-          <span style={{ fontSize: 11, color: C.textMuted }}>{fmtTokens(stats.totalTokens)} tok</span>
-          {stats.requestCount > 0 && (
+          {showLocalStats && <span style={{ fontSize: 11, color: C.textMuted }}>{fmtTokens(stats.totalTokens)} tok</span>}
+          {showLocalStats && stats.requestCount > 0 && (
             <span style={{ fontSize: 11, color: C.textMuted }}>{stats.requestCount} req</span>
           )}
-          {!hideCost && (
+          {showLocalStats && !hideCost && (
             <span title={t('tokenStatsCard.usageWindowCost')} style={{ fontSize: 12, fontWeight: 600, color: costColor }}>{costStr}</span>
           )}
         </div>
@@ -409,7 +400,7 @@ function TokenStatsCard({
               )}
             </div>
             <span style={{ fontSize: 10, fontWeight: 600, color: noData || cachedDisconnected ? C.textMuted : limitValueColor, width: noData || noCapState ? 72 : 28, textAlign: 'right', flexShrink: 0, fontFamily: C.fontMono }}>
-              {noCapState ? t(isUnlimited ? 'tokenStatsCard.unlimited' : 'tokenStatsCard.unreported') : noData ? <LimitStatusIndicator state={resolvedLimitState} /> : formatUsagePct(barPct)}
+              {noCapState ? t('tokenStatsCard.unlimited') : noData ? <LimitStatusIndicator state={resolvedLimitState} /> : formatUsagePct(barPct)}
             </span>
             {(noCapState || !noData) && resetStr && (
               <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>{resetStr}</span>

@@ -1,11 +1,11 @@
-import type { ProviderId, ProviderQuotaSnapshot } from './providers/types';
+import type { ProviderId, ProviderQuotaSnapshot } from '../shared/quotaTypes';
 import { cacheEfficiencyDenominator, cacheEfficiencyPct } from './cacheMetrics';
 import { weekKey } from '../shared/bucketKey';
 import {
-  buildProviderWindowTargets,
-  targetAcceptsModel,
-} from './usageWindowTargets';
-import type { UsageData, UsageWindowResetHints, WindowStats } from './usageWindows';
+  buildQuotaUsageTargets,
+  usageBindingAcceptsModel,
+} from './quotaUsageTargets';
+import type { UsageData, WindowStats } from './usageWindows';
 import type { UsageTrendData, UsageTrendPoint } from './usageTrendTypes';
 import {
   usageProviderVisible,
@@ -113,7 +113,6 @@ export async function loadUsageIndexProjection(
 
 export function computeUsageFromUsageIndex(
   projections: readonly UsageIndexProjection[],
-  resets: UsageWindowResetHints = {},
   nowMs = Date.now(),
   visibilityFilter?: UsageVisibilityFilter,
   providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>> = {},
@@ -126,15 +125,13 @@ export function computeUsageFromUsageIndex(
   const timelineStart = currentWeekStart - 19 * WEEK_MS;
   const visibleProjections = projections.filter(projection => usageProviderVisible(visibilityFilter, projection.provider));
   const visibleProviders = new Set(visibleProjections.map(projection => projection.provider));
-  const providerWindowTargets = buildProviderWindowTargets(
+  const usageTargets = buildQuotaUsageTargets(
     visibleProviders,
     providerQuotas,
-    resets,
     nowMs,
-    currentWeekStart,
   );
-  const providerWindows = new Map<ProviderId, NonNullable<UsageData['byProvider'][ProviderId]>>();
-  const providerModelWindows = new Map<ProviderId, NonNullable<UsageData['modelWindows'][ProviderId]>>();
+  const fixedPeriodByProvider = new Map<ProviderId, NonNullable<UsageData['fixedPeriodByProvider'][ProviderId]>>();
+  const entryStats = new Map<string, WindowStats>();
   const modelMap = new Map<string, UsageData['models'][number]>();
   const heatMap7 = new Map<string, UsageData['heatmap'][number]>();
   const heatMap30 = new Map<string, UsageData['heatmap30'][number]>();
@@ -158,25 +155,12 @@ export function computeUsageFromUsageIndex(
     { period: 'evening', label: 'Evening (18-24h)', tokens: 0, costUSD: 0, requestCount: 0 },
   ];
 
-  const getProviderWindowUsage = (provider: ProviderId): NonNullable<UsageData['byProvider'][ProviderId]> => {
-    const existing = providerWindows.get(provider);
+  const getFixedPeriodUsage = (provider: ProviderId): NonNullable<UsageData['fixedPeriodByProvider'][ProviderId]> => {
+    const existing = fixedPeriodByProvider.get(provider);
     if (existing) return existing;
-    const next = { windows: {} };
-    providerWindows.set(provider, next);
+    const next = { periods: {} };
+    fixedPeriodByProvider.set(provider, next);
     return next;
-  };
-  const getProviderModelWindowUsage = (provider: ProviderId): NonNullable<UsageData['modelWindows'][ProviderId]> => {
-    const existing = providerModelWindows.get(provider);
-    if (existing) return existing;
-    const next = { windows: {} };
-    providerModelWindows.set(provider, next);
-    return next;
-  };
-  const getProviderModelWindow = (provider: ProviderId, windowKey: string, model: string): WindowStats => {
-    const usage = getProviderModelWindowUsage(provider);
-    usage.windows[windowKey] ??= {};
-    usage.windows[windowKey][model] ??= emptyWindow();
-    return usage.windows[windowKey][model];
   };
   const addHeatmap = (
     map: Map<string, UsageData['heatmap'][number]>,
@@ -210,10 +194,9 @@ export function computeUsageFromUsageIndex(
     }
   };
 
-  for (const [provider, targets] of providerWindowTargets) {
-    if (!usageProviderVisible(visibilityFilter, provider)) continue;
-    const usage = getProviderWindowUsage(provider);
-    for (const target of targets) usage.windows[target.windowKey] ??= emptyWindow();
+  for (const target of usageTargets.fixed) {
+    if (!usageProviderVisible(visibilityFilter, target.provider)) continue;
+    getFixedPeriodUsage(target.provider).periods[target.period] ??= emptyWindow();
   }
 
   for (const projection of visibleProjections) {
@@ -265,32 +248,36 @@ export function computeUsageFromUsageIndex(
         todayCacheDenominator += cacheEfficiencyDenominator(provider, metrics);
       }
 
-      const usage = getProviderWindowUsage(provider);
-      const addedWindowKeys = new Set<string>();
-      for (const target of providerWindowTargets.get(provider) ?? []) {
-        if (timestampMs < target.startMs || !targetAcceptsModel(target, model)) continue;
-        const key = `${target.windowKey}\0${model}`;
-        if (addedWindowKeys.has(key)) continue;
-        addedWindowKeys.add(key);
-        usage.windows[target.windowKey] ??= emptyWindow();
-        addMetrics(usage.windows[target.windowKey], metrics);
-        addMetrics(getProviderModelWindow(provider, target.windowKey, model), metrics);
+      for (const target of usageTargets.fixed) {
+        if (target.provider !== provider || timestampMs < target.startMs) continue;
+        const usage = getFixedPeriodUsage(provider);
+        usage.periods[target.period] ??= emptyWindow();
+        addMetrics(usage.periods[target.period]!, metrics);
+      }
+      for (const target of usageTargets.entries) {
+        if (target.provider !== provider
+          || timestampMs < target.startMs
+          || !usageBindingAcceptsModel(target.binding, model)) continue;
+        const stats = entryStats.get(target.entryKey) ?? emptyWindow();
+        addMetrics(stats, metrics);
+        entryStats.set(target.entryKey, stats);
       }
     }
   }
 
-  for (const [provider, usage] of providerWindows) {
-    for (const window of Object.values(usage.windows)) window.cacheEfficiency = cacheEfficiencyPct(provider, window);
+  for (const [provider, usage] of fixedPeriodByProvider) {
+    for (const window of Object.values(usage.periods)) if (window) window.cacheEfficiency = cacheEfficiencyPct(provider, window);
   }
-  for (const [provider, usage] of providerModelWindows) {
-    for (const models of Object.values(usage.windows)) {
-      for (const window of Object.values(models)) window.cacheEfficiency = cacheEfficiencyPct(provider, window);
-    }
+  for (const [entryKey, stats] of entryStats) {
+    const provider = providerQuotas.claude?.entries.some(entry => entry.key === entryKey) ? 'claude'
+      : providerQuotas.codex?.entries.some(entry => entry.key === entryKey) ? 'codex'
+        : 'antigravity';
+    stats.cacheEfficiency = cacheEfficiencyPct(provider, stats);
   }
 
   return {
-    byProvider: Object.fromEntries(providerWindows),
-    modelWindows: Object.fromEntries(providerModelWindows),
+    fixedPeriodByProvider: Object.fromEntries(fixedPeriodByProvider),
+    entryStats: Object.fromEntries(entryStats),
     models: [...modelMap.values()].filter(model => model.tokens > 0).sort((a, b) => b.tokens - a.tokens),
     heatmap: [...heatMap7.values()],
     heatmap30: [...heatMap30.values()],

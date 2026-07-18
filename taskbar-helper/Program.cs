@@ -9,9 +9,10 @@ namespace WhereMyTokens.Taskbar;
 
 internal static class Program
 {
-    private static readonly HashSet<string> ValidTaskbarPeriods = new(StringComparer.Ordinal) { "5h", "1w" };
+    private static readonly HashSet<string> ValidTaskbarPeriods = new(StringComparer.Ordinal) { "5h", "7d" };
     private static readonly HashSet<string> ValidQuotaSeverities = new(StringComparer.Ordinal) { "normal", "warning", "danger", "unknown" };
     private static readonly HashSet<string> ValidProviderStatusTones = new(StringComparer.Ordinal) { "normal", "warning", "danger", "unknown" };
+    private static readonly HashSet<string> ValidQuotaStates = new(StringComparer.Ordinal) { "limited", "unlimited" };
 
     [STAThread]
     private static void Main()
@@ -70,13 +71,12 @@ internal static class Program
 
     private static bool IsValidSnapshot(TaskbarQuotaSnapshot snapshot)
     {
-        if (snapshot.Rows is not { Length: 2 }) return false;
-        if (!string.Equals(snapshot.Rows[0]?.Period, "5h", StringComparison.Ordinal)) return false;
-        if (!string.Equals(snapshot.Rows[1]?.Period, "1w", StringComparison.Ordinal)) return false;
-        foreach (var row in snapshot.Rows)
+        if (snapshot.Lines is not { Length: 2 }) return false;
+        foreach (var row in snapshot.Lines)
         {
             if (row is null
                 || !ValidTaskbarPeriods.Contains(row.Period)
+                || (row.Label != "5h" && row.Label != "1w")
                 || row.Blocks is null
                 || row.Blocks.Length > 3
                 || row.HiddenCount < 0)
@@ -90,6 +90,10 @@ internal static class Program
                     || string.IsNullOrWhiteSpace(block.Provider)
                     || string.IsNullOrWhiteSpace(block.Abbreviation)
                     || string.IsNullOrWhiteSpace(block.Label)
+                    || !ValidQuotaStates.Contains(block.State)
+                    || (block.State == "limited" && (block.UsedPct is null or < 0 or > 100))
+                    || (block.State == "unlimited" && block.UsedPct is not null)
+                    || block.ElapsedPct is < 0 or > 100
                     || !ValidQuotaSeverities.Contains(block.Severity)
                     || !ValidProviderStatusTones.Contains(block.ProviderStatusTone))
                 {
@@ -406,16 +410,18 @@ internal static class JsonOptions
     };
 }
 
-internal sealed record TaskbarQuotaSnapshot(long UpdatedAt, string? Theme, TaskbarQuotaPeriodRow[] Rows);
-internal sealed record TaskbarQuotaPeriodRow(string Period, TaskbarQuotaBlock[] Blocks, int HiddenCount = 0, string? StatusLabel = null);
+internal sealed record TaskbarQuotaSnapshot(long UpdatedAt, string? Theme, TaskbarQuotaDisplayLine[] Lines);
+internal sealed record TaskbarQuotaDisplayLine(string Period, string Label, TaskbarQuotaBlock[] Blocks, int HiddenCount = 0);
 internal sealed record LayoutState(int X, int Y);
 internal sealed record TaskbarQuotaBlock(
     string TargetId,
     string Provider,
     string Abbreviation,
     string Label,
-    double? QuotaPct,
+    string State,
+    double? UsedPct,
     double? ElapsedPct,
+    bool DurationInferred,
     string? ResetLabel,
     string ProviderStatusTone,
     string Severity);
@@ -519,10 +525,10 @@ internal sealed class TaskbarQuotaCanvas : Control
         if (columns[BlockTwoColumn].Width > 0) DrawDivider(e.Graphics, columns.BlockOneDivider);
         if (columns[BlockThreeColumn].Width > 0) DrawDivider(e.Graphics, columns.BlockTwoDivider);
 
-        for (var index = 0; index < Math.Min(2, snapshot.Rows.Length); index++)
+        for (var index = 0; index < Math.Min(2, snapshot.Lines.Length); index++)
         {
             var rowBounds = new Rectangle(content.Left, content.Top + (index * RowHeight), content.Width, RowHeight);
-            DrawRow(e.Graphics, snapshot.Rows[index], columns, rowBounds);
+            DrawRow(e.Graphics, snapshot.Lines[index], columns, rowBounds);
         }
     }
 
@@ -597,7 +603,7 @@ internal sealed class TaskbarQuotaCanvas : Control
     {
         var width = 0;
         var hasQuotaBlock = false;
-        foreach (var row in snapshot.Rows.Take(2))
+        foreach (var row in snapshot.Lines.Take(2))
         {
             var block = row.Blocks.ElementAtOrDefault(blockIndex);
             if (block is not null)
@@ -616,10 +622,6 @@ internal sealed class TaskbarQuotaCanvas : Control
                 width = Math.Max(width, MeasureOverflowBadgeWidth(graphics, row.HiddenCount));
             }
         }
-        if (!hasQuotaBlock && blockIndex == 0 && snapshot.Rows.Take(2).Any(row => row.Blocks.Length == 0 && !string.IsNullOrWhiteSpace(row.StatusLabel)))
-        {
-            return Math.Min(maxBlockWidth, Math.Max(Scaled(MinimumBlockWidth), MeasureStatusWidth(graphics, snapshot, maxBlockWidth)));
-        }
         if (width <= 0) return 0;
         return FinalizeMeasuredColumnWidth(width, hasQuotaBlock, maxBlockWidth);
     }
@@ -634,17 +636,6 @@ internal sealed class TaskbarQuotaCanvas : Control
     {
         var textWidth = MeasureDrawStringWidth(graphics, $"+{hiddenCount}", _blockFont, Scaled(MaximumMaximumBlockWidth));
         return textWidth + (Scaled(OverflowBadgeHorizontalPadding) * 2);
-    }
-
-    private int MeasureStatusWidth(Graphics graphics, TaskbarQuotaSnapshot snapshot, int maxBlockWidth)
-    {
-        var width = 0;
-        foreach (var row in snapshot.Rows.Take(2))
-        {
-            if (row.Blocks.Length > 0 || string.IsNullOrWhiteSpace(row.StatusLabel)) continue;
-            width = Math.Max(width, MeasureDrawStringWidth(graphics, row.StatusLabel, _blockFont, maxBlockWidth));
-        }
-        return width + (Scaled(BlockHorizontalPadding) * 2);
     }
 
     private int MeasureBlockWidth(Graphics graphics, TaskbarQuotaBlock? block, int maxBlockWidth)
@@ -672,7 +663,7 @@ internal sealed class TaskbarQuotaCanvas : Control
     }
 
     private static int VisibleQuotaBlockCount(TaskbarQuotaSnapshot snapshot)
-        => Math.Clamp(snapshot.Rows.Take(2).Select(row => Math.Min(3, row.Blocks.Length)).DefaultIfEmpty(0).Max(), 1, 3);
+        => Math.Clamp(snapshot.Lines.Take(2).Select(row => Math.Min(3, row.Blocks.Length)).DefaultIfEmpty(0).Max(), 1, 3);
 
     private int MaximumBlockWidthFor(int availableWidth, int visibleBlockCount)
     {
@@ -696,14 +687,10 @@ internal sealed class TaskbarQuotaCanvas : Control
         return width;
     }
 
-    private void DrawRow(Graphics graphics, TaskbarQuotaPeriodRow row, ColumnLayout columns, Rectangle rowBounds)
+    private void DrawRow(Graphics graphics, TaskbarQuotaDisplayLine row, ColumnLayout columns, Rectangle rowBounds)
     {
-        DrawText(graphics, PeriodText(row.Period), _periodFont, _palette.Text, RowCell(columns[PeriodColumn], rowBounds));
-        if (row.Blocks.Length == 0)
-        {
-            DrawText(graphics, row.StatusLabel ?? "--", _blockFont, _palette.Muted, RowCell(columns[BlockOneColumn], rowBounds));
-            return;
-        }
+        DrawText(graphics, row.Label, _periodFont, _palette.Text, RowCell(columns[PeriodColumn], rowBounds));
+        if (row.Blocks.Length == 0) return;
         DrawBlock(graphics, row.Blocks.ElementAtOrDefault(0), RowCell(columns[BlockOneColumn], rowBounds));
         DrawBlock(graphics, row.Blocks.ElementAtOrDefault(1), RowCell(columns[BlockTwoColumn], rowBounds));
         var thirdCell = RowCell(columns[BlockThreeColumn], rowBounds);
@@ -813,26 +800,17 @@ internal sealed class TaskbarQuotaCanvas : Control
         return new Rectangle(column.Left, top, column.Width, height);
     }
 
-    private static string PeriodText(string period) => period.ToUpperInvariant();
-
     private static string QuotaPrefixLabel(TaskbarQuotaBlock block) => $"{block.Abbreviation}:";
 
-    private static string BlockDetailText(TaskbarQuotaBlock block) => $"{QuotaPairText(block)}{ResetText(block)}";
+    private static string QuotaUsedText(TaskbarQuotaBlock block)
+        => block.State == "unlimited" ? "∞" : PctText(block.UsedPct);
 
-    private static string QuotaPairText(TaskbarQuotaBlock block)
-    {
-        var quota = QuotaUsedText(block);
-        var elapsed = PctText(block.ElapsedPct);
-        return $"{quota}/{elapsed}";
-    }
+    private static string ElapsedText(TaskbarQuotaBlock block)
+        => block.ElapsedPct is null ? "" : $"/{(block.DurationInferred ? "~" : "")}{PctText(block.ElapsedPct)}";
 
-    private static string QuotaUsedText(TaskbarQuotaBlock block) => PctText(block.QuotaPct);
+    private static string ResetText(TaskbarQuotaBlock block) => string.IsNullOrWhiteSpace(block.ResetLabel) ? "" : $" {block.ResetLabel}";
 
-    private static string ElapsedText(TaskbarQuotaBlock block) => $"/{PctText(block.ElapsedPct)}";
-
-    private static string ResetText(TaskbarQuotaBlock block) => string.IsNullOrWhiteSpace(block.ResetLabel) ? " --" : $" {block.ResetLabel}";
-
-    private static string PctText(double? value) => value is null ? "--" : $"{Math.Round(value.Value):0}%";
+    private static string PctText(double? value) => value is null ? "" : $"{Math.Round(value.Value):0}%";
 
     private Color QuotaColorFor(string severity) => severity switch
     {

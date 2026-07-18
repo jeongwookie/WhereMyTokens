@@ -36,7 +36,7 @@ export interface TaskbarQuotaHelperManagerOptions {
   helperExists?: (helperPath: string) => boolean;
   allowDevHelperFallback?: boolean;
   spawnHelper?: (helperPath: string) => ChildLike;
-  buildSnapshot?: (state: AppState) => TaskbarQuotaSnapshot;
+  buildSnapshot?: (state: AppState) => TaskbarQuotaSnapshot | null;
   openDashboard?: () => void;
   onRuntimeDisabled?: () => void;
   backpressureTimeoutMs?: number;
@@ -306,13 +306,12 @@ export function createTaskbarQuotaHelperManager(options: TaskbarQuotaHelperManag
     }
   }
 
-  function writeSnapshot(state: AppState): void {
+  function writeSnapshot(snapshot: TaskbarQuotaSnapshot): void {
     const current = child;
     if (!current?.stdin) {
       stopActive();
       return;
     }
-    const snapshot = snapshotBuilder(state);
     const line = `${JSON.stringify(snapshot)}\n`;
     if (waitingForDrain || waitingForRenderAck) {
       pendingSnapshotLine = line;
@@ -329,8 +328,13 @@ export function createTaskbarQuotaHelperManager(options: TaskbarQuotaHelperManag
         return;
       }
       if (runtimeDisabled) return;
+      const snapshot = snapshotBuilder(state);
+      if (snapshot == null) {
+        stopActive();
+        return;
+      }
       if (!start()) return;
-      writeSnapshot(state);
+      writeSnapshot(snapshot);
     },
 
     stopTaskbarQuotaHelper() {

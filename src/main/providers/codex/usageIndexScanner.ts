@@ -16,6 +16,7 @@ import type {
   UsageSourceScanPlan,
   UsageSourceScanner,
 } from '../../usageIndex';
+import { codexQuotaEntries } from './quota';
 import {
   emptyToolActivity,
   emptyToolOutput,
@@ -68,34 +69,31 @@ function asNumber(value: unknown): number {
 function parseRateLimits(
   payload: Record<string, unknown>,
   observedAt: number,
+  position: number,
 ): SessionSnapshot['codexRateLimits'] {
   const rateLimits = payload.rate_limits as Record<string, unknown> | undefined;
   if (!rateLimits) return undefined;
-  const result: NonNullable<SessionSnapshot['codexRateLimits']> = {};
+  const windows: Array<{ durationMs: number; usedPct: number; resetsAt: number | null }> = [];
   for (const key of ['primary', 'secondary'] as const) {
     const window = rateLimits[key] as Record<string, unknown> | undefined;
     if (!window) continue;
-    const value = {
-      pct: asNumber(window.used_percent),
-      resetsAt: asNumber(window.resets_at),
-      observedAt,
-    };
     const windowMinutes = asNumber(window.window_minutes);
-    if (windowMinutes === 300) result.h5 = value;
-    else if (windowMinutes === 10_080) result.week = value;
+    const durationMs = windowMinutes === 300
+      ? 5 * 60 * 60 * 1000
+      : windowMinutes === 10_080
+        ? 7 * 24 * 60 * 60 * 1000
+        : null;
+    if (durationMs == null) continue;
+    const resetSeconds = asNumber(window.resets_at);
+    windows.push({
+      durationMs,
+      usedPct: Math.max(0, Math.min(100, asNumber(window.used_percent))),
+      resetsAt: resetSeconds > 0 ? resetSeconds * 1000 : null,
+    });
   }
-  return result.h5 || result.week ? result : undefined;
-}
-
-function mergeRateLimits(
-  current: SessionSnapshot['codexRateLimits'],
-  next: SessionSnapshot['codexRateLimits'],
-): SessionSnapshot['codexRateLimits'] {
-  if (!next) return current;
-  const merged: NonNullable<SessionSnapshot['codexRateLimits']> = { ...(current ?? {}) };
-  if (next.h5 && (!merged.h5 || next.h5.observedAt >= merged.h5.observedAt)) merged.h5 = next.h5;
-  if (next.week && (!merged.week || next.week.observedAt >= merged.week.observedAt)) merged.week = next.week;
-  return merged;
+  return windows.length > 0
+    ? { capturedAt: observedAt, position, sourceId: '', entries: codexQuotaEntries({ windows, plan: '', credits: null }) }
+    : undefined;
 }
 
 function timestampMs(value: unknown, fallback: number): number {
@@ -200,7 +198,13 @@ export function createCodexUsageIndexScanner(
         snapshot.latestCacheReadTokens = extracted.entry.cacheReadTokens;
         if ((extracted.contextMax ?? 0) > 0) snapshot.contextMax = extracted.contextMax;
         const observedAt = timestampMs(object.timestamp, now);
-        snapshot.codexRateLimits = mergeRateLimits(snapshot.codexRateLimits, parseRateLimits(payload, observedAt));
+        const nextRateLimits = parseRateLimits(payload, observedAt, offsetAfterLine);
+        if (nextRateLimits && (!snapshot.codexRateLimits
+          || nextRateLimits.capturedAt > snapshot.codexRateLimits.capturedAt
+          || (nextRateLimits.capturedAt === snapshot.codexRateLimits.capturedAt
+            && nextRateLimits.position >= snapshot.codexRateLimits.position))) {
+          snapshot.codexRateLimits = nextRateLimits;
+        }
         for (const [name, count] of Object.entries(pending.toolNames)) {
           snapshot.toolCounts[name] = (snapshot.toolCounts[name] ?? 0) + count;
         }

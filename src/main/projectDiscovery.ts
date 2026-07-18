@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { isSafeLocalCwd } from './pathSafety';
 import { readJsonlCwd } from './sessionMetadata';
-import type { ProviderId } from './providers/types';
+import type { ProviderId } from '../shared/quotaTypes';
 import { compareClaudeSessionJsonlNames, isClaudeJsonlName } from './providers/claude/logFiles';
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');

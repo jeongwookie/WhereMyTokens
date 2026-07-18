@@ -4,7 +4,6 @@ import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-export const CODEX_USAGE_CACHE_SCHEMA_VERSION = 3;
 export const CODEX_USAGE_MAX_BACKOFF_MS = 600_000;
 
 const CODEX_DEFAULT_BASE_URL = 'https://chatgpt.com/backend-api';
@@ -23,39 +22,22 @@ export type CodexUsageStatusCode =
   | 'schema-changed'
   | 'http-error';
 
-export type CodexResetMs = number | null;
-
 export interface CodexCreditsSnapshot {
   hasCredits: boolean;
   unlimited: boolean;
   balance: string | null;
 }
 
-export interface CodexUsagePct {
-  h5Available: boolean;
-  weekAvailable: boolean;
-  h5Unlimited: boolean;
-  weekUnlimited: boolean;
-  h5Unreported: boolean;
-  weekUnreported: boolean;
-  unlimited: boolean;
-  h5Pct: number;
-  weekPct: number;
-  h5ResetMs: CodexResetMs;
-  weekResetMs: CodexResetMs;
-  h5LimitReached: boolean;
-  weekLimitReached: boolean;
-  plan: string;
-  credits: CodexCreditsSnapshot | null;
-  limitReached: boolean;
-  rateLimitReachedType: string | null;
+export interface CodexQuotaWindow {
+  durationMs: number;
+  usedPct: number;
+  resetsAt: number | null;
 }
 
-export interface StoredCodexUsagePct extends CodexUsagePct {
-  storedAt: number;
-  schemaVersion: number;
-  authMtimeMs: number | null;
-  authIdentityHash: string | null;
+export interface CodexQuotaPayload {
+  windows: CodexQuotaWindow[];
+  plan: string;
+  credits: CodexCreditsSnapshot | null;
 }
 
 export interface CodexUsageStatus {
@@ -69,7 +51,7 @@ export interface CodexUsageStatus {
 }
 
 export interface CodexUsageFetchResult {
-  usage: CodexUsagePct | null;
+  usage: CodexQuotaPayload | null;
   status: CodexUsageStatus;
   authMtimeMs: number | null;
   authIdentityHash: string | null;
@@ -85,11 +67,9 @@ interface CodexAuthCredentials {
 
 interface ParsedUsageWindow {
   pct: number;
-  resetMs: CodexResetMs;
+  resetsAt: number | null;
   windowMinutes: number | null;
 }
-
-type CodexLimitWindowRole = 'h5' | 'week' | 'unknown';
 
 class HttpResponseError extends Error {
   statusCode: number;
@@ -389,12 +369,6 @@ function normalizePct(value: unknown): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function normalizeResetValue(value: unknown): CodexResetMs {
-  if (value == null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.max(0, value);
-}
-
 function numericValue(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return value;
@@ -446,49 +420,17 @@ function parseUsageWindow(value: unknown, now: number): ParsedUsageWindow | null
   const pct = pctFromWindow(window);
   if (pct == null) return null;
   const resetAtMs = resetAtMsFromWindow(window, now);
-  const resetMs = resetAtMs == null || !Number.isFinite(resetAtMs)
-    ? null
-    : Math.max(0, resetAtMs - now);
   return {
     pct,
-    resetMs,
+    resetsAt: resetAtMs == null || !Number.isFinite(resetAtMs) ? null : resetAtMs,
     windowMinutes: windowMinutesFromWindow(window),
   };
 }
 
-function roleForWindowMinutes(minutes: number | null | undefined): CodexLimitWindowRole {
-  if (minutes == null) return 'unknown';
-  if (minutes >= 240 && minutes <= 360) return 'h5';
-  if (minutes >= 9_000 && minutes <= 11_000) return 'week';
-  return 'unknown';
-}
-
-function roleForWindow(window: ParsedUsageWindow | null): CodexLimitWindowRole {
-  return roleForWindowMinutes(window?.windowMinutes);
-}
-
-function normalizeWindowRoles(rateLimit: Record<string, unknown> | null, now: number): { h5: ParsedUsageWindow | null; week: ParsedUsageWindow | null } {
-  if (!rateLimit) return { h5: null, week: null };
-  const primary = parseUsageWindow(rateLimit.primary_window ?? rateLimit.primary, now);
-  const secondary = parseUsageWindow(rateLimit.secondary_window ?? rateLimit.secondary, now);
-  const primaryRole = roleForWindow(primary);
-  const secondaryRole = roleForWindow(secondary);
-
-  if (primary && secondary) {
-    if (primaryRole === 'week' && secondaryRole !== 'week') return { h5: secondary, week: primary };
-    if (secondaryRole === 'week') return { h5: primary, week: secondary };
-    return { h5: primary, week: secondary };
-  }
-
-  if (primary) {
-    return primaryRole === 'week' ? { h5: null, week: primary } : { h5: primary, week: null };
-  }
-
-  if (secondary) {
-    return secondaryRole === 'week' ? { h5: null, week: secondary } : { h5: secondary, week: null };
-  }
-
-  return { h5: null, week: null };
+function exactWindowDurationMs(minutes: number | null): number | null {
+  if (minutes === 300) return 5 * 60 * 60 * 1000;
+  if (minutes === 10_080) return 7 * 24 * 60 * 60 * 1000;
+  return null;
 }
 
 function creditsSnapshot(value: unknown): CodexCreditsSnapshot | null {
@@ -502,171 +444,53 @@ function creditsSnapshot(value: unknown): CodexCreditsSnapshot | null {
   };
 }
 
-function rateLimitReachedType(value: unknown): string | null {
-  if (typeof value === 'string' && value.trim()) return value.trim();
-  const record = asRecord(value);
-  return stringValue(record, 'kind') || stringValue(record, 'type');
-}
-
-function isReachedType(value: string | null): boolean {
-  if (!value) return false;
-  const normalized = value.toLowerCase();
-  return normalized !== 'unknown' && normalized !== 'none';
-}
-
-function reachedRoleForType(value: string | null): CodexLimitWindowRole {
-  if (!value) return 'unknown';
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || normalized === 'unknown' || normalized === 'none') return 'unknown';
-  const compact = normalized.replace(/[\s_-]+/g, '');
-  const h5Matched = compact.includes('primary')
-    || compact === '5h'
-    || compact.includes('fivehour')
-    || compact.includes('5hour');
-  const weekMatched = compact.includes('secondary')
-    || compact === '1w'
-    || compact === '7d'
-    || compact.includes('week')
-    || compact.includes('weekly')
-    || compact.includes('sevenday')
-    || compact.includes('7day');
-  if (h5Matched === weekMatched) return 'unknown';
-  return h5Matched ? 'h5' : 'week';
-}
-
-function reachedRoleFromValues(values: unknown[]): CodexLimitWindowRole {
-  let reachedRole: CodexLimitWindowRole = 'unknown';
-  for (const value of values) {
-    const role = reachedRoleForType(rateLimitReachedType(value));
-    if (role === 'unknown') continue;
-    if (reachedRole !== 'unknown' && reachedRole !== role) return 'unknown';
-    reachedRole = role;
-  }
-  return reachedRole;
-}
-
-function firstReachedType(values: unknown[]): string | null {
-  for (const value of values) {
-    const reachedType = rateLimitReachedType(value);
-    if (reachedType) return reachedType;
-  }
-  return null;
-}
-
-function boolValue(value: unknown): boolean | null {
-  return typeof value === 'boolean' ? value : null;
-}
-
-function parseUsagePayload(payload: unknown, now: number): CodexUsagePct | null {
+function parseUsagePayload(payload: unknown, now: number): { usage: CodexQuotaPayload | null; authoritativeEmpty: boolean } {
   const root = asRecord(payload);
-  if (!root) return null;
+  if (!root) return { usage: null, authoritativeEmpty: false };
   const status = asRecord(root.rate_limit_status);
   const source = status ?? root;
   const rateLimit = asRecord(source.rate_limit) ?? asRecord(root.rate_limit);
-  const windows = normalizeWindowRoles(rateLimit, now);
+  if (!rateLimit) return { usage: null, authoritativeEmpty: false };
+  const candidateValues = [
+    rateLimit.primary_window ?? rateLimit.primary,
+    rateLimit.secondary_window ?? rateLimit.secondary,
+  ].filter(value => value !== undefined && value !== null);
+  if (candidateValues.length === 0) {
+    return {
+      usage: {
+        windows: [],
+        plan: stringValue(source, 'plan_type') || stringValue(root, 'plan_type') || '',
+        credits: creditsSnapshot(source.credits ?? root.credits),
+      },
+      authoritativeEmpty: true,
+    };
+  }
+  const windows: CodexQuotaWindow[] = [];
+  for (const candidate of candidateValues) {
+    const parsed = parseUsageWindow(candidate, now);
+    const durationMs = exactWindowDurationMs(parsed?.windowMinutes ?? null);
+    if (!parsed || durationMs == null) continue;
+    if (windows.some(window => window.durationMs === durationMs)) continue;
+    windows.push({ durationMs, usedPct: parsed.pct, resetsAt: parsed.resetsAt });
+  }
+  if (windows.length === 0) return { usage: null, authoritativeEmpty: false };
   const credits = creditsSnapshot(source.credits ?? root.credits);
-  const unlimited = credits?.unlimited === true;
-  const h5Unlimited = unlimited && !windows.h5;
-  const weekUnlimited = unlimited && !windows.week;
-  const h5Unreported = !unlimited && !windows.h5 && !!windows.week;
-  const weekUnreported = !unlimited && !windows.week && !!windows.h5;
-  const reachedTypeValues = [
-    source.rate_limit_reached_type,
-    root.rate_limit_reached_type,
-    rateLimit?.rate_limit_reached_type,
-  ];
-  const reachedType = firstReachedType(reachedTypeValues);
-  const reachedRole = reachedRoleFromValues(reachedTypeValues);
-  const h5LimitReached = !!windows.h5 && (reachedRole === 'h5' || windows.h5.pct >= 100);
-  const weekLimitReached = !!windows.week && (reachedRole === 'week' || windows.week.pct >= 100);
-  const limitReached = boolValue(rateLimit?.limit_reached) === true
-    || boolValue(rateLimit?.allowed) === false
-    || isReachedType(reachedType)
-    || h5LimitReached
-    || weekLimitReached;
-  const h5Pct = windows.h5 ? (h5LimitReached ? 100 : windows.h5.pct) : 0;
-  const weekPct = windows.week ? (weekLimitReached ? 100 : windows.week.pct) : 0;
-
-  if (!windows.h5 && !windows.week && !unlimited) return null;
-
   return {
-    h5Available: !!windows.h5 || h5Unlimited || h5Unreported,
-    weekAvailable: !!windows.week || weekUnlimited || weekUnreported,
-    h5Unlimited,
-    weekUnlimited,
-    h5Unreported,
-    weekUnreported,
-    unlimited,
-    h5Pct,
-    weekPct,
-    h5ResetMs: windows.h5?.resetMs ?? null,
-    weekResetMs: windows.week?.resetMs ?? null,
-    h5LimitReached,
-    weekLimitReached,
-    plan: stringValue(source, 'plan_type') || stringValue(root, 'plan_type') || '',
-    credits,
-    limitReached,
-    rateLimitReachedType: reachedType,
+    usage: { windows, plan: stringValue(source, 'plan_type') || stringValue(root, 'plan_type') || '', credits },
+    authoritativeEmpty: false,
   };
+}
+
+export function parseCodexQuotaPayload(
+  payload: unknown,
+  now = Date.now(),
+): { usage: CodexQuotaPayload | null; authoritativeEmpty: boolean } {
+  return parseUsagePayload(payload, now);
 }
 
 function responseKeys(payload: unknown): string[] {
   const record = asRecord(payload);
   return record ? Object.keys(record).sort() : [];
-}
-
-function normalizeCredits(value: unknown): CodexCreditsSnapshot | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  return {
-    hasCredits: record.hasCredits === true || record.has_credits === true,
-    unlimited: record.unlimited === true,
-    balance: typeof record.balance === 'string' || typeof record.balance === 'number' ? String(record.balance) : null,
-  };
-}
-
-export function normalizeStoredCodexUsagePct(
-  value: unknown,
-  currentAuthMtimeMs: number | null = getCodexAuthMtimeMs(),
-  currentAuthIdentityHash: string | null = getCodexAuthIdentityHash(),
-): StoredCodexUsagePct | null {
-  const record = asRecord(value);
-  if (!record) return null;
-  if (record.schemaVersion !== CODEX_USAGE_CACHE_SCHEMA_VERSION) return null;
-  const storedAt = typeof record.storedAt === 'number' && Number.isFinite(record.storedAt)
-    ? record.storedAt
-    : null;
-  if (storedAt == null || storedAt <= 0 || storedAt > Date.now()) return null;
-  const authMtimeMs = typeof record.authMtimeMs === 'number' && Number.isFinite(record.authMtimeMs)
-    ? record.authMtimeMs
-    : null;
-  if (currentAuthMtimeMs == null || authMtimeMs == null || Math.abs(authMtimeMs - currentAuthMtimeMs) > 1) return null;
-  const authIdentityHash = typeof record.authIdentityHash === 'string' && record.authIdentityHash ? record.authIdentityHash : null;
-  if (!authIdentityHash || !currentAuthIdentityHash || authIdentityHash !== currentAuthIdentityHash) return null;
-
-  return {
-    schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
-    storedAt,
-    authMtimeMs,
-    authIdentityHash,
-    h5Available: record.h5Available === true,
-    weekAvailable: record.weekAvailable === true,
-    h5Unlimited: record.h5Unlimited === true,
-    weekUnlimited: record.weekUnlimited === true,
-    h5Unreported: record.h5Unreported === true,
-    weekUnreported: record.weekUnreported === true,
-    unlimited: record.unlimited === true,
-    h5Pct: normalizePct(record.h5Pct),
-    weekPct: normalizePct(record.weekPct),
-    h5ResetMs: normalizeResetValue(record.h5ResetMs),
-    weekResetMs: normalizeResetValue(record.weekResetMs),
-    h5LimitReached: record.h5LimitReached === true,
-    weekLimitReached: record.weekLimitReached === true,
-    plan: typeof record.plan === 'string' ? record.plan : '',
-    credits: normalizeCredits(record.credits),
-    limitReached: record.limitReached === true,
-    rateLimitReachedType: typeof record.rateLimitReachedType === 'string' ? record.rateLimitReachedType : null,
-  };
 }
 
 export interface StoredCodexResetCredits {
@@ -726,7 +550,7 @@ export function normalizeStoredCodexResetCredits(
   };
 }
 
-export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
+export async function fetchCodexQuota(): Promise<CodexUsageFetchResult> {
   const credentials = readCredentials();
   if (!credentials) {
     const status = buildStatus('no-credentials', false, 'local log', 'Codex auth.json with ChatGPT tokens was not found.');
@@ -751,8 +575,8 @@ export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
   try {
     const body = await httpsGet(resolveCodexUsageUrl(), headers);
     const parsed = JSON.parse(body) as unknown;
-    const usage = parseUsagePayload(parsed, Date.now());
-    if (!usage) {
+    const parsedUsage = parseUsagePayload(parsed, Date.now());
+    if (!parsedUsage.usage) {
       const status = buildStatus('schema-changed', false, 'schema changed', 'Codex usage response is missing expected limit windows.', {
         responseKeys: responseKeys(parsed),
       });
@@ -761,7 +585,7 @@ export async function fetchCodexUsagePct(): Promise<CodexUsageFetchResult> {
     }
     const status = buildStatus('ok', true, '', '', { responseKeys: responseKeys(parsed) });
     logStatus(status);
-    return { usage, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash, rawPayload: parsed };
+    return { usage: parsedUsage.usage, status, authMtimeMs: credentials.authMtimeMs, authIdentityHash: credentials.authIdentityHash, rawPayload: parsed };
   } catch (error) {
     const status = classifyRuntimeError(error);
     logStatus(status);

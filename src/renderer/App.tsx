@@ -3,24 +3,10 @@ import { useTranslation } from 'react-i18next';
 import {
   AppState,
   AppSettings,
-  ProviderCreditBalance,
-  ProviderId,
-  ProviderModelQuota,
-  ProviderModelWindowUsage,
-  ProviderQuotaDisplayBadge,
-  ProviderQuotaGroupSpec,
-  ProviderQuotaRowVisualKind,
-  ProviderQuotaSnapshot,
-  ProviderQuotaSource,
-  ProviderQuotaStatus,
-  ProviderQuotaWindow,
-  ProviderQuotaWindowDisplay,
-  ProviderResetCredit,
-  ProviderResetCreditsData,
-  ProviderWindowUsage,
-  QuotaDisplayMode,
   WindowStats,
 } from './types';
+import type { ProviderId, QuotaDisplayMode } from '../shared/quotaTypes';
+import { validateProviderQuotaSnapshot } from '../shared/quotaDomain';
 import MainView from './views/MainView';
 import SettingsView from './views/SettingsView';
 import NotificationsView from './views/NotificationsView';
@@ -35,10 +21,6 @@ import { applyLanguagePreference, normalizeLanguagePreference } from './i18n';
 type View = 'main' | 'settings' | 'notifications' | 'help';
 
 const EMPTY_WINDOW = { inputTokens:0, outputTokens:0, cacheCreationTokens:0, cacheReadTokens:0, totalTokens:0, costUSD:0, requestCount:0, cacheEfficiency:0, cacheSavingsUSD:0 };
-const EMPTY_BY_PROVIDER = {
-  claude: { windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW, sonnetWeek: EMPTY_WINDOW } },
-  codex: { windows: { h5: EMPTY_WINDOW, week: EMPTY_WINDOW } },
-};
 const EMPTY_CODE_OUTPUT = {
   today: { commits: 0, added: 0, removed: 0 },
   all: { commits: 0, added: 0, removed: 0 },
@@ -53,8 +35,8 @@ const BOOT_FALLBACK_DELAY_MS = 12_000;
 const DEFAULT_STATE: AppState = {
   sessions: [],
   usage: {
-    byProvider: EMPTY_BY_PROVIDER,
-    modelWindows: {},
+    fixedPeriodByProvider: {},
+    entryStats: {},
     models: [], heatmap: [], heatmap30: [], heatmap90: [], weeklyTimeline: [],
     todayTokens: 0, todayCost: 0, todayRequestCount: 0,
     todayInputTokens: 0, todayOutputTokens: 0, todayCacheTokens: 0,
@@ -126,7 +108,6 @@ function numberRecord(value: unknown): Record<string, number> {
 }
 
 const PROVIDER_IDS: ProviderId[] = ['claude', 'codex', 'antigravity'];
-const QUOTA_SOURCES: ProviderQuotaSource[] = ['api', 'statusLine', 'localLog', 'localRpc', 'cache'];
 
 function recordOrNull(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -138,66 +119,8 @@ function isProviderId(value: unknown): value is ProviderId {
   return typeof value === 'string' && (PROVIDER_IDS as string[]).includes(value);
 }
 
-function isQuotaSource(value: unknown): value is ProviderQuotaSource {
-  return typeof value === 'string' && (QUOTA_SOURCES as string[]).includes(value);
-}
-
-function normalizeQuotaWindow(value: unknown): ProviderQuotaWindow | null {
-  const record = recordOrNull(value);
-  if (!record) return null;
-  const pct = typeof record.pct === 'number' && Number.isFinite(record.pct)
-    ? Math.max(0, Math.min(100, record.pct))
-    : 0;
-  const resetMs = typeof record.resetMs === 'number' && Number.isFinite(record.resetMs)
-    ? record.resetMs
-    : null;
-  return {
-    pct,
-    resetMs,
-    resetLabel: typeof record.resetLabel === 'string' ? record.resetLabel : undefined,
-    limitState: record.limitState === 'unlimited' || record.limitState === 'unreported' ? record.limitState : undefined,
-    source: isQuotaSource(record.source) ? record.source : undefined,
-  };
-}
-
-function normalizeQuotaStatus(value: unknown): ProviderQuotaStatus | undefined {
-  const record = recordOrNull(value);
-  if (!record) return undefined;
-  return {
-    connected: record.connected === true,
-    code: typeof record.code === 'string' ? record.code : 'unknown',
-    label: typeof record.label === 'string' ? record.label : undefined,
-    detail: typeof record.detail === 'string' ? record.detail : undefined,
-    severity: record.severity === 'ok' || record.severity === 'warning' || record.severity === 'danger'
-      ? record.severity
-      : undefined,
-  };
-}
-
-function normalizeCreditBalance(value: unknown): ProviderCreditBalance | null {
-  const record = recordOrNull(value);
-  if (!record) return null;
-  const balance: ProviderCreditBalance = {
-    available: typeof record.available === 'number' && Number.isFinite(record.available)
-      ? Math.max(0, record.available)
-      : 0,
-  };
-  if (typeof record.used === 'number' && Number.isFinite(record.used)) balance.used = Math.max(0, record.used);
-  if (typeof record.total === 'number' && Number.isFinite(record.total)) balance.total = Math.max(0, record.total);
-  if (typeof record.remainingPct === 'number' && Number.isFinite(record.remainingPct)) {
-    balance.remainingPct = Math.max(0, Math.min(100, record.remainingPct));
-  }
-  if (typeof record.resetMs === 'number' && Number.isFinite(record.resetMs)) balance.resetMs = record.resetMs;
-  else if (record.resetMs === null) balance.resetMs = null;
-  return balance;
-}
-
 function isQuotaDisplayMode(value: unknown): value is QuotaDisplayMode {
   return value === 'rich' || value === 'simple' || value === 'none';
-}
-
-function isQuotaRowVisualKind(value: unknown): value is ProviderQuotaRowVisualKind {
-  return value === 'pace' || value === 'percentOnly';
 }
 
 function isSafeQuotaGroupKey(value: string): boolean {
@@ -213,211 +136,26 @@ function isQuotaTargetId(value: string): boolean {
     && isSafeQuotaGroupKey(encodedGroupKey);
 }
 
-function normalizeQuotaBadge(value: unknown): ProviderQuotaDisplayBadge | null {
-  const record = recordOrNull(value);
-  if (!record) return null;
-  const key = typeof record.key === 'string' && isSafeQuotaGroupKey(record.key) ? record.key : null;
-  const label = typeof record.label === 'string' && record.label.trim() ? record.label.trim() : null;
-  if (!key || !label) return null;
-  return {
-    key,
-    label,
-    title: typeof record.title === 'string' ? record.title : undefined,
-    tone: record.tone === 'good' || record.tone === 'neutral' || record.tone === 'warning'
-      ? record.tone
-      : undefined,
-  };
-}
-
-function normalizeQuotaBadges(value: unknown): ProviderQuotaDisplayBadge[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const badges = value
-    .map(normalizeQuotaBadge)
-    .filter((badge): badge is ProviderQuotaDisplayBadge => !!badge);
-  return badges.length > 0 ? badges : undefined;
-}
-
-function normalizeQuotaGroupSpec(value: unknown): ProviderQuotaGroupSpec | null {
-  const record = recordOrNull(value);
-  if (!record) return null;
-  const key = typeof record.key === 'string' && isSafeQuotaGroupKey(record.key) ? record.key : null;
-  const label = typeof record.label === 'string' && record.label.trim() ? record.label.trim() : null;
-  const windowKeys = Array.isArray(record.windowKeys)
-    ? record.windowKeys.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : [];
-  if (!key || !label || !isQuotaDisplayMode(record.defaultMode)) return null;
-  return {
-    key,
-    label,
-    windowKeys,
-    defaultMode: record.defaultMode,
-    accentColor: typeof record.accentColor === 'string' && record.accentColor ? record.accentColor : undefined,
-    badges: normalizeQuotaBadges(record.badges),
-    sortOrder: typeof record.sortOrder === 'number' && Number.isFinite(record.sortOrder) ? record.sortOrder : undefined,
-  };
-}
-
-function normalizeQuotaWindowDisplay(value: unknown): ProviderQuotaWindowDisplay | null {
-  const record = recordOrNull(value);
-  if (!record) return null;
-  const label = typeof record.label === 'string' && record.label.trim() ? record.label.trim() : null;
-  if (!label) return null;
-  return {
-    label,
-    visualKind: isQuotaRowVisualKind(record.visualKind) ? record.visualKind : undefined,
-    cacheMetricTitle: typeof record.cacheMetricTitle === 'string' && record.cacheMetricTitle
-      ? record.cacheMetricTitle
-      : undefined,
-    durationMs: typeof record.durationMs === 'number' && Number.isFinite(record.durationMs) && record.durationMs > 0
-      ? record.durationMs
-      : undefined,
-    modelIncludes: Array.isArray(record.modelIncludes)
-      ? record.modelIncludes.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-      : undefined,
-    hideCost: record.hideCost === true,
-    badges: normalizeQuotaBadges(record.badges),
-  };
-}
-
-function normalizeQuotaWindowDisplayMap(value: unknown): Record<string, ProviderQuotaWindowDisplay> | undefined {
-  const record = recordOrNull(value);
-  if (!record) return undefined;
-  const display: Record<string, ProviderQuotaWindowDisplay> = {};
-  for (const [key, entry] of Object.entries(record)) {
-    const normalized = normalizeQuotaWindowDisplay(entry);
-    if (normalized) display[key] = normalized;
-  }
-  return Object.keys(display).length > 0 ? display : undefined;
-}
-
-function normalizeModelQuota(value: unknown): ProviderModelQuota | null {
-  const record = recordOrNull(value);
-  if (!record || typeof record.model !== 'string' || typeof record.label !== 'string') return null;
-  return {
-    model: record.model,
-    label: record.label,
-    usageModel: typeof record.usageModel === 'string' && record.usageModel ? record.usageModel : undefined,
-    statsWindowKey: typeof record.statsWindowKey === 'string' && record.statsWindowKey ? record.statsWindowKey : undefined,
-    remainingPct: typeof record.remainingPct === 'number' && Number.isFinite(record.remainingPct)
-      ? Math.max(0, Math.min(100, record.remainingPct))
-      : 0,
-    resetMs: typeof record.resetMs === 'number' && Number.isFinite(record.resetMs)
-      ? record.resetMs
-      : record.resetMs === null ? null : undefined,
-    groupKey: typeof record.groupKey === 'string' && isSafeQuotaGroupKey(record.groupKey) ? record.groupKey : undefined,
-    defaultMode: isQuotaDisplayMode(record.defaultMode) ? record.defaultMode : undefined,
-    visualKind: isQuotaRowVisualKind(record.visualKind) ? record.visualKind : undefined,
-    cacheMetricTitle: typeof record.cacheMetricTitle === 'string' && record.cacheMetricTitle ? record.cacheMetricTitle : undefined,
-    durationMs: typeof record.durationMs === 'number' && Number.isFinite(record.durationMs) && record.durationMs > 0
-      ? record.durationMs
-      : undefined,
-    hideCost: record.hideCost === true,
-    accentColor: typeof record.accentColor === 'string' && record.accentColor ? record.accentColor : undefined,
-    badges: normalizeQuotaBadges(record.badges),
-  };
-}
-
-function normalizeResetCredit(value: unknown): ProviderResetCredit | null {
-  const r = recordOrNull(value);
-  if (!r) return null;
-  const hasExpiry = Object.prototype.hasOwnProperty.call(r, 'expiresAtUtc');
-  const expiresAtUtc = typeof r.expiresAtUtc === 'string' && Number.isFinite(Date.parse(r.expiresAtUtc))
-    ? r.expiresAtUtc
-    : hasExpiry && r.expiresAtUtc === null ? null : undefined;
-  if (expiresAtUtc === undefined) return null;
-  return {
-    idSuffix: null,
-    status: typeof r.status === 'string' ? r.status : 'available',
-    expiresAtUtc,
-  };
-}
-
-function normalizeResetCredits(value: unknown): ProviderResetCreditsData | null {
-  const r = recordOrNull(value);
-  if (!r) return null;
-  const credits = Array.isArray(r.credits)
-    ? r.credits.map(normalizeResetCredit).filter((c): c is ProviderResetCredit => !!c)
-    : [];
-  const availableCount = typeof r.availableCount === 'number' && Number.isFinite(r.availableCount)
-    ? Math.max(0, Math.round(r.availableCount))
-    : credits.length;
-  const countOnly = r.countOnly === true || availableCount !== credits.length;
-  const publicCredits = countOnly ? [] : credits;
-  const totalEarnedCount = typeof r.totalEarnedCount === 'number' && Number.isFinite(r.totalEarnedCount)
-    ? Math.max(0, Math.round(r.totalEarnedCount))
-    : 0;
-  return {
-    credits: publicCredits,
-    availableCount: countOnly ? availableCount : publicCredits.length,
-    totalEarnedCount,
-    checkedAt: typeof r.checkedAt === 'number' && Number.isFinite(r.checkedAt) ? r.checkedAt : 0,
-    countOnly,
-    source: r.source === 'cache' ? 'cache' : r.source === 'usage' ? 'usage' : 'api',
-    status: normalizeQuotaStatus(r.status) ?? { connected: false, code: 'unknown' },
-  };
-}
-
-function normalizeProviderQuotaSnapshot(provider: ProviderId, value: unknown): ProviderQuotaSnapshot | null {
-  const record = recordOrNull(value);
-  if (!record) return null;
-  if (record.provider != null && record.provider !== provider) return null;
-  const windowsRecord = recordOrNull(record.windows);
-  const windows: Record<string, ProviderQuotaWindow> = {};
-  if (windowsRecord) {
-    for (const [key, entry] of Object.entries(windowsRecord)) {
-      const window = normalizeQuotaWindow(entry);
-      if (window) windows[key] = window;
-    }
-  }
-  const creditsRecord = recordOrNull(record.credits);
-  const credits: Record<string, ProviderCreditBalance> = {};
-  if (creditsRecord) {
-    for (const [key, entry] of Object.entries(creditsRecord)) {
-      const credit = normalizeCreditBalance(entry);
-      if (credit) credits[key] = credit;
-    }
-  }
-  const models = Array.isArray(record.models)
-    ? record.models.map(normalizeModelQuota).filter((model): model is ProviderModelQuota => !!model)
-    : undefined;
-  const groups = Array.isArray(record.groups)
-    ? record.groups.map(normalizeQuotaGroupSpec).filter((group): group is ProviderQuotaGroupSpec => !!group)
-    : undefined;
-  return {
-    provider,
-    source: isQuotaSource(record.source) ? record.source : 'cache',
-    capturedAt: typeof record.capturedAt === 'number' && Number.isFinite(record.capturedAt) ? record.capturedAt : 0,
-    accountLabel: typeof record.accountLabel === 'string' ? record.accountLabel : undefined,
-    accountTooltip: typeof record.accountLabel === 'string' ? record.accountLabel : undefined,
-    planName: typeof record.planName === 'string' ? record.planName : undefined,
-    windows: Object.keys(windows).length > 0 ? windows : undefined,
-    models: models && models.length > 0 ? models : undefined,
-    groups: groups && groups.length > 0 ? groups : undefined,
-    windowDisplay: normalizeQuotaWindowDisplayMap(record.windowDisplay),
-    credits: Object.keys(credits).length > 0 ? credits : undefined,
-    status: normalizeQuotaStatus(record.status),
-    resetCredits: normalizeResetCredits(record.resetCredits),
-  };
-}
-
 export function normalizeProviderQuotas(value: unknown): AppState['providerQuotas'] {
   const record = recordOrNull(value);
   if (!record) return {};
   const providerQuotas: AppState['providerQuotas'] = {};
   for (const [provider, snapshot] of Object.entries(record)) {
     if (!isProviderId(provider)) continue;
-    const normalized = normalizeProviderQuotaSnapshot(provider, snapshot);
-    if (normalized) providerQuotas[provider] = normalized;
+    const normalized = validateProviderQuotaSnapshot(snapshot);
+    if (normalized?.provider === provider) providerQuotas[provider] = normalized;
   }
   return providerQuotas;
 }
+
+const RETIRED_QUOTA_TARGET_ID = 'claude.group.sonnet';
 
 function normalizeQuotaTargetModes(value: unknown): AppState['settings']['quotaTargetModes'] {
   const record = recordOrNull(value);
   if (!record) return {};
   const modes: AppState['settings']['quotaTargetModes'] = {};
   for (const [targetId, mode] of Object.entries(record)) {
-    if (!isQuotaTargetId(targetId)) continue;
+    if (targetId === RETIRED_QUOTA_TARGET_ID || !isQuotaTargetId(targetId)) continue;
     if (isQuotaDisplayMode(mode)) modes[targetId] = mode;
   }
   return modes;
@@ -428,7 +166,7 @@ function normalizeQuotaTargetOrder(value: unknown): AppState['settings']['quotaT
   const seen = new Set<string>();
   const order: AppState['settings']['quotaTargetOrder'] = [];
   for (const targetId of value) {
-    if (typeof targetId !== 'string' || !isQuotaTargetId(targetId) || seen.has(targetId)) continue;
+    if (typeof targetId !== 'string' || targetId === RETIRED_QUOTA_TARGET_ID || !isQuotaTargetId(targetId) || seen.has(targetId)) continue;
     seen.add(targetId);
     order.push(targetId);
   }
@@ -440,7 +178,7 @@ function normalizeQuotaTargetAbbreviations(value: unknown): AppState['settings']
   if (!record) return {};
   const abbreviations: AppState['settings']['quotaTargetAbbreviations'] = {};
   for (const [targetId, abbreviation] of Object.entries(record)) {
-    if (!isQuotaTargetId(targetId) || typeof abbreviation !== 'string') continue;
+    if (targetId === RETIRED_QUOTA_TARGET_ID || !isQuotaTargetId(targetId) || typeof abbreviation !== 'string') continue;
     const normalized = abbreviation.trim().toUpperCase();
     if (/^[A-Z0-9]{1,3}$/.test(normalized)) abbreviations[targetId] = normalized;
   }
@@ -490,65 +228,35 @@ function normalizeWindowStats(value: unknown): WindowStats {
   return { ...EMPTY_WINDOW, ...(record ?? {}) } as WindowStats;
 }
 
-function normalizeProviderWindowUsage(
-  value: ProviderWindowUsage | undefined,
-  defaultWindows: Record<string, WindowStats> = {},
-): ProviderWindowUsage {
-  const windows: Record<string, WindowStats> = {};
-  for (const [windowKey, stats] of Object.entries(defaultWindows)) {
-    windows[windowKey] = normalizeWindowStats(stats);
-  }
-
-  const rawWindows = recordOrNull(value?.windows);
-  if (rawWindows) {
-    for (const [windowKey, stats] of Object.entries(rawWindows)) {
-      windows[windowKey] = normalizeWindowStats(stats);
-    }
-  }
-
-  return { windows };
-}
-
-function normalizeProviderWindowUsages(value: AppState['usage']['byProvider'] | undefined): AppState['usage']['byProvider'] {
-  const normalized: AppState['usage']['byProvider'] = {};
-  const defaultByProvider = DEFAULT_STATE.usage.byProvider;
+function normalizeFixedPeriodUsage(value: unknown): AppState['usage']['fixedPeriodByProvider'] {
+  const record = recordOrNull(value);
+  const normalized: AppState['usage']['fixedPeriodByProvider'] = {};
+  if (!record) return normalized;
   for (const provider of PROVIDER_IDS) {
-    const providerUsage = value?.[provider];
-    const defaultUsage = defaultByProvider[provider];
-    if (!providerUsage && !defaultUsage) continue;
-    normalized[provider] = normalizeProviderWindowUsage(providerUsage, defaultUsage?.windows);
+    const providerRecord = recordOrNull(record[provider]);
+    const periods = recordOrNull(providerRecord?.periods);
+    if (!periods || !periods['5h']) continue;
+    normalized[provider] = { periods: { '5h': normalizeWindowStats(periods['5h']) } };
   }
   return normalized;
 }
 
-function normalizeProviderModelWindowUsage(value: unknown): ProviderModelWindowUsage {
-  const windows: Record<string, Record<string, WindowStats>> = {};
-  const rawWindows = recordOrNull((value as ProviderModelWindowUsage | undefined)?.windows);
-  if (!rawWindows) return { windows };
-  for (const [windowKey, models] of Object.entries(rawWindows)) {
-    const modelRecord = recordOrNull(models);
-    if (!modelRecord) continue;
-    const normalizedModels: Record<string, WindowStats> = {};
-    for (const [model, stats] of Object.entries(modelRecord)) {
-      normalizedModels[model] = normalizeWindowStats(stats);
-    }
-    if (Object.keys(normalizedModels).length > 0) windows[windowKey] = normalizedModels;
-  }
-  return { windows };
-}
-
-function normalizeProviderModelWindowUsages(value: AppState['usage']['modelWindows'] | undefined): AppState['usage']['modelWindows'] {
-  const normalized: AppState['usage']['modelWindows'] = {};
-  for (const provider of PROVIDER_IDS) {
-    const providerUsage = value?.[provider];
-    if (!providerUsage) continue;
-    const usage = normalizeProviderModelWindowUsage(providerUsage);
-    if (Object.keys(usage.windows).length > 0) normalized[provider] = usage;
+function normalizeEntryStats(value: unknown): AppState['usage']['entryStats'] {
+  const record = recordOrNull(value);
+  const normalized: AppState['usage']['entryStats'] = {};
+  if (!record) return normalized;
+  for (const [entryKey, stats] of Object.entries(record)) {
+    normalized[entryKey] = normalizeWindowStats(stats);
   }
   return normalized;
 }
 
-function normalizeSession(session: Partial<AppState['sessions'][number]> | null | undefined): AppState['sessions'][number] {
+function normalizeSession(
+  session: (Partial<Omit<AppState['sessions'][number], 'startedAt' | 'lastModified'>> & {
+    startedAt?: string | Date;
+    lastModified?: string | Date | null;
+  }) | null | undefined,
+): AppState['sessions'][number] {
   const state = session?.state;
   const normalizedState = state === 'active' || state === 'waiting' || state === 'idle' || state === 'compacting'
     ? state
@@ -597,7 +305,6 @@ function normalizeSession(session: Partial<AppState['sessions'][number]> | null 
 
 function normalizeState(next: AppState): AppState {
   const mainSectionOrder = normalizeMainSectionOrder(next.settings?.mainSectionOrder);
-  const nextByProvider = next.usage?.byProvider ?? {};
   return {
     ...DEFAULT_STATE,
     ...next,
@@ -608,8 +315,8 @@ function normalizeState(next: AppState): AppState {
     usage: {
       ...DEFAULT_STATE.usage,
       ...next.usage,
-      byProvider: normalizeProviderWindowUsages(nextByProvider),
-      modelWindows: normalizeProviderModelWindowUsages(next.usage?.modelWindows),
+      fixedPeriodByProvider: normalizeFixedPeriodUsage(next.usage?.fixedPeriodByProvider),
+      entryStats: normalizeEntryStats(next.usage?.entryStats),
       models: arrayOrEmpty(next.usage?.models),
       heatmap: arrayOrEmpty(next.usage?.heatmap),
       heatmap30: arrayOrEmpty(next.usage?.heatmap30),
