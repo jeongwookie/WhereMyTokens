@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.22.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.22.2</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.22.1 muestra la quota de Codex como Unlimited cuando Codex no reporta temporalmente una ventana de límite.</em>
+  <em>v1.22.2 reduce el parpadeo en la barra de tareas, corrige los botones del widget compacto y baja la presión de memoria con historiales grandes.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | 18 jul | Usa dashboard/widget windows owned by tray para evitar parpadeos en la barra de tareas, corrige botones y hide persistente del widget compacto, y reduce memoria con historiales grandes sin perder Codex `Unlimited` |
 | **[v1.22.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1)** | 17 jul | Muestra como `Unlimited` las ventanas 5h/1sem que Codex deja de reportar temporalmente y evita que la UI se quede en Syncing |
 | **[v1.22.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.0)** | 17 jul | Añade UI japonesa integrada, selector de idioma guardado en AppSettings y guía de descarga para usuarios japoneses, con base en la traducción y estructura de keys de @restructure-git en PR #37 |
 | **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 17 jul | Unifica los stores de uso anteriores en un UsageIndex SQLite atribuido por source, añade recuperación con Reset index y ajusta los overflow hit bounds del taskbar mini |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | 10 jul | Permite configurar 1-3 bloques por fila en el taskbar mini quota, conserva `+N` para targets ocultos y corrige los colores de prefix live/cache/log |
-| **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | 7 jul | Añade Codex reset credits como target de Plan Usage y un taskbar mini quota display self-contained y arrastrable con filas 5H/1W |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-v1.22.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-v1.22.2-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -99,7 +99,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.22.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.22.2-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

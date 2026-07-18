@@ -91,12 +91,16 @@ export async function loadUsageIndexProjection(
   provider: ProviderId,
   excludedProjectKeys: readonly string[],
   nowMs = Date.now(),
+  recentEntriesFromMs?: number,
 ): Promise<UsageIndexProjection> {
   const providers = new Set<ProviderId>([provider]);
   const cutoffs = usageRetentionCutoffs(nowMs);
+  const recentFromMs = typeof recentEntriesFromMs === 'number' && Number.isFinite(recentEntriesFromMs)
+    ? Math.max(cutoffs.requestMs, Math.floor(recentEntriesFromMs))
+    : cutoffs.requestMs;
   const filter = { providers, excludedProjectKeys };
   const [recentEntries, hourly, daily, monthly] = await Promise.all([
-    usageIndex.readProjectionEntries({ ...filter, fromMs: cutoffs.requestMs }),
+    usageIndex.readProjectionEntries({ ...filter, fromMs: recentFromMs }),
     usageIndex.queryUsage({ ...filter, grain: 'hour', fromMs: cutoffs.hourMs }),
     usageIndex.queryUsage({ ...filter, grain: 'day', fromMs: cutoffs.dayMs }),
     usageIndex.queryUsage({ ...filter, grain: 'month' }),

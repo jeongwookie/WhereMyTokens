@@ -369,6 +369,24 @@ test('popup show path sends cached state without forcing refresh', () => {
   assert.doesNotMatch(showBody, /await /);
 });
 
+test('compact widget controls remain visible and hide persists the widget setting', () => {
+  const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
+  const widgetSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'CompactWidgetView.tsx'), 'utf8');
+  const showStart = mainSource.indexOf('function showPopup');
+  const showEnd = mainSource.indexOf('function sendWidgetStateUpdate', showStart);
+  const showBody = mainSource.slice(showStart, showEnd);
+  const hideStart = mainSource.indexOf('function hideCompactWidget');
+  const hideEnd = mainSource.indexOf('function showCompactWidget', hideStart);
+  const hideBody = mainSource.slice(hideStart, hideEnd);
+
+  assert.match(showBody, /syncCompactWidget\(\)/);
+  assert.doesNotMatch(showBody, /suppressCompactWidgetForPopup/);
+  assert.match(hideBody, /store\.set\('compactWidgetEnabled', false\)/);
+  assert.match(hideBody, /stateManager\?\.applySettingsChange\(\)/);
+  assert.match(widgetSource, /const stopToolbarPointer = useCallback/);
+  assert.match(widgetSource, /onPointerDown=\{stopToolbarPointer\}/);
+});
+
 test('visible UI transition schedules refresh instead of running heavy refresh inline', () => {
   const stateSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
   const visibleStart = stateSource.indexOf('  setUiVisible(visible: boolean): void');

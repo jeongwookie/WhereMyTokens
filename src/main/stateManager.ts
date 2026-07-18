@@ -25,7 +25,7 @@ import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentat
 import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
 import { UsageTrendData, emptyUsageTrendData } from './usageTrendTypes';
-import { bucketDateRange, type BreakdownGrain } from '../shared/bucketKey';
+import { bucketDateRange, weekKey, type BreakdownGrain } from '../shared/bucketKey';
 import {
   emptyOutputComposition,
   emptyToolActivity,
@@ -81,6 +81,7 @@ import {
   loadUsageIndexProjection,
   type UsageIndexProjection,
 } from './usageIndexPresentation';
+import { buildProviderWindowTargets } from './usageWindowTargets';
 
 export interface SessionInfo extends DiscoveredSession {
   modelName: string;
@@ -704,6 +705,15 @@ export function currentLedgerRepoKeys<T extends Pick<GitStats, 'gitCommonDir' | 
   return currentLedgerRepoStats(sessions, repoGitStats)
     .map(stats => repoKeyFromGitStats(stats) ?? normalizeGitPathKey(stats.toplevel))
     .filter((key): key is string => !!key);
+}
+
+function localDateKey(timestampMs: number): string {
+  const date = new Date(timestampMs);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function localDayStartMs(timestampMs: number): number {
+  return new Date(`${localDateKey(timestampMs)}T00:00:00`).getTime();
 }
 
 function sessionSummaryFromProjection(
@@ -2047,14 +2057,49 @@ export class StateManager {
     return buildTrendDataFromUsageIndex(this.usageIndexProjections, buildUsageVisibilityFilter(settings));
   }
 
-  private async refreshUsageIndexProjections(settings: AppSettings): Promise<void> {
+  private projectionRecentEntryFromMs(settings: AppSettings, providerQuotas: ProviderQuotaMap, now: number): number {
     const enabled = this.enabledProviderSet(settings);
+    const todayStart = localDayStartMs(now);
+    const currentWeekStart = new Date(`${weekKey(localDateKey(now))}T00:00:00`).getTime();
+    const resetWindows: UsageWindowResetHints = {};
+    for (const provider of enabled) {
+      const windows = providerQuotas[provider]?.windows;
+      if (!windows) continue;
+      resetWindows[provider] = {
+        weekResetMs: windows.week?.resetMs ?? null,
+        h5ResetMs: windows.h5?.resetMs ?? null,
+      };
+    }
+
+    let fromMs = todayStart;
+    const targets = buildProviderWindowTargets(
+      enabled,
+      providerQuotas,
+      resetWindows,
+      now,
+      currentWeekStart,
+    );
+    for (const provider of enabled) {
+      for (const target of targets.get(provider) ?? []) {
+        if (Number.isFinite(target.startMs)) fromMs = Math.min(fromMs, target.startMs);
+      }
+    }
+    return Math.max(0, Math.floor(fromMs));
+  }
+
+  private async refreshUsageIndexProjections(settings: AppSettings): Promise<void> {
+    const now = Date.now();
+    const enabled = this.enabledProviderSet(settings);
+    const providerQuotas = this.buildProviderQuotas(now, settings);
+    const recentEntriesFromMs = this.projectionRecentEntryFromMs(settings, providerQuotas, now);
     const projections = await Promise.all(INDEXED_USAGE_PROVIDERS
       .filter(provider => enabled.has(provider))
       .map(provider => loadUsageIndexProjection(
         this.usageIndex,
         provider,
         settings.excludedProjects ?? [],
+        now,
+        recentEntriesFromMs,
       )));
     this.usageIndexProjections = projections;
     this.usageIndexCoverage = projections.length > 0

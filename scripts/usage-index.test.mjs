@@ -75,6 +75,33 @@ function batch(byteOffset, entries, rebuildCoverage = { kind: 'full' }) {
   return { checkpoint: { byteOffset }, entries, rebuildCoverage };
 }
 
+function emptyQueryResult(grain) {
+  const metrics = {
+    requestCount: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: 0,
+    costUSD: 0,
+    cacheSavingsUSD: 0,
+  };
+  return {
+    grain,
+    aggregate: { ...metrics },
+    byProvider: {},
+    models: [],
+    buckets: [],
+    coverage: {
+      state: 'complete',
+      requiredSourceCount: 0,
+      indexedSourceCount: 0,
+      pendingSourceCount: 0,
+      failedSourceCount: 0,
+    },
+  };
+}
+
 function codexLine(type, timestamp, payload) {
   return JSON.stringify({ type, timestamp, payload });
 }
@@ -134,6 +161,54 @@ test('unchanged source does not invoke scanner or write duplicate usage', async 
   assert.equal((await index.refreshSource(source('codex:one', 'v1', 10), scanner)).status, 'unchanged');
   assert.equal(scans, 1);
   assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 1);
+});
+
+test('mtime-only append-only source changes update descriptor without rescanning EOF', async () => {
+  const storage = new InMemoryUsageIndexStorage();
+  const index = new DefaultUsageIndex(storage);
+  let scans = 0;
+  const scanner = {
+    scan: async plan => {
+      scans += 1;
+      assert.equal(plan.mode, 'rebuild');
+      return batch(10, [entry('mtime-only-r1', Date.parse('2026-07-16T01:00:00Z'))]);
+    },
+  };
+
+  assert.equal((await index.refreshSource(source('codex:mtime-only', '10:1000', 10), scanner)).status, 'rebuilt');
+  const second = source('codex:mtime-only', '10:2000', 10);
+  assert.equal((await index.refreshSource(second, {
+    scan: async () => {
+      throw new Error('mtime-only EOF refresh should not rescan payload');
+    },
+  })).status, 'unchanged');
+  assert.equal(scans, 1);
+  assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 1);
+  assert.equal((await storage.getSource(second.sourceId)).descriptor.version.token, '10:2000');
+});
+
+test('usage projection reads raw entries only from the requested recent window', async () => {
+  const now = Date.parse('2026-07-18T06:00:00Z');
+  const recentFromMs = Date.parse('2026-07-18T00:00:00Z');
+  let rawEntryQuery = null;
+  const aggregateQueries = [];
+  const usageIndex = {
+    readProjectionEntries: async query => {
+      rawEntryQuery = query;
+      return [];
+    },
+    queryUsage: async query => {
+      aggregateQueries.push(query);
+      return emptyQueryResult(query.grain);
+    },
+  };
+
+  await loadUsageIndexProjection(usageIndex, 'codex', ['project-a'], now, recentFromMs);
+
+  assert.equal(rawEntryQuery.fromMs, recentFromMs);
+  assert.deepEqual([...rawEntryQuery.providers], ['codex']);
+  assert.deepEqual(rawEntryQuery.excludedProjectKeys, ['project-a']);
+  assert.deepEqual(aggregateQueries.map(query => query.grain).sort(), ['day', 'hour', 'month']);
 });
 
 test('file source descriptors compare versions without reading payload and scanners publish project attribution', async () => {

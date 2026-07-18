@@ -173,6 +173,19 @@ function sameProjects(stored: StoredUsageSource, source: UsageSourceDescriptor):
     && previous.every((key, index) => key === current[index]);
 }
 
+function appendOnlyFileAlreadyIndexed(stored: StoredUsageSource, source: UsageSourceDescriptor): boolean {
+  if (source.kind !== 'file' || stored.descriptor.kind !== 'file') return false;
+  if (stored.descriptor.parserVersion !== source.parserVersion) return false;
+  const previousSize = stored.descriptor.version.size;
+  const currentSize = source.version.size;
+  const previousOffset = stored.checkpoint.byteOffset;
+  return previousSize !== undefined
+    && currentSize !== undefined
+    && previousOffset !== undefined
+    && currentSize === previousSize
+    && previousOffset === currentSize;
+}
+
 function selectScanMode(stored: StoredUsageSource | null, source: UsageSourceDescriptor): UsageScanMode {
   if (!stored) return 'rebuild';
   if (stored.descriptor.parserVersion !== source.parserVersion) return 'rebuild';
@@ -237,6 +250,21 @@ export class DefaultUsageIndex implements UsageIndex {
       this.assertRefreshCurrent(refreshEpoch);
       if (stored && (stored.descriptor.provider !== normalizedSource.provider || stored.descriptor.kind !== normalizedSource.kind)) {
         throw new Error(`Usage source ${normalizedSource.sourceId} changed provider or source kind`);
+      }
+      if (stored && appendOnlyFileAlreadyIndexed(stored, normalizedSource)) {
+        if (!sameVersion(stored, normalizedSource) || !sameProjects(stored, normalizedSource)) {
+          await this.storage.updateSourceDescriptor({
+            ...normalizedSource,
+            projectKeys: normalizeProjectKeys(
+              normalizedSource.projectKeys
+                ?? stored.descriptor.projectKeys
+                ?? [],
+            ),
+          });
+          this.assertRefreshCurrent(refreshEpoch);
+        }
+        this.markCoverageSource(normalizedSource, 'indexed');
+        return { sourceId: normalizedSource.sourceId, status: 'unchanged', scannedEntries: 0 };
       }
       if (stored && sameVersion(stored, normalizedSource)) {
         if (!sameProjects(stored, normalizedSource)) {

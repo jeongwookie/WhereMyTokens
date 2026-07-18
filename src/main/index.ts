@@ -21,6 +21,7 @@ if (isDebugInstrumentationEnabled()) {
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let tray: Tray | null = null;
+let taskbarOwnerWindow: BrowserWindow | null = null;
 let popupWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let stateManager: StateManager | null = null;
@@ -33,12 +34,14 @@ let widgetMoveEndTimer: NodeJS.Timeout | null = null;
 let lastTrayTitle = '';
 let lastTrayTooltip = '';
 let registeredGlobalHotkey = '';
+let lastPopupFocusAt = 0;
 const readyWidgetWindows = new WeakSet<BrowserWindow>();
 
 type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
 const POPUP_MARGIN = 8;
+const POPUP_FOCUS_DEBOUNCE_MS = 250;
 const TASKBAR_MINI_DISABLED_TITLE = 'Taskbar mini disabled';
 const TASKBAR_MINI_DISABLED_BODY = 'The taskbar mini quota helper could not start after repeated attempts. Open Settings to enable it again after checking Windows taskbar support.';
 function resolveTaskbarSnapshotTheme(theme: AppSettings['theme']): 'light' | 'dark' {
@@ -79,6 +82,8 @@ function registerDebugTargets() {
     { name: 'ipcMain', emitter: ipcMain },
     { name: 'nativeTheme', emitter: nativeTheme },
     { name: 'tray', emitter: tray },
+    { name: 'taskbarOwnerWindow', emitter: taskbarOwnerWindow },
+    { name: 'taskbarOwnerWebContents', emitter: taskbarOwnerWindow?.webContents },
     { name: 'popupWindow', emitter: popupWindow },
     { name: 'popupWebContents', emitter: popupWindow?.webContents },
     { name: 'widgetWindow', emitter: widgetWindow },
@@ -167,9 +172,39 @@ function keepWindowOutOfTaskbar(win: BrowserWindow) {
   } catch { /* 창 종료 타이밍과 겹치는 일시적 오류는 무시한다. */ }
 }
 
+function getTaskbarOwnerWindow(): BrowserWindow {
+  if (taskbarOwnerWindow && !taskbarOwnerWindow.isDestroyed()) return taskbarOwnerWindow;
+  const owner = new BrowserWindow({
+    width: 1,
+    height: 1,
+    x: -32000,
+    y: -32000,
+    show: false,
+    frame: false,
+    resizable: false,
+    skipTaskbar: true,
+    focusable: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+  taskbarOwnerWindow = owner;
+  keepWindowOutOfTaskbar(owner);
+  owner.on('closed', () => {
+    if (taskbarOwnerWindow === owner) taskbarOwnerWindow = null;
+  });
+  registerDebugTargets();
+  return owner;
+}
+
 function createPopupWindow(): BrowserWindow {
   const settings = getSettings();
   const win = new BrowserWindow({
+    parent: getTaskbarOwnerWindow(),
+    modal: false,
     width: POPUP_WIDTH,
     height: POPUP_HEIGHT,
     show: false,
@@ -194,7 +229,9 @@ function createPopupWindow(): BrowserWindow {
     keepWindowOutOfTaskbar(win);
     syncUiVisibility();
   });
-  win.on('hide', syncUiVisibility);
+  win.on('hide', () => {
+    syncUiVisibility();
+  });
   win.webContents.on('context-menu', openDashboardContextMenu);
   registerDebugTargets();
 
@@ -205,6 +242,10 @@ function createPopupWindow(): BrowserWindow {
 
 function isCompactWidgetVisible() {
   return !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
+}
+
+function isPopupWindowVisible() {
+  return !!popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible();
 }
 
 type WidgetPosition = { x: number; y: number };
@@ -321,6 +362,8 @@ function createWidgetWindow(): BrowserWindow {
   const size = compactWidgetSize(settings, stateManager?.getState());
   const position = resolveWidgetPosition(settings, size);
   const win = new BrowserWindow({
+    parent: getTaskbarOwnerWindow(),
+    modal: false,
     width: size.width,
     height: size.height,
     x: position.x,
@@ -386,7 +429,7 @@ function sendPopupNavigation(view: AppView) {
 }
 
 function syncUiVisibility() {
-  const popupVisible = !!popupWindow && !popupWindow.isDestroyed() && popupWindow.isVisible();
+  const popupVisible = isPopupWindowVisible();
   const widgetVisible = !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible();
   // 화면에 보이는 창이 하나라도 있으면 새 세션 발견을 놓치지 않도록 foreground 스캔을 유지한다.
   const foregroundVisible = popupVisible || widgetVisible;
@@ -424,9 +467,15 @@ function showPopup(view: AppView = 'main') {
   const currentState = stateManager?.getState();
   syncCompactWidget();
 
+  const wasVisible = popupWindow.isVisible();
   popupWindow.setBounds(resolvePopupBounds(tray.getBounds()));
-  popupWindow.show();
-  popupWindow.focus();
+  keepWindowOutOfTaskbar(popupWindow);
+  if (!wasVisible) popupWindow.show();
+  const now = Date.now();
+  if (!popupWindow.isFocused() && now - lastPopupFocusAt >= POPUP_FOCUS_DEBOUNCE_MS) {
+    popupWindow.focus();
+    lastPopupFocusAt = now;
+  }
   keepWindowOutOfTaskbar(popupWindow);
   sendPopupNavigation(view);
   if (currentState) {
@@ -466,7 +515,10 @@ function syncCompactWidget() {
 }
 
 function hideCompactWidget() {
+  store.set('compactWidgetEnabled', false);
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide();
+  stateManager?.applySettingsChange();
+  applyWindowSettings();
   syncUiVisibility();
   rebuildTrayMenu();
 }

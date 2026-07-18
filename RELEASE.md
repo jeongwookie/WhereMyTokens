@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.22.2 | 2026-07-18 | Stabilize tray-owned dashboard and compact-widget windows to stop taskbar flicker, fix compact widget toolbar clicks and persistent hide, reduce memory pressure for large usage histories, and keep Codex Unlimited rows visible from live quota data |
 | v1.22.1 | 2026-07-17 | Show Codex live usage windows as Unlimited when the provider temporarily omits a 5h/1w limit, keep compact/taskbar labels aligned, and avoid stuck Syncing quota states |
 | v1.22.0 | 2026-07-17 | Add built-in Japanese UI, persist language preference through AppSettings/electron-store, update Japanese download guidance, and credit @restructure-git's PR #37 translation/key-structure groundwork |
 | v1.21.0 | 2026-07-17 | Replace the JSON usage ledger, summary cache, and Antigravity usage cache with a source-attributed SQLite UsageIndex; add destructive Reset index recovery; tighten taskbar mini overflow hit bounds while preserving measured +N cues |

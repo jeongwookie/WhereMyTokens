@@ -664,6 +664,10 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     window.wmt.openDashboard().catch(() => {});
   }, []);
 
+  const stopToolbarPointer = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  }, []);
+
   return (
     <div
       onPointerDown={handlePointerDown}
@@ -701,6 +705,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
         <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           <button
             data-no-drag="true"
+            onPointerDown={stopToolbarPointer}
             onClick={handleRefresh}
             title={t('compactWidgetView.button.refreshNow')}
             style={{
@@ -715,6 +720,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
           </button>
           <button
             data-no-drag="true"
+            onPointerDown={stopToolbarPointer}
             onClick={() => window.wmt.openDashboard().catch(() => {})}
             title={t('compactWidgetView.button.openDashboard')}
             style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 11 }}
@@ -723,6 +729,7 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
           </button>
           <button
             data-no-drag="true"
+            onPointerDown={stopToolbarPointer}
             onClick={() => window.wmt.hideCompactWidget().catch(() => {})}
             title={t('compactWidgetView.button.hideWidget')}
             style={{ ...toolbarButtonStyle, width: 20, minWidth: 20, fontSize: 12 }}

@@ -18,7 +18,7 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1"><img alt="Release v1.22.1" src="https://img.shields.io/badge/release-v1.22.1-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2"><img alt="Release v1.22.2" src="https://img.shields.io/badge/release-v1.22.2-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
@@ -61,9 +61,9 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.1/WhereMyTokens-v1.22.1-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.2/WhereMyTokens-v1.22.2-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.0)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -83,11 +83,11 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | Jul 18 | Stabilize tray-owned dashboard/widget windows to stop taskbar flicker, fix compact widget buttons, and reduce memory pressure for large usage histories while preserving Codex `Unlimited` rows |
 | **[v1.22.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1)** | Jul 17 | Show temporary unreported Codex quota windows as `Unlimited`, avoid stuck Syncing states, and keep taskbar/compact quota labels aligned |
 | **[v1.22.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.0)** | Jul 17 | Add built-in Japanese UI, a Settings language selector backed by AppSettings, and Japanese download guidance with credit to @restructure-git |
 | **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | Jul 17 | Replace legacy usage ledgers with the source-attributed SQLite UsageIndex, add Reset index recovery, and tighten taskbar mini overflow hit bounds |
 | **[v1.20.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.1)** | Jul 10 | Make taskbar mini quota rows configurable from 1-3 blocks, keep hidden-target `+N` cues, and separate source/status prefix tones from quota severity colors |
-| **[v1.20.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.20.0)** | Jul 7 | Add Codex reset-credit availability in Plan Usage and an optional self-contained Windows taskbar mini quota display with draggable 5H/1W rows |
 
 [Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
