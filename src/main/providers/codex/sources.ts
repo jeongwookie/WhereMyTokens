@@ -113,7 +113,7 @@ export function buildCodexUsageIndexSource(_ctx: ProviderContext, source: Provid
       sourceId: `codex:${codexSessionDedupeKey(source.filePath)}`,
       provider: 'codex' as const,
       kind: 'file' as const,
-      parserVersion: 2,
+      parserVersion: 3,
       version: {
         token: `${stat.size}:${stat.mtimeMs}`,
         size: stat.size,

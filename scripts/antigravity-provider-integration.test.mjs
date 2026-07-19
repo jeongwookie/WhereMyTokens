@@ -137,13 +137,14 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
     assert.equal(quota.accountLabel, 'pe***@example.com');
     assert.equal(quota.accountTooltip, 'pe***@example.com');
     assert.equal(quota.accountTooltip.includes('person@example.com'), false);
-    assert.equal(quota.models[0].remainingPct, 80);
-    assert.equal(quota.models[0].usageModel, 'Gemini 3 Pro');
-    assert.equal(quota.models[0].statsWindowKey, 'model.MODEL_GEMINI_3_PRO');
-    assert.equal(quota.models[0].durationMs, undefined);
-    assert.equal(quota.models[0].visualKind, 'percentOnly');
+    assert.equal(quota.entries[0].state, 'limited');
+    assert.equal(quota.entries[0].usedPct, 20);
+    assert.equal(quota.entries[0].target.id, 'antigravity.group.model.model-gemini-3-pro');
+    assert.equal(quota.entries[0].durationMs, null);
+    assert.equal(quota.entries[0].period, null);
+    assert.equal(quota.entries[0].usageBinding, undefined);
     assert.equal('credits' in quota, false);
-    assert.equal('source' in quota.models[0], false);
+    assert.equal('source' in quota.entries[0], false);
     const quotaWithPace = await fetchAntigravityQuotaFromServers(
       context({
         nowMs,
@@ -154,8 +155,9 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
       }),
       [serverInfo],
     );
-    assert.equal(quotaWithPace.models[0].durationMs, 5 * 60 * 60 * 1000);
-    assert.equal(quotaWithPace.models[0].visualKind, 'pace');
+    assert.equal(quotaWithPace.entries[0].durationMs, 5 * 60 * 60 * 1000);
+    assert.equal(quotaWithPace.entries[0].period, '5h');
+    assert.equal(quotaWithPace.entries[0].durationInferred, true);
     assert.equal(usage.usageIndexSources[0].descriptor.sourceId, summaryKey(serverInfo, 'c1'));
     assert.equal(indexed.usage.aggregate.requestCount, 1);
     assert.equal(indexed.usage.aggregate.inputTokens, 10);
@@ -222,8 +224,8 @@ test('Antigravity quota selection prefers the server with the newest cascade act
             [olderServer, newerServer],
           );
 
-          assert.equal(quota.models[0].remainingPct, 20);
-          assert.equal(quota.models[0].durationMs, 7 * 24 * 60 * 60 * 1000);
+          assert.equal(quota.entries[0].usedPct, 80);
+          assert.equal(quota.entries[0].durationMs, 7 * 24 * 60 * 60 * 1000);
         },
       );
     },

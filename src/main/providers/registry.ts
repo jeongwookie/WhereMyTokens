@@ -1,4 +1,5 @@
-import type { ProviderAdapter, ProviderId } from './types';
+import type { ProviderAdapter } from './types';
+import type { ProviderId } from '../../shared/quotaTypes';
 
 export class ProviderRegistry {
   private providers = new Map<ProviderId, ProviderAdapter>();

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PanelBottom, PictureInPicture2 } from 'lucide-react';
-import { AppState, ProviderQuotaSource, ProviderQuotaStatus, SessionInfo } from '../types';
+import { AppState, SessionInfo } from '../types';
+import type { ProviderQuotaSource, ProviderQuotaStatus } from '../../shared/quotaTypes';
+import { quotaElapsedPct } from '../../shared/quotaDomain';
 import { useTheme } from '../ThemeContext';
 import { fmtTokens, fmtCost, fmtRelative, modelColor, quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 // Plain (non-component) helper functions below call the i18next singleton's `.t()` directly
@@ -20,10 +22,9 @@ import RenderErrorBoundary from '../components/RenderErrorBoundary';
 import { MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 import { limitDataState, limitSourceDisplay } from '../limitDisplay';
 import {
-  buildQuotaDisplayModels,
-  buildRichCardRows,
-  quotaGroupId,
-  creditUrgencyBucket,
+buildQuotaDisplayModels,
+buildRichCardRows,
+creditUrgencyBucket,
   formatCreditDuration,
   CreditUrgency,
   QuotaDisplayRichCardViewModel,
@@ -537,10 +538,11 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const resolvedApiConnected = claudeStatus?.connected ?? apiConnected;
   const resolvedApiStatusLabel = claudeStatus?.label ?? apiStatusLabel;
   const resolvedApiError = claudeStatus?.detail ?? apiError;
-  const hasClaudeFallback = showClaudeUsage && Object.values(claudeQuota?.windows ?? {}).some(window => window.source === 'statusLine');
-  const codexFallbackWindows = Object.values(codexQuota?.windows ?? {}).filter(window => window.source === 'localLog' || window.source === 'cache');
-  const hasCodexFallback = showCodexUsage && codexFallbackWindows.length > 0;
-  const codexFallbackSource = codexFallbackWindows.some(window => window.source === 'cache') ? 'cache' : (codexFallbackWindows[0]?.source as ProviderQuotaSource | undefined);
+  const hasClaudeFallback = showClaudeUsage && claudeQuota?.source === 'statusLine';
+  const codexFallbackSource = codexQuota?.source === 'localLog' || codexQuota?.source === 'cache'
+    ? codexQuota.source
+    : undefined;
+  const hasCodexFallback = showCodexUsage && codexFallbackSource !== undefined;
   const [period, setPeriod] = useState<'today' | 'all'>('today');
   const headerStatus = useMemo(() => buildHeaderStatus({
     enabledProviders: enabledProviderList,
@@ -767,13 +769,7 @@ function clampSimplePct(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function simpleTimeElapsedPct(durationMs: number | null | undefined, resetMs: number | null): number | null {
-  if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
-  return clampSimplePct(((durationMs - resetMs) / durationMs) * 100);
-}
-
-function formatSimpleReset(resetMs: number | null, resetLabel?: string): string {
-  if (resetLabel) return resetLabel;
+function formatSimpleReset(resetMs: number | null): string {
   if (resetMs == null || resetMs <= 0) return i18n.t('mainView.quota.waitingReset');
   const totalMinutes = Math.max(1, Math.round(resetMs / 60000));
   if (totalMinutes < 60) return `${totalMinutes}m`;
@@ -787,16 +783,15 @@ function formatSimpleReset(resetMs: number | null, resetLabel?: string): string 
 function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
   const C = useTheme();
   const { t } = useTranslation();
-  const source = limitSourceDisplay(row.quota);
-  const dataState = limitDataState(row.quota, row.pending);
-  const isUnlimited = row.quota.limitState === 'unlimited';
-  const isUnreported = row.quota.limitState === 'unreported';
-  const noCapState = isUnlimited || isUnreported;
-  const percentOnly = row.visualKind === 'percentOnly';
-  const quota = clampSimplePct(row.quotaPct);
-  const elapsed = !noCapState && !row.pending && dataState === 'ready' && !percentOnly
-    ? simpleTimeElapsedPct(row.durationMs, row.resetMs)
+  const source = limitSourceDisplay(row.source);
+  const dataState = limitDataState(row.entry, row.pending);
+  const isUnlimited = row.entry.state === 'unlimited';
+  const quota = row.entry.state === 'limited' ? clampSimplePct(row.entry.usedPct) : 0;
+  const elapsed = !isUnlimited && !row.pending && dataState === 'ready'
+    ? quotaElapsedPct(row.entry, Date.now())
     : null;
+  const resetMs = row.entry.resetsAt == null ? null : Math.max(0, row.entry.resetsAt - Date.now());
+  const noCapState = isUnlimited;
   const quotaColor = noCapState
     ? C.accent
     : row.pending
@@ -809,17 +804,12 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
     : quotaColor;
   const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
-  const noCapTitleKey = isUnlimited ? 'tokenStatsCard.unlimitedTooltip' : 'tokenStatsCard.unreportedTooltip';
-  const noCapResetKey = isUnlimited ? 'mainView.quota.unlimitedReset' : 'mainView.quota.unreportedReset';
-  const noCapLabelKey = isUnlimited ? 'mainView.quota.unlimitedLabel' : 'mainView.quota.unreportedLabel';
   return (
     <div
-      title={noCapState ? t(noCapTitleKey) : row.pending ? row.pendingTitle : source.title}
+      title={isUnlimited ? t('tokenStatsCard.unlimitedTooltip') : row.pending ? row.pendingTitle : source.title}
       style={{
         display: 'grid',
-        gridTemplateColumns: percentOnly
-          ? '24px minmax(0, 1fr) 64px'
-          : '24px minmax(0, 1fr) 38px 64px',
+        gridTemplateColumns: '24px minmax(0, 1fr) 38px 64px',
         alignItems: 'center',
         gap: 6,
         padding: '3px 0',
@@ -829,7 +819,7 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
         {row.label}
       </span>
       <div style={{ position: 'relative', height: 8, background: trackColor, borderRadius: 4, overflow: 'hidden' }}>
-        {!percentOnly && elapsed != null && (
+        {elapsed != null && (
           <div
             style={{
               position: 'absolute',
@@ -854,26 +844,24 @@ function SimpleQuotaRow({ row }: { row: QuotaDisplayRowViewModel }) {
           }}
         />
       </div>
-      {!percentOnly && (
-        <span style={{ color: C.textMuted, fontSize: 9, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
-          {noCapState ? t(noCapResetKey) : row.pending ? t('mainView.quota.syncingLabel') : formatSimpleReset(row.resetMs, row.resetLabel)}
-        </span>
-      )}
+      <span style={{ color: C.textMuted, fontSize: 9, fontFamily: C.fontMono, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>
+        {isUnlimited ? t('mainView.quota.unlimitedReset') : row.pending ? t('mainView.quota.syncingLabel') : formatSimpleReset(resetMs)}
+      </span>
       <span
-        title={percentOnly ? t('mainView.quota.usedTooltip') : t('mainView.quota.usedElapsedTooltip')}
+        title={t('mainView.quota.usedElapsedTooltip')}
         style={{ color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap', textAlign: 'right', minWidth: 42 }}
       >
         {noCapState ? (
-          <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{t(noCapLabelKey)}</span>
+          <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{t('mainView.quota.unlimitedLabel')}</span>
         ) : row.pending ? (
           <span style={{ color: C.textMuted }}>...</span>
-        ) : percentOnly ? (
-          <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{formatSimplePct(quota)}</span>
         ) : (
           <>
             <span style={{ color: paceColor, fontSize: 12, fontWeight: 800 }}>{formatSimplePct(quota)}</span>
             <span style={{ color: C.textMuted }}> / </span>
-            <span>{formatSimplePct(elapsed)}</span>
+            <span title={row.entry.durationInferred ? t('mainView.quota.estimatedDuration') : undefined}>
+              {row.entry.durationInferred && elapsed != null ? '~' : ''}{formatSimplePct(elapsed)}
+            </span>
           </>
         )}
       </span>
@@ -1483,10 +1471,9 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     formatWarmupEta,
   });
   const showExtraUsage = !!extraUsage?.isEnabled;
-  const resetTargetId = quotaGroupId('codex', 'resets');
   const visibleTargetIds = new Set([...richGroups.map(group => group.id), ...simpleGroups.map(group => group.id)]);
   const orderedTargetIds = targets
-    .filter(group => group.id === resetTargetId || visibleTargetIds.has(group.id))
+    .filter(group => visibleTargetIds.has(group.id))
     .map(group => group.id);
   const richGroupById = new Map(richGroups.map(group => [group.id, group]));
   const simpleGroupById = new Map(simpleGroups.map(group => [group.id, group]));
@@ -1518,7 +1505,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     <div key={key} data-testid="plan-usage-rich-row" style={{ display: 'grid', gridTemplateColumns: cards.length === 1 ? '1fr' : '1fr 1fr', borderBottom: `1px solid ${C.border}` }}>
       {cards.map((cardView, cardIndex) => {
         const { group, row: card } = cardView;
-        const source = limitSourceDisplay(card.quota);
+        const source = limitSourceDisplay(card.source);
         const accountTooltip = providerQuotas[cardView.provider]?.accountTooltip;
         return (
           <TokenStatsCard
@@ -1526,22 +1513,19 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
             provider={group.label}
             period={card.label}
             stats={card.stats}
+            showLocalStats={card.hasLocalStats}
             currency={currency}
             usdToKrw={usdToKrw}
-            limitPct={card.quota.pct}
-            resetMs={card.visualKind === 'percentOnly' ? null : card.quota.resetMs}
-            resetLabel={card.visualKind === 'percentOnly' ? undefined : card.quota.resetLabel}
+            quotaEntry={card.entry}
             apiConnected={card.apiConnected}
             limitSourceLabel={source.label}
             limitSourceTitle={source.title}
             limitSourceTone={source.tone}
-            limitDataState={limitDataState(card.quota, card.pending)}
-            limitState={card.quota.limitState}
+            limitDataState={limitDataState(card.entry, card.pending)}
             pendingLimit={card.pending}
             pendingLimitLabel={t('mainView.quota.pendingLabel')}
             pendingLimitTitle={card.pendingTitle}
             cacheMetricTitle={card.cacheMetricTitle}
-            durationMs={card.durationMs}
             accountTooltip={accountTooltip}
             hideCost={card.hideCost}
             hero
@@ -1561,12 +1545,6 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     }
   };
   for (const targetId of orderedTargetIds) {
-    if (targetId === resetTargetId) {
-      flushRichCards();
-      const entry = renderResetEntry('codex-reset-target');
-      if (entry) orderedPlanEntries.push(entry);
-      continue;
-    }
     const richGroup = richGroupById.get(targetId);
     if (richGroup) {
       pendingRichCards.push(...(richCardsByGroupId.get(richGroup.id) ?? []));
@@ -1583,6 +1561,8 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     }
   }
   flushRichCards();
+  const resetEntry = renderResetEntry('codex-reset-credits');
+  if (resetEntry) orderedPlanEntries.push(resetEntry);
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>

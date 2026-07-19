@@ -1,0 +1,19 @@
+{
+  "sevenDayOnly": {
+    "rate_limit": { "primary_window": { "window_minutes": 10080, "used_percent": 40, "reset_at": 1784500000 } }
+  },
+  "fiveHourOnly": {
+    "rate_limit": { "secondary_window": { "window_minutes": 300, "used_percent": 20, "reset_after_seconds": 3600 } }
+  },
+  "reversed": {
+    "rate_limit": {
+      "primary_window": { "window_minutes": 10080, "used_percent": 41 },
+      "secondary_window": { "window_minutes": 300, "used_percent": 21 }
+    }
+  },
+  "unknownDuration": {
+    "rate_limit": { "primary_window": { "window_minutes": 1440, "used_percent": 10 } }
+  },
+  "absent": { "rate_limit": {} },
+  "creditsUnlimited": { "rate_limit": {}, "credits": { "unlimited": true } }
+}

@@ -314,7 +314,7 @@ const CSS_VAR_MAP: Record<keyof Theme, string> = {
   active: '--wmt-active', waiting: '--wmt-waiting', idle: '--wmt-idle', compacting: '--wmt-compacting',
   input: '--wmt-input', output: '--wmt-output', cacheW: '--wmt-cache-w', cacheR: '--wmt-cache-r',
   opus: '--wmt-opus', sonnet: '--wmt-sonnet', haiku: '--wmt-haiku', gpt: '--wmt-gpt',
-  gpt5: '--wmt-gpt-5', gptCodex: '--wmt-gpt-codex', gpt4: '--wmt-gpt-4', codexMini: '--wmt-codex-mini',
+  gpt5: '--wmt-gpt-5', gpt54: '--wmt-gpt-5-4', gpt55: '--wmt-gpt-5-5', gptCodex: '--wmt-gpt-codex', gpt4: '--wmt-gpt-4', codexMini: '--wmt-codex-mini',
   barGreen: '--wmt-bar-green', barOrange: '--wmt-bar-orange', barRed: '--wmt-bar-red', barYellow: '--wmt-bar-yellow',
   gradeExcellentBg: '--wmt-grade-excellent-bg', gradeExcellentColor: '--wmt-grade-excellent-color',
   gradeGoodBg: '--wmt-grade-good-bg', gradeGoodColor: '--wmt-grade-good-color',

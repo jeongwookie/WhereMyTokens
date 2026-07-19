@@ -8,9 +8,9 @@ import { EventEmitter } from 'node:events';
 
 import codexUsageFetcher from '../dist/main/codexUsageFetcher.js';
 import codexQuota from '../dist/main/providers/codex/quota.js';
+import quotaDomain from '../dist/shared/quotaDomain.js';
 
 const {
-  CODEX_USAGE_CACHE_SCHEMA_VERSION,
   resolveCodexResetCreditsUrl,
   parseCodexResetCreditsPayload,
   resetCreditsFromUsagePayload,
@@ -19,6 +19,7 @@ const {
   getCodexAuthIdentityHash,
 } = codexUsageFetcher;
 const { fetchCodexQuota } = codexQuota;
+const { validateProviderQuotaSnapshot } = quotaDomain;
 
 const originalRequest = https.request;
 const originalCodexHome = process.env.CODEX_HOME;
@@ -333,7 +334,7 @@ test('usage-ok + reset-429: count may show but status stays rate-limited (backof
   assert.equal(snap.resetCredits.status.retryAfterMs, 90_000);
   assert.equal(snap.resetCredits.availableCount, 3);             // count-only fallback still shows the count
   assert.equal(snap.resetCredits.countOnly, true);
-  assert.ok(snap.usage, 'usage unaffected');
+  assert.equal(snap.entries.length, 1, 'usage entries unaffected');
 });
 
 test('usage-ok + reset-401: error state, no stale count laundered as ok', async () => {
@@ -346,7 +347,7 @@ test('usage-ok + reset-401: error state, no stale count laundered as ok', async 
   assert.equal(snap.resetCredits.status.code, 'unauthorized');   // preserved -> Task 3 evicts
   assert.equal(snap.resetCredits.availableCount, 0);             // do NOT show a stale count for a rejected credential
   assert.equal(snap.resetCredits.countOnly, false);
-  assert.ok(snap.usage, 'usage unaffected');
+  assert.equal(snap.entries.length, 1, 'usage entries unaffected');
 });
 
 test('usage-ok + reset-schema-changed: failing status preserved, empty list', async () => {
@@ -454,11 +455,21 @@ function fakeStore(initial = {}) {
 
 function codexSnapshot({ usage = true, reset }) {
   const { authMtimeMs, authIdentityHash } = ensureTempCodexAuth();
+  const capturedAt = Date.now();
   return {
-    provider: 'codex', source: 'api', capturedAt: Date.now(),
-    groups: [], windowDisplay: {},
-    windows: usage ? { h5: { pct: 5, resetMs: 3600000, source: 'api' } } : undefined,
-    usage: usage ? { h5Available: true, weekAvailable: false, h5Pct: 5, weekPct: 0, h5ResetMs: 3600000, weekResetMs: null, h5LimitReached: false, weekLimitReached: false, plan: 'pro', credits: null, limitReached: false, rateLimitReachedType: null } : null,
+    provider: 'codex', source: 'api', capturedAt,
+    entries: usage ? [{
+      key: 'codex.account.5h',
+      target: { id: 'codex.group.account', label: 'Codex', defaultMode: 'rich', defaultOrder: 0, taskbarAbbreviation: 'X' },
+      scope: { kind: 'account' },
+      state: 'limited', usedPct: 5,
+      resetsAt: capturedAt + 3_600_000,
+      durationMs: 18_000_000,
+      durationInferred: false,
+      period: '5h',
+      usageBinding: { kind: 'all-provider-models' },
+    }] : [],
+    planName: 'pro',
     status: { code: 'ok', connected: true, label: '', detail: '' },
     authMtimeMs,
     authIdentityHash,
@@ -468,12 +479,25 @@ function codexSnapshot({ usage = true, reset }) {
   };
 }
 
+function cachedCodexQuotaRecord(pct, capturedAt, authMtimeMs, authIdentityHash) {
+  const snapshot = codexSnapshot({ usage: true, reset: null });
+  return {
+    schemaVersion: 1,
+    authMtimeMs,
+    authIdentityHash,
+    snapshot: {
+      ...snapshot,
+      source: 'cache',
+      capturedAt,
+      entries: snapshot.entries.map(entry => ({ ...entry, usedPct: pct })),
+    },
+  };
+}
+
 function noCredentialCodexSnapshot() {
   return {
     provider: 'codex', source: 'localLog', capturedAt: Date.now(),
-    groups: [], windowDisplay: {},
-    windows: undefined,
-    usage: null,
+    entries: [],
     status: { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' },
     authMtimeMs: null,
     authIdentityHash: null,
@@ -512,7 +536,7 @@ test('reset ok persists _cachedCodexResetCredits; usage cache written independen
   const reset = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset }));
   assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache written');
-  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache written');
+  assert.ok(store.map.get('_cachedCodexQuota'), 'canonical quota cache written');
 });
 
 test('Codex-disabled startup does not expose or validate persisted Codex quota caches', () => {
@@ -524,7 +548,7 @@ test('Codex-disabled startup does not expose or validate persisted Codex quota c
   const mgr = new StateManager(store, () => {});
   const quotas = mgr.buildProviderQuotas(Date.now());
   assert.equal(quotas.codex, undefined);
-  assert.equal(store.map.has('_cachedCodexUsagePct'), true);
+  assert.equal(store.map.has('_cachedCodexUsagePct'), false, 'legacy usage cache is retired at startup');
   assert.equal(store.map.has('_cachedCodexResetCredits'), true);
 });
 
@@ -573,24 +597,7 @@ test('startup valid auth-bound Codex caches are exposed in initial providerQuota
   const now = Date.now();
   const store = fakeStore({
     enabledProviders: ['codex'],
-    _cachedCodexUsagePct: {
-      schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
-      storedAt: now - 1000,
-      authMtimeMs,
-      authIdentityHash,
-      h5Available: true,
-      weekAvailable: false,
-      h5Pct: 12,
-      weekPct: 0,
-      h5ResetMs: 3_600_000,
-      weekResetMs: null,
-      h5LimitReached: false,
-      weekLimitReached: false,
-      plan: 'pro',
-      credits: null,
-      limitReached: false,
-      rateLimitReachedType: null,
-    },
+    _cachedCodexQuota: cachedCodexQuotaRecord(12, now - 1000, authMtimeMs, authIdentityHash),
     _cachedCodexResetCredits: {
       schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
       storedAt: now - 1000,
@@ -612,7 +619,7 @@ test('startup valid auth-bound Codex caches are exposed in initial providerQuota
   const quota = mgr.getState().providerQuotas.codex;
 
   assert.ok(quota, 'Codex quota is visible before the first refresh');
-  assert.equal(quota.windows.h5.pct, 12);
+  assert.equal(quota.entries[0].usedPct, 12);
   assert.equal(quota.resetCredits.availableCount, 1);
   assert.equal(quota.resetCredits.source, 'cache');
   assert.equal(quota.resetCredits.credits[0].idSuffix, null);
@@ -655,24 +662,7 @@ test('Codex provider toggle preserves auth-bound caches and rehydrates them when
   const now = Date.now();
   const store = fakeStore({
     enabledProviders: ['codex'],
-    _cachedCodexUsagePct: {
-      schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
-      storedAt: now - 1000,
-      authMtimeMs,
-      authIdentityHash,
-      h5Available: true,
-      weekAvailable: false,
-      h5Pct: 22,
-      weekPct: 0,
-      h5ResetMs: 3_600_000,
-      weekResetMs: null,
-      h5LimitReached: false,
-      weekLimitReached: false,
-      plan: 'pro',
-      credits: null,
-      limitReached: false,
-      rateLimitReachedType: null,
-    },
+    _cachedCodexQuota: cachedCodexQuotaRecord(22, now - 1000, authMtimeMs, authIdentityHash),
     _cachedCodexResetCredits: {
       schemaVersion: CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION,
       storedAt: now - 1000,
@@ -694,7 +684,7 @@ test('Codex provider toggle preserves auth-bound caches and rehydrates them when
 
   store.set('enabledProviders', ['claude']);
   mgr.applySettingsChange();
-  assert.ok(store.map.get('_cachedCodexUsagePct'), 'disabled provider does not delete auth-bound usage cache');
+  assert.ok(store.map.get('_cachedCodexQuota'), 'disabled provider does not delete auth-bound quota cache');
   assert.ok(store.map.get('_cachedCodexResetCredits'), 'disabled provider does not delete auth-bound reset cache');
   assert.equal(mgr.getState().providerQuotas.codex, undefined);
 
@@ -702,7 +692,7 @@ test('Codex provider toggle preserves auth-bound caches and rehydrates them when
   mgr.applySettingsChange();
   const quota = mgr.getState().providerQuotas.codex;
   assert.ok(quota, 're-enabled Codex rehydrates trusted cache immediately');
-  assert.equal(quota.windows.h5.pct, 22);
+  assert.equal(quota.entries[0].usedPct, 22);
   assert.equal(quota.resetCredits.availableCount, 1);
 });
 
@@ -715,7 +705,7 @@ test('reset 401 evicts ONLY the reset cache; usage cache intact', () => {
   const reset401 = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'unauthorized', connected: false, label: 'auth failed', detail: 'rejected' } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: reset401 }));
   assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'reset cache evicted on 401');
-  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache untouched by reset 401');
+  assert.ok(store.map.get('_cachedCodexQuota'), 'quota cache untouched by reset 401');
 });
 
 test('reset schema-changed (e.g. a remapped 404) evicts ONLY the reset cache (R4-1)', () => {
@@ -727,7 +717,7 @@ test('reset schema-changed (e.g. a remapped 404) evicts ONLY the reset cache (R4
   const resetSchema = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'schema-changed', connected: false, label: 'schema changed', detail: 'endpoint 404', httpStatus: 404 } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: resetSchema }));
   assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'reset cache evicted on schema-changed');
-  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache untouched');
+  assert.ok(store.map.get('_cachedCodexQuota'), 'quota cache untouched');
 });
 
 test('no-credentials clears BOTH caches and zeroes reset backoff', () => {
@@ -738,7 +728,7 @@ test('no-credentials clears BOTH caches and zeroes reset backoff', () => {
   const noCred = { ...codexSnapshot({ usage: false, reset: null }), status: { code: 'no-credentials', connected: false, label: 'local log', detail: '' } };
   applyCodex(mgr, noCred);
   assert.equal(store.map.has('_cachedCodexResetCredits'), false);
-  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
+  assert.equal(store.map.has('_cachedCodexQuota'), false);
   assert.equal(mgr.codexResetBackoffMs, 0);
   assert.equal(mgr.lastCodexUsageCallMs, 0);
 });
@@ -756,11 +746,9 @@ test('Codex auth change clears failed-attempt usage and reset backoffs even with
   mgr.applyProviderQuotaSnapshot({
     ...codexSnapshot({ usage: false, reset: reset401 }),
     status: unauthorized,
-    usage: null,
-    windows: undefined,
   }, first.requestSeq, now);
 
-  assert.equal(mgr.codexUsagePct, null);
+  assert.equal(mgr.cachedCodexQuota, null);
   assert.ok(mgr.codexUsageBackoffMs > 0);
   assert.ok(mgr.codexResetBackoffMs > 0);
 
@@ -803,7 +791,7 @@ test('reset 429 sets reset-specific backoff without touching usage backoff (F1)'
   applyCodex(mgr, codexSnapshot({ usage: true, reset: reset429 }));
   assert.equal(mgr.codexResetBackoffMs, 90_000, 'reset backoff honors Retry-After');
   assert.equal(mgr.codexUsageBackoffMs, 0, 'usage backoff untouched by reset 429');
-  assert.ok(store.map.get('_cachedCodexUsagePct'));
+  assert.ok(store.map.get('_cachedCodexQuota'));
 });
 
 test('reset cooldown throttles ONLY the reset GET; usage scheduling is independent (R2-2)', () => {
@@ -878,7 +866,7 @@ test('reset failure does not evict usage cache and vice-versa (independence)', (
   const firstPublic = mgr.buildCodexProviderQuota(readAt);
   assert.equal(firstPublic.resetCredits?.credits.length, 1, 'public snapshot carries active reset credits');
   assert.equal(firstPublic.resetCredits?.credits[0].idSuffix, null);
-  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache written by the initial good usage apply');
+  assert.ok(store.map.get('_cachedCodexQuota'), 'quota cache written by the initial good usage apply');
   assert.ok(store.map.get('_cachedCodexResetCredits'), 'reset cache written by the initial good reset apply');
 
   const reset401 = {
@@ -892,8 +880,8 @@ test('reset failure does not evict usage cache and vice-versa (independence)', (
   };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: reset401 }));
 
-  assert.ok(store.map.get('_cachedCodexUsagePct'), 'usage cache survives reset 401');
-  assert.equal(mgr.codexUsagePct?.h5Pct, 5, 'in-memory usage remains intact after reset 401');
+  assert.ok(store.map.get('_cachedCodexQuota'), 'quota cache survives reset 401');
+  assert.equal(mgr.cachedCodexQuota?.entries[0]?.usedPct, 5, 'in-memory quota remains intact after reset 401');
   assert.equal(store.map.has('_cachedCodexResetCredits'), false, 'reset cache evicted on reset 401');
   assert.equal(mgr.codexResetCredits, null, 'in-memory reset cache evicted on reset 401');
 
@@ -1058,13 +1046,13 @@ test('reset-only no-credentials clears stale usage cache immediately', () => {
   const mgr = new StateManager(store, () => {});
   const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
-  assert.ok(store.map.get('_cachedCodexUsagePct'));
+  assert.ok(store.map.get('_cachedCodexQuota'));
 
   const resetNoCred = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'no-credentials', connected: false, label: 'local log', detail: 'Codex auth.json with ChatGPT tokens was not found.' } };
   applyCodex(mgr, { ...codexSnapshot({ usage: false, reset: resetNoCred }), usageSkipped: true, source: 'cache' });
 
-  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
-  assert.equal(mgr.codexUsagePct, null);
+  assert.equal(store.map.has('_cachedCodexQuota'), false);
+  assert.equal(mgr.cachedCodexQuota, null);
   assert.equal(mgr.codexUsageConnected, false);
 });
 
@@ -1073,13 +1061,13 @@ test('reset-only schema-changed clears stale usage cache immediately', () => {
   const mgr = new StateManager(store, () => {});
   const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
-  assert.ok(store.map.get('_cachedCodexUsagePct'));
+  assert.ok(store.map.get('_cachedCodexQuota'));
 
   const resetSchema = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'schema-changed', connected: false, label: 'unsupported endpoint', detail: 'Custom endpoint unsupported.' } };
   applyCodex(mgr, { ...codexSnapshot({ usage: false, reset: resetSchema }), usageSkipped: true, source: 'cache' });
 
-  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
-  assert.equal(mgr.codexUsagePct, null);
+  assert.equal(store.map.has('_cachedCodexQuota'), false);
+  assert.equal(mgr.cachedCodexQuota, null);
   assert.equal(mgr.codexUsageConnected, false);
 });
 
@@ -1088,13 +1076,13 @@ test('in-memory Codex usage is discarded when auth identity changes', () => {
   const mgr = new StateManager(store, () => {});
   const good = { credits: [{ idSuffix: 'a', status: 'available', expiresAtUtc: '2999-01-01T00:00:00Z' }], availableCount: 1, totalEarnedCount: 0, checkedAt: Date.now(), countOnly: false, source: 'api', status: { code: 'ok', connected: true, label: '', detail: '' } };
   applyCodex(mgr, codexSnapshot({ usage: true, reset: good }));
-  assert.ok(mgr.getAgedCodexUsagePct(Date.now()), 'usage sample is initially visible');
+  assert.ok(mgr.getAgedCodexQuota(Date.now()), 'quota snapshot is initially visible');
 
   fs.writeFileSync(path.join(process.env.CODEX_HOME, 'auth.json'), JSON.stringify({ tokens: { access_token: 'test-access-token-b', account_id: 'acct_b' } }));
 
-  assert.equal(mgr.getAgedCodexUsagePct(Date.now()), null);
-  assert.equal(mgr.codexUsagePct, null);
-  assert.equal(store.map.has('_cachedCodexUsagePct'), false);
+  assert.equal(mgr.getAgedCodexQuota(Date.now()), null);
+  assert.equal(mgr.cachedCodexQuota, null);
+  assert.equal(store.map.has('_cachedCodexQuota'), false);
 });
 
 test('fresh count-only fallback wins over older reset list and survives reset-skipped usage ticks', () => {
@@ -1165,11 +1153,10 @@ test('sanitizeResetCredits clamps persisted or IPC count values', () => {
 
 // --- Task 5: fresh-apply sanitizer whitelists a validated resetCredits ---
 
-const { sanitizeProviderQuotaSnapshot } = stateManagerModule;
-
-test('sanitizeProviderQuotaSnapshot whitelists a validated resetCredits (public shape)', () => {
-  const out = sanitizeProviderQuotaSnapshot('codex', {
+test('validateProviderQuotaSnapshot whitelists validated resetCredits and entries', () => {
+  const out = validateProviderQuotaSnapshot({
     provider: 'codex', source: 'api', capturedAt: 1,
+    entries: [],
     resetCredits: {
       credits: [{ idSuffix: 'aaa', status: 'available', expiresAtUtc: '2026-07-12T00:00:00Z', title: 'leak' }],
       availableCount: 1, totalEarnedCount: 0, checkedAt: 123, countOnly: false, source: 'api',
@@ -1183,9 +1170,9 @@ test('sanitizeProviderQuotaSnapshot whitelists a validated resetCredits (public 
   assert.equal('responseKeys' in out.resetCredits.status, false);
 });
 
-test('sanitizeProviderQuotaSnapshot yields null resetCredits when absent', () => {
-  const out = sanitizeProviderQuotaSnapshot('codex', { provider: 'codex', source: 'api', capturedAt: 1 });
-  assert.equal(out.resetCredits, null);
+test('validateProviderQuotaSnapshot leaves resetCredits absent when not supplied', () => {
+  const out = validateProviderQuotaSnapshot({ provider: 'codex', source: 'api', capturedAt: 1, entries: [] });
+  assert.equal(out.resetCredits, undefined);
 });
 
 // --- Closing-gate G1 (spec §8): errored/no-credentials must render an in-card "unavailable",

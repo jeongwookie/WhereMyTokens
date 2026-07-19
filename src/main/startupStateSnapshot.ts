@@ -1,4 +1,4 @@
-export const STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION = 5;
+export const STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION = 6;
 export const STARTUP_STATE_SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type StateFreshness = 'empty' | 'restored' | 'fresh';
@@ -50,14 +50,10 @@ function sanitizeStateForSnapshot<TState extends StartupSnapshotState>(state: TS
     settings?: unknown;
     providerQuotas?: unknown;
   };
-  const { settings: _settings, providerQuotas: rawProviderQuotas, ...rest } = raw;
-  const providerQuotas = asRecord(rawProviderQuotas);
-  const sanitizedProviderQuotas = providerQuotas
-    ? Object.fromEntries(Object.entries(providerQuotas).filter(([provider]) => provider !== 'codex'))
-    : undefined;
+  const { settings: _settings, providerQuotas: _providerQuotas, ...rest } = raw;
   return {
     ...rest,
-    ...(providerQuotas ? { providerQuotas: sanitizedProviderQuotas } : {}),
+    providerQuotas: {},
     sessions: Array.isArray(raw.sessions)
       ? raw.sessions
           .filter((session): session is Record<string, unknown> => !!session && typeof session === 'object' && !Array.isArray(session))

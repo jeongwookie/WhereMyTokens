@@ -1,5 +1,5 @@
 import type { UsageEntry, UsageEntryProjection } from './types';
-import type { ProviderId } from '../providers/types';
+import type { ProviderId } from '../../shared/quotaTypes';
 
 const INITIAL_CAPACITY = 256;
 

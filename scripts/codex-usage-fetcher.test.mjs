@@ -1,350 +1,57 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import https from 'node:https';
-import os from 'node:os';
-import path from 'node:path';
-import { EventEmitter } from 'node:events';
+import test from 'node:test';
+import codexFetcher from '../dist/main/codexUsageFetcher.js';
+import codexProvider from '../dist/main/providers/codex/quota.js';
 
-import codexUsageFetcher from '../dist/main/codexUsageFetcher.js';
+const { parseCodexQuotaPayload, resolveCodexUsageUrl, normalizeCodexUsageBaseUrl } = codexFetcher;
+const { codexQuotaEntries } = codexProvider;
+const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/quota/codex-windows.json', import.meta.url), 'utf8'));
+const NOW = Date.parse('2026-07-18T00:00:00Z');
 
-const {
-  CODEX_USAGE_CACHE_SCHEMA_VERSION,
-  fetchCodexUsagePct,
-  normalizeStoredCodexUsagePct,
-  resolveCodexUsageUrl,
-} = codexUsageFetcher;
-
-const originalRequest = https.request;
-const originalCodexHome = process.env.CODEX_HOME;
-const tempDirs = [];
-let lastRequestOptions = null;
-
-function makeTempCodexHome(authPayload = null, configText = null) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-codex-test-'));
-  tempDirs.push(dir);
-  process.env.CODEX_HOME = dir;
-  if (authPayload) {
-    fs.writeFileSync(path.join(dir, 'auth.json'), JSON.stringify(authPayload));
-  }
-  if (configText != null) {
-    fs.writeFileSync(path.join(dir, 'config.toml'), configText);
-  }
-  return dir;
-}
-
-function withHttpResponse(statusCode, payload, headers = {}) {
-  https.request = function patchedRequest(options, callback) {
-    lastRequestOptions = options;
-    const req = new EventEmitter();
-    req.setTimeout = () => req;
-    req.destroy = (error) => {
-      if (error) process.nextTick(() => req.emit('error', error));
-    };
-    req.end = () => {
-      const res = new EventEmitter();
-      res.statusCode = statusCode;
-      res.headers = headers;
-      callback(res);
-      process.nextTick(() => {
-        const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
-        if (body) res.emit('data', body);
-        res.emit('end');
-      });
-    };
-    return req;
-  };
-}
-
-function restoreMocks() {
-  https.request = originalRequest;
-  lastRequestOptions = null;
-  if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
-  else process.env.CODEX_HOME = originalCodexHome;
-  for (const dir of tempDirs.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-test.afterEach(() => {
-  restoreMocks();
-});
-
-test('Codex usage URL follows official path style', () => {
+test('Codex usage URL remains on the official backend path', () => {
   assert.equal(resolveCodexUsageUrl('https://chatgpt.com'), 'https://chatgpt.com/backend-api/wham/usage');
-  assert.equal(resolveCodexUsageUrl('https://chat.openai.com/'), 'https://chat.openai.com/backend-api/wham/usage');
-  assert.equal(resolveCodexUsageUrl('https://chatgpt.com/api/codex'), 'https://chatgpt.com/api/codex/usage');
-  assert.equal(resolveCodexUsageUrl('https://chatgpt.com/api/codex/usage'), 'https://chatgpt.com/api/codex/usage');
-  assert.equal(resolveCodexUsageUrl('https://example.test'), 'https://chatgpt.com/backend-api/wham/usage');
-  assert.equal(resolveCodexUsageUrl('http://chatgpt.com'), 'https://chatgpt.com/backend-api/wham/usage');
+  assert.equal(normalizeCodexUsageBaseUrl('https://chatgpt.com/backend-api/'), 'https://chatgpt.com/backend-api');
 });
 
-test('Codex live usage reads auth.json, sends safe headers, and parses windows', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-      account_id: 'acct_test',
-    },
-  });
-  const nowSec = Math.floor(Date.now() / 1000);
-  withHttpResponse(200, {
-    plan_type: 'pro',
-    rate_limit: {
-      primary_window: { used_percent: 7, reset_at: nowSec + 3600, limit_window_seconds: 18_000 },
-      secondary_window: { used_percent: 53, reset_at: nowSec + 86_400, limit_window_seconds: 604_800 },
-      limit_reached: false,
-    },
-    credits: { has_credits: true, unlimited: false, balance: '12.34' },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.h5Available, true);
-  assert.equal(result.usage?.weekAvailable, true);
-  assert.equal(result.usage?.h5Pct, 7);
-  assert.equal(result.usage?.weekPct, 53);
-  assert.equal(result.usage?.h5LimitReached, false);
-  assert.equal(result.usage?.weekLimitReached, false);
-  assert.equal(result.usage?.plan, 'pro');
-  assert.equal(result.usage?.credits?.balance, '12.34');
-  assert.equal(lastRequestOptions.hostname, 'chatgpt.com');
-  assert.equal(lastRequestOptions.path, '/backend-api/wham/usage');
-  assert.equal(lastRequestOptions.headers.Authorization, 'Bearer test-access-token');
-  assert.equal(lastRequestOptions.headers['ChatGPT-Account-Id'], 'acct_test');
-  assert.equal(lastRequestOptions.headers.Accept, 'application/json');
-  assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
+test('Codex maps 7d-only and 5h-only windows by exact duration, not slot position', () => {
+  const seven = parseCodexQuotaPayload(fixture.sevenDayOnly, NOW).usage;
+  const five = parseCodexQuotaPayload(fixture.fiveHourOnly, NOW).usage;
+  assert.deepEqual(seven.windows.map(window => window.durationMs), [604_800_000]);
+  assert.deepEqual(five.windows.map(window => window.durationMs), [18_000_000]);
+  assert.deepEqual(codexQuotaEntries(seven).map(entry => entry.key), ['codex.account.7d']);
+  assert.deepEqual(codexQuotaEntries(five).map(entry => entry.key), ['codex.account.5h']);
 });
 
-test('Codex live usage treats unlimited credits without windows as unlimited quota windows', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-      account_id: 'acct_test',
-    },
-  });
-  withHttpResponse(200, {
-    plan_type: 'pro',
-    credits: { has_credits: true, unlimited: true, balance: 'unlimited' },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.unlimited, true);
-  assert.equal(result.usage?.h5Available, true);
-  assert.equal(result.usage?.weekAvailable, true);
-  assert.equal(result.usage?.h5Unlimited, true);
-  assert.equal(result.usage?.weekUnlimited, true);
-  assert.equal(result.usage?.h5Pct, 0);
-  assert.equal(result.usage?.weekPct, 0);
-  assert.equal(result.usage?.credits?.unlimited, true);
+test('Codex reversed primary/secondary slots preserve semantic 7d then 5h durations', () => {
+  const usage = parseCodexQuotaPayload(fixture.reversed, NOW).usage;
+  assert.deepEqual(usage.windows.map(window => [window.durationMs, window.usedPct]), [
+    [604_800_000, 41],
+    [18_000_000, 21],
+  ]);
 });
 
-test('Codex live usage marks missing 5h window as unreported when weekly data is present', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-      account_id: 'acct_test',
-    },
-  });
-  const nowSec = Math.floor(Date.now() / 1000);
-  withHttpResponse(200, {
-    plan_type: 'pro',
-    rate_limit: {
-      secondary_window: { used_percent: 9, reset_at: nowSec + 604_800, limit_window_seconds: 604_800 },
-      limit_reached: false,
-    },
-    credits: { has_credits: false, unlimited: false, balance: '0' },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.unlimited, false);
-  assert.equal(result.usage?.h5Available, true);
-  assert.equal(result.usage?.weekAvailable, true);
-  assert.equal(result.usage?.h5Unreported, true);
-  assert.equal(result.usage?.weekUnreported, false);
-  assert.equal(result.usage?.h5Pct, 0);
-  assert.equal(result.usage?.weekPct, 9);
+test('Codex unknown-only duration is schema-invalid and does not become a placeholder', () => {
+  const parsed = parseCodexQuotaPayload(fixture.unknownDuration, NOW);
+  assert.equal(parsed.usage, null);
+  assert.equal(parsed.authoritativeEmpty, false);
 });
 
-test('Codex live usage rejects non-OpenAI custom base URLs before sending auth headers', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-      account_id: 'acct_test',
-    },
-  }, 'chatgpt_base_url = "https://example.test"');
-  withHttpResponse(200, {
-    should_not: 'be requested',
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'schema-changed');
-  assert.equal(result.status.label, 'unsupported endpoint');
-  assert.equal(result.usage, null);
-  assert.equal(lastRequestOptions, null);
-  assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
+test('Codex absent windows and credits-unlimited are authoritative empty quota arrays', () => {
+  for (const payload of [fixture.absent, fixture.creditsUnlimited]) {
+    const parsed = parseCodexQuotaPayload(payload, NOW);
+    assert.equal(parsed.authoritativeEmpty, true);
+    assert.deepEqual(parsed.usage.windows, []);
+    assert.deepEqual(codexQuotaEntries(parsed.usage), []);
+  }
+  assert.equal(parseCodexQuotaPayload(fixture.creditsUnlimited, NOW).usage.credits.unlimited, true);
 });
 
-test('Codex global limit_reached does not override unrelated weekly window', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-    },
-  });
-  const nowSec = Math.floor(Date.now() / 1000);
-  withHttpResponse(200, {
-    rate_limit: {
-      primary_window: { used_percent: 9, remaining_percent: 0, reset_at: nowSec + 3600, limit_window_seconds: 18_000 },
-      secondary_window: { used_percent: 100, remaining_percent: 22, reset_at: nowSec + 604_800, limit_window_seconds: 604_800 },
-      limit_reached: true,
-    },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.limitReached, true);
-  assert.equal(result.usage?.h5Pct, 100);
-  assert.equal(result.usage?.weekPct, 78);
-  assert.equal(result.usage?.h5LimitReached, true);
-  assert.equal(result.usage?.weekLimitReached, false);
-});
-
-test('Codex clear reached type only marks the matching 5h window', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-    },
-  });
-  const nowSec = Math.floor(Date.now() / 1000);
-  withHttpResponse(200, {
-    rate_limit: {
-      primary_window: { used_percent: 9, reset_at: nowSec + 3600, limit_window_seconds: 18_000 },
-      secondary_window: { used_percent: 17, reset_at: nowSec + 604_800, limit_window_seconds: 604_800 },
-      rate_limit_reached_type: 'primary_window',
-    },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.limitReached, true);
-  assert.equal(result.usage?.h5Pct, 100);
-  assert.equal(result.usage?.weekPct, 17);
-  assert.equal(result.usage?.h5LimitReached, true);
-  assert.equal(result.usage?.weekLimitReached, false);
-});
-
-test('Codex ambiguous reached type is metadata only', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-    },
-  });
-  const nowSec = Math.floor(Date.now() / 1000);
-  withHttpResponse(200, {
-    rate_limit_reached_type: 'rate_limit_reached',
-    rate_limit: {
-      primary_window: { used_percent: 9, reset_at: nowSec + 3600, limit_window_seconds: 18_000 },
-      secondary_window: { used_percent: 17, reset_at: nowSec + 604_800, limit_window_seconds: 604_800 },
-    },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.limitReached, true);
-  assert.equal(result.usage?.h5Pct, 9);
-  assert.equal(result.usage?.weekPct, 17);
-  assert.equal(result.usage?.h5LimitReached, false);
-  assert.equal(result.usage?.weekLimitReached, false);
-});
-
-test('Codex remaining percentage takes precedence over used percentage aliases', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-    },
-  });
-  const nowSec = Math.floor(Date.now() / 1000);
-  withHttpResponse(200, {
-    rate_limit: {
-      primary_window: { used_percentage: 3, remaining_percentage: 25, reset_at: nowSec + 3600, limit_window_seconds: 18_000 },
-      secondary_window: { used_percent: 91, remaining_percent: 60, reset_at: nowSec + 604_800, limit_window_seconds: 604_800 },
-    },
-  });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'ok');
-  assert.equal(result.usage?.h5Pct, 75);
-  assert.equal(result.usage?.weekPct, 40);
-});
-
-test('Codex usage fetcher returns local-log status when auth is missing', async () => {
-  makeTempCodexHome();
-  withHttpResponse(200, {});
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'no-credentials');
-  assert.equal(result.usage, null);
-  assert.equal(lastRequestOptions, null);
-});
-
-test('Codex usage fetcher respects Retry-After on 429 without storing response body', async () => {
-  makeTempCodexHome({
-    tokens: {
-      access_token: 'test-access-token',
-    },
-  });
-  withHttpResponse(429, { error: 'rate limited' }, { 'retry-after': '120' });
-
-  const result = await fetchCodexUsagePct();
-
-  assert.equal(result.status.code, 'rate-limited');
-  assert.equal(result.status.retryAfterMs, 120_000);
-  assert.equal(JSON.stringify(result.status).includes('rate limited'), true);
-  assert.equal(JSON.stringify(result.status).includes('test-access-token'), false);
-});
-
-test('stored Codex usage cache is rejected after auth file changes', () => {
-  const now = Date.now();
-  const authIdentityHash = 'auth-hash-a';
-  const cached = {
-    schemaVersion: CODEX_USAGE_CACHE_SCHEMA_VERSION,
-    storedAt: now - 1000,
-    authMtimeMs: 123,
-    authIdentityHash,
-    h5Available: true,
-    weekAvailable: true,
-    h5Unlimited: false,
-    weekUnlimited: false,
-    h5Unreported: false,
-    weekUnreported: false,
-    unlimited: false,
-    h5Pct: 5,
-    weekPct: 17,
-    h5ResetMs: 60_000,
-    weekResetMs: 120_000,
-    h5LimitReached: false,
-    weekLimitReached: false,
-    plan: 'pro',
-    credits: null,
-    limitReached: false,
-    rateLimitReachedType: null,
-  };
-
-  assert.equal(normalizeStoredCodexUsagePct(cached, 456, authIdentityHash), null);
-  assert.equal(normalizeStoredCodexUsagePct(cached, 123, 'auth-hash-b'), null);
-  const normalized = normalizeStoredCodexUsagePct(cached, 123, authIdentityHash);
-  assert.equal(normalized?.h5Pct, 5);
-  assert.equal(normalized?.weekPct, 17);
-  assert.equal(normalized?.h5LimitReached, false);
-  assert.equal(normalized?.weekLimitReached, false);
+test('Codex keeps genuine zero utilization as a limited zero entry', () => {
+  const parsed = parseCodexQuotaPayload({
+    rate_limit: { primary_window: { window_minutes: 300, used_percent: 0, reset_after_seconds: 60 } },
+  }, NOW);
+  const [entry] = codexQuotaEntries(parsed.usage);
+  assert.equal(entry.state, 'limited');
+  assert.equal(entry.usedPct, 0);
 });

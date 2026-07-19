@@ -1,5 +1,5 @@
 import type { BreakdownDelta } from '../../shared/breakdownTypes';
-import type { ProviderId } from '../providers/types';
+import type { ProviderId } from '../../shared/quotaTypes';
 
 export type UsageSourceKind = 'file' | 'remote';
 export type UsageScanMode = 'tail' | 'rebuild';

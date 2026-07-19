@@ -189,7 +189,8 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
   const app = fs.readFileSync('src/renderer/App.tsx', 'utf8');
 
-  assert.match(types, /enabledProviders: Array<'claude' \| 'codex' \| 'antigravity'>/);
+  assert.match(types, /enabledProviders: ProviderId\[\]/);
+  assert.match(types, /from '\.\.\/shared\/quotaTypes'/);
   assert.match(types, /quotaTargetModes: Partial<Record<string, QuotaDisplayMode>>/);
   assert.match(types, /quotaTargetOrder: string\[\]/);
   assert.match(types, /taskbarQuotaEnabled: boolean/);
@@ -285,8 +286,8 @@ test('compact widget height uses visible quota target count', () => {
   assert.match(sizing, /compactWidgetTargetSummary/);
   assert.match(sizing, /settings\.quotaTargetModes/);
   assert.match(sizing, /state\?\.providerQuotas/);
-  assert.match(sizing, /quotaGroupId/);
-  assert.match(sizing, /group\.windowKeys/);
+  assert.match(sizing, /groupQuotaEntries/);
+  assert.match(sizing, /group\.entries\.length/);
   assert.doesNotMatch(sizing, /provider === 'claude'/);
   assert.doesNotMatch(sizing, /provider === 'codex'/);
   assert.doesNotMatch(mainIndex, /settings\.provider/);

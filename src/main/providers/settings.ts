@@ -1,5 +1,5 @@
 import type { AppSettings } from '../ipc';
-import type { ProviderId } from './types';
+import type { ProviderId } from '../../shared/quotaTypes';
 
 export const BUILTIN_PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex'];
 export const PROVIDER_IDS: readonly ProviderId[] = ['claude', 'codex', 'antigravity'];

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { DatabaseSync } from 'node:sqlite';
-import type { ProviderId } from '../providers/types';
+import type { ProviderId } from '../../shared/quotaTypes';
 import { emptyBreakdownDelta } from '../../shared/breakdownTypes';
 import { DefaultUsageIndex } from './usageIndex';
 import { SqliteUsageIndexStorage } from './sqliteUsageIndexStorage';

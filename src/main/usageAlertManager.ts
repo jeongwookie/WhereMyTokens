@@ -1,14 +1,20 @@
 /**
- * Usage threshold alerts (50% / 80% / 90%)
- * 60-minute cooldown, re-arm after reset allowed
+ * Usage threshold alerts (50% / 80% / 90%).
+ * Alert state is keyed by the canonical quota-entry key so dynamic targets
+ * re-arm independently when their own reset boundary changes.
  */
 import { Notification } from 'electron';
 import { addNotification } from './notificationHistory';
-import type { ProviderId, ProviderQuotaSnapshot, QuotaDisplayMode } from './providers/types';
+import type {
+  ProviderId,
+  ProviderQuotaSnapshot,
+  QuotaDisplayMode,
+  QuotaPeriod,
+} from '../shared/quotaTypes';
 
 interface AlertState {
-  lastAlertTime: number;    // ms timestamp
-  lastResetTime: number;    // for reset detection
+  lastAlertTime: number;
+  lastResetAt: number | null;
   firedThresholds: Set<number>;
 }
 
@@ -19,38 +25,43 @@ interface AlertOptions {
   emitNotification?: (title: string, body: string) => void;
 }
 
+export interface QuotaAlertCheck {
+  key: string;
+  pct: number;
+  resetsAt: number | null;
+  label: string;
+  source?: string;
+  provider: ProviderId;
+}
+
 const alertStates: Record<string, AlertState> = {};
+const prevPct: Record<string, number> = {};
+const pctHistory = new Map<string, number[]>();
 const COOLDOWN_MS = 60 * 60 * 1000;
 
 function getState(key: string): AlertState {
   if (!alertStates[key]) {
-    alertStates[key] = { lastAlertTime: 0, lastResetTime: 0, firedThresholds: new Set() };
+    alertStates[key] = { lastAlertTime: 0, lastResetAt: null, firedThresholds: new Set() };
   }
   return alertStates[key];
 }
 
-// Store previous percentage (only alert when rising)
-const prevPct: Record<string, number> = {};
-
-// 3-샘플 이동 평균 스무딩 — 순간 급등/급락에 의한 오발 방지
-const pctHistory: Map<string, number[]> = new Map();
-
 function smoothedPct(key: string, rawPct: number): number {
-  const hist = pctHistory.get(key) ?? [];
-  hist.push(rawPct);
-  if (hist.length > 3) hist.shift();
-  pctHistory.set(key, hist);
-  return hist.reduce((a, b) => a + b, 0) / hist.length;
+  const history = pctHistory.get(key) ?? [];
+  history.push(rawPct);
+  if (history.length > 3) history.shift();
+  pctHistory.set(key, history);
+  return history.reduce((sum, value) => sum + value, 0) / history.length;
 }
 
-function formatReset(resetMs: number | null | undefined): string {
+function formatReset(resetMs: number | null): string {
   if (!resetMs || resetMs <= 0) return '';
-  const minutes = Math.max(1, Math.round(resetMs / 60000));
+  const minutes = Math.max(1, Math.round(resetMs / 60_000));
   const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours <= 0) return ` · resets in ${mins}m`;
-  if (mins === 0) return ` · resets in ${hours}h`;
-  return ` · resets in ${hours}h ${mins}m`;
+  const remainder = minutes % 60;
+  if (hours <= 0) return ` · resets in ${remainder}m`;
+  if (remainder === 0) return ` · resets in ${hours}h`;
+  return ` · resets in ${hours}h ${remainder}m`;
 }
 
 function formatSource(source: string | undefined): string {
@@ -65,75 +76,29 @@ function formatSource(source: string | undefined): string {
   return ` · source: ${labels[source] ?? source}`;
 }
 
-function providerLabel(provider: ProviderId): string {
-  if (provider === 'claude') return 'Claude';
-  if (provider === 'codex') return 'Codex';
-  if (provider === 'antigravity') return 'Antigravity';
-  return provider;
-}
-
-function windowLabel(windowKey: string): string {
-  if (windowKey === 'h5') return '5h usage';
-  if (windowKey === 'week') return 'weekly usage';
-  if (windowKey === 'sonnetWeek') return 'Sonnet weekly';
-  return `${windowKey} usage`;
-}
-
-const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-function modelDurationLabel(durationMs: number | undefined): string {
-  const resolved = durationMs;
-  if (resolved === FIVE_HOURS_MS) return '5h';
-  if (resolved === WEEK_MS) return '1w';
-  return 'quota';
-}
-
-function modelWindowLabel(durationMs: number | undefined): string {
-  const label = modelDurationLabel(durationMs);
-  if (label === '5h') return '5h usage';
-  if (label === '1w') return 'weekly usage';
+function periodLabel(period: QuotaPeriod | null): string {
+  if (period === '5h') return '5h usage';
+  if (period === '7d') return 'weekly usage';
   return 'usage';
-}
-
-function quotaGroupLabel(snapshot: ProviderQuotaSnapshot | undefined, provider: ProviderId, windowKey: string): string {
-  return snapshot?.groups?.find(group => group.windowKeys.includes(windowKey))?.label
-    ?? providerLabel(provider);
-}
-
-function quotaWindowLabel(snapshot: ProviderQuotaSnapshot | undefined, windowKey: string): string {
-  return snapshot?.windowDisplay?.[windowKey]?.label
-    ?? windowLabel(windowKey);
 }
 
 export function quotaChecks(
   providerQuotas: Partial<Record<ProviderId, ProviderQuotaSnapshot>>,
   enabledProviders: ReadonlySet<ProviderId>,
   options: Pick<AlertOptions, 'quotaTargetModes'> = {},
-): Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> {
-  const checks: Array<{ key: string; pct: number; resetMs: number | null; label: string; source?: string; provider: ProviderId }> = [];
+): QuotaAlertCheck[] {
+  const checks: QuotaAlertCheck[] = [];
   for (const provider of enabledProviders) {
     const snapshot = providerQuotas[provider];
-    const windows = snapshot?.windows;
-    for (const [windowKey, window] of Object.entries(windows ?? {})) {
+    if (!snapshot) continue;
+    for (const entry of snapshot.entries) {
+      if (entry.state !== 'limited') continue;
       checks.push({
-        key: `${provider}-${windowKey}`,
-        pct: window.pct,
-        resetMs: window.resetMs,
-        label: `${quotaGroupLabel(snapshot, provider, windowKey)} ${quotaWindowLabel(snapshot, windowKey)}`,
-        source: window.source,
-        provider,
-      });
-    }
-    for (const model of snapshot?.models ?? []) {
-      const resetMs = model.resetMs ?? null;
-      const durationLabel = modelDurationLabel(model.durationMs);
-      checks.push({
-        key: `${provider}-model-${model.model}-${durationLabel}`,
-        pct: Math.max(0, Math.min(100, 100 - model.remainingPct)),
-        resetMs,
-        label: `${providerLabel(provider)} ${model.label} ${modelWindowLabel(model.durationMs)}`,
-        source: snapshot?.source,
+        key: entry.key,
+        pct: entry.usedPct,
+        resetsAt: entry.resetsAt,
+        label: `${entry.target.label} ${periodLabel(entry.period)}`,
+        source: snapshot.source,
         provider,
       });
     }
@@ -146,7 +111,6 @@ function emitUsageAlert(title: string, body: string, options: AlertOptions): voi
     options.emitNotification(title, body);
     return;
   }
-
   addNotification('alert', title, body);
   try {
     new Notification({ title: `WhereMyTokens ${title}`, body }).show();
@@ -163,49 +127,46 @@ export function checkAlerts(
   if (!enabled) return;
 
   const now = options.nowMs ?? Date.now();
-  const triggered: Array<{
-    label: string;
-    threshold: number;
-    pct: number;
-    resetMs: number | null;
-    source?: string;
-  }> = [];
+  const triggered: Array<QuotaAlertCheck & { threshold: number }> = [];
 
-  for (const { key, pct, resetMs, label, source, provider } of quotaChecks(providerQuotas, enabledProviders, options)) {
+  for (const check of quotaChecks(providerQuotas, enabledProviders, options)) {
+    const { key, pct, resetsAt, source, provider } = check;
     if (options.deferCodexLocalLog && provider === 'codex' && source === 'localLog') continue;
     if (pct <= 0) continue;
+
     const state = getState(key);
-
-    // Reset detection: if resetMs grows larger than before (new cycle started)
-    const currentReset = resetMs != null ? now + resetMs : state.lastResetTime;
-    if (resetMs != null && currentReset > state.lastResetTime + 5000) {
-      state.lastResetTime = currentReset;
-      state.firedThresholds.clear();
-      pctHistory.delete(key); // 리셋 후 스무딩 히스토리 초기화
-    }
-
-    const prev = prevPct[key] ?? 0;
-    if (resetMs == null && prev >= 50 && pct <= Math.max(5, prev * 0.25)) {
-      state.firedThresholds.clear();
+    if (resetsAt !== null && state.lastResetAt !== resetsAt) {
+      state.lastResetAt = resetsAt;
       state.lastAlertTime = 0;
+      state.firedThresholds.clear();
       pctHistory.delete(key);
+      delete prevPct[key];
     }
 
-    // 3-샘플 이동 평균으로 노이즈 제거 후 threshold 비교
+    const previous = prevPct[key] ?? 0;
+    if (resetsAt === null && previous >= 50 && pct <= Math.max(5, previous * 0.25)) {
+      state.lastAlertTime = 0;
+      state.firedThresholds.clear();
+      pctHistory.delete(key);
+      delete prevPct[key];
+    }
+
     const smoothPct = smoothedPct(key, pct);
-
-    // Cooldown check
     const cooldownExpired = now - state.lastAlertTime > COOLDOWN_MS;
-    // Only alert when percentage is actually rising (avoid repeating at 100% due to bad calculation)
+    const isRising = smoothPct > previous + 1;
     prevPct[key] = smoothPct;
-    const isRising = smoothPct > prev + 1;  // only when rising by more than 1%
 
-    for (const threshold of [...thresholds].sort((a, b) => b - a)) {
-      if (smoothPct >= threshold && !state.firedThresholds.has(threshold) && cooldownExpired && (isRising || prev === 0)) {
+    for (const threshold of [...thresholds].sort((left, right) => right - left)) {
+      if (
+        smoothPct >= threshold
+        && !state.firedThresholds.has(threshold)
+        && cooldownExpired
+        && (isRising || previous === 0)
+      ) {
         state.firedThresholds.add(threshold);
         state.lastAlertTime = now;
-        triggered.push({ label, threshold, pct: smoothPct, resetMs, source });
-        break; // only fire the highest matching threshold
+        triggered.push({ ...check, pct: smoothPct, threshold });
+        break;
       }
     }
   }
@@ -215,14 +176,14 @@ export function checkAlerts(
     const alert = triggered[0];
     emitUsageAlert(
       `Usage alert: ${alert.label} reached ${alert.threshold}%`,
-      `Currently at ${Math.round(alert.pct)}% usage${formatReset(alert.resetMs)}${formatSource(alert.source)}`,
+      `Currently at ${Math.round(alert.pct)}% usage${formatReset(alert.resetsAt === null ? null : alert.resetsAt - now)}${formatSource(alert.source)}`,
       options,
     );
     return;
   }
 
   const body = triggered
-    .map(alert => `${alert.label} reached ${alert.threshold}% · currently ${Math.round(alert.pct)}% usage${formatReset(alert.resetMs)}${formatSource(alert.source)}`)
+    .map(alert => `${alert.label} reached ${alert.threshold}% · currently ${Math.round(alert.pct)}% usage${formatReset(alert.resetsAt === null ? null : alert.resetsAt - now)}${formatSource(alert.source)}`)
     .join('\n');
   emitUsageAlert(`Usage alerts: ${triggered.length} limits reached thresholds`, body, options);
 }

@@ -1,4 +1,4 @@
-import type { QuotaDisplayMode } from '../types';
+import type { QuotaDisplayMode } from '../../../shared/quotaTypes';
 
 const LEGACY_MODEL_MAP: Record<string, string> = {
   MODEL_CLAUDE_4_5_SONNET: 'Claude 4.5 Sonnet',

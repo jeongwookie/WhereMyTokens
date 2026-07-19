@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowUpRight, X } from 'lucide-react';
-import { AppState, ProviderId, ProviderQuotaDisplayBadge, ProviderQuotaSnapshot, ProviderQuotaStatus, ProviderQuotaWindow } from '../types';
+import { AppState } from '../types';
+import type { ProviderId, ProviderQuotaDisplayBadge, ProviderQuotaStatus, QuotaEntry } from '../../shared/quotaTypes';
+import { quotaElapsedPct } from '../../shared/quotaDomain';
 import { useTheme } from '../ThemeContext';
-import { hasLimitData, limitDataState, limitSourceDisplay, LimitWindow, providerDisplayName } from '../limitDisplay';
+import { limitSourceDisplay, providerDisplayName } from '../limitDisplay';
 import { buildQuotaDisplayModels, QuotaDisplayGroupViewModel, QuotaDisplayRowViewModel } from '../quotaDisplayModels';
 import { quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 // This module mixes plain (non-React) builder functions with React components. The plain
@@ -29,21 +31,11 @@ type WidgetAgent = {
   rows: Array<{
     key: string;
     label: string;
-    visualKind: QuotaDisplayRowViewModel['visualKind'];
-    quotaPct: number;
-    resetMs: number | null;
-    durationMs?: number;
-    limitState?: 'unlimited' | 'unreported';
+    entry: QuotaEntry;
     pending?: boolean;
     pendingTitle?: string;
-    unknown?: boolean;
-    unknownLabel?: string;
-    unknownBadge?: string;
-    unknownTitle?: string;
   }>;
 };
-
-const EMPTY_QUOTA_WINDOW: ProviderQuotaWindow = { pct: 0, resetMs: null };
 
 type DragState = {
   pointerId: number;
@@ -89,10 +81,6 @@ function clampPct(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function timeElapsedPct(durationMs: number | null | undefined, resetMs: number | null): number | null {
-  if (!durationMs || resetMs == null || resetMs < 0 || resetMs > durationMs) return null;
-  return clampPct(((durationMs - resetMs) / durationMs) * 100);
-}
 
 function formatResetShort(resetMs: number | null): string {
   if (resetMs == null || resetMs <= 0) return '--';
@@ -109,56 +97,6 @@ function formatResetShort(resetMs: number | null): string {
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
   return target instanceof Element && !!target.closest('[data-no-drag="true"]');
-}
-
-function missingLimitStatus(
-  pct: number,
-  resetMs: number | null,
-  bootPending: boolean,
-  unavailableTitle: string,
-  windowLabel: string,
-  resetLabel: string | undefined,
-): Pick<WidgetAgent['rows'][number], 'unknown' | 'unknownLabel' | 'unknownBadge' | 'unknownTitle'> {
-  if (bootPending) {
-    return {
-      unknown: true,
-      // NOTE: 'loading' here is an internal state-discriminator code (compared via
-      // `unknownLabel === 'loading'` in ProgressRow and `row.unknownLabel === 'waiting'`
-      // in CompactWidgetView) — it is never rendered as text, so it must stay untranslated.
-      unknownLabel: 'loading',
-      unknownBadge: i18n.t('compactWidgetView.status.waitBadge'),
-      unknownTitle: i18n.t('compactWidgetView.tooltip.startupLoading'),
-    };
-  }
-  if (pct <= 0 && resetMs == null) {
-    // The provider explicitly reported "no data for this window" (e.g. Codex has no active
-    // 5h limit for this account/plan) rather than "haven't heard back yet" — show it as a
-    // static, known state instead of the perpetually-animated waiting dots, which otherwise
-    // looks identical to "still loading" and never resolves.
-    if (resetLabel) {
-      return {
-        unknown: true,
-        // Not 'loading' or 'waiting' — see the ProgressRow visualState mapping below.
-        unknownLabel: 'unavailable',
-        unknownBadge: '--',
-        unknownTitle: resetLabel,
-      };
-    }
-    return {
-      unknown: true,
-      // Same as above: internal code, not displayed text — keep untranslated.
-      unknownLabel: 'waiting',
-      unknownBadge: '',
-      unknownTitle: windowLabel === '5h'
-        ? i18n.t('compactWidgetView.tooltip.noFiveHourData')
-        : unavailableTitle,
-    };
-  }
-  return {};
-}
-
-function hasSimpleQuotaInput(window: ProviderQuotaWindow | undefined): boolean {
-  return !!window && (hasLimitData(window) || !!window.source);
 }
 
 function MiniLimitStatus({ state, animate = true }: { state: 'syncing' | 'waiting'; animate?: boolean }) {
@@ -189,10 +127,6 @@ function MiniLimitStatus({ state, animate = true }: { state: 'syncing' | 'waitin
   );
 }
 
-function healthLabelForSource(limit: LimitWindow): string | null {
-  return limitSourceDisplay(limit).label ?? null;
-}
-
 function quotaStatusTone(status: ProviderQuotaStatus | undefined): HealthTone {
   if (status?.severity === 'warning') return 'warning';
   if (status?.severity === 'danger') return 'danger';
@@ -206,96 +140,6 @@ function providerLabelFromQuota(provider: ProviderId): string {
   return providerDisplayName(provider);
 }
 
-function modelQuotaWindows(quota: ProviderQuotaSnapshot | undefined): ProviderQuotaWindow[] {
-  return (quota?.models ?? [])
-    .filter(model => Number.isFinite(model.remainingPct))
-    .map(model => ({
-      pct: clampPct(100 - model.remainingPct),
-      resetMs: model.resetMs ?? null,
-      source: quota?.source,
-    }));
-}
-
-function providerHealth(
-  provider: ProviderId,
-  providerLabel: string,
-  primary: LimitWindow,
-  secondary: LimitWindow,
-  syncing: boolean,
-  statusLabel?: string,
-  connected = true,
-  statusTone: HealthTone = 'neutral',
-): HealthItem {
-  if (syncing || limitDataState(primary, syncing) === 'syncing' || limitDataState(secondary, syncing) === 'syncing') {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.syncing.label', { provider: providerLabel }),
-      tone: 'good',
-      title: i18n.t('compactWidgetView.health.syncing.title', { provider: providerLabel }),
-    };
-  }
-
-  if (statusLabel && !connected) {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.statusLabel.label', { provider: providerLabel, statusLabel }),
-      tone: statusTone === 'neutral' ? 'danger' : statusTone,
-      title: i18n.t('compactWidgetView.health.statusLabel.title', { provider: providerLabel, statusLabel }),
-    };
-  }
-
-  if (!connected) {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.offline.label', { provider: providerLabel }),
-      tone: 'danger',
-      title: i18n.t('compactWidgetView.health.offline.title', { provider: providerLabel }),
-    };
-  }
-
-  const sources = [healthLabelForSource(primary), healthLabelForSource(secondary)].filter((label): label is string => !!label);
-  if (sources.includes('Log')) {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.log.label', { provider: providerLabel }),
-      tone: 'warning',
-      title: i18n.t('compactWidgetView.health.log.title', { provider: providerLabel }),
-    };
-  }
-  if (sources.includes('Cache')) {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.cache.label', { provider: providerLabel }),
-      tone: 'neutral',
-      title: i18n.t('compactWidgetView.health.cache.title', { provider: providerLabel }),
-    };
-  }
-  if (sources.includes('Bridge')) {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.bridge.label', { provider: providerLabel }),
-      tone: 'neutral',
-      title: i18n.t('compactWidgetView.health.bridge.title', { provider: providerLabel }),
-    };
-  }
-
-  if (!hasLimitData(primary) && !hasLimitData(secondary)) {
-    return {
-      key: provider,
-      label: i18n.t('compactWidgetView.health.waiting.label', { provider: providerLabel }),
-      tone: 'neutral',
-      title: i18n.t('compactWidgetView.health.waiting.title', { provider: providerLabel }),
-    };
-  }
-
-  return {
-    key: provider,
-    label: i18n.t('compactWidgetView.health.ok.label', { provider: providerLabel }),
-    tone: 'good',
-    title: i18n.t('compactWidgetView.health.ok.title', { provider: providerLabel }),
-  };
-}
-
 function buildWidgetAgents(state: AppState): WidgetAgent[] {
   const { widgetGroups } = buildQuotaDisplayModels({
     usage: state.usage,
@@ -306,24 +150,14 @@ function buildWidgetAgents(state: AppState): WidgetAgent[] {
     formatWarmupEta: () => 'syncing',
     simpleIncludesRich: true,
   });
-  const bootPending = !state.initialRefreshComplete;
   return widgetGroups.map((group: QuotaDisplayGroupViewModel) => {
-    const unavailableTitle = i18n.t('compactWidgetView.tooltip.groupUnavailable', { group: group.label });
-    const rowFor = (row: QuotaDisplayRowViewModel) => {
-      return {
-        key: row.key,
-        label: row.label,
-        visualKind: row.visualKind,
-        quotaPct: row.quotaPct,
-        resetMs: row.resetMs,
-        durationMs: row.durationMs,
-        limitState: row.quota.limitState,
-        pending: row.pending,
-        pendingTitle: row.pendingTitle,
-        ...(!row.pending && row.quota.limitState !== 'unlimited' && row.quota.limitState !== 'unreported' && row.visualKind === 'pace' ? missingLimitStatus(row.quotaPct, row.resetMs, bootPending, unavailableTitle, row.label, row.resetLabel) : {}),
-      };
-    };
-    const rows: WidgetAgent['rows'] = group.rows.map(rowFor);
+    const rows: WidgetAgent['rows'] = group.rows.map((row: QuotaDisplayRowViewModel) => ({
+      key: row.key,
+      label: row.label,
+      entry: row.entry,
+      pending: row.pending,
+      pendingTitle: row.pendingTitle,
+    }));
     const scanning = rows.some(row => row.pending);
     return {
       key: group.id,
@@ -343,63 +177,67 @@ function buildHealthItems(state: AppState): HealthItem[] {
   for (const provider of state.settings.enabledProviders) {
     const providerLabel = providerLabelFromQuota(provider);
     const quota = state.providerQuotas[provider];
-    const windows = [...Object.values(quota?.windows ?? {}), ...modelQuotaWindows(quota)];
-    const primary = windows[0] ?? EMPTY_QUOTA_WINDOW;
-    const secondary = windows[1] ?? EMPTY_QUOTA_WINDOW;
-    const syncing = state.historyWarmupPending && windows.some(window => window.source === 'localLog' || !hasLimitData(window));
+    const syncing = quota?.entries.some(entry => entry.provisional) === true;
+    if (syncing) {
+      items.push({
+        key: provider,
+        label: i18n.t('compactWidgetView.health.syncing.label', { provider: providerLabel }),
+        tone: 'good',
+        title: i18n.t('compactWidgetView.health.syncing.title', { provider: providerLabel }),
+      });
+      continue;
+    }
     const statusLabel = quota?.status?.label;
-    const connected = quota?.status?.connected ?? windows.some(hasSimpleQuotaInput);
-    items.push(providerHealth(provider, providerLabel, primary, secondary, syncing, statusLabel, connected, quotaStatusTone(quota?.status)));
+    const connected = quota?.status?.connected ?? quota != null;
+    if (!connected) {
+      items.push({
+        key: provider,
+        label: statusLabel
+          ? i18n.t('compactWidgetView.health.statusLabel.label', { provider: providerLabel, statusLabel })
+          : i18n.t('compactWidgetView.health.offline.label', { provider: providerLabel }),
+        tone: quotaStatusTone(quota?.status) === 'neutral' ? 'danger' : quotaStatusTone(quota?.status),
+        title: statusLabel
+          ? i18n.t('compactWidgetView.health.statusLabel.title', { provider: providerLabel, statusLabel })
+          : i18n.t('compactWidgetView.health.offline.title', { provider: providerLabel }),
+      });
+      continue;
+    }
+    const source = limitSourceDisplay(quota?.source).label;
+    const sourceKey = source === 'Log' ? 'log' : source === 'Cache' ? 'cache' : source === 'Bridge' ? 'bridge' : 'ok';
+    items.push({
+      key: provider,
+      label: i18n.t(`compactWidgetView.health.${sourceKey}.label`, { provider: providerLabel }),
+      tone: sourceKey === 'log' ? 'warning' : sourceKey === 'ok' ? 'good' : 'neutral',
+      title: i18n.t(`compactWidgetView.health.${sourceKey}.title`, { provider: providerLabel }),
+    });
   }
   return items;
 }
 
 function ProgressRow({
   label,
-  visualKind,
-  quotaPct,
-  resetMs,
-  durationMs,
-  limitState,
+  entry,
   pending = false,
   pendingTitle,
-  unknown = false,
-  unknownLabel = 'loading',
-  unknownBadge = 'wait',
-  unknownTitle,
   animateWaiting = false,
 }: {
   label: string;
-  visualKind: WidgetAgent['rows'][number]['visualKind'];
-  quotaPct: number;
-  resetMs: number | null;
-  durationMs?: number;
-  limitState?: 'unlimited' | 'unreported';
+  entry: QuotaEntry;
   pending?: boolean;
   pendingTitle?: string;
-  unknown?: boolean;
-  unknownLabel?: string;
-  unknownBadge?: string;
-  unknownTitle?: string;
   animateWaiting?: boolean;
 }) {
   const C = useTheme();
   const { t } = useTranslation();
-  const percentOnly = visualKind === 'percentOnly';
-  const quota = clampPct(quotaPct);
-  const isUnlimited = limitState === 'unlimited';
-  const isUnreported = limitState === 'unreported';
-  const noCapState = isUnlimited || isUnreported;
-  // unknownLabel 'unavailable' (provider explicitly has no data for this window) falls through
-  // to null here on purpose — it renders as a static row like a known/empty value, not the
-  // animated 'waiting' dots reserved for "still expecting data soon".
-  const visualState: 'syncing' | 'waiting' | null = pending
-    ? 'syncing'
-    : unknown ? (unknownLabel === 'loading' ? 'syncing' : unknownLabel === 'waiting' ? 'waiting' : null) : null;
-  const suppressWaitingAnimation = visualState === 'waiting' && !animateWaiting;
-  const elapsed = visualState || percentOnly || noCapState ? null : timeElapsedPct(durationMs, resetMs);
+  const quota = entry.state === 'limited' ? clampPct(entry.usedPct) : 0;
+  const isUnlimited = entry.state === 'unlimited';
+  const noCapState = isUnlimited;
+  const visualState: 'syncing' | 'waiting' | null = pending ? 'syncing' : null;
+  const suppressWaitingAnimation = false;
+  const elapsed = visualState || noCapState ? null : quotaElapsedPct(entry, Date.now());
   const elapsedWidth = elapsed ?? 0;
-  const resetLabel = percentOnly ? '' : noCapState ? t(isUnlimited ? 'compactWidgetView.status.unlimitedBadge' : 'compactWidgetView.status.unreportedBadge') : pending ? '' : unknown ? unknownBadge : formatResetShort(resetMs);
+  const resetMs = entry.resetsAt == null ? null : Math.max(0, entry.resetsAt - Date.now());
+  const resetLabel = noCapState ? t('compactWidgetView.status.unlimitedBadge') : pending ? '' : formatResetShort(resetMs);
   const usedColor = noCapState ? C.accent : visualState ? (visualState === 'syncing' ? C.accent : C.textMuted) : quotaPctBarColor(quota, C);
   const quotaColor = usedColor;
   // pace 색상: 사용량이 경과 시간보다 빠르면 경고
@@ -408,13 +246,12 @@ function ProgressRow({
     : usedColor;
   const trackColor = C.bgCard === '#ffffff' ? '#e7e9f2' : '#131d30';
   const elapsedColor = C.bgCard === '#ffffff' ? '#cbd5e1' : '#334155';
-  const rowTitle = pending ? pendingTitle : unknown ? unknownTitle : undefined;
-  const resolvedTitle = noCapState ? t(isUnlimited ? 'compactWidgetView.tooltip.unlimited' : 'compactWidgetView.tooltip.unreported') : rowTitle;
+  const resolvedTitle = noCapState ? t('compactWidgetView.tooltip.unlimited') : pendingTitle;
 
   return (
     <div
       title={resolvedTitle}
-      style={{ display: 'grid', gridTemplateColumns: percentOnly ? '24px minmax(0, 1fr) 64px' : '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
+      style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 38px 64px', alignItems: 'center', gap: 6 }}
     >
       <div style={{ color: C.textMuted, fontSize: 10, fontFamily: C.fontMono, fontWeight: 700 }}>
         {label}
@@ -455,37 +292,27 @@ function ProgressRow({
           />
         ) : null}
       </div>
-      {!percentOnly && (
-        <div
-          title={resetLabel ? t('compactWidgetView.tooltip.timeUntilReset', { resetLabel }) : undefined}
-          style={{
-            color: C.textDim,
-            fontSize: 9,
-            fontFamily: C.fontMono,
-            textAlign: 'right',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {resetLabel}
-        </div>
-      )}
       <div
-        title={percentOnly ? t('compactWidgetView.tooltip.used') : t('compactWidgetView.tooltip.usedElapsed')}
+        title={resetLabel ? t('compactWidgetView.tooltip.timeUntilReset', { resetLabel }) : undefined}
+        style={{ color: C.textDim, fontSize: 9, fontFamily: C.fontMono, textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+      >
+        {resetLabel}
+      </div>
+      <div
+        title={t('compactWidgetView.tooltip.usedElapsed')}
         style={{ textAlign: 'right', color: C.textDim, fontSize: 10, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}
       >
         {noCapState ? (
-          <span style={{ color: paceColor }}>{t(isUnlimited ? 'compactWidgetView.status.unlimited' : 'compactWidgetView.status.unreported')}</span>
+          <span style={{ color: paceColor }}>{t('compactWidgetView.status.unlimited')}</span>
         ) : visualState ? (
           <MiniLimitStatus state={visualState} animate={!suppressWaitingAnimation} />
-        ) : percentOnly ? (
-          <span style={{ color: paceColor }}>{formatPct(quota)}</span>
         ) : (
           <>
             <span style={{ color: paceColor }}>{formatPct(quota)}</span>
             <span style={{ color: C.textMuted }}> / </span>
-            <span>{formatPct(elapsed)}</span>
+            <span title={entry.durationInferred ? t('mainView.quota.estimatedDuration') : undefined}>
+              {entry.durationInferred && elapsed != null ? '~' : ''}{formatPct(elapsed)}
+            </span>
           </>
         )}
       </div>
@@ -548,17 +375,9 @@ function AgentBlock({ agent, animateWaiting }: { agent: WidgetAgent; animateWait
           <ProgressRow
             key={row.key}
             label={row.label}
-            visualKind={row.visualKind}
-            quotaPct={row.quotaPct}
-            resetMs={row.resetMs}
-            durationMs={row.durationMs}
-            limitState={row.limitState}
+            entry={row.entry}
             pending={row.pending}
             pendingTitle={row.pendingTitle}
-            unknown={row.unknown}
-            unknownLabel={row.unknownLabel}
-            unknownBadge={row.unknownBadge}
-            unknownTitle={row.unknownTitle}
             animateWaiting={animateWaiting}
           />
         ))}
@@ -595,9 +414,6 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
     return { color: C.textMuted, background: C.bgRow, border: `1px solid ${C.borderSub}` };
   }, [C.active, C.barRed, C.bgRow, C.borderSub, C.waiting, C.textMuted]);
 
-  const showFiveHourHint = agents.length > 1 && agents.every(agent =>
-    agent.rows.some(row => row.label === '5h' && row.unknown && row.unknownLabel === 'waiting')
-  );
   const toolbarButtonStyle: React.CSSProperties = {
     background: C.bgCard === '#ffffff' ? 'rgba(245,247,252,0.72)' : 'rgba(30,41,59,0.62)',
     border: `1px solid ${C.bgCard === '#ffffff' ? 'rgba(148,163,184,0.42)' : 'rgba(100,116,139,0.28)'}`,
@@ -781,23 +597,6 @@ export default function CompactWidgetView({ state, onRefresh }: Props) {
               </span>
             ))}
           </span>
-        </div>
-      ) : null}
-      {showFiveHourHint ? (
-        <div
-          title={t('compactWidgetView.tooltip.noFiveHourData')}
-          style={{
-            marginTop: -2,
-            color: C.textMuted,
-            fontSize: 8,
-            fontFamily: C.fontMono,
-            lineHeight: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {t('compactWidgetView.hint.fiveHourLimits')}
         </div>
       ) : null}
     </div>

@@ -1,6 +1,5 @@
 import type { UsageProvider } from './jsonlTypes';
-import type { ProviderId } from './providers/types';
-import type { ProviderWindowResetHintMap } from './usageWindowTargets';
+import type { ProviderId } from '../shared/quotaTypes';
 
 export interface WindowStats {
   inputTokens: number;
@@ -42,17 +41,13 @@ export interface TimeOfDayBucket {
   requestCount: number;
 }
 
-export interface ProviderWindowUsage {
-  windows: Record<string, WindowStats>;
-}
-
-export interface ProviderModelWindowUsage {
-  windows: Record<string, Record<string, WindowStats>>;
+export interface ProviderFixedPeriodUsage {
+  periods: Partial<Record<'5h', WindowStats>>;
 }
 
 export interface UsageData {
-  byProvider: Partial<Record<ProviderId, ProviderWindowUsage>>;
-  modelWindows: Partial<Record<ProviderId, ProviderModelWindowUsage>>;
+  fixedPeriodByProvider: Partial<Record<ProviderId, ProviderFixedPeriodUsage>>;
+  entryStats: Record<string, WindowStats>;
   models: ModelUsage[];
   heatmap: HourlyBucket[];
   heatmap30: HourlyBucket[];
@@ -75,5 +70,3 @@ export interface UsageData {
   allTimeAvgCacheEfficiency: number;
   todBuckets: TimeOfDayBucket[];
 }
-
-export type UsageWindowResetHints = ProviderWindowResetHintMap;

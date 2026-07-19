@@ -117,9 +117,10 @@ test('renderer splash and session stabilization use initial readiness and daily 
   assert.match(source, /normalizeState\(next\)/);
   assert.match(source, /stateFreshness: 'empty'/);
   assert.match(source, /normalizeStateFreshness/);
-  assert.match(source, /normalizeProviderWindowUsage/);
-  assert.match(source, /Object\.entries\(rawWindows\)/);
-  assert.doesNotMatch(source, /nextByProvider\.antigravity\.windows\?\.h5/);
+  assert.match(source, /normalizeFixedPeriodUsage/);
+  assert.match(source, /normalizeEntryStats/);
+  assert.match(source, /validateProviderQuotaSnapshot/);
+  assert.doesNotMatch(source, /normalizeProviderWindowUsage|rawWindows/);
 });
 
 test('renderer mutes cached usage text and shows soft loading states', () => {
@@ -146,9 +147,17 @@ test('rich quota card title uses CSS ellipsis and keeps full title tooltip', asy
     hero: true,
     currency: 'USD',
     usdToKrw: 1300,
-    limitPct: 42,
-    resetMs: 60 * 60 * 1000,
-    durationMs: 5 * 60 * 60 * 1000,
+    showLocalStats: true,
+    quotaEntry: {
+      key: 'antigravity.model.long.5h',
+      target: { id: 'antigravity.group.model.long', label: provider, defaultMode: 'rich', defaultOrder: 0, taskbarAbbreviation: 'A' },
+      scope: { kind: 'model', label: provider },
+      state: 'limited', usedPct: 42,
+      resetsAt: Date.now() + 60 * 60 * 1000,
+      durationMs: 5 * 60 * 60 * 1000,
+      durationInferred: false,
+      period: '5h',
+    },
     limitSourceLabel: 'API',
     limitSourceTitle: 'Provider API quota',
     limitSourceTone: 'good',
@@ -201,21 +210,21 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
 
   assert.match(mainSource, /historyWarmupPending=\{state\.historyWarmupPending\}/);
   assert.match(mainSource, /pendingLimit=\{card\.pending\}/);
-  assert.match(modelSource, /quotaWindow\.source === 'localLog'/);
+  assert.match(modelSource, /entry\.provisional === true/);
   assert.match(cardSource, /pendingLimitLabel/);
   assert.match(cardSource, /displayLimitSourceLabel = pendingLimit/);
-  assert.match(modelSource, /isPendingQuotaWindow/);
-  assert.match(widgetSource, /unknownLabel: 'waiting'/);
-  assert.match(widgetSource, tCallRegex('compactWidgetView.tooltip.noFiveHourData'));
+  assert.match(stateSource, /provisional: true/);
+  assert.match(widgetSource, /visualState: 'syncing' \| 'waiting' \| null/);
+  assert.doesNotMatch(widgetSource, tCallRegex('compactWidgetView.tooltip.noFiveHourData'));
   assert.match(widgetSource, /target instanceof Element && !!target\.closest\('\[data-no-drag="true"\]'\)/);
   assert.match(widgetSource, /const scanning = rows\.some\(row => row\.pending\)/);
   assert.match(widgetSource, /agent\.scanning \? \(/);
   assert.match(widgetSource, /MiniLimitStatus/);
   assert.match(widgetSource, tCallRegex('compactWidgetView.health.sectionTitle'));
-  assert.match(widgetSource, tCallRegex('compactWidgetView.health.ok.label'));
+  assert.match(widgetSource, /compactWidgetView\.health\.\$\{sourceKey\}\.label/);
   assert.match(widgetSource, /tone: 'good'/);
   assert.doesNotMatch(widgetSource, />--<\/span>/);
-  assert.match(widgetSource, /bootPending = !state\.initialRefreshComplete/);
+  assert.doesNotMatch(widgetSource, /bootPending = !state\.initialRefreshComplete/);
   assert.match(stateSource, /API_MIN_INTERVAL_MS = 300_000/);
   assert.match(stateSource, /MANUAL_PROVIDER_USAGE_FORCE_MIN_INTERVAL_MS = 60_000/);
   assert.match(stateSource, /consumeManualProviderUsageForce/);
@@ -241,37 +250,36 @@ test('Plan Usage and floating widget render providerQuotas through generic provi
   const agentsStart = widgetSource.indexOf('function buildWidgetAgents');
   const agentsEnd = widgetSource.indexOf('function buildHealthItems', agentsStart);
   const agentsBody = widgetSource.slice(agentsStart, agentsEnd);
-  const healthStart = widgetSource.indexOf('function providerHealth');
-  const healthEnd = widgetSource.indexOf('function buildWidgetAgents', healthStart);
+  const healthStart = widgetSource.indexOf('function buildHealthItems');
+  const healthEnd = widgetSource.indexOf('function ProgressRow', healthStart);
   const healthBody = widgetSource.slice(healthStart, healthEnd);
 
   assert.match(modelSource, /export interface QuotaDisplayGroupViewModel/);
   assert.match(modelSource, /export interface QuotaDisplayRowViewModel/);
-  assert.match(modelSource, /ProviderQuotaRowVisualKind/);
+  assert.match(modelSource, /QuotaEntry/);
   assert.match(modelSource, /buildQuotaDisplayModels/);
   assert.match(modelSource, /buildQuotaDisplayGroups/);
   assert.match(modelSource, /quotaGroupId/);
-  assert.match(modelSource, /group\.windowKeys/);
-  assert.match(modelSource, /rowHasDisplaySignal/);
+  assert.match(modelSource, /snapshot\.entries/);
+  assert.match(modelSource, /row\.entry/);
   assert.match(panelBody, /buildQuotaDisplayModels/);
   assert.match(panelBody, /simpleGroups/);
   assert.match(panelBody, /richGroups/);
   assert.match(panelBody, /SimpleQuotaGroupBlock/);
-  assert.match(panelBody, /durationMs=\{card\.durationMs\}/);
+  assert.match(panelBody, /quotaEntry=\{card\.entry\}/);
   assert.doesNotMatch(panelBody, /badges=\{quotaGroupBadgesForCard\(group\.badges\)\}/);
   assert.doesNotMatch(tokenStatsSource, /badges\?: ProviderQuotaDisplayBadge\[\]/);
   assert.doesNotMatch(modelSource, /tokens\.total|cost\.total|modelTotalTokenBadge|modelTotalCostBadge/);
   assert.match(agentsBody, /buildQuotaDisplayModels/);
   assert.match(agentsBody, /widgetGroups/);
-  assert.match(agentsBody, /row\.visualKind/);
-  assert.match(agentsBody, /durationMs: row\.durationMs/);
+  assert.match(agentsBody, /entry: row\.entry/);
   assert.doesNotMatch(agentsBody, /rowFor\('week'/);
   assert.doesNotMatch(agentsBody, /enabledProviders\.has\('claude'\)/);
   assert.doesNotMatch(agentsBody, /enabledProviders\.has\('codex'\)/);
   assert.doesNotMatch(tokenStatsSource, /normalized === '5h'|normalized === '1w'/);
   assert.doesNotMatch(widgetSource, /function windowDurationMs/);
   assert.match(widgetSource, /function quotaStatusTone/);
-  assert.ok(healthBody.indexOf('if (statusLabel && !connected)') < healthBody.indexOf("sources.includes('Log')"));
+  assert.ok(healthBody.indexOf('if (!connected)') < healthBody.indexOf('const source = limitSourceDisplay'));
 });
 
 test('settings and widget integration guard malformed persisted values', () => {
@@ -341,11 +349,11 @@ test('settings and widget integration guard malformed persisted values', () => {
   assert.match(widgetSource, /dragSeq !== dragSeqRef\.current/);
   assert.match(widgetSource, /const toolbarButtonStyle: React\.CSSProperties/);
   assert.match(widgetSource, /animateWaiting=\{state\.settings\.compactWidgetWaitingAnimationEnabled === true\}/);
-  assert.match(widgetSource, /visualState === 'waiting' && !animateWaiting/);
+  assert.match(widgetSource, /animate=\{!suppressWaitingAnimation\}/);
   assert.match(widgetSource, /quotaPctBarColor/);
   assert.match(widgetSource, /quotaSourceBadgeToneStyle/);
   assert.match(widgetSource, /return `\$\{hours\}h \$\{minutes\}m`/);
-  assert.match(widgetSource, /percentOnly \? '24px minmax\(0, 1fr\) 64px' : '24px minmax\(0, 1fr\) 38px 64px'/);
+  assert.match(widgetSource, /gridTemplateColumns: '24px minmax\(0, 1fr\) 38px 64px'/);
   assert.match(sectionsSource, /Array\.isArray\(value\) \? value : \[\]/);
   assert.match(settingsSource, /buildSettingsPatch\(s, baseSettings, latestSettings\)/);
   assert.match(settingsSource, /compactWidgetWaitingAnimationEnabled/);
@@ -473,7 +481,8 @@ test('tray and header status derive provider data from enabled providers', () =>
 
   assert.match(trayBody, /settings\.enabledProviders/);
   assert.match(trayBody, /trayH5Stats\(state, provider\)/);
-  assert.match(trayBody, /trayH5Pct\(state, provider\)/);
+  assert.match(trayBody, /trayQuotaSelection\(state/);
+  assert.match(mainSource, /selectFixedPeriodQuota/);
   assert.doesNotMatch(trayBody, /usageWindow\(state, 'claude'/);
   assert.doesNotMatch(trayBody, /usageWindow\(state, 'codex'/);
   assert.match(rendererSource, /function buildProviderQuotaHeaderStatus/);
@@ -491,7 +500,7 @@ test('startup refresh uses lightweight session bootstrapping and API status labe
   assert.match(mainSource, /historyWarmupStartsAt/);
   assert.match(rendererSource, /apiStatusLabel/);
   assert.match(rendererSource, /formatWarmupStatus/);
-  assert.match(rendererSource, /resetLabel=\{card\.visualKind === 'percentOnly' \? undefined : card\.quota\.resetLabel\}/);
+  assert.match(rendererSource, /quotaEntry=\{card\.entry\}/);
 });
 
 test('history warmup tracks both source discovery truncation and partial scans', () => {
