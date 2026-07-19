@@ -116,8 +116,8 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Barras de uso de herramientas** — barra de color proporcional + etiquetas de herramientas (Bash, Edit, Read, …)
 
 ### Límites de Uso y Alertas
-- **Barras de provider quota** — Claude, Codex, Antigravity y futuros providers publican snapshots efectivos por `providerQuotas`; Claude usa Anthropic API/statusLine/cache, Codex usa live usage 5h/1sem con fallback local-log y reset-credit endpoint con cache ligada al auth, y Antigravity lee quota por modelo desde 127.0.0.1 local RPC cuando el IDE está en ejecución. Si Codex está conectado pero no reporta una ventana de límite, la UI muestra `Unlimited` y vuelve al porcentaje normal cuando Codex vuelve a reportar el límite
-- **Visualización quota por target** — cada provider window y model target puede mostrarse como Rich, Simple u oculto desde Settings; también afecta el orden y la visibilidad en Plan Usage, el widget flotante y el taskbar mini. El taskbar mini permite 1-3 bloques por fila y muestra targets ocultos como `+N`; el color del prefix indica source/status de datos como live/cache/log, separado de la severidad de quota. Codex Resets es exclusivo de Plan Usage
+- **Barras de provider quota** — Claude, Codex, Antigravity y futuros providers traducen los límites reportados por cada provider a canonical Quota Entries en `providerQuotas`; Claude usa las top-level 5h/7d account windows y active scoped `limits[]` de Anthropic usage, Codex usa live usage snapshots con fallback local-log y reset-credit endpoint con cache ligada al auth, y Antigravity lee model quota entries desde 127.0.0.1 local RPC cuando el IDE está en ejecución. Los límites no reportados ya no se sintetizan como `Unlimited`; quedan ausentes
+- **Visualización quota por target** — cada canonical quota target puede mostrarse como Rich, Simple u oculto desde Settings; también afecta el orden y la visibilidad en Plan Usage, el widget flotante y el taskbar mini. El taskbar mini reparte entries 5h/7d normalizadas en dos physical lines, permite 1-3 bloques por line y muestra targets ocultos como `+N`; el color del prefix indica source/status de datos como live/cache/log, separado de la severidad de quota. Codex Resets es exclusivo de Plan Usage
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — regístrate como plugin `statusLine` para datos en tiempo real sin sondeo de API
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
@@ -192,7 +192,7 @@ WhereMyTokens es una app de bandeja Electron local-first. El renderer no lee arc
 | Límites de uso Codex y reset credits | OAuth token en `~/.codex/auth.json` | ChatGPT/Codex usage endpoint y reset-credit endpoint | Sí, directo a OpenAI/ChatGPT |
 | Sesiones/quota Antigravity | Language server de Antigravity en ejecución | 127.0.0.1 local RPC, luego renderer state | No |
 
-La prioridad de quota depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; los límites 5h/1sem de Codex usan primero live usage y pueden caer a cache/eventos locales `rate_limits` de los logs JSONL; los reset credits de Codex usan primero el reset-credit endpoint y solo caen a cache ligada al auth o a valores count-only del live usage payload; Antigravity usa solo 127.0.0.1 local RPC del IDE en ejecución. El último valor correcto se conserva solo hasta quedar stale.
+La prioridad de quota depende del provider: Claude usa primero la API de Anthropic y luego el bridge `statusLine` como fallback; las quota entries 5h/7d de Codex usan primero live usage y pueden caer a cache/eventos locales `rate_limits` de los logs JSONL; los límites de Codex no reportados ya no se sintetizan como `Unlimited`; los reset credits de Codex usan primero el reset-credit endpoint y solo caen a cache ligada al auth o a valores count-only del live usage payload; Antigravity usa solo 127.0.0.1 local RPC del IDE en ejecución. El último valor correcto se conserva solo hasta quedar stale.
 
 ---
 
@@ -211,7 +211,7 @@ WhereMyTokens lee archivos locales y, cuando está habilitado, solo hace solicit
 | `~/.codex/auth.json` | Material OAuth de ChatGPT usado solo para snapshots de uso de Codex y consultas de reset credits; no se copia al storage de la app ni se registra en logs. El reset-credit cache guarda solo counts, vencimientos, fetch status, source labels, un hashed auth marker y el modified time del archivo auth. |
 | Antigravity local RPC | Lee sesiones, quota por modelo y generator metadata desde el language server del IDE Antigravity en ejecución. No usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Snapshot local escrito por el bridge `statusLine` de Claude Code. |
-| Taskbar mini helper stdin | Cuando el taskbar mini está habilitado, el main process envía datos resumidos de quota 5H/1W y el resolved light/dark theme fallback al native helper. El helper samplea localmente el fondo visible de la barra de tareas para contraste, pero no guarda ni transmite píxeles; tampoco lee credentials, logs ni llama provider APIs directamente. |
+| Taskbar mini helper stdin | Cuando el taskbar mini está habilitado, el main process envía dos physical display lines derivadas de quota entries 5h/7d normalizadas y el resolved light/dark theme fallback al native helper. El helper samplea localmente el fondo visible de la barra de tareas para contraste, pero no guarda ni transmite píxeles; tampoco lee credentials, logs ni llama provider APIs directamente. |
 | `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Guarda solo la posición del taskbar mini relativa a la barra de tareas. |
 | `%APPDATA%\WhereMyTokens\usage-index.sqlite` | Índice local de uso para checkpoints incrementales, totales a largo plazo, buckets de Trend y heatmap. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | Ajustes de la app, cachés locales, historial de notificaciones y estado del bridge. |
@@ -246,7 +246,7 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 - Estado de sesión, agrupación por proyecto/rama y etiquetas de origen como VS Code o Codex Exec
 - Uso por modelo GPT/Codex y estimaciones de costo equivalentes a API
 - Tokens input, cached input y output, ahorro por caché y totales por modelo
-- Porcentajes y tiempos de reset de Codex 5h/1sem desde live Codex usage cuando está disponible, con fallback a caché/eventos locales `rate_limits`
+- Porcentajes y tiempos de reset de las quota entries Codex 5h/7d reportadas por live Codex usage cuando está disponible, con fallback a caché/eventos locales `rate_limits`
 - Reset credits disponibles, próximo vencimiento y estados stale/error cuando el reset endpoint no está disponible
 - Activity Breakdown basado en tool events, porque los logs de Codex exponen llamadas a herramientas, no output tokens por herramienta
 
@@ -254,7 +254,7 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 
 El seguimiento de Antigravity se conecta únicamente al language server del IDE Antigravity en ejecución mediante 127.0.0.1 local RPC. Lee cascades de sesión, quota por modelo y generator metadata para alimentar providerQuotas y el UsageIndex atribuido por source; no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline.
 
-Las tarjetas de quota por modelo de Antigravity son percent-only por defecto. Activa **Antigravity quota pace** en Settings para estimar el pacing de 5h/semanal desde los reset times.
+Las tarjetas de quota por modelo de Antigravity son percent-only por defecto. Activa **Antigravity quota pace** en Settings para estimar el pacing de 5h/7d desde los reset times.
 
 **Cálculo de caché de prompt:** los logs de Codex reportan `input_tokens` y `cached_input_tokens`. WhereMyTokens guarda el input no cacheado como `input_tokens - cached_input_tokens` y el cached input como cache-read tokens. Codex y Antigravity muestran la eficiencia como cache reads sobre prompt tokens:
 

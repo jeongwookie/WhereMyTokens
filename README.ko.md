@@ -119,8 +119,8 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 - **툴 사용 바** — 비례 색상 바 + 툴 칩 (Bash, Edit, Read 등)
 
 ### 속도 제한 & 알림
-- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 `providerQuotas` snapshot으로 유효 quota를 게시합니다. Claude는 Anthropic API/statusLine/cache, Codex는 5h/1w live usage와 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity는 IDE 실행 중 127.0.0.1 local RPC에서 모델 quota를 읽습니다. Codex가 연결된 상태에서 특정 한도 window를 보고하지 않으면 `Unlimited`로 표시하고, 다시 한도가 보고되면 일반 % 표시로 돌아갑니다
-- **Target별 quota 표시** — 각 provider window와 model target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Taskbar mini는 행당 1-3개 블록 제한과 숨김 target `+N` 표시를 지원하며, prefix 색상은 quota severity가 아니라 live/cache/log 같은 데이터 source/status를 나타냅니다. Codex Resets target은 Plan Usage 전용입니다
+- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 보고한 limit을 `providerQuotas`의 canonical Quota Entry로 게시합니다. Claude는 Anthropic usage의 top-level 5h/7d account window와 active scoped `limits[]`, Codex는 live usage snapshot과 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity는 IDE 실행 중 127.0.0.1 local RPC의 모델 quota entry를 사용합니다. 보고되지 않은 limit은 `Unlimited`로 합성하지 않고 부재 상태로 둡니다
+- **Target별 quota 표시** — 각 canonical quota target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Taskbar mini는 정규화된 5h/7d entry를 두 개의 물리적 line에 배치하고, line당 1-3개 블록 제한과 숨김 target `+N` 표시를 지원합니다. prefix 색상은 quota severity가 아니라 live/cache/log 같은 데이터 source/status를 나타냅니다. Codex Resets target은 Plan Usage 전용입니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
 - **Windows 토스트 알림** — 사용량 임계값(50% / 80% / 90%)에서 알림
@@ -196,7 +196,7 @@ WhereMyTokens는 local-first Electron 트레이 앱입니다. renderer는 로컬
 | Codex 사용량 한도 및 reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage 및 reset-credit endpoint | 있음, OpenAI/ChatGPT 직접 호출 |
 | Antigravity 세션/quota | 실행 중인 Antigravity language server | 127.0.0.1 local RPC, 이후 renderer state | 없음 |
 
-Quota 우선순위는 provider별로 다릅니다. Claude는 Anthropic API를 1순위로 사용하고 `statusLine` bridge를 폴백으로 사용합니다. Codex 5h/1w 한도는 live usage를 우선 사용하고 cache/JSONL 로그의 로컬 `rate_limits` 이벤트로 폴백할 수 있습니다. Codex reset credit은 reset-credit endpoint를 우선 사용하며 auth-bound cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 실행 중인 IDE의 127.0.0.1 local RPC만 사용하며, 마지막 성공 값은 stale 상태가 되기 전까지만 유지합니다.
+Quota 우선순위는 provider별로 다릅니다. Claude는 Anthropic API를 1순위로 사용하고 `statusLine` bridge를 폴백으로 사용합니다. Codex 5h/7d quota entry는 live usage를 우선 사용하고 cache/JSONL 로그의 로컬 `rate_limits` 이벤트로 폴백할 수 있습니다. 보고되지 않은 Codex limit은 `Unlimited`로 합성하지 않습니다. Codex reset credit은 reset-credit endpoint를 우선 사용하며 auth-bound cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 실행 중인 IDE의 127.0.0.1 local RPC만 사용하며, 마지막 성공 값은 stale 상태가 되기 전까지만 유지합니다.
 
 ---
 
@@ -215,7 +215,7 @@ WhereMyTokens는 로컬 파일을 읽고, 활성화된 경우 본인 계정의 p
 | `~/.codex/auth.json` | Codex 사용량 snapshot과 reset-credit 조회에만 쓰는 ChatGPT OAuth 정보. 앱 storage에 복사하거나 로그로 남기지 않습니다. reset-credit cache에는 count, 만료 시각, fetch 상태, source label, hashed auth marker, auth file modified time만 저장됩니다. |
 | Antigravity local RPC | 실행 중인 Antigravity IDE의 language server에서 세션, 모델 quota, generator metadata를 읽습니다. Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다. |
 | `%APPDATA%\WhereMyTokens\live-session.json` | Claude Code `statusLine` bridge가 쓰는 로컬 bridge snapshot. |
-| Taskbar mini helper stdin | taskbar mini를 켠 경우 main process가 요약된 5H/1W quota 표시 데이터와 resolved light/dark theme fallback을 native helper로 전달합니다. helper는 대비를 위해 보이는 작업 표시줄 배경을 로컬에서 샘플링하지만 픽셀을 저장하거나 전송하지 않으며, credentials, 로그 파일, provider API를 직접 읽거나 호출하지 않습니다. |
+| Taskbar mini helper stdin | taskbar mini를 켠 경우 main process가 정규화된 5h/7d quota entry에서 만든 두 개의 physical display line과 resolved light/dark theme fallback을 native helper로 전달합니다. helper는 대비를 위해 보이는 작업 표시줄 배경을 로컬에서 샘플링하지만 픽셀을 저장하거나 전송하지 않으며, credentials, 로그 파일, provider API를 직접 읽거나 호출하지 않습니다. |
 | `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | taskbar mini의 작업 표시줄 기준 위치만 저장합니다. |
 | `%APPDATA%\WhereMyTokens\usage-index.sqlite` | 증분 checkpoint, 장기 합계, trend bucket, heatmap에 쓰는 로컬 사용량 인덱스. |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | 앱 설정, 로컬 캐시, 알림 기록, bridge 상태. |
@@ -250,7 +250,7 @@ WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~
 - 세션 상태, 프로젝트/브랜치 그루핑, VS Code 또는 Codex Exec 같은 source 표시
 - GPT/Codex 모델별 사용량과 API 환산 비용 추정
 - input, cached input, output 토큰, 캐시 절약액, 전체 기간 모델별 합계
-- live Codex usage가 가능할 때 Codex 5h/1w 사용률과 reset 시간, 실패 시 캐시/로컬 `rate_limits` 폴백
+- live Codex usage가 가능할 때 보고된 Codex 5h/7d quota entry의 사용률과 reset 시간, 실패 시 캐시/로컬 `rate_limits` 폴백
 - 사용 가능한 reset credit 수량, 가장 가까운 만료 시각, reset endpoint 실패 시 stale/error 상태
 - Codex 로그는 tool별 output token이 아니라 tool call을 제공하므로, Activity Breakdown은 tool event count 기준으로 표시
 
@@ -258,7 +258,7 @@ WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~
 
 Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. 세션 cascade, 모델 quota, generator metadata를 읽어 providerQuotas와 source-attributed UsageIndex에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
 
-Antigravity 모델 quota 카드는 기본적으로 percent-only로 표시됩니다. Settings의 **Antigravity quota pace**를 켜면 reset time으로 5h/weekly pacing을 추정합니다.
+Antigravity 모델 quota 카드는 기본적으로 percent-only로 표시됩니다. Settings의 **Antigravity quota pace**를 켜면 reset time으로 5h/7d pacing을 추정합니다.
 
 **Prompt 캐시 계산식:** Codex 로그는 `input_tokens`와 `cached_input_tokens`를 제공합니다. WhereMyTokens는 uncached input을 `input_tokens - cached_input_tokens`로, cached input을 cache-read token으로 저장합니다. Codex와 Antigravity는 cache read가 prompt token에서 차지하는 비율을 캐시 효율로 표시합니다.
 
