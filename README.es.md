@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-Setup.exe"><strong>Descargar v1.22.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.23.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.22.3 carga historiales grandes de forma más ligera y reduce notablemente la memoria del panel.</em>
+  <em>v1.23.0 unifica provider quota en Quota Entries dinámicas y no sintetiza como Unlimited los limits no reportados.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | 19 jul | Dashboard, alertas, tray, compact widget y taskbar helper usan las mismas Quota Entries dinámicas; los limits no reportados quedan absent en vez de sintetizarse como `Unlimited` |
 | **[v1.22.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.3)** | 18 jul | Lee el historial SQLite como compact projection para reducir notablemente la memoria del panel con historiales grandes, manteniendo los cálculos today/5h/weekly y por modelo |
 | **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | 18 jul | Usa dashboard/widget windows owned by tray para evitar parpadeos en la barra de tareas, corrige botones y hide persistente del widget compacto, y reduce memoria con historiales grandes sin perder Codex `Unlimited` |
 | **[v1.22.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1)** | 17 jul | Muestra como `Unlimited` las ventanas 5h/1sem que Codex deja de reportar temporalmente y evita que la UI se quede en Syncing |
 | **[v1.22.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.0)** | 17 jul | Añade UI japonesa integrada, selector de idioma guardado en AppSettings y guía de descarga para usuarios japoneses, con base en la traducción y estructura de keys de @restructure-git en PR #37 |
-| **[v1.21.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.21.0)** | 17 jul | Unifica los stores de uso anteriores en un UsageIndex SQLite atribuido por source, añade recuperación con Reset index y ajusta los overflow hit bounds del taskbar mini |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.22.3/WhereMyTokens-v1.22.3-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.0/WhereMyTokens-v1.23.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -99,7 +99,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.22.3-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.23.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

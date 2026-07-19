@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.23.0 | 2026-07-19 | Move provider quota data to canonical dynamic Quota Entries across dashboard, alerts, tray, compact widget, and taskbar helper; preserve provider-reported scope/reset/duration and keep unreported limits absent instead of synthesizing Unlimited |
 | v1.22.3 | 2026-07-18 | Stream compact SQLite usage projections to sharply reduce dashboard memory use for large histories while preserving today, 5h, weekly, and per-model quota calculations |
 | v1.22.2 | 2026-07-18 | Stabilize tray-owned dashboard and compact-widget windows to stop taskbar flicker, fix compact widget toolbar clicks and persistent hide, reduce memory pressure for large usage histories, and keep Codex Unlimited rows visible from live quota data |
 | v1.22.1 | 2026-07-17 | Show Codex live usage windows as Unlimited when the provider temporarily omits a 5h/1w limit, keep compact/taskbar labels aligned, and avoid stuck Syncing quota states |
