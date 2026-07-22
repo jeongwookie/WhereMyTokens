@@ -501,15 +501,23 @@ test('PlanUsagePanel renders the simple reset row when mode is simple (F5 integr
 
 // --- Task 10: settings row (rich/simple/none) — zero-new-UI reuse (visual contract §9.6) ---
 
-test('settings quota list excludes reset credits because they are not quota entries', async () => {
+test('settings quota list synthesizes the reset credits row when reset data is present', async () => {
   const M = await loadModels();
   const options = M.buildQuotaTargetSettingsOptions(
     { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
     { codex: resetSnapshot() },
   );
   const row = options.find(o => o.label === 'Codex Resets');
-  assert.equal(row, undefined);
+  assert.ok(row, 'reset credits settings row present');
+  assert.equal(row.id, M.quotaGroupId('codex', 'resets'));
+  assert.equal(row.mode, 'simple');
+  assert.equal(row.taskbarEligible, false);
   assert.ok(options.find(o => o.label === 'Codex'), 'canonical account target remains configurable');
+  const withoutResets = M.buildQuotaTargetSettingsOptions(
+    { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
+    { codex: { ...resetSnapshot(), resetCredits: null } },
+  );
+  assert.equal(withoutResets.find(o => o.label === 'Codex Resets'), undefined, 'no reset data, no settings row');
 });
 
 test('retained reset mode none hides the sibling reset card without creating a settings target', async () => {
@@ -522,7 +530,7 @@ test('retained reset mode none hides the sibling reset card without creating a s
   assert.equal(hidden.settingsTargets.some(g => g.label === 'Codex Resets'), false);
 });
 
-test('SettingsView DOM lists canonical quota targets only', async () => {
+test('SettingsView DOM lists canonical quota targets plus the reset credits row', async () => {
   const mod = await mainView();
   const SettingsView = mod.SettingsView;
   assert.ok(SettingsView, 'SettingsView exported from the bundle');
@@ -532,7 +540,7 @@ test('SettingsView DOM lists canonical quota targets only', async () => {
     onSave: () => {}, onBack: () => {},
   };
   const html = renderToStaticMarkup(React.createElement(ThemeProvider, { value: DARK }, React.createElement(SettingsView, props)));
-  assert.doesNotMatch(html, /Codex Resets/, 'reset credits are not exposed as a dynamic quota target');
+  assert.match(html, /Codex Resets/, 'reset credits row exposed with display mode controls');
   assert.match(html, /Codex/, 'canonical Codex account target is present');
   assert.match(html, />Rich<\/button>/);
   assert.match(html, />Simple<\/button>/);
