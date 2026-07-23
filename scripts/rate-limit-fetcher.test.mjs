@@ -34,23 +34,24 @@ test('Claude maps account windows and active scoped limits from their single tra
   assert.equal(parsed.invalid, 0);
 });
 
-test('Claude parser omits inactive rows and diagnoses malformed or unknown active rows', () => {
+test('Claude parser ignores is_active and diagnoses malformed or unknown rows', () => {
   const usage = parseClaudeUsagePayload({ limits: [
-    { kind: 'session', group: 'session', percent: 10, resets_at: '2026-07-18T10:00:00Z', active: false },
-    { kind: 'weekly_all', group: 'weekly', percent: 'bad', resets_at: '2026-07-24T10:00:00Z' },
-    { kind: 'unknown', group: 'weekly', percent: 20, resets_at: '2026-07-24T10:00:00Z' },
+    { kind: 'session', group: 'session', percent: 10, resets_at: '2026-07-18T10:00:00Z', is_active: true },
+    { kind: 'weekly_scoped', group: 'weekly', percent: 30, resets_at: '2026-07-24T10:00:00Z', is_active: false, scope: { model: { id: null, display_name: 'Fable' } } },
+    { kind: 'unknown', group: 'weekly', percent: 20, resets_at: '2026-07-24T10:00:00Z', is_active: false },
   ] });
   const parsed = parseClaudeQuotaEntries(usage);
-  assert.deepEqual(parsed.entries, []);
-  assert.equal(parsed.activeCandidates, 1);
+  assert.deepEqual(parsed.entries.map(entry => entry.key), ['claude.fable.7d']);
+  assert.equal(parsed.entries[0].usedPct, 30);
+  assert.equal(parsed.activeCandidates, 2);
   assert.equal(parsed.invalid, 1);
 });
 
-test('Claude empty and all-inactive arrays are authoritative empty without invalid candidates', () => {
+test('Claude empty arrays are authoritative empty; malformed scoped rows are invalid candidates', () => {
   const empty = parseClaudeUsagePayload({ limits: [] });
-  const inactive = parseClaudeUsagePayload({ limits: [{ kind: 'weekly_scoped', group: 'weekly', is_active: false }] });
+  const malformed = parseClaudeUsagePayload({ limits: [{ kind: 'weekly_scoped', group: 'weekly', is_active: false }] });
   assert.deepEqual(parseClaudeQuotaEntries(empty), { entries: [], activeCandidates: 0, invalid: 0 });
-  assert.deepEqual(parseClaudeQuotaEntries(inactive), { entries: [], activeCandidates: 0, invalid: 0 });
+  assert.deepEqual(parseClaudeQuotaEntries(malformed), { entries: [], activeCandidates: 1, invalid: 1 });
 });
 
 test('Claude accepts an account-only response without inventing scoped entries', () => {

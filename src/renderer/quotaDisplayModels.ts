@@ -104,6 +104,9 @@ export function quotaGroupId(provider: ProviderId, groupKey: string): string {
   return `${provider}.group.${encodeURIComponent(groupKey)}`;
 }
 
+export const CODEX_RESETS_TARGET_ID = quotaGroupId('codex', 'resets');
+const CODEX_RESETS_DEFAULT_MODE: QuotaDisplayMode = 'simple';
+
 export function modelQuotaGroupKey(model: string): string {
   return `model.${model}`;
 }
@@ -344,9 +347,9 @@ export function buildQuotaTargetSettingsOptions(
     historyWarmupStartsAt: null,
     formatWarmupEta: () => '',
   });
-  return targets.map(group => ({
+  const options = targets.map(group => ({
     id: group.id,
-    provider: group.provider,
+    provider: group.provider as ProviderId,
     label: group.label,
     period: group.rows.map(row => row.label).join(' / '),
     taskbarEligible: group.rows.some(row => row.entry.period === '5h' || row.entry.period === '7d'),
@@ -355,6 +358,25 @@ export function buildQuotaTargetSettingsOptions(
     badges: group.badges,
     rowCount: group.rows.length,
   }));
+  // Reset credits are sibling data on the codex snapshot, not a quota entry,
+  // so they never produce an entry-derived target; synthesize their settings
+  // row here to keep the codex.group.resets mode configurable.
+  if (settings.enabledProviders.includes('codex') && providerQuotas.codex?.resetCredits) {
+    const resetOption: QuotaTargetSettingsOption = {
+      id: CODEX_RESETS_TARGET_ID,
+      provider: 'codex',
+      label: 'Codex Resets',
+      period: 'Credits',
+      taskbarEligible: false,
+      mode: targetMode(settings, CODEX_RESETS_TARGET_ID, CODEX_RESETS_DEFAULT_MODE),
+      defaultMode: CODEX_RESETS_DEFAULT_MODE,
+      badges: [],
+      rowCount: 0,
+    };
+    const lastCodex = options.map(option => option.provider).lastIndexOf('codex');
+    options.splice(lastCodex === -1 ? options.length : lastCodex + 1, 0, resetOption);
+  }
+  return options;
 }
 
 export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions): QuotaDisplayModels {
@@ -363,7 +385,7 @@ export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions)
   const richGroups = visibleTargets.filter(group => group.mode === 'rich');
   const simpleGroups = visibleTargets.filter(group => group.mode === 'simple');
   const widgetGroups = visibleTargets.filter(group => group.mode === 'simple' || options.simpleIncludesRich === true);
-  const resetMode = targetMode(options.settings, quotaGroupId('codex', 'resets'), 'simple');
+  const resetMode = targetMode(options.settings, CODEX_RESETS_TARGET_ID, CODEX_RESETS_DEFAULT_MODE);
   const resetData = options.settings.enabledProviders.includes('codex')
     ? options.providerQuotas.codex?.resetCredits
     : null;

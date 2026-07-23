@@ -43,12 +43,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function isInactive(record: Record<string, unknown>): boolean {
-  return record.active === false
-    || record.is_active === false
-    || record.status === 'inactive';
-}
-
 function usedPct(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(100, value));
@@ -151,7 +145,8 @@ export function parseClaudeQuotaEntries(usage: ClaudeUsagePayload): { entries: Q
     if ((kind === 'session' && group === 'session') || (kind === 'weekly_all' && group === 'weekly')) {
       continue;
     }
-    if (isInactive(record)) continue;
+    // is_active marks the currently binding limit (display priority), not
+    // whether the limit exists — inactive scoped rows still carry real quota.
     activeCandidates += 1;
     const percent = usedPct(record.percent);
     const resetsAt = absoluteReset(record.resets_at);

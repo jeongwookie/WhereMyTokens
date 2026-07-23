@@ -96,7 +96,7 @@ Japanese UI is built into the Windows app. It follows your system language by de
 - `provider checkboxes` for Claude Code, Codex, Antigravity, or any combination.
 - Provider adapters live under `src/main/providers/` and translate provider-reported limits into one canonical Quota Entry shape, separate from local token/cost usage.
 - Dynamic Claude Code, Codex, and Antigravity quota cards preserve provider scope, reset time, known-or-unknown duration, and explicit unlimited state. Missing limits are absent rather than synthesized as `Unlimited`.
-- Claude account limits come from the Anthropic usage response's top-level 5h/7d windows; active scoped `limits[]` targets such as Fable remain independent and do not receive guessed local token/cost attribution.
+- Claude account limits come from the Anthropic usage response's top-level 5h/7d windows; scoped `limits[]` targets such as Fable remain independent regardless of their `is_active` marker and do not receive guessed local token/cost attribution.
 - Optional draggable Windows taskbar mini display uses two physical lines for normalized 5h/7d entries. Two represented periods use one line each; a single represented period can use both lines, with configurable 1-3 blocks per line and compact `+N` hidden-target cues.
 - Built-in Japanese UI with a Settings → General → Language selector.
 - Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.

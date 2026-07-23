@@ -119,7 +119,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **ツール使用バー** — 比例色分けバー + ツールチップ（Bash、Edit、Read など）
 
 ### レート制限 & アラート
-- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は Anthropic usage の top-level 5h/7d account window と active scoped `limits[]`、Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
+- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は Anthropic usage の top-level 5h/7d account window と scoped `limits[]`、Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
 - **Target 別 quota 表示** — 各 canonical quota target は Settings で Rich、Simple、非表示にでき、Plan Usage、Floating widget、taskbar mini の表示順と表示対象に反映されます。Taskbar mini は正規化された 5h/7d entry を 2 本の physical line に配置し、line ごとに 1-3 個のブロック制限と非表示 target の `+N` 表示をサポートします。prefix の色は quota severity ではなく live/cache/log などのデータ source/status を表します。Codex Resets target は Plan Usage 専用です
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` プラグインで API ポーリングなしのリアルタイムデータ受信

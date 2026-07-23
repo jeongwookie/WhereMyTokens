@@ -119,7 +119,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 - **툴 사용 바** — 비례 색상 바 + 툴 칩 (Bash, Edit, Read 등)
 
 ### 속도 제한 & 알림
-- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 보고한 limit을 `providerQuotas`의 canonical Quota Entry로 게시합니다. Claude는 Anthropic usage의 top-level 5h/7d account window와 active scoped `limits[]`, Codex는 live usage snapshot과 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity는 IDE 실행 중 127.0.0.1 local RPC의 모델 quota entry를 사용합니다. 보고되지 않은 limit은 `Unlimited`로 합성하지 않고 부재 상태로 둡니다
+- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 보고한 limit을 `providerQuotas`의 canonical Quota Entry로 게시합니다. Claude는 Anthropic usage의 top-level 5h/7d account window와 scoped `limits[]`, Codex는 live usage snapshot과 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity는 IDE 실행 중 127.0.0.1 local RPC의 모델 quota entry를 사용합니다. 보고되지 않은 limit은 `Unlimited`로 합성하지 않고 부재 상태로 둡니다
 - **Target별 quota 표시** — 각 canonical quota target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Taskbar mini는 정규화된 5h/7d entry를 두 개의 물리적 line에 배치하고, line당 1-3개 블록 제한과 숨김 target `+N` 표시를 지원합니다. prefix 색상은 quota severity가 아니라 live/cache/log 같은 데이터 source/status를 나타냅니다. Codex Resets target은 Plan Usage 전용입니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 API 폴링 없이 실시간 데이터 수신
