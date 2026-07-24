@@ -148,7 +148,7 @@ function claudeUsageLine(id, timestamp, outputTokens, content) {
 }
 
 test('unchanged source does not invoke scanner or write duplicate usage', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse('2026-07-16T01:00:00Z'));
   let scans = 0;
   const scanner = {
     scan: async plan => {
@@ -166,7 +166,7 @@ test('unchanged source does not invoke scanner or write duplicate usage', async 
 
 test('mtime-only append-only source changes update descriptor without rescanning EOF', async () => {
   const storage = new InMemoryUsageIndexStorage();
-  const index = new DefaultUsageIndex(storage);
+  const index = new DefaultUsageIndex(storage, () => Date.parse('2026-07-16T01:00:00Z'));
   let scans = 0;
   const scanner = {
     scan: async plan => {
@@ -295,7 +295,7 @@ test('scanner-discovered project attribution is durable when later descriptors s
 });
 
 test('query coverage stays incomplete for queued or failed discovered sources and completes atomically', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse('2026-07-16T02:00:00Z'));
   const first = source('codex:coverage-one', 'v1', 10);
   const second = source('codex:coverage-two', 'v1', 10);
   index.declareSources('codex', [first, second], true);
@@ -334,9 +334,9 @@ test('query coverage stays incomplete for queued or failed discovered sources an
 });
 
 test('reset discards indexed history and checkpoints before current-source reindex', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
-  const descriptor = source('codex:reset', 'v1', 10);
   const timestamp = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => timestamp);
+  const descriptor = source('codex:reset', 'v1', 10);
 
   await index.refreshSource(descriptor, {
     scan: async () => batch(10, [entry('before-reset', timestamp, 19)]),
@@ -360,8 +360,8 @@ test('reset discards indexed history and checkpoints before current-source reind
 });
 
 test('reset invalidates an in-flight tail scan before it can recreate stale partial history', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const now = Date.parse('2026-07-16T12:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => now);
   const initial = source('codex:reset-race', 'v1', 10);
   await index.refreshSource(initial, {
     scan: async () => batch(10, [entry('before-reset', now, 10)]),
@@ -560,8 +560,8 @@ test('compact projection preserves dynamic window calculations across storage ad
 });
 
 test('append selects tail and rewrite replaces only the affected source', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const now = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => now);
 
   await index.refreshSource(source('codex:one', 'v1', 10), {
     scan: async plan => {
@@ -597,8 +597,8 @@ test('append selects tail and rewrite replaces only the affected source', async 
 });
 
 test('a live file may grow past its discovery stat without rejecting the committed checkpoint', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const now = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => now);
   const liveSource = source('codex:live-growth', 'v1-size-10', 10);
 
   await index.refreshSource(liveSource, {
@@ -620,9 +620,9 @@ test('a live file may grow past its discovery stat without rejecting the committ
 });
 
 test('range rebuild preserves sealed history outside reconstructible coverage', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const sealedTimestamp = Date.parse('2025-01-01T00:00:00Z');
   const rebuildTimestamp = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => rebuildTimestamp);
 
   await index.refreshSource(source('codex:repair', 'v1', 20), {
     scan: async () => batch(20, [
@@ -648,8 +648,8 @@ test('range rebuild preserves sealed history outside reconstructible coverage', 
 });
 
 test('project exclusion filters sources before reduction without multi-project double counting', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const now = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => now);
   let scans = 0;
   const scanner = {
     scan: async () => {
@@ -669,8 +669,8 @@ test('project exclusion filters sources before reduction without multi-project d
 });
 
 test('failed or invalid scans leave the previous source state unchanged', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const now = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => now);
   await index.refreshSource(source('codex:one', 'v1', 10), {
     scan: async () => batch(10, [entry('r1', now, 13)]),
   });
@@ -693,9 +693,9 @@ test('failed or invalid scans leave the previous source state unchanged', async 
 });
 
 test('usage and breakdown filters share source attribution and time bounds', async () => {
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
   const first = Date.parse('2026-07-15T23:00:00Z');
   const second = Date.parse('2026-07-16T01:00:00Z');
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => second);
   const breakdown = {
     thinking: 1,
     response: 2,
@@ -753,7 +753,7 @@ test('Codex scanner reads one payload stream and commits usage plus session proj
   fs.writeFileSync(filePath, `${initialLines.join('\n')}\n`, 'utf8');
 
   let bytesRead = 0;
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse(firstTimestamp));
   const scanner = createCodexUsageIndexScanner(filePath, {
     now: () => Date.parse(firstTimestamp),
     onPayloadBytesRead: count => { bytesRead += count; },
@@ -825,7 +825,7 @@ test('Codex scanner deduplicates repeated usage rows with collision-resistant re
     usageLine,
   ].join('\n')}\n`, 'utf8');
 
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse(timestamp));
   const stat = fs.statSync(filePath);
   const result = await index.refreshSource(
     { ...source('codex:duplicate', `v1:${stat.size}`, stat.size), parserVersion: 2 },
@@ -848,7 +848,7 @@ test('Claude scanner tails once and replaces streamed request snapshots without 
   ])}\n`, 'utf8');
 
   let bytesRead = 0;
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse(firstTimestamp));
   const scanner = createClaudeUsageIndexScanner(filePath, {
     now: () => Date.parse(firstTimestamp),
     onPayloadBytesRead: count => { bytesRead += count; },
@@ -897,7 +897,7 @@ test('Claude scanner accepts plaintext thinking outside the encrypted-signature 
     { type: 'thinking', thinking: 't'.repeat(100), signature: 's'.repeat(514) },
   ])}\n`, 'utf8');
 
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse(timestamp));
   const stat = fs.statSync(filePath);
   await index.refreshSource(
     claudeSource('claude:calib-drift', `v1:${stat.size}`, stat.size),
@@ -922,7 +922,7 @@ test('Claude classifier errors preserve canonical usage while omitting only unav
     { type: 'tool_use', input: { file_path: 'missing-name.ts' } },
   ])}\n`, 'utf8');
 
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse(timestamp));
   const stat = fs.statSync(filePath);
   const descriptor = claudeSource('claude:contained-error', `v1:${stat.size}`, stat.size);
   index.declareSources('claude', [descriptor], true);
@@ -947,7 +947,7 @@ test('JSONL stream callback errors reject the scan and remain inside UsageIndex 
     { type: 'text', text: 'valid' },
   ])}\n`, 'utf8');
 
-  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => Date.parse(timestamp));
   const stat = fs.statSync(filePath);
   const descriptor = claudeSource('claude:contained-error', `v1:${stat.size}`, stat.size);
   index.declareSources('claude', [descriptor], true);
@@ -1069,7 +1069,7 @@ test('SQLite adapter preserves checkpoints and usage across restart', async () =
   const now = Date.parse('2026-07-16T01:00:00Z');
   let scans = 0;
 
-  let index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath));
+  let index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath), () => now);
   await index.refreshSource(source('codex:sqlite', 'v1', 10, ['project-a', 'project-alias']), {
     scan: async plan => {
       scans += 1;
@@ -1079,7 +1079,7 @@ test('SQLite adapter preserves checkpoints and usage across restart', async () =
   });
   await index.close();
 
-  index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath));
+  index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath), () => now);
   const result = await index.refreshSource(source('codex:sqlite', 'v1', 10, ['project-a', 'project-alias']), {
     scan: async () => {
       scans += 1;
@@ -1100,14 +1100,14 @@ test('SQLite reset cascades all canonical rows and remains empty after restart',
   const descriptor = source('codex:sqlite-reset', 'v1', 10);
   const timestamp = Date.parse('2026-07-16T01:00:00Z');
 
-  let index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath));
+  let index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath), () => timestamp);
   await index.refreshSource(descriptor, {
     scan: async () => batch(10, [entry('sqlite-reset-row', timestamp, 23)]),
   });
   await index.reset();
   await index.close();
 
-  index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath));
+  index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath), () => timestamp);
   assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.totalTokens, 0);
   let mode = null;
   await index.refreshSource(descriptor, {
@@ -1149,7 +1149,7 @@ test('SQLite schema v4 maintains source-attributed hour/day/month buckets withou
   const timestamp = Date.parse('2026-07-16T01:10:00Z');
   const descriptor = source('codex:bucket-source', 'v1', 10);
 
-  const index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath));
+  const index = new DefaultUsageIndex(new SqliteUsageIndexStorage(dbPath), () => timestamp);
   await index.refreshSource(descriptor, {
     scan: async () => batch(10, [
       entry('bucket-r1', timestamp, 10),
