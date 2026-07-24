@@ -182,7 +182,15 @@ function logStatus(status: ClaudeApiStatus): void {
   });
 }
 
-function httpsGet(url: string, headers: Record<string, string>): Promise<string> {
+interface UsageHttpResponse {
+  status: number;
+  body: string;
+  headers: Record<string, string | string[] | undefined>;
+}
+
+type UsageHttpGet = (url: string, headers: Record<string, string>) => Promise<UsageHttpResponse>;
+
+function httpsGet(url: string, headers: Record<string, string>): Promise<UsageHttpResponse> {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     let settled = false;
@@ -214,12 +222,7 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
         res.on('end', () => {
           if (settled) return;
           settled = true;
-          const statusCode = res.statusCode ?? 0;
-          if (statusCode >= 200 && statusCode < 300) {
-            resolve(body);
-            return;
-          }
-          reject(new HttpResponseError(statusCode, body, res.headers));
+          resolve({ status: res.statusCode ?? 0, body, headers: res.headers });
         });
       },
     );
@@ -229,6 +232,12 @@ function httpsGet(url: string, headers: Record<string, string>): Promise<string>
     });
     req.end();
   });
+}
+
+let httpsGetImpl: UsageHttpGet = httpsGet;
+
+export function __setClaudeUsageHttpForTest(impl: UsageHttpGet | null): void {
+  httpsGetImpl = impl ?? httpsGet;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -391,15 +400,18 @@ function planFromTier(tier: string, sub: string): string {
 }
 
 async function performUsageFetch(cred: Credentials): Promise<ApiUsageFetchResult> {
-  const body = await httpsGet('https://api.anthropic.com/api/oauth/usage', {
+  const response = await httpsGetImpl('https://api.anthropic.com/api/oauth/usage', {
     Authorization: `Bearer ${cred.accessToken}`,
     'Content-Type': 'application/json',
     'anthropic-version': '2023-06-01',
     'anthropic-beta': 'oauth-2025-04-20',
     'User-Agent': CLAUDE_USER_AGENT,
   });
+  if (response.status < 200 || response.status >= 300) {
+    throw new HttpResponseError(response.status, response.body, response.headers);
+  }
 
-  const parsed = JSON.parse(body) as unknown;
+  const parsed = JSON.parse(response.body) as unknown;
   const data = asRecord(parsed);
   if (!data) {
     const status = buildStatus('schema-changed', false, 'schema changed', 'Claude API returned a non-object response.');
@@ -472,6 +484,11 @@ function refreshFailedStatus(outcome: Extract<RefreshOutcome, { kind: 'network' 
   );
 }
 
+function credentialLooksExpired(): boolean {
+  const state = getOAuthCredentialState();
+  return state.isExpired || (state.msUntilExpiry != null && state.msUntilExpiry < 60_000);
+}
+
 export async function fetchClaudeUsage(): Promise<ApiUsageFetchResult> {
   const cred = readCredentials();
   if (!cred) {
@@ -480,13 +497,29 @@ export async function fetchClaudeUsage(): Promise<ApiUsageFetchResult> {
     return { usage: null, status };
   }
 
+  // Token expiry must be detected locally: the server may answer an expired
+  // token with 429 instead of 401, which would otherwise back off forever
+  // without refreshing. Polling doubles as the refresh scheduler, so a token
+  // entering its expiry leeway is renewed here before it actually expires.
+  let accessToken = cred.accessToken;
+  if (getOAuthCredentialState().shouldRefresh) {
+    const outcome = await refreshNow(CLAUDE_OAUTH_REFRESH_USER_AGENT, 'expiry-preflight');
+    if (outcome.kind === 'ok') {
+      accessToken = outcome.accessToken;
+    } else if (outcome.kind === 'invalid-grant') {
+      const status = loginRequiredStatus(outcome.serverMessage);
+      logStatus(status);
+      return { usage: null, status };
+    }
+    // rate-limited / network / write-failed / unexpected: attempt the fetch
+    // with the stored token anyway; the server stays the validity authority.
+  }
+
   try {
-    return await performUsageFetch(cred);
+    return await performUsageFetch({ ...cred, accessToken });
   } catch (error) {
     if (error instanceof HttpResponseError && error.statusCode === 401) {
-      const state = getOAuthCredentialState();
-      const looksLikeExpiredToken = state.isExpired || (state.msUntilExpiry != null && state.msUntilExpiry < 60_000);
-      if (!looksLikeExpiredToken) {
+      if (!credentialLooksExpired()) {
         const status = classifyHttpError(error);
         logStatus(status);
         return { usage: null, status };
