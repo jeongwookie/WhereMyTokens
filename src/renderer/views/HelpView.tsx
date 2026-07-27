@@ -140,7 +140,7 @@ function ContentEN() {
         <div style={{ marginBottom: 6 }}>
           WhereMyTokens can track <B>Claude Code</B>, <B>Codex</B>, and <B>Antigravity</B>. Use Settings → Providers to choose enabled providers with checkboxes.
         </div>
-        <div style={{ marginBottom: 5 }}><B>Claude</B> reads local Claude session/JSONL files and uses the Anthropic API account windows plus active scoped <code>limits[]</code>, or the statusLine bridge, for provider-reported quota entries. Scoped limits such as Fable remain independent targets.</div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B> reads local Claude session/JSONL files and uses the Anthropic API account windows plus scoped <code>limits[]</code>, or the statusLine bridge, for provider-reported quota entries. Scoped limits such as Fable remain independent targets even when they are not the currently binding limit.</div>
         <div><B>Codex</B> prefers one complete live quota snapshot and can fall back to one complete auth-bound cache or newest local rate-limit event from <code>~/.codex/sessions/**/*.jsonl</code>, <code>~/.codex/archived_sessions/**/*.jsonl</code>, and <code>~/.codex/session-cleanup-archive/**/*.jsonl</code>. A missing limit is absent, not synthesized as <B>Unlimited</B>; only an explicit provider unlimited state renders that way. Reset credits remain a separate sibling card with auth-bound cache or count-only live fallback. Local logs still power model usage, token counts, cached input, tool events, and reset events.</div>
         <div style={{ marginTop: 5 }}><B>Antigravity</B> reads only the running Antigravity IDE language server on <code>127.0.0.1</code> for sessions, model quota percentages, and token metadata. It does not use Google OAuth, refresh tokens, or cloud fallback requests.</div>
       </Section>
@@ -236,7 +236,7 @@ function ContentEN() {
           <B>Local sources</B> — Enabled Claude JSONL and Codex JSONL providers are parsed locally. Antigravity reads the running IDE language server over local RPC only.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>Limit sources</B> — Claude selects one whole Anthropic API snapshot first, then one whole Bridge or Cache snapshot. If the local Claude access token expires, the app can refresh it with Anthropic and write updated credentials back atomically. Codex selects one whole live, newest local-log, or Cache snapshot; sources are never combined by period, and omitted limits stay absent. Reset credits fall back only to auth-bound Cache or count-only live usage payloads. Antigravity uses local RPC model quotas only. Live requests run only for enabled providers and are spaced by a few minutes.
+          <B>Limit sources</B> — Claude selects one whole Anthropic API snapshot first, then one whole Bridge or Cache snapshot. If the local Claude access token is near expiry or expires, the app can refresh it with Anthropic before polling and write updated credentials back atomically. Codex selects one whole live, newest local-log, or Cache snapshot; sources are never combined by period, and omitted limits stay absent. Reset credits fall back only to auth-bound Cache or count-only live usage payloads. Antigravity uses local RPC model quotas only. Live requests run only for enabled providers and are spaced by a few minutes.
         </SrcRow>
         <SrcRow badge="FB">
           <B>Last cached value</B> — kept when live limit data is unavailable. Claude API cache is tied to the current Claude login, and stale data past its reset window is auto-cleared on startup. Codex reset-credit cache is tied to the current Codex auth file and stores counts, expiry times, fetch status, source labels, a hashed auth marker, and the auth file modified time.
@@ -246,7 +246,7 @@ function ContentEN() {
           <InfoRow label="Language">Settings → General → Language follows your system language by default. Choose English or 日本語 to override the UI language.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display controls Rich, Simple, or hidden presentation per provider window or model target. It also affects Plan Usage, the floating widget, and taskbar mini order/visibility; Codex Resets is Plan Usage only.</InfoRow>
           <InfoRow label="Taskbar mini">Enable it from the header taskbar button or Settings. It renders two physical lines from normalized 5h/7d quota entries and can be dragged to reposition. Two represented periods use one line each; a single period can use both lines. Target prefixes use source/status tone, quota numbers keep pace/severity colors, and +N marks targets hidden by the per-line block limit. The helper receives summarized display lines plus the resolved light/dark theme fallback; its taskbar-relative layout is saved locally. It locally samples the visible taskbar background for contrast and does not store or transmit pixels. If the helper repeatedly fails, WhereMyTokens turns it off and shows a notification.</InfoRow>
-          <InfoRow label="Claude OAuth">Expired Claude access tokens may be refreshed through Anthropic for usage polling. WhereMyTokens does not keep a separate credential backup.</InfoRow>
+          <InfoRow label="Claude OAuth">Expiring or expired Claude access tokens may be refreshed through Anthropic before usage polling. WhereMyTokens does not keep a separate credential backup.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget or the main header PiP button opens the always-on-top compact Quota Pace window. It compares used % with elapsed %, and yellow/red means usage is ahead of the reset window. Waiting animations are off by default; enable Settings → Waiting animation if you want them.</InfoRow>
         </div>
@@ -263,7 +263,7 @@ function ContentKO() {
         <div style={{ marginBottom: 6 }}>
           WhereMyTokens는 <B>Claude Code</B>, <B>Codex</B>, <B>Antigravity</B>를 추적할 수 있습니다. Settings → Providers에서 provider 체크박스로 켜고 끕니다.
         </div>
-        <div style={{ marginBottom: 5 }}><B>Claude</B>는 로컬 Claude 세션/JSONL 파일을 읽고 Anthropic API의 account window와 활성 scoped <code>limits[]</code>, 또는 statusLine 브리지에서 provider가 보고한 quota entry를 가져옵니다. Fable 같은 scoped limit은 독립 target으로 유지됩니다.</div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B>는 로컬 Claude 세션/JSONL 파일을 읽고 Anthropic API의 account window와 scoped <code>limits[]</code>, 또는 statusLine 브리지에서 provider가 보고한 quota entry를 가져옵니다. Fable 같은 scoped limit은 현재 binding limit이 아니어도 독립 target으로 유지됩니다.</div>
         <div><B>Codex</B>는 하나의 완전한 live quota snapshot을 우선 사용하고, auth-bound cache 하나 또는 로컬 <code>~/.codex/sessions/**/*.jsonl</code>, <code>~/.codex/archived_sessions/**/*.jsonl</code>, <code>~/.codex/session-cleanup-archive/**/*.jsonl</code> 중 가장 최신의 완전한 rate-limit 이벤트 하나로 폴백합니다. 누락된 limit은 없는 것으로 취급하며 <B>Unlimited</B>를 합성하지 않습니다. provider가 명시한 unlimited entry만 그렇게 표시됩니다. Reset credit은 별도 sibling card로 유지되며 auth-bound cache 또는 live usage의 count-only 값만 폴백으로 사용합니다.</div>
         <div style={{ marginTop: 5 }}><B>Antigravity</B>는 실행 중인 Antigravity IDE language server를 <code>127.0.0.1</code> local RPC로만 읽어 세션, 모델 quota %, token metadata를 가져옵니다. Google OAuth, refresh token, cloud fallback 요청은 사용하지 않습니다.</div>
       </Section>
@@ -357,7 +357,7 @@ function ContentKO() {
           <B>로컬 소스</B> — 켜진 Claude JSONL과 Codex JSONL provider는 로컬에서 파싱합니다. Antigravity는 실행 중인 IDE language server를 local RPC로만 읽습니다.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>한도 소스</B> — Claude는 Anthropic API, Bridge, Cache 중 우선순위가 가장 높은 하나의 완전한 snapshot을 선택합니다. Codex도 live, 최신 local-log, Cache 중 하나의 완전한 snapshot만 선택하며 period별로 source를 섞지 않습니다. 누락된 limit은 그대로 absent입니다. Reset credit은 auth-bound Cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 local RPC model quota만 사용합니다. Live 요청은 켜진 provider에만 수행되며 몇 분 간격을 둡니다.
+          <B>한도 소스</B> — Claude는 Anthropic API, Bridge, Cache 중 우선순위가 가장 높은 하나의 완전한 snapshot을 선택합니다. 로컬 Claude access token이 만료 직전이거나 만료되면 polling 전에 Anthropic을 통해 refresh하고 credentials를 원자적으로 갱신할 수 있습니다. Codex도 live, 최신 local-log, Cache 중 하나의 완전한 snapshot만 선택하며 period별로 source를 섞지 않습니다. 누락된 limit은 그대로 absent입니다. Reset credit은 auth-bound Cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 local RPC model quota만 사용합니다. Live 요청은 켜진 provider에만 수행되며 몇 분 간격을 둡니다.
         </SrcRow>
         <SrcRow badge="FB">
           <B>마지막 캐시값</B> — 실시간 한도 데이터를 사용할 수 없을 때 직전 값을 유지합니다. Claude API 캐시는 현재 Claude 로그인에 묶이며, 리셋 시각이 지난 stale 데이터는 시작 시 자동 초기화합니다. Codex reset-credit 캐시는 현재 Codex auth file에 묶이며 count, 만료 시각, fetch 상태, source label, hashed auth marker, auth file modified time만 저장합니다.
@@ -367,7 +367,7 @@ function ContentKO() {
           <InfoRow label="Language">Settings → General → Language는 기본적으로 시스템 언어를 따릅니다. English 또는 日本語를 선택해 UI 언어를 고정할 수 있습니다.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display에서 provider window 또는 model target별 Rich, Simple, 숨김 표시를 선택합니다. Plan Usage, Floating widget, taskbar mini의 순서와 노출에도 반영되며, Codex Resets는 Plan Usage 전용입니다.</InfoRow>
           <InfoRow label="Taskbar mini">상단 taskbar 버튼이나 Settings에서 켤 수 있습니다. 정규화된 5h/7d quota entry를 두 개의 물리적 line에 표시하고 드래그로 위치를 옮길 수 있습니다. 두 period가 있으면 line을 하나씩 쓰고, 하나뿐이면 두 line을 모두 사용할 수 있습니다. 대상 prefix 색은 source/status 상태를, quota 숫자 색은 pace/severity를 뜻하며, line 제한으로 숨겨진 target은 +N으로 표시됩니다. helper에는 요약 display line과 resolved light/dark theme fallback만 전달됩니다.</InfoRow>
-          <InfoRow label="Claude OAuth">만료된 Claude access token은 사용량 조회를 위해 Anthropic을 통해 refresh될 수 있습니다. WhereMyTokens는 별도 credentials 백업을 보관하지 않습니다.</InfoRow>
+          <InfoRow label="Claude OAuth">만료 직전이거나 만료된 Claude access token은 사용량 조회 전에 Anthropic을 통해 refresh될 수 있습니다. WhereMyTokens는 별도 credentials 백업을 보관하지 않습니다.</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup.</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget 또는 메인 헤더 PiP 버튼으로 항상 위에 표시되는 작은 Quota Pace 창을 열고 닫을 수 있습니다. 사용률 %와 경과 시간 %를 비교하며, 노랑/빨강은 리셋 전 사용 속도가 빠르다는 뜻입니다. Waiting 애니메이션은 기본 꺼짐이며 Settings → Waiting animation에서 켤 수 있습니다.</InfoRow>
         </div>
@@ -384,7 +384,7 @@ function ContentJA() {
         <div style={{ marginBottom: 6 }}>
           WhereMyTokens は <B>Claude Code</B>、<B>Codex</B>、<B>Antigravity</B> を追跡できます。Settings → Providers の provider チェックボックスで有効化します。
         </div>
-        <div style={{ marginBottom: 5 }}><B>Claude</B> はローカルの Claude セッション/JSONL ファイルを読み取り、Anthropic API の account window と有効な scoped <code>limits[]</code>、または statusLine ブリッジから provider が報告した quota entry を取得します。Fable のような scoped limit は独立 target のままです。</div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B> はローカルの Claude セッション/JSONL ファイルを読み取り、Anthropic API の account window と scoped <code>limits[]</code>、または statusLine ブリッジから provider が報告した quota entry を取得します。Fable のような scoped limit は現在 binding limit でなくても独立 target のままです。</div>
         <div><B>Codex</B> は完全な live quota snapshot を優先し、auth-bound cache ひとつ、またはローカルの <code>~/.codex/sessions/**/*.jsonl</code>、<code>~/.codex/archived_sessions/**/*.jsonl</code>、<code>~/.codex/session-cleanup-archive/**/*.jsonl</code> にある最新の完全な rate-limit event ひとつへフォールバックします。欠落した limit は absent であり、<B>Unlimited</B> を合成しません。provider が明示した unlimited entry だけがそのように表示されます。Reset credit は独立した sibling card です。</div>
         <div style={{ marginTop: 5 }}><B>Antigravity</B> は実行中の Antigravity IDE language server を <code>127.0.0.1</code> local RPC でのみ読み取り、セッション、モデル quota %、token metadata を取得します。Google OAuth、refresh token、cloud fallback request は使いません。</div>
       </Section>
@@ -478,7 +478,7 @@ function ContentJA() {
           <B>ローカルソース</B> — 有効な Claude JSONL と Codex JSONL provider はローカルで解析します。Antigravity は実行中の IDE language server を local RPC でのみ読み取ります。
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>制限ソース</B> — Claude は Anthropic API、Bridge、Cache から優先順位の最も高い完全な snapshot をひとつ選びます。Codex も live、最新 local-log、Cache から完全な snapshot をひとつだけ選び、period ごとに source を混ぜません。欠落した limit は absent のままです。Reset credit は auth-bound Cache または live usage payload の count-only 値だけへフォールバックします。Antigravity は local RPC model quota だけを使います。
+          <B>制限ソース</B> — Claude は Anthropic API、Bridge、Cache から優先順位の最も高い完全な snapshot をひとつ選びます。ローカル Claude access token が期限間近または期限切れの場合、polling 前に Anthropic で refresh し、credentials を atomic に更新できます。Codex も live、最新 local-log、Cache から完全な snapshot をひとつだけ選び、period ごとに source を混ぜません。欠落した limit は absent のままです。Reset credit は auth-bound Cache または live usage payload の count-only 値だけへフォールバックします。Antigravity は local RPC model quota だけを使います。
         </SrcRow>
         <SrcRow badge="FB">
           <B>最後のキャッシュ値</B> — ライブ制限データが利用できない場合に直近の値を保持。Claude API キャッシュは現在の Claude ログインに紐づき、リセット済みの古いデータは起動時に自動削除。Codex reset-credit cache は現在の Codex auth file に紐づき、count、有効期限、fetch status、source label、hashed auth marker、auth file modified time だけを保存します。
@@ -488,7 +488,7 @@ function ContentJA() {
           <InfoRow label="言語">Settings → 一般 → 言語はデフォルトでシステム言語に従います。English または 日本語を選択して UI 言語を固定できます。</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display で provider window または model target ごとの Rich、Simple、非表示を選択します。Plan Usage、Floating widget、taskbar mini の順序と表示対象にも反映され、Codex Resets は Plan Usage 専用です。</InfoRow>
           <InfoRow label="Taskbar mini">ヘッダーの taskbar ボタンまたは Settings から有効にできます。正規化された 5h/7d quota entry を二つの物理 line に表示し、ドラッグで位置を調整できます。二つの period があれば各 line をひとつずつ使い、一つだけなら両方の line を使えます。target prefix は source/status、quota 数値は pace/severity を示し、line 上限で隠れた target は +N で表示されます。helper には要約 display line と resolved light/dark theme fallback だけが渡されます。</InfoRow>
-          <InfoRow label="Claude OAuth">期限切れの Claude access token は、使用量 polling のため Anthropic で refresh されることがあります。WhereMyTokens は別の credentials backup を保持しません。</InfoRow>
+          <InfoRow label="Claude OAuth">期限間近または期限切れの Claude access token は、使用量 polling 前に Anthropic で refresh されることがあります。WhereMyTokens は別の credentials backup を保持しません。</InfoRow>
           <InfoRow label="Bridge">Settings → Claude Code Integration → Setup。</InfoRow>
           <InfoRow label="Widget">Settings → Floating usage widget またはメインヘッダーの PiP ボタンで、常に最前面のコンパクトな Quota Pace ウィンドウを開閉できます。使用率 % と経過時間 % を比較し、黄色/赤はリセット前に使い切るペースであることを示します。Waiting animation はデフォルトでオフで、Settings → Waiting animation から有効にできます。</InfoRow>
         </div>
