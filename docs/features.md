@@ -20,10 +20,11 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 
 ## Analytics
 
-- Today and all-time header totals for tokens, cost, calls, sessions, cache efficiency, and savings.
+- Today and all-time header totals for tokens, API-equivalent estimated cost, calls, sessions, cache efficiency, and savings.
 - Persistent source-attributed local usage index for long-range totals, incremental startup, and project-aware filtering.
 - Usage precision retention: request detail for 8 days, hourly buckets for 35 days, daily buckets for 180 days, and exact monthly authority indefinitely.
 - Non-blocking first indexing with explicit incomplete coverage, plus a destructive `Reset index` action that rebuilds only from currently available sources.
+- Lossless cost repricing with a validated SQLite backup and transactionally enforced non-cost-state hash; unavailable ambiguous raw-model history is preserved rather than guessed or reset.
 - Trend buckets with drill-downs for provider input/output, thinking, response, tools, cache-aware work tokens, billing tokens, and git net-line categories.
 - Activity tabs for 7-day heatmap, 5-month calendar, hourly distribution, weekly comparison, and rhythm breakdown.
 - Model usage cards and activity breakdowns for Claude output categories and Codex tool-event categories.
