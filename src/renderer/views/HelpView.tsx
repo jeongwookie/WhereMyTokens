@@ -154,6 +154,9 @@ function ContentEN() {
         <div style={{ marginBottom: 6 }}>
           <B>Cache Efficiency</B> uses provider-specific math: Claude = cache read ÷ (cache read + cache creation); Codex and Antigravity = cache read ÷ prompt tokens.
         </div>
+        <div style={{ marginBottom: 6 }}>
+          <B>Pricing</B> uses model-specific API rates and known dated price changes. Historical cost repricing preserves unavailable ambiguous history instead of guessing or resetting it.
+        </div>
         <UsageTable
           headers={['Display', 'Scope', 'tok', '$']}
           rows={[
@@ -277,6 +280,9 @@ function ContentKO() {
         <div style={{ marginBottom: 6 }}>
           <B>Cache Efficiency</B> 계산식은 provider별로 다릅니다. Claude = cache read ÷ (cache read + cache creation), Codex/Antigravity = cache read ÷ prompt tokens.
         </div>
+        <div style={{ marginBottom: 6 }}>
+          <B>가격</B>은 모델별 API 단가와 확인된 가격 변경 날짜를 반영합니다. 과거 비용 재산정은 원본이 없어 모델을 확정할 수 없는 기록을 추측하거나 reset하지 않고 그대로 보존합니다.
+        </div>
         <UsageTable
           headers={['표시 위치', '범위', 'tok', '$']}
           rows={[
@@ -397,6 +403,9 @@ function ContentJA() {
         </div>
         <div style={{ marginBottom: 6 }}>
           <B>Cache Efficiency</B> は provider ごとに計算式が異なります。Claude = cache read ÷ (cache read + cache creation)、Codex/Antigravity = cache read ÷ prompt tokens。
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <B>価格</B>はモデル別 API 単価と確認済みの価格改定日を反映します。履歴コストの再計算では、raw data がなくモデルを特定できない履歴を推測や reset せず保持します。
         </div>
         <UsageTable
           headers={['表示場所', '集計期間', 'tok', '$']}

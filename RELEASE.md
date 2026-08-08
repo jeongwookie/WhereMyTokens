@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.23.2 | 2026-08-08 | Correct model-specific API-equivalent pricing across Claude and GPT-5.6 price changes; add lossless SQLite cost repricing with validated backups, checkpoint-bounded replay, concurrent-change protection, and privacy-safe CLI output |
 | v1.23.1 | 2026-07-27 | Restore Fable scoped Claude quota visibility, Codex Resets display settings, and proactive Claude OAuth refresh before expiry; pin UsageIndex test clocks for stable release validation |
 | v1.23.0 | 2026-07-19 | Move provider quota data to canonical dynamic Quota Entries across dashboard, alerts, tray, compact widget, and taskbar helper; preserve provider-reported scope/reset/duration and keep unreported limits absent instead of synthesizing Unlimited |
 | v1.22.3 | 2026-07-18 | Stream compact SQLite usage projections to sharply reduce dashboard memory use for large histories while preserving today, 5h, weekly, and per-model quota calculations |

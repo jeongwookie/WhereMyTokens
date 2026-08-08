@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.1/WhereMyTokens-Setup.exe"><strong>v1.23.1 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-Setup.exe"><strong>v1.23.2 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.23.1 は Fable quota と Codex Resets 設定表示を復旧し、期限前の Claude OAuth token を先に refresh します。</em>
+  <em>v1.23.2 はモデル別 API 換算コストを価格改定日ごとに正しく計算し、backup 検証と同時変更検出を備えた lossless SQLite cost repricing を追加します。</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | Claude と GPT-5.6 のモデル別・時点別 API 換算価格を修正し、検証済み backup、checkpoint 制限 replay、同時変更検出、privacy-safe CLI を備えた lossless SQLite cost repricing を追加 |
 | **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | 7/27 | Fable scoped quota と Codex Resets 表示設定を復旧し、期限前の Claude OAuth token を先に refresh。UsageIndex test clock も固定して release 検証を安定化 |
 | **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | 7/19 | dashboard、alert、tray、compact widget、taskbar helper が同じ動的 Quota Entry を使うよう整理し、報告されない limit は `Unlimited` に合成せず absent のまま保持 |
 | **[v1.22.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.3)** | 7/18 | SQLite 使用履歴を compact projection として読み込み、大きな履歴でもダッシュボードのメモリ使用を大きく下げつつ、today/5h/weekly/モデル別 quota 計算を維持 |
 | **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | 7/18 | tray-owned dashboard/widget window でタスクバーの点滅を抑え、Compact widget のボタンと hide 保存を修正し、大きな使用履歴のメモリ負荷を下げつつ Codex `Unlimited` 表示を維持 |
-| **[v1.22.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.1)** | 7/17 | Codex が一時的に 5h/1w 制限 window を報告しない場合は `Unlimited` として表示し、Syncing のまま残らないよう改善 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +88,11 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.1/WhereMyTokens-v1.23.1-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-v1.23.2-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -102,7 +102,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.23.1-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.23.2-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
