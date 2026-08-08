@@ -26,12 +26,15 @@ interface ResolvedPrice {
 
 const PER_MILLION = 1_000_000;
 const GPT_5_6_LONG_CONTEXT_THRESHOLD = 272_000;
+const GPT_5_6_PRICE_CUT_MS = Date.UTC(2026, 6, 30);
 const SONNET_5_STANDARD_PRICE_START_MS = Date.UTC(2026, 8, 1);
 
 const RATE = {
   gpt56Sol: { input: 5, output: 30, cacheWrite: 6.25, cacheRead: 0.5 },
-  gpt56Terra: { input: 2.5, output: 15, cacheWrite: 3.125, cacheRead: 0.25 },
-  gpt56Luna: { input: 1, output: 6, cacheWrite: 1.25, cacheRead: 0.1 },
+  gpt56Terra: { input: 2, output: 12, cacheWrite: 2.5, cacheRead: 0.2 },
+  gpt56TerraLaunch: { input: 2.5, output: 15, cacheWrite: 3.125, cacheRead: 0.25 },
+  gpt56Luna: { input: 0.2, output: 1.2, cacheWrite: 0.25, cacheRead: 0.02 },
+  gpt56LunaLaunch: { input: 1, output: 6, cacheWrite: 1.25, cacheRead: 0.1 },
   gpt54Mini: { input: 0.75, output: 4.5, cacheWrite: 0.75, cacheRead: 0.075 },
   gpt54Nano: { input: 0.2, output: 1.25, cacheWrite: 0.2, cacheRead: 0.02 },
   gpt54: { input: 2.5, output: 15, cacheWrite: 2.5, cacheRead: 0.25 },
@@ -58,9 +61,14 @@ function isCurrentOpus4(model: string): boolean {
 
 function resolvePrice(model: string, timestampMs: number): ResolvedPrice {
   const lower = model.trim().toLowerCase();
+  const beforeGpt56PriceCut = timestampMs > 0 && timestampMs < GPT_5_6_PRICE_CUT_MS;
 
-  if (lower.includes('gpt-5.6-luna')) return { rates: RATE.gpt56Luna, longContext: true };
-  if (lower.includes('gpt-5.6-terra')) return { rates: RATE.gpt56Terra, longContext: true };
+  if (lower.includes('gpt-5.6-luna')) {
+    return { rates: beforeGpt56PriceCut ? RATE.gpt56LunaLaunch : RATE.gpt56Luna, longContext: true };
+  }
+  if (lower.includes('gpt-5.6-terra')) {
+    return { rates: beforeGpt56PriceCut ? RATE.gpt56TerraLaunch : RATE.gpt56Terra, longContext: true };
+  }
   if (lower.includes('gpt-5.6-sol') || lower === 'gpt-5.6') {
     return { rates: RATE.gpt56Sol, longContext: true };
   }

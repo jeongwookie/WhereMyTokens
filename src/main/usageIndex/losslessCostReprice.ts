@@ -168,6 +168,10 @@ function sourceLabel(sourceId: string): string {
   return `source-${createHash('sha256').update(sourceId).digest('hex').slice(0, 12)}`;
 }
 
+function recordLabel(sourceId: string, recordId: string): string {
+  return `record-${createHash('sha256').update(sourceId).update('\0').update(recordId).digest('hex').slice(0, 12)}`;
+}
+
 function canonicalTotals(database: DatabaseSync): { costUSD: number; cacheSavingsUSD: number } {
   const row = database.prepare(`
     SELECT COALESCE(SUM(cost_usd), 0) AS cost_usd,
@@ -244,7 +248,7 @@ function assertEntryIdentity(row: EntryRow, entry: UsageEntry): void {
     && row.cache_creation_tokens === entry.cacheCreationTokens
     && row.cache_read_tokens === entry.cacheReadTokens;
   if (!same) {
-    throw new Error(`Replay identity mismatch for ${row.source_id}:${row.request_id}: ${JSON.stringify({
+    throw new Error(`Replay identity mismatch for ${recordLabel(row.source_id, row.request_id)}: ${JSON.stringify({
       stored: {
         timestampMs: row.timestamp_ms,
         provider: row.provider,
@@ -287,12 +291,13 @@ function repriceReplayedSource(
   let updatedEntryRows = 0;
   for (const row of storedEntries) {
     const entry = entryById.get(row.request_id);
-    if (!entry) throw new Error(`Replay omitted indexed request ${sourceId}:${row.request_id}`);
+    const label = recordLabel(sourceId, row.request_id);
+    if (!entry) throw new Error(`Replay omitted indexed ${label}`);
     assertEntryIdentity(row, entry);
     if (sameNumber(row.cost_usd, entry.costUSD)
       && sameNumber(row.cache_savings_usd, entry.cacheSavingsUSD)) continue;
     const result = updateEntry.run(entry.costUSD, entry.cacheSavingsUSD, sourceId, row.request_id);
-    if (result.changes !== 1) throw new Error(`Failed to reprice request ${sourceId}:${row.request_id}`);
+    if (result.changes !== 1) throw new Error(`Failed to reprice ${label}`);
     updatedEntryRows += 1;
   }
 
@@ -313,8 +318,9 @@ function repriceReplayedSource(
       row.bucket_kind,
       row.bucket_start_ms,
     );
+    const label = recordLabel(sourceId, key);
     const replayed = bucketDeltas.get(key);
-    if (!replayed) throw new Error(`Replay omitted indexed bucket ${key}`);
+    if (!replayed) throw new Error(`Replay omitted indexed ${label}`);
     const metrics = replayed.metrics;
     const sameIdentity = row.request_count === metrics.requestCount
       && row.input_tokens === metrics.inputTokens
@@ -322,7 +328,7 @@ function repriceReplayedSource(
       && row.cache_creation_tokens === metrics.cacheCreationTokens
       && row.cache_read_tokens === metrics.cacheReadTokens
       && row.total_tokens === metrics.totalTokens;
-    if (!sameIdentity) throw new Error(`Replay token mismatch for bucket ${key}`);
+    if (!sameIdentity) throw new Error(`Replay token mismatch for ${label}`);
     if (sameNumber(row.cost_usd, metrics.costUSD)
       && sameNumber(row.cache_savings_usd, metrics.cacheSavingsUSD)) continue;
     const result = updateBucket.run(
@@ -334,7 +340,7 @@ function repriceReplayedSource(
       row.bucket_kind,
       row.bucket_start_ms,
     );
-    if (result.changes !== 1) throw new Error(`Failed to reprice bucket ${key}`);
+    if (result.changes !== 1) throw new Error(`Failed to reprice ${label}`);
     updatedBucketRows += 1;
   }
   return { updatedEntryRows, updatedBucketRows };
@@ -404,7 +410,7 @@ function createBackup(database: DatabaseSync, databasePath: string, backupPath: 
   const resolvedDatabase = path.resolve(databasePath);
   const resolvedBackup = path.resolve(backupPath);
   if (resolvedBackup === resolvedDatabase) throw new Error('Backup path must differ from the live UsageIndex path');
-  if (fs.existsSync(resolvedBackup)) throw new Error(`Backup already exists: ${resolvedBackup}`);
+  if (fs.existsSync(resolvedBackup)) throw new Error('Backup file already exists; choose a new backup path');
   fs.mkdirSync(path.dirname(resolvedBackup), { recursive: true });
   const escaped = resolvedBackup.replace(/'/g, "''");
   database.exec(`VACUUM INTO '${escaped}'`);

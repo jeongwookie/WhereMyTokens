@@ -50,9 +50,24 @@ test('GPT-5.6 Sol, Terra, and Luna use their distinct standard rates', () => {
     cacheReadTokens: 100_000,
   };
   closeTo(estimate('gpt-5.6-sol', timestamp, standardRequest).costUSD, 3.55);
-  closeTo(estimate('gpt-5.6-terra', timestamp, standardRequest).costUSD, 1.775);
-  closeTo(estimate('gpt-5.6-luna', timestamp, standardRequest).costUSD, 0.71);
+  closeTo(estimate('gpt-5.6-terra', timestamp, standardRequest).costUSD, 1.42);
+  closeTo(estimate('gpt-5.6-luna', timestamp, standardRequest).costUSD, 0.142);
   closeTo(estimate('gpt-5.6', timestamp, standardRequest).costUSD, 3.55);
+});
+
+test('GPT-5.6 Terra and Luna preserve launch pricing before the July 30 cut', () => {
+  const beforeCut = Date.parse('2026-07-29T23:59:59.999Z');
+  const atCut = Date.parse('2026-07-30T00:00:00.000Z');
+  const request = {
+    inputTokens: 100_000,
+    outputTokens: 100_000,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 100_000,
+  };
+  closeTo(estimate('gpt-5.6-terra', beforeCut, request).costUSD, 1.775);
+  closeTo(estimate('gpt-5.6-luna', beforeCut, request).costUSD, 0.71);
+  closeTo(estimate('gpt-5.6-terra', atCut, request).costUSD, 1.42);
+  closeTo(estimate('gpt-5.6-luna', atCut, request).costUSD, 0.142);
 });
 
 test('GPT-5.6 long-context surcharge begins only above 272K prompt tokens', () => {

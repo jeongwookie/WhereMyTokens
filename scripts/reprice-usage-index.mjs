@@ -65,7 +65,12 @@ function sourceLabel(sourceId) {
 }
 
 function validatedCheckpoint(filePath, byteOffset, sourceId) {
-  const size = statSync(filePath).size;
+  let size;
+  try {
+    size = statSync(filePath).size;
+  } catch {
+    throw new Error(`Unable to read ${sourceLabel(sourceId)}`);
+  }
   if (!Number.isSafeInteger(byteOffset) || byteOffset < 0) {
     throw new Error(`Invalid byte checkpoint ${byteOffset} for ${sourceLabel(sourceId)}`);
   }
@@ -78,7 +83,7 @@ function validatedCheckpoint(filePath, byteOffset, sourceId) {
 async function main() {
   const arguments_ = parseArguments(process.argv.slice(2));
   const databasePath = path.resolve(arguments_.database ?? defaultDatabasePath());
-  if (!existsSync(databasePath)) throw new Error(`UsageIndex does not exist: ${databasePath}`);
+  if (!existsSync(databasePath)) throw new Error('UsageIndex does not exist at the selected path');
   const backupPath = path.resolve(
     arguments_.backup
       ?? path.join(path.dirname(databasePath), `usage-index.cost-backup-${timestampForPath()}.sqlite`),
@@ -101,13 +106,17 @@ async function main() {
       const scanner = descriptor.provider === 'claude'
         ? createClaudeUsageIndexScanner(source.filePath, { endOffsetExclusive })
         : createCodexUsageIndexScanner(source.filePath, { endOffsetExclusive });
-      const batch = await scanner.scan({
-        mode: 'rebuild',
-        source: descriptor,
-        checkpoint: null,
-        previousSessionProjection: null,
-      });
-      return batch.entries;
+      try {
+        const batch = await scanner.scan({
+          mode: 'rebuild',
+          source: descriptor,
+          checkpoint: null,
+          previousSessionProjection: null,
+        });
+        return batch.entries;
+      } catch {
+        throw new Error(`Failed to replay ${sourceLabel(descriptor.sourceId)}`);
+      }
     },
     onProgress: progress => {
       if (progress.completedSources === progress.totalSources
@@ -118,7 +127,10 @@ async function main() {
       }
     },
   });
-  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  const publicReport = report.backupPath
+    ? { ...report, backupPath: path.basename(report.backupPath) }
+    : report;
+  process.stdout.write(`${JSON.stringify(publicReport, null, 2)}\n`);
 }
 
 main().catch(error => {
