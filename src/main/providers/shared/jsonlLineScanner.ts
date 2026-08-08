@@ -9,8 +9,18 @@ export async function scanJsonlLines(
   startOffset: number,
   onPayloadBytesRead: ((byteCount: number) => void) | undefined,
   onLine: (line: string, offsetAfterLine: number) => void,
+  endOffsetExclusive?: number,
 ): Promise<void> {
-  const stream = fs.createReadStream(filePath, { start: startOffset });
+  if (endOffsetExclusive !== undefined) {
+    if (!Number.isSafeInteger(endOffsetExclusive) || endOffsetExclusive < startOffset) {
+      throw new RangeError(`Invalid JSONL end offset: ${endOffsetExclusive}`);
+    }
+    if (endOffsetExclusive === startOffset) return;
+  }
+  const stream = fs.createReadStream(filePath, {
+    start: startOffset,
+    ...(endOffsetExclusive === undefined ? {} : { end: endOffsetExclusive - 1 }),
+  });
   let pendingChunks: Buffer[] = [];
   let pendingLength = 0;
   let consumedBytes = 0;

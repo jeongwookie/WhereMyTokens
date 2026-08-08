@@ -36,7 +36,7 @@
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
 </p>
 
-WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota windows, token totals, cost estimates, cache efficiency, sessions, model usage, activity patterns, and git output.
+WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota windows, token totals, API-equivalent cost estimates, cache efficiency, sessions, model usage, activity patterns, and git output.
 
 <a id="screenshots"></a>
 

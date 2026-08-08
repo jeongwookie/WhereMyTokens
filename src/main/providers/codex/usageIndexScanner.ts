@@ -32,6 +32,7 @@ interface CodexSessionPayload extends Record<string, unknown> {
 export interface CodexUsageIndexScannerOptions {
   now?: () => number;
   onPayloadBytesRead?: (byteCount: number) => void;
+  endOffsetExclusive?: number;
 }
 
 interface PendingTurn {
@@ -214,7 +215,7 @@ export function createCodexUsageIndexScanner(
         pending = newPendingTurn();
         checkpointOffset = offsetAfterLine;
         lastUsageTimestamp = Math.max(lastUsageTimestamp, extracted.entry.timestampMs);
-      });
+      }, options.endOffsetExclusive);
 
       const sessionPayload: CodexSessionPayload = { sessionSnapshot: snapshot };
       return {

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CompactRecentEntry, UsageProvider } from './jsonlTypes';
+import { estimateUsageCost } from './modelPricing';
 
 export interface ExtractedUsageLine {
   entry: CompactRecentEntry;
@@ -7,37 +8,6 @@ export interface ExtractedUsageLine {
   contextMax?: number;
   reasoningOutputTokens?: number;
   toolNames: string[];
-}
-
-const PRICING: Record<string, { in: number; out: number; cw: number; cr: number }> = {
-  'gpt-5.4-mini':       { in: 0.75, out: 4.50, cw: 0.75, cr: 0.075 },
-  'gpt-5.4-nano':       { in: 0.20, out: 1.25, cw: 0.20, cr: 0.02  },
-  'gpt-5.4':            { in: 2.50, out: 15,   cw: 2.50, cr: 0.25  },
-  'gpt-5.3-codex':      { in: 1.75, out: 14,   cw: 1.75, cr: 0.175 },
-  'gpt-5.2-codex':      { in: 1.75, out: 14,   cw: 1.75, cr: 0.175 },
-  'gpt-5.1-codex-mini': { in: 0.25, out: 2,    cw: 0.25, cr: 0.025 },
-  'gpt-5.1-codex-max':  { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
-  'gpt-5.1-codex':      { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
-  'gpt-5-codex':        { in: 1.25, out: 10,   cw: 1.25, cr: 0.125 },
-  'codex-mini-latest':  { in: 1.50, out: 6,    cw: 1.50, cr: 0.375 },
-  'claude-opus-4':      { in: 5,    out: 25,   cw: 6.25, cr: 0.50  },
-  'claude-sonnet-4':    { in: 3,    out: 15,   cw: 3.75, cr: 0.30  },
-  'claude-haiku-4':     { in: 1,    out: 5,    cw: 1.25, cr: 0.10  },
-  'claude-opus':        { in: 15,   out: 75,   cw: 18.75, cr: 1.50 },
-  'claude-sonnet':      { in: 3,    out: 15,   cw: 3.75, cr: 0.30  },
-  'claude-haiku':       { in: 0.8,  out: 4,    cw: 1.0,  cr: 0.08  },
-  'gpt-4':              { in: 2,    out: 8,    cw: 0,    cr: 0.5   },
-  'gpt-4o':             { in: 2.5,  out: 10,   cw: 0,    cr: 1.25  },
-};
-
-const DEFAULT_PRICE = { in: 3, out: 15, cw: 3.75, cr: 0.30 };
-
-function getPrice(model: string) {
-  const lower = model.toLowerCase();
-  for (const [key, val] of Object.entries(PRICING).sort((a, b) => b[0].length - a[0].length)) {
-    if (lower.includes(key)) return val;
-  }
-  return DEFAULT_PRICE;
 }
 
 export function normalizeModel(model: string): string {
@@ -57,16 +27,6 @@ export function getProvider(model: string): UsageProvider {
   if (lower.startsWith('claude')) return 'claude';
   if (lower.startsWith('gpt') || lower.startsWith('text-davinci') || lower.startsWith('codex')) return 'codex';
   return 'other';
-}
-
-export function calcCost(model: string, inp: number, out: number, cw: number, cr: number): number {
-  const p = getPrice(model);
-  return (inp * p.in + out * p.out + cw * p.cw + cr * p.cr) / 1_000_000;
-}
-
-export function calcCacheSavings(model: string, cr: number): number {
-  const p = getPrice(model);
-  return Math.max(0, p.in - p.cr) * cr / 1_000_000;
 }
 
 function asNumber(value: unknown): number {
@@ -139,6 +99,14 @@ export function extractClaudeUsageLine(line: string, now: number): ExtractedUsag
   if (inp + out + cw + cr === 0) return null;
 
   const timestampMs = timestamp ? parseTimestampMs(timestamp, now) : 0;
+  const estimate = estimateUsageCost({
+    model: rawModel,
+    timestampMs,
+    inputTokens: inp,
+    outputTokens: out,
+    cacheCreationTokens: cw,
+    cacheReadTokens: cr,
+  });
   const toolNames: string[] = [];
   const content = message?.content as unknown[] | undefined;
   if (Array.isArray(content)) {
@@ -161,8 +129,8 @@ export function extractClaudeUsageLine(line: string, now: number): ExtractedUsag
       outputTokens: out,
       cacheCreationTokens: cw,
       cacheReadTokens: cr,
-      costUSD: calcCost(rawModel, inp, out, cw, cr),
-      cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+      costUSD: estimate.costUSD,
+      cacheSavingsUSD: estimate.cacheSavingsUSD,
     },
     toolNames,
   };
@@ -201,6 +169,14 @@ export function extractCodexUsageLine(
 
     const rawModel = fallbackRawModel || inferCodexModel(payload, info, usage);
     if (!rawModel) return null;
+    const estimate = estimateUsageCost({
+      model: rawModel,
+      timestampMs,
+      inputTokens: inp,
+      outputTokens: out,
+      cacheCreationTokens: 0,
+      cacheReadTokens: cr,
+    });
 
     return {
       rawModel,
@@ -215,8 +191,8 @@ export function extractCodexUsageLine(
         outputTokens: out,
         cacheCreationTokens: 0,
         cacheReadTokens: cr,
-        costUSD: calcCost(rawModel, inp, out, 0, cr),
-        cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+        costUSD: estimate.costUSD,
+        cacheSavingsUSD: estimate.cacheSavingsUSD,
       },
       toolNames: [],
     };
@@ -231,6 +207,14 @@ export function extractCodexUsageLine(
   if (rawInput + out + cr === 0) return null;
 
   const rawModel = fallbackRawModel || inferCodexModel(payload, usage) || 'gpt-5-codex';
+  const estimate = estimateUsageCost({
+    model: rawModel,
+    timestampMs,
+    inputTokens: rawInput,
+    outputTokens: out,
+    cacheCreationTokens: 0,
+    cacheReadTokens: cr,
+  });
   return {
     rawModel,
     contextMax: asNumber(usage.model_context_window ?? payload.model_context_window),
@@ -243,8 +227,8 @@ export function extractCodexUsageLine(
       outputTokens: out,
       cacheCreationTokens: 0,
       cacheReadTokens: cr,
-      costUSD: calcCost(rawModel, rawInput, out, 0, cr),
-      cacheSavingsUSD: calcCacheSavings(rawModel, cr),
+      costUSD: estimate.costUSD,
+      cacheSavingsUSD: estimate.cacheSavingsUSD,
     },
     toolNames: [],
   };

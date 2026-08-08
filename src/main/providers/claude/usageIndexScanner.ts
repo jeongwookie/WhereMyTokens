@@ -43,6 +43,7 @@ export interface ClaudeUsageIndexScannerOptions {
   now?: () => number;
   onPayloadBytesRead?: (byteCount: number) => void;
   baseProjectKeys?: readonly string[];
+  endOffsetExclusive?: number;
 }
 
 function restoredPayload(projection: UsageSessionProjection | null): ClaudeSessionPayload {
@@ -157,7 +158,7 @@ export function createClaudeUsageIndexScanner(
         if (!current || candidate.entry.outputTokens > current.entry.outputTokens) {
           candidates.set(entry.requestId, candidate);
         }
-      });
+      }, options.endOffsetExclusive);
 
       const ordered = [...candidates.values()].sort((left, right) => left.sequence - right.sequence);
       const entries = ordered.map(candidate => candidate.entry);
