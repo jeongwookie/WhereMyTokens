@@ -30,8 +30,8 @@ const SONNET_5_STANDARD_PRICE_START_MS = Date.UTC(2026, 8, 1);
 
 const RATE = {
   gpt56Sol: { input: 5, output: 30, cacheWrite: 6.25, cacheRead: 0.5 },
-  gpt56Terra: { input: 2, output: 12, cacheWrite: 2.5, cacheRead: 0.2 },
-  gpt56Luna: { input: 0.2, output: 1.2, cacheWrite: 0.25, cacheRead: 0.02 },
+  gpt56Terra: { input: 2.5, output: 15, cacheWrite: 3.125, cacheRead: 0.25 },
+  gpt56Luna: { input: 1, output: 6, cacheWrite: 1.25, cacheRead: 0.1 },
   gpt54Mini: { input: 0.75, output: 4.5, cacheWrite: 0.75, cacheRead: 0.075 },
   gpt54Nano: { input: 0.2, output: 1.25, cacheWrite: 0.2, cacheRead: 0.02 },
   gpt54: { input: 2.5, output: 15, cacheWrite: 2.5, cacheRead: 0.25 },

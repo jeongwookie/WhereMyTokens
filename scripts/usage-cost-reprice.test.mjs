@@ -7,9 +7,13 @@ import { DatabaseSync } from 'node:sqlite';
 
 import usageIndexModule from '../dist/main/usageIndex/index.js';
 import modelPricingModule from '../dist/main/modelPricing.js';
+import claudeScannerModule from '../dist/main/providers/claude/usageIndexScanner.js';
+import codexScannerModule from '../dist/main/providers/codex/usageIndexScanner.js';
 
 const { SqliteUsageIndexStorage, repriceUsageIndexCosts } = usageIndexModule;
 const { estimateUsageCost } = modelPricingModule;
+const { createClaudeUsageIndexScanner } = claudeScannerModule;
+const { createCodexUsageIndexScanner } = codexScannerModule;
 
 function descriptor(sourceId, provider) {
   return {
@@ -163,4 +167,114 @@ test('a replay token mismatch rolls back every proposed cost change', async t =>
   database.close();
   assert.equal(row.cost_usd, 18.3);
   assert.equal(fs.existsSync(backupPath), true);
+});
+
+test('bounded source replay reads only through the persisted checkpoint', async t => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-reprice-bounded-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const timestamp = '2026-08-04T00:00:00.000Z';
+
+  const claudePath = path.join(tempDir, 'claude.jsonl');
+  const claudeLine = (id, outputTokens) => JSON.stringify({
+    type: 'assistant',
+    timestamp,
+    message: {
+      id,
+      model: 'claude-fable-5',
+      usage: { input_tokens: 10, output_tokens: outputTokens },
+    },
+  });
+  const firstClaude = `${claudeLine('claude-first', 5)}\n`;
+  fs.writeFileSync(claudePath, `${firstClaude}${claudeLine('claude-later', 9)}\n`);
+  const claudeBatch = await createClaudeUsageIndexScanner(claudePath, {
+    endOffsetExclusive: Buffer.byteLength(firstClaude),
+  }).scan({
+    mode: 'rebuild',
+    source: descriptor('claude:bounded', 'claude'),
+    checkpoint: null,
+    previousSessionProjection: null,
+  });
+  assert.deepEqual(claudeBatch.entries.map(item => item.requestId), ['claude-first']);
+  assert.equal(claudeBatch.checkpoint.byteOffset, Buffer.byteLength(firstClaude));
+
+  const codexPath = path.join(tempDir, 'codex.jsonl');
+  const sessionLine = `${JSON.stringify({
+    type: 'session_meta',
+    timestamp,
+    payload: { model: 'gpt-5.6-sol' },
+  })}\n`;
+  const codexUsageLine = outputTokens => `${JSON.stringify({
+    type: 'event_msg',
+    timestamp,
+    payload: {
+      type: 'token_count',
+      info: {
+        model_context_window: 1_050_000,
+        last_token_usage: { input_tokens: 10, cached_input_tokens: 2, output_tokens: outputTokens },
+      },
+    },
+  })}\n`;
+  const firstCodex = `${sessionLine}${codexUsageLine(5)}`;
+  fs.writeFileSync(codexPath, `${firstCodex}${codexUsageLine(9)}`);
+  const codexBatch = await createCodexUsageIndexScanner(codexPath, {
+    endOffsetExclusive: Buffer.byteLength(firstCodex),
+  }).scan({
+    mode: 'rebuild',
+    source: descriptor('codex:bounded', 'codex'),
+    checkpoint: null,
+    previousSessionProjection: null,
+  });
+  assert.equal(codexBatch.entries.length, 1);
+  assert.equal(codexBatch.entries[0].outputTokens, 5);
+  assert.equal(codexBatch.checkpoint.byteOffset, Buffer.byteLength(firstCodex));
+});
+
+test('a database change after backup creation aborts before repricing', async t => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-reprice-race-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const dbPath = path.join(tempDir, 'usage-index.sqlite');
+  const backupPath = path.join(tempDir, 'usage-index.backup.sqlite');
+  const source = descriptor('claude:race-fixture', 'claude');
+  const timestamp = Date.parse('2026-08-04T00:00:00Z');
+  const old = entry('opus-race', timestamp, 'claude', 'Opus', 91.5);
+  const storage = new SqliteUsageIndexStorage(dbPath);
+  await commit(storage, source, [old]);
+  await storage.close();
+
+  const estimate = estimateUsageCost({
+    model: 'claude-opus-5',
+    timestampMs: timestamp,
+    inputTokens: old.inputTokens,
+    outputTokens: old.outputTokens,
+    cacheCreationTokens: old.cacheCreationTokens,
+    cacheReadTokens: old.cacheReadTokens,
+  });
+  await assert.rejects(
+    repriceUsageIndexCosts({
+      databasePath: dbPath,
+      backupPath,
+      replaySource: async () => {
+        const concurrent = new DatabaseSync(dbPath);
+        concurrent.prepare('UPDATE usage_source SET version_token = ? WHERE source_id = ?')
+          .run('fixture-v2', source.sourceId);
+        concurrent.close();
+        return [{ ...old, costUSD: estimate.costUSD, cacheSavingsUSD: estimate.cacheSavingsUSD }];
+      },
+    }),
+    /changed after backup creation/,
+  );
+
+  const live = new DatabaseSync(dbPath);
+  const liveRow = live.prepare(`
+    SELECT s.version_token, b.cost_usd
+    FROM usage_source s JOIN usage_bucket b ON b.source_id = s.source_id
+    WHERE b.bucket_kind = 'month'
+  `).get();
+  live.close();
+  const backup = new DatabaseSync(backupPath);
+  const backupSource = backup.prepare('SELECT version_token FROM usage_source').get();
+  backup.close();
+  assert.equal(liveRow.version_token, 'fixture-v2');
+  assert.equal(liveRow.cost_usd, 91.5);
+  assert.equal(backupSource.version_token, 'fixture-v1');
 });

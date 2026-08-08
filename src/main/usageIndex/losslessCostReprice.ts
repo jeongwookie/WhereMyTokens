@@ -117,6 +117,22 @@ const NON_COST_HASH_QUERIES = [
     FROM usage_session_hot ORDER BY source_id`,
 ] as const;
 
+const FULL_STATE_HASH_QUERIES = [
+  `SELECT source_id, provider, source_kind, parser_version, version_token, source_size,
+      mtime_ms, checkpoint_json, provider_metadata_json, sealed_before_ms
+    FROM usage_source ORDER BY source_id`,
+  `SELECT source_id, project_key FROM usage_source_project ORDER BY source_id, project_key`,
+  `SELECT source_id, request_id, timestamp_ms, provider, model, input_tokens, output_tokens,
+      cache_creation_tokens, cache_read_tokens, cost_usd, cache_savings_usd, breakdown_json
+    FROM usage_entry ORDER BY source_id, request_id`,
+  `SELECT source_id, provider, model, bucket_kind, bucket_start_ms, request_count,
+      input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens,
+      cost_usd, cache_savings_usd, breakdown_json
+    FROM usage_bucket ORDER BY source_id, provider, model, bucket_kind, bucket_start_ms`,
+  `SELECT source_id, provider, updated_at, byte_size, payload_json
+    FROM usage_session_hot ORDER BY source_id`,
+] as const;
+
 function assertIntegrity(database: DatabaseSync, label: string): void {
   const rows = database.prepare('PRAGMA integrity_check').all() as Array<{ integrity_check: string }>;
   if (rows.length !== 1 || rows[0]?.integrity_check !== 'ok') {
@@ -124,11 +140,11 @@ function assertIntegrity(database: DatabaseSync, label: string): void {
   }
 }
 
-function hashNonCostState(database: DatabaseSync): string {
+function hashState(database: DatabaseSync, queries: readonly string[]): string {
   const hash = createHash('sha256');
   const version = database.prepare('PRAGMA user_version').get() as { user_version: number };
   hash.update(`user_version\0${version.user_version}\0`);
-  for (const sql of NON_COST_HASH_QUERIES) {
+  for (const sql of queries) {
     hash.update(sql);
     hash.update('\0');
     const rows = database.prepare(sql).all() as Array<Record<string, unknown>>;
@@ -138,6 +154,18 @@ function hashNonCostState(database: DatabaseSync): string {
     }
   }
   return hash.digest('hex');
+}
+
+function hashNonCostState(database: DatabaseSync): string {
+  return hashState(database, NON_COST_HASH_QUERIES);
+}
+
+function hashFullState(database: DatabaseSync): string {
+  return hashState(database, FULL_STATE_HASH_QUERIES);
+}
+
+function sourceLabel(sourceId: string): string {
+  return `source-${createHash('sha256').update(sourceId).digest('hex').slice(0, 12)}`;
 }
 
 function canonicalTotals(database: DatabaseSync): { costUSD: number; cacheSavingsUSD: number } {
@@ -168,10 +196,10 @@ function parseCheckpoint(source: SourceRow): UsageSourceCheckpoint {
   try {
     value = JSON.parse(source.checkpoint_json);
   } catch {
-    throw new Error(`Usage source ${source.source_id} has invalid checkpoint JSON`);
+    throw new Error(`Usage ${sourceLabel(source.source_id)} has invalid checkpoint JSON`);
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`Usage source ${source.source_id} has a non-object checkpoint`);
+    throw new Error(`Usage ${sourceLabel(source.source_id)} has a non-object checkpoint`);
   }
   return value as UsageSourceCheckpoint;
 }
@@ -181,7 +209,7 @@ function replayDescriptor(source: SourceRow): UsageSourceDescriptor {
     throw new Error(`Cannot replay unsupported provider ${source.provider}`);
   }
   if (source.source_kind !== 'file') {
-    throw new Error(`Cannot replay non-file source ${source.source_id}`);
+    throw new Error(`Cannot replay non-file ${sourceLabel(source.source_id)}`);
   }
   return {
     sourceId: source.source_id,
@@ -372,7 +400,7 @@ function repriceUnambiguousFableRows(
   return { updatedEntryRows, updatedBucketRows };
 }
 
-function createBackup(database: DatabaseSync, databasePath: string, backupPath: string): void {
+function createBackup(database: DatabaseSync, databasePath: string, backupPath: string): string {
   const resolvedDatabase = path.resolve(databasePath);
   const resolvedBackup = path.resolve(backupPath);
   if (resolvedBackup === resolvedDatabase) throw new Error('Backup path must differ from the live UsageIndex path');
@@ -383,6 +411,7 @@ function createBackup(database: DatabaseSync, databasePath: string, backupPath: 
   const backup = new DatabaseSync(resolvedBackup, { timeout: 5_000 });
   try {
     assertIntegrity(backup, 'UsageIndex backup');
+    return hashFullState(backup);
   } finally {
     backup.close();
   }
@@ -406,13 +435,9 @@ export async function repriceUsageIndexCosts(
     if (version.user_version !== usageIndexSchemaVersion()) {
       throw new Error(`Expected UsageIndex schema ${usageIndexSchemaVersion()}, found ${version.user_version}`);
     }
-    if (!dryRun) createBackup(database, options.databasePath, options.backupPath!);
-
-    database.exec('BEGIN IMMEDIATE');
-    transactionOpen = true;
-    const beforeHash = hashNonCostState(database);
-    const beforeTotals = canonicalTotals(database);
-    const affectedModelsBefore = affectedModelTotals(database);
+    const expectedStateHash = dryRun
+      ? hashFullState(database)
+      : createBackup(database, options.databasePath, options.backupPath!);
     const sources = database.prepare(`
       SELECT DISTINCT s.source_id, s.provider, s.source_kind, s.parser_version,
         s.version_token, s.source_size, s.mtime_ms, s.checkpoint_json
@@ -425,8 +450,7 @@ export async function repriceUsageIndexCosts(
 
     let replayedSources = 0;
     let preservedUnavailableSources = 0;
-    let updatedEntryRows = 0;
-    let updatedBucketRows = 0;
+    const replayedEntries = new Map<string, readonly UsageEntry[] | null>();
     for (let index = 0; index < sources.length; index += 1) {
       const source = sources[index]!;
       const replayed = await options.replaySource({
@@ -435,8 +459,9 @@ export async function repriceUsageIndexCosts(
       });
       if (replayed === null) {
         if (source.provider === 'codex') {
-          throw new Error(`Cannot exactly reprice unavailable Codex source ${source.source_id}`);
+          throw new Error(`Cannot exactly reprice unavailable Codex ${sourceLabel(source.source_id)}`);
         }
+        replayedEntries.set(source.source_id, null);
         preservedUnavailableSources += 1;
         options.onProgress?.({
           completedSources: index + 1,
@@ -446,9 +471,7 @@ export async function repriceUsageIndexCosts(
         });
         continue;
       }
-      const changed = repriceReplayedSource(database, source.source_id, replayed);
-      updatedEntryRows += changed.updatedEntryRows;
-      updatedBucketRows += changed.updatedBucketRows;
+      replayedEntries.set(source.source_id, replayed);
       replayedSources += 1;
       options.onProgress?.({
         completedSources: index + 1,
@@ -456,6 +479,24 @@ export async function repriceUsageIndexCosts(
         sourceId: source.source_id,
         state: 'replayed',
       });
+    }
+
+    database.exec('BEGIN IMMEDIATE');
+    transactionOpen = true;
+    if (hashFullState(database) !== expectedStateHash) {
+      throw new Error('UsageIndex changed after backup creation; close WhereMyTokens and retry with a new backup path');
+    }
+    const beforeHash = hashNonCostState(database);
+    const beforeTotals = canonicalTotals(database);
+    const affectedModelsBefore = affectedModelTotals(database);
+    let updatedEntryRows = 0;
+    let updatedBucketRows = 0;
+    for (const source of sources) {
+      const replayed = replayedEntries.get(source.source_id);
+      if (!replayed) continue;
+      const changed = repriceReplayedSource(database, source.source_id, replayed);
+      updatedEntryRows += changed.updatedEntryRows;
+      updatedBucketRows += changed.updatedBucketRows;
     }
 
     const fable = repriceUnambiguousFableRows(database);

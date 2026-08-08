@@ -50,8 +50,8 @@ test('GPT-5.6 Sol, Terra, and Luna use their distinct standard rates', () => {
     cacheReadTokens: 100_000,
   };
   closeTo(estimate('gpt-5.6-sol', timestamp, standardRequest).costUSD, 3.55);
-  closeTo(estimate('gpt-5.6-terra', timestamp, standardRequest).costUSD, 1.42);
-  closeTo(estimate('gpt-5.6-luna', timestamp, standardRequest).costUSD, 0.142);
+  closeTo(estimate('gpt-5.6-terra', timestamp, standardRequest).costUSD, 1.775);
+  closeTo(estimate('gpt-5.6-luna', timestamp, standardRequest).costUSD, 0.71);
   closeTo(estimate('gpt-5.6', timestamp, standardRequest).costUSD, 3.55);
 });
 

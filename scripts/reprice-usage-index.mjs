@@ -1,16 +1,9 @@
 import { createHash } from 'node:crypto';
 import {
-  createReadStream,
-  createWriteStream,
   existsSync,
-  mkdtempSync,
-  rmSync,
   statSync,
-  writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
 
 import usageIndexModule from '../dist/main/usageIndex/index.js';
 import claudeSourcesModule from '../dist/main/providers/claude/sources.js';
@@ -67,27 +60,19 @@ function sourcePathMap() {
   return result;
 }
 
-async function checkpointPrefix(filePath, byteOffset, tempRoot, sourceId) {
+function sourceLabel(sourceId) {
+  return `source-${createHash('sha256').update(sourceId).digest('hex').slice(0, 12)}`;
+}
+
+function validatedCheckpoint(filePath, byteOffset, sourceId) {
   const size = statSync(filePath).size;
   if (!Number.isSafeInteger(byteOffset) || byteOffset < 0) {
-    throw new Error(`Invalid byte checkpoint ${byteOffset} for ${sourceId}`);
+    throw new Error(`Invalid byte checkpoint ${byteOffset} for ${sourceLabel(sourceId)}`);
   }
   if (size < byteOffset) {
-    throw new Error(`Source ${sourceId} is shorter than its indexed byte checkpoint (${size} < ${byteOffset})`);
+    throw new Error(`Source ${sourceLabel(sourceId)} is shorter than its indexed byte checkpoint (${size} < ${byteOffset})`);
   }
-  if (size === byteOffset) return filePath;
-
-  const name = `${createHash('sha256').update(sourceId).digest('hex').slice(0, 20)}.jsonl`;
-  const prefixPath = path.join(tempRoot, name);
-  if (byteOffset === 0) {
-    writeFileSync(prefixPath, '');
-    return prefixPath;
-  }
-  await pipeline(
-    createReadStream(filePath, { start: 0, end: byteOffset - 1 }),
-    createWriteStream(prefixPath, { flags: 'wx' }),
-  );
-  return prefixPath;
+  return byteOffset;
 }
 
 async function main() {
@@ -99,50 +84,44 @@ async function main() {
       ?? path.join(path.dirname(databasePath), `usage-index.cost-backup-${timestampForPath()}.sqlite`),
   );
   const sources = sourcePathMap();
-  const tempRoot = mkdtempSync(path.join(tmpdir(), 'wmt-cost-reprice-'));
-  try {
-    const report = await repriceUsageIndexCosts({
-      databasePath,
-      ...(arguments_.dryRun ? { dryRun: true } : { backupPath }),
-      replaySource: async ({ descriptor, checkpoint }) => {
-        const source = sources.get(descriptor.sourceId);
-        if (!source) return null;
-        if (source.provider !== descriptor.provider) {
-          throw new Error(`Provider mismatch for ${descriptor.sourceId}`);
-        }
-        const scanPath = await checkpointPrefix(
-          source.filePath,
-          checkpoint.byteOffset,
-          tempRoot,
-          descriptor.sourceId,
+  const report = await repriceUsageIndexCosts({
+    databasePath,
+    ...(arguments_.dryRun ? { dryRun: true } : { backupPath }),
+    replaySource: async ({ descriptor, checkpoint }) => {
+      const source = sources.get(descriptor.sourceId);
+      if (!source) return null;
+      if (source.provider !== descriptor.provider) {
+        throw new Error(`Provider mismatch for ${sourceLabel(descriptor.sourceId)}`);
+      }
+      const endOffsetExclusive = validatedCheckpoint(
+        source.filePath,
+        checkpoint.byteOffset,
+        descriptor.sourceId,
+      );
+      const scanner = descriptor.provider === 'claude'
+        ? createClaudeUsageIndexScanner(source.filePath, { endOffsetExclusive })
+        : createCodexUsageIndexScanner(source.filePath, { endOffsetExclusive });
+      const batch = await scanner.scan({
+        mode: 'rebuild',
+        source: descriptor,
+        checkpoint: null,
+        previousSessionProjection: null,
+      });
+      return batch.entries;
+    },
+    onProgress: progress => {
+      if (progress.completedSources === progress.totalSources
+        || progress.completedSources % 50 === 0) {
+        process.stderr.write(
+          `[${progress.completedSources}/${progress.totalSources}] ${progress.state}\n`,
         );
-        const scanner = descriptor.provider === 'claude'
-          ? createClaudeUsageIndexScanner(scanPath)
-          : createCodexUsageIndexScanner(scanPath);
-        const batch = await scanner.scan({
-          mode: 'rebuild',
-          source: descriptor,
-          checkpoint: null,
-          previousSessionProjection: null,
-        });
-        return batch.entries;
-      },
-      onProgress: progress => {
-        if (progress.completedSources === progress.totalSources
-          || progress.completedSources % 50 === 0) {
-          process.stderr.write(
-            `[${progress.completedSources}/${progress.totalSources}] ${progress.state}: ${progress.sourceId}\n`,
-          );
-        }
-      },
-    });
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
-  }
+      }
+    },
+  });
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
 main().catch(error => {
-  process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });
