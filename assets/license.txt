@@ -54,7 +54,7 @@ is explicitly permitted and encouraged.
 ------------------------------------
 WhereMyTokens is designed with privacy as a core principle:
 
-  - LOCAL FILES ONLY: The software reads the following files solely on your
+  - LOCAL SESSION DATA: The software reads the following files solely on your
     local machine and does not upload, sync, or transmit their contents to
     any external server:
       * ~/.claude/sessions/*.json         (session metadata)
@@ -68,12 +68,18 @@ WhereMyTokens is designed with privacy as a core principle:
   - NO CLOUD SYNC: No account, registration, or internet connection is
     required for the core functionality of this software.
 
-  - CLAUDE QUOTA: The software receives Claude quota fields from the official
-    Claude Code statusLine input. It does not read or write Claude OAuth
-    credentials and does not call an Anthropic usage endpoint.
+  - CLAUDE QUOTA: The software prefers quota fields from the official Claude
+    Code statusLine input. When no fresh statusLine quota exists, it may read
+    the Claude Code credential file and extract its existing access token and
+    plan metadata. It sends only the access token to the fixed HTTPS host
+    api.anthropic.com, ignores the refresh-token property, never refreshes
+    credentials, and never writes the credential file. One request may occur
+    on app launch; later requests in that run are throttled and use timeout,
+    response-size, and backoff limits. Cached compatibility quota is bound to
+    a one-way token marker and is discarded after login changes.
 
-  - THIRD-PARTY SERVICES: Optional non-Claude provider features may communicate
-    with their provider as described in the in-app help and privacy document.
+  - THIRD-PARTY SERVICES: Optional provider features may communicate with their
+    provider as described in the in-app help and privacy document.
 
 You are solely responsible for the security of your local machine and any
 credentials stored therein.

@@ -282,9 +282,9 @@
     },
     "status": {
       "claude": {
-        "localLabel": "Claude ローカル",
-        "localTitle": "Claude Code statusLine が最後に報告した制限値を表示しています（{{status}}）{{errorSuffix}}",
-        "localOnlyTitleDefault": "statusLine 連携を有効にした後、Claude Code を一度使用するとプラン使用量が同期されます。"
+        "localLabel": "Claude キャッシュ",
+        "localTitle": "キャッシュ済みの Claude 制限値を表示しています（{{status}}）{{errorSuffix}}",
+        "localOnlyTitleDefault": "Claude quota は statusLine データまたは利用可能な Claude Code credential を待っています。"
       },
       "codex": {
         "limitedLabel": "Codex 制限",

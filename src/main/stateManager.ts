@@ -57,10 +57,12 @@ import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
 import {
   ageClaudeQuotaSnapshot,
   buildClaudeStatusLineQuota,
+  getClaudeQuotaCredentialMarker,
   isClaudeQuotaSnapshot,
   waitingClaudeQuota,
 } from './providers/claude/quota';
 import { CLAUDE_STATUS_LINE_FRESH_MS } from '../shared/claudeStatusLine';
+import { getClaudeCompatibilityCredentialMarker } from './providers/claude/readOnlyUsage';
 import { CodexProviderQuotaSnapshot, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
   buildUsageVisibilityFilter,
@@ -163,7 +165,7 @@ type WatcherProfile = 'wide' | 'recent' | 'off';
 type WatcherMode = 'auto' | 'wide' | 'recent';
 
 const CANONICAL_QUOTA_CACHE_SCHEMA_VERSION = 1;
-const CLAUDE_QUOTA_CACHE_SCHEMA_VERSION = 2;
+const CLAUDE_QUOTA_CACHE_SCHEMA_VERSION = 3;
 
 interface PerfSampleStart {
   wallNs: bigint;
@@ -452,6 +454,8 @@ export class StateManager {
   private fastDebounce: NodeJS.Timeout | null = null;
   private onUpdate: (s: AppState) => void;
   private cachedClaudeQuota: ProviderQuotaSnapshot | null = null;
+  private cachedClaudeQuotaAuthMarker: string | null = null;
+  private claudeQuotaAttemptAuthMarker: string | null = null;
   private apiConnected = false;
   private apiStatusLabel = '';
   private apiError = '';
@@ -548,7 +552,15 @@ export class StateManager {
     this.deletePersistedValue('_cachedApiPct');
     this.deletePersistedValue('_cachedCodexUsagePct');
     const settings = this.getSettings();
-    if (settings.enabledProviders.includes('claude')) this.hydrateClaudeQuotaCache();
+    if (settings.enabledProviders.includes('claude')) {
+      this.hydrateClaudeQuotaCache();
+      if (this.cachedClaudeQuota) {
+        this.state = {
+          ...this.state,
+          providerQuotas: this.buildProviderQuotas(Date.now(), settings),
+        };
+      }
+    }
     else this.deletePersistedValue('_cachedClaudeQuota');
     if (settings.enabledProviders.includes('codex')) {
       this.hydrateCodexCachesFromStore(settings);
@@ -748,19 +760,33 @@ export class StateManager {
   private hydrateClaudeQuotaCache(): void {
     const record = quotaRecord(this.getPersistedValue('_cachedClaudeQuota', null));
     const snapshot = validateProviderQuotaSnapshot(record?.snapshot);
-    if (record?.schemaVersion !== CLAUDE_QUOTA_CACHE_SCHEMA_VERSION || snapshot?.provider !== 'claude') {
+    const compatibility = snapshot?.status?.code === 'compatibility-api'
+      || snapshot?.status?.code === 'compatibility-stale';
+    const authMarker = typeof record?.authMarker === 'string' ? record.authMarker : null;
+    const currentAuthMarker = compatibility ? getClaudeCompatibilityCredentialMarker() : null;
+    if (
+      record?.schemaVersion !== CLAUDE_QUOTA_CACHE_SCHEMA_VERSION
+      || snapshot?.provider !== 'claude'
+      || (compatibility && (!authMarker || authMarker !== currentAuthMarker))
+    ) {
       if (record) this.deletePersistedValue('_cachedClaudeQuota');
+      this.cachedClaudeQuota = null;
+      this.cachedClaudeQuotaAuthMarker = null;
       return;
     }
     const aged = ageClaudeQuotaSnapshot({ ...snapshot, source: 'cache' }, Date.now());
     if (aged.entries.length === 0) {
       this.deletePersistedValue('_cachedClaudeQuota');
+      this.cachedClaudeQuota = null;
+      this.cachedClaudeQuotaAuthMarker = null;
       return;
     }
     this.cachedClaudeQuota = aged;
+    this.cachedClaudeQuotaAuthMarker = authMarker;
     if (aged.entries.length !== snapshot.entries.length) {
       this.setPersistedValue('_cachedClaudeQuota', {
         schemaVersion: CLAUDE_QUOTA_CACHE_SCHEMA_VERSION,
+        authMarker,
         snapshot: aged,
       });
     }
@@ -769,11 +795,26 @@ export class StateManager {
   private persistClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): void {
     const publicSnapshot = validateProviderQuotaSnapshot(snapshot);
     if (!publicSnapshot || publicSnapshot.provider !== 'claude' || publicSnapshot.entries.length === 0) return;
+    const compatibility = publicSnapshot.source === 'api'
+      || publicSnapshot.status?.code === 'compatibility-api'
+      || publicSnapshot.status?.code === 'compatibility-stale';
+    const authMarker = compatibility ? getClaudeQuotaCredentialMarker(snapshot) : null;
+    if (compatibility && (!authMarker || authMarker !== getClaudeCompatibilityCredentialMarker())) return;
     this.cachedClaudeQuota = { ...publicSnapshot, source: 'cache' };
+    this.cachedClaudeQuotaAuthMarker = authMarker;
     this.setPersistedValue('_cachedClaudeQuota', {
       schemaVersion: CLAUDE_QUOTA_CACHE_SCHEMA_VERSION,
+      authMarker,
       snapshot: this.cachedClaudeQuota,
     });
+  }
+
+  private invalidateClaudeCompatibilityCacheForCredentialChange(): void {
+    if (!this.cachedClaudeQuotaAuthMarker) return;
+    if (this.cachedClaudeQuotaAuthMarker === getClaudeCompatibilityCredentialMarker()) return;
+    this.cachedClaudeQuota = null;
+    this.cachedClaudeQuotaAuthMarker = null;
+    this.deletePersistedValue('_cachedClaudeQuota');
   }
 
   private getSettings(): AppSettings {
@@ -1221,10 +1262,12 @@ export class StateManager {
   }
 
   private getAgedClaudeQuota(now = Date.now()): ProviderQuotaSnapshot | null {
+    this.invalidateClaudeCompatibilityCacheForCredentialChange();
     if (!this.cachedClaudeQuota) return null;
     const aged = ageClaudeQuotaSnapshot({ ...this.cachedClaudeQuota, source: 'cache' }, now);
     if (this.cachedClaudeQuota.entries.length > 0 && aged.entries.length === 0) {
       this.cachedClaudeQuota = null;
+      this.cachedClaudeQuotaAuthMarker = null;
       this.deletePersistedValue('_cachedClaudeQuota');
       return null;
     }
@@ -1278,6 +1321,13 @@ export class StateManager {
   private applyClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, _requestStartedAtMs: number): boolean {
     if (!isClaudeQuotaSnapshot(snapshot)) return false;
     if (this.providerQuotaRequestSeqs.get('claude') !== requestSeq) return false;
+    this.invalidateClaudeCompatibilityCacheForCredentialChange();
+    const compatibility = snapshot.source === 'api' || snapshot.status?.code === 'compatibility-api';
+    const attemptAuthMarker = compatibility ? getClaudeQuotaCredentialMarker(snapshot) : null;
+    if (compatibility && (!attemptAuthMarker || attemptAuthMarker !== getClaudeCompatibilityCredentialMarker())) {
+      return false;
+    }
+    this.claudeQuotaAttemptAuthMarker = attemptAuthMarker;
     this.applyApiStatus(snapshot.status!);
     if (snapshot.entries.length > 0) this.persistClaudeQuotaSnapshot(snapshot);
     return true;
@@ -2374,29 +2424,41 @@ export class StateManager {
   }
 
   private buildClaudeProviderQuota(now: number): ProviderQuotaSnapshot {
-    const rawAttempt = validateProviderQuotaSnapshot(this.providerQuotaSnapshots.get('claude'));
+    let rawAttempt = validateProviderQuotaSnapshot(this.providerQuotaSnapshots.get('claude'));
+    const compatibilityAttempt = rawAttempt?.source === 'api'
+      || rawAttempt?.status?.code === 'compatibility-api'
+      || rawAttempt?.status?.code === 'compatibility-stale';
+    if (
+      compatibilityAttempt
+      && (!this.claudeQuotaAttemptAuthMarker
+        || this.claudeQuotaAttemptAuthMarker !== getClaudeCompatibilityCredentialMarker())
+    ) {
+      this.providerQuotaSnapshots.delete('claude');
+      this.claudeQuotaAttemptAuthMarker = null;
+      rawAttempt = null;
+    }
     const attempt = rawAttempt ? ageClaudeQuotaSnapshot(rawAttempt, now) : null;
     const live = this.liveSession ? buildClaudeStatusLineQuota(this.liveSession, now) : null;
-    const fresh = [attempt, live]
-      .filter((candidate): candidate is ProviderQuotaSnapshot => (
-        !!candidate?.status?.connected && candidate.entries.length > 0
-      ))
-      .sort((left, right) => right.capturedAt - left.capturedAt)[0];
-    if (fresh) return fresh;
+    if (live?.status?.connected && live.entries.length > 0) return live;
+    if (attempt?.status?.connected && attempt.entries.length > 0) return attempt;
 
     const candidates = [live, attempt, this.getAgedClaudeQuota(now)]
       .filter((candidate): candidate is ProviderQuotaSnapshot => !!candidate && candidate.entries.length > 0)
       .sort((left, right) => right.capturedAt - left.capturedAt);
     const cached = candidates[0];
     if (cached) {
+      const compatibility = cached.status?.code === 'compatibility-api'
+        || cached.status?.code === 'compatibility-stale';
       return {
         ...cached,
         source: 'cache',
         status: {
           connected: false,
-          code: 'bridge-stale',
+          code: compatibility ? 'compatibility-stale' : 'bridge-stale',
           label: 'cached',
-          detail: 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
+          detail: compatibility
+            ? 'Showing the last read-only Claude compatibility result for up to 30 minutes.'
+            : 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
           severity: 'warning',
         },
       };
@@ -3042,6 +3104,8 @@ export class StateManager {
       const claudeSelectionChanged = enabled.has('claude') !== previousEnabled.has('claude');
       if (claudeSelectionChanged && !enabled.has('claude')) {
         this.cachedClaudeQuota = null;
+        this.cachedClaudeQuotaAuthMarker = null;
+        this.claudeQuotaAttemptAuthMarker = null;
         this.liveSession = null;
         this.providerQuotaSnapshots.delete('claude');
         this.deletePersistedValue('_cachedClaudeQuota');

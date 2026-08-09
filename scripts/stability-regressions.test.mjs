@@ -7,11 +7,16 @@ import path from 'node:path';
 import stateManagerModule from '../dist/main/stateManager.js';
 import codexUsageFetcherModule from '../dist/main/codexUsageFetcher.js';
 import quotaDomainModule from '../dist/shared/quotaDomain.js';
+import claudeCompatibilityModule from '../dist/main/providers/claude/readOnlyUsage.js';
+import claudeQuotaModule from '../dist/main/providers/claude/quota.js';
 
 const { StateManager } = stateManagerModule;
 const { getCodexAuthIdentityHash } = codexUsageFetcherModule;
+const { getClaudeCompatibilityCredentialMarker } = claudeCompatibilityModule;
+const { buildClaudeCompatibilityQuota } = claudeQuotaModule;
 const { ageProviderQuotaSnapshot, validateProviderQuotaSnapshot } = quotaDomainModule;
 const originalCodexHome = process.env.CODEX_HOME;
+const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 const tempDirs = [];
 
 function makeStore(overrides = {}) {
@@ -101,6 +106,17 @@ function withTempCodexAuth(token = 'codex-token') {
   };
 }
 
+function withTempClaudeAuth(token = 'access-a') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-stability-'));
+  tempDirs.push(dir);
+  process.env.CLAUDE_CONFIG_DIR = dir;
+  const filePath = path.join(dir, '.credentials.json');
+  fs.writeFileSync(filePath, JSON.stringify({
+    claudeAiOauth: { accessToken: token, refreshToken: 'untouched' },
+  }));
+  return { filePath, authMarker: getClaudeCompatibilityCredentialMarker() };
+}
+
 function applyClaude(manager, snapshot, startedAt = snapshot.capturedAt) {
   const seq = (manager.providerQuotaRequestSeqs.get('claude') ?? 0) + 1;
   manager.providerQuotaRequestSeqs.set('claude', seq);
@@ -117,6 +133,8 @@ function applyCodex(manager, snapshot, startedAt = snapshot.capturedAt) {
 test.afterEach(() => {
   if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
   else process.env.CODEX_HOME = originalCodexHome;
+  if (originalClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
   for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -150,7 +168,7 @@ test('Claude statusLine cache hydrates once and ages individual entries', () => 
   const store = makeStore({
     enabledProviders: ['claude'],
     _cachedClaudeQuota: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       snapshot: claudeSnapshot(now - 1_000, [
         entry('claude', '5h', 14, now, { resetsAt: now - 1 }),
         entry('claude', '7d', 28, now, { resetsAt: now + 60_000 }),
@@ -170,7 +188,7 @@ test('Claude statusLine cache is deleted on startup after every entry expires', 
   const store = makeStore({
     enabledProviders: ['claude'],
     _cachedClaudeQuota: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       snapshot: claudeSnapshot(now - 60_000, [
         entry('claude', '5h', 14, now, { resetsAt: now - 1 }),
       ]),
@@ -195,6 +213,81 @@ test('Claude legacy API cache is retired', () => {
   assert.equal('_cachedApiPct' in store.values, false);
   assert.equal('_cachedClaudeQuota' in store.values, false);
   assert.equal(manager.buildProviderQuotas(now).claude.entries.length, 0);
+});
+
+test('Claude compatibility cache is bound to the current access token', () => {
+  const auth = withTempClaudeAuth('account-a');
+  const now = Date.now();
+  const snapshot = claudeSnapshot(now - 1_000, [entry('claude', '7d', 61, now)], {
+    source: 'cache',
+    status: { connected: false, code: 'compatibility-stale', label: 'cached', detail: 'read-only' },
+  });
+  const matchingStore = makeStore({
+    enabledProviders: ['claude'],
+    _cachedClaudeQuota: {
+      schemaVersion: 3,
+      authMarker: auth.authMarker,
+      snapshot,
+    },
+  });
+  const matchingManager = new StateManager(matchingStore, () => {});
+  assert.equal(matchingManager.buildProviderQuotas(now).claude.entries[0].usedPct, 61);
+  assert.equal(matchingManager.state.providerQuotas.claude.entries[0].usedPct, 61);
+
+  fs.writeFileSync(auth.filePath, JSON.stringify({
+    claudeAiOauth: { accessToken: 'account-b', refreshToken: 'unused' },
+  }));
+  assert.deepEqual(matchingManager.buildProviderQuotas(now).claude.entries, []);
+  assert.equal('_cachedClaudeQuota' in matchingStore.values, false);
+
+  const mismatchedStore = makeStore({
+    enabledProviders: ['claude'],
+    _cachedClaudeQuota: {
+      schemaVersion: 3,
+      authMarker: auth.authMarker,
+      snapshot,
+    },
+  });
+  const mismatchedManager = new StateManager(mismatchedStore, () => {});
+  assert.equal('_cachedClaudeQuota' in mismatchedStore.values, false);
+  assert.deepEqual(mismatchedManager.buildProviderQuotas(now).claude.entries, []);
+});
+
+test('Claude compatibility response is rejected if credentials change in flight', () => {
+  const auth = withTempClaudeAuth('request-a');
+  const now = Date.now();
+  const snapshot = buildClaudeCompatibilityQuota({
+    fiveHour: { usedPct: 73, resetsAtMs: now + 60_000 },
+    modelScoped: [],
+    planName: 'Max',
+    extraUsage: null,
+  }, now, now, auth.authMarker);
+  fs.writeFileSync(auth.filePath, JSON.stringify({
+    claudeAiOauth: { accessToken: 'request-b', refreshToken: 'unused' },
+  }));
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  assert.equal(applyClaude(manager, snapshot), false);
+  assert.deepEqual(manager.buildProviderQuotas(now).claude.entries, []);
+});
+
+test('Claude in-memory compatibility snapshot is discarded after login changes', () => {
+  const auth = withTempClaudeAuth('live-a');
+  const now = Date.now();
+  const snapshot = buildClaudeCompatibilityQuota({
+    sevenDay: { usedPct: 67, resetsAtMs: now + 60_000 },
+    modelScoped: [],
+    planName: 'Max',
+    extraUsage: null,
+  }, now, now, auth.authMarker);
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  assert.equal(applyClaude(manager, snapshot), true);
+  assert.equal(manager.buildProviderQuotas(now).claude.entries[0].usedPct, 67);
+
+  fs.writeFileSync(auth.filePath, JSON.stringify({
+    claudeAiOauth: { accessToken: 'live-b', refreshToken: 'unused' },
+  }));
+  assert.deepEqual(manager.buildProviderQuotas(now + 1).claude.entries, []);
+  assert.equal(manager.providerQuotaSnapshots.has('claude'), false);
 });
 
 test('Claude waiting refresh keeps the last whole trusted statusLine snapshot', () => {
@@ -245,6 +338,29 @@ test('newer Claude statusLine data immediately outranks an older refresh snapsho
   assert.equal(manager.buildProviderQuotas(now + 101).claude.entries[0].usedPct, 87);
 });
 
+test('fresh statusLine stays ahead of a newer compatibility snapshot', () => {
+  const auth = withTempClaudeAuth();
+  const now = Date.now();
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  manager.liveSession = {
+    schemaVersion: 1,
+    capturedAt: now,
+    rateLimits: {
+      fiveHour: { usedPct: 21, resetsAtMs: now + 60_000 },
+      modelScoped: [],
+    },
+  };
+  applyClaude(manager, buildClaudeCompatibilityQuota({
+    fiveHour: { usedPct: 92, resetsAtMs: now + 60_000 },
+    modelScoped: [],
+    planName: 'Max',
+    extraUsage: null,
+  }, now + 100, now + 100, auth.authMarker));
+  const quota = manager.buildProviderQuotas(now + 101).claude;
+  assert.equal(quota.entries[0].usedPct, 21);
+  assert.equal(quota.source, 'statusLine');
+});
+
 test('Claude in-memory refresh snapshot becomes visibly cached after five minutes', () => {
   const now = Date.now();
   const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
@@ -254,6 +370,27 @@ test('Claude in-memory refresh snapshot becomes visibly cached after five minute
   assert.equal(quota.claude.source, 'cache');
   assert.equal(quota.claude.status.connected, false);
   assert.equal(quota.claude.status.code, 'bridge-stale');
+});
+
+test('Claude compatibility snapshot stays live for its 15-minute poll interval, then becomes cached', () => {
+  const auth = withTempClaudeAuth();
+  const now = Date.now();
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  applyClaude(manager, buildClaudeCompatibilityQuota({
+    sevenDay: { usedPct: 48, resetsAtMs: now + 7 * 24 * 60 * 60_000 },
+    modelScoped: [],
+    planName: 'Max',
+    extraUsage: null,
+  }, now, now, auth.authMarker));
+  const beforePoll = manager.buildProviderQuotas(now + 14 * 60_000).claude;
+  assert.equal(beforePoll.source, 'api');
+  assert.equal(beforePoll.status.connected, true);
+
+  const afterPoll = manager.buildProviderQuotas(now + 15 * 60_000).claude;
+  assert.equal(afterPoll.entries[0].usedPct, 48);
+  assert.equal(afterPoll.source, 'cache');
+  assert.equal(afterPoll.status.connected, false);
+  assert.equal(afterPoll.status.code, 'compatibility-stale');
 });
 
 test('Claude in-memory attempt expires at reset instead of bypassing aging', () => {

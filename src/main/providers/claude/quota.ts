@@ -5,6 +5,7 @@ import {
   normalizeQuotaPeriod,
 } from '../../../shared/quotaDomain';
 import type {
+  ProviderCreditBalance,
   ProviderQuotaSnapshot,
   ProviderQuotaStatus,
   QuotaEntry,
@@ -17,6 +18,11 @@ import {
 } from '../../../shared/claudeStatusLine';
 import { readClaudeStatusLineFile } from '../../../bridge/claudeStatusLineFile';
 import type { ProviderContext } from '../types';
+import {
+  CLAUDE_COMPATIBILITY_MIN_INTERVAL_MS,
+  fetchClaudeCompatibilityUsage,
+  type ClaudeCompatibilityUsage,
+} from './readOnlyUsage';
 
 const ACCOUNT_TARGET: QuotaTarget = {
   id: 'claude.group.account',
@@ -27,6 +33,21 @@ const ACCOUNT_TARGET: QuotaTarget = {
   cacheMetricTitle: 'Cache read / (cache read + cache creation)',
 };
 
+const COMPATIBILITY_CREDENTIAL_MARKERS = new WeakMap<object, string>();
+
+function accountTarget(source: 'statusLine' | 'api'): QuotaTarget {
+  if (source === 'statusLine') return ACCOUNT_TARGET;
+  return {
+    ...ACCOUNT_TARGET,
+    badges: [{
+      key: 'compatibility-api',
+      label: 'Compat',
+      title: 'Read-only Claude Desktop compatibility data',
+      tone: 'neutral',
+    }],
+  };
+}
+
 function slug(value: string): string {
   return value
     .normalize('NFKD')
@@ -35,7 +56,7 @@ function slug(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function scopedTarget(label: string, id: string): QuotaTarget {
+function scopedTarget(label: string, id: string, source: 'statusLine' | 'api'): QuotaTarget {
   const isFable = /\bfable\b/i.test(label);
   return {
     id: isFable ? 'claude.group.fable' : `claude.group.${id}`,
@@ -45,9 +66,11 @@ function scopedTarget(label: string, id: string): QuotaTarget {
     taskbarAbbreviation: (label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? 'C'),
     hideCost: true,
     badges: [{
-      key: 'statusline',
-      label: 'Local',
-      title: 'Reported locally by Claude Code statusLine',
+      key: source === 'statusLine' ? 'statusline' : 'compatibility-api',
+      label: source === 'statusLine' ? 'Local' : 'Compat',
+      title: source === 'statusLine'
+        ? 'Reported locally by Claude Code statusLine'
+        : 'Read-only Claude Desktop compatibility data',
       tone: 'neutral',
     }],
   };
@@ -58,10 +81,11 @@ function limitedEntry(
   usedPct: number,
   resetsAt: number | null,
   durationMs: number,
+  source: 'statusLine' | 'api',
 ): QuotaEntry {
   return {
     key: `claude.account.${period}`,
-    target: ACCOUNT_TARGET,
+    target: accountTarget(source),
     scope: { kind: 'account' },
     state: 'limited',
     usedPct,
@@ -83,10 +107,16 @@ export function waitingClaudeQuota(nowMs: number): ProviderQuotaSnapshot {
       connected: false,
       code: 'bridge-unavailable',
       label: 'waiting for Claude',
-      detail: 'Use Claude Code once after enabling the statusLine integration to sync plan usage.',
+      detail: 'Waiting for Claude Code statusLine or read-only Desktop compatibility data.',
       severity: 'warning',
     },
   };
+}
+
+function isCompatibilitySnapshot(snapshot: ProviderQuotaSnapshot): boolean {
+  return snapshot.source === 'api'
+    || snapshot.status?.code === 'compatibility-api'
+    || snapshot.status?.code === 'compatibility-stale';
 }
 
 export function ageClaudeQuotaSnapshot(
@@ -97,17 +127,21 @@ export function ageClaudeQuotaSnapshot(
   if (nowMs >= snapshot.capturedAt + CLAUDE_STATUS_LINE_CACHE_MAX_MS) {
     return { ...aged, entries: [] };
   }
+  const compatibility = isCompatibilitySnapshot(snapshot);
+  const freshMs = compatibility ? CLAUDE_COMPATIBILITY_MIN_INTERVAL_MS : CLAUDE_STATUS_LINE_FRESH_MS;
   const fresh = nowMs >= snapshot.capturedAt
-    && nowMs - snapshot.capturedAt < CLAUDE_STATUS_LINE_FRESH_MS;
+    && nowMs - snapshot.capturedAt < freshMs;
   if (fresh || aged.entries.length === 0) return aged;
   return {
     ...aged,
     source: 'cache',
     status: {
       connected: false,
-      code: 'bridge-stale',
+      code: compatibility ? 'compatibility-stale' : 'bridge-stale',
       label: 'cached',
-      detail: 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
+      detail: compatibility
+        ? 'Showing the last read-only Claude compatibility result for up to 30 minutes.'
+        : 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
       severity: 'warning',
     },
   };
@@ -120,13 +154,13 @@ export function buildClaudeStatusLineQuota(
   const entries: QuotaEntry[] = [];
   const fiveHour = data.rateLimits.fiveHour;
   const sevenDay = data.rateLimits.sevenDay;
-  if (fiveHour) entries.push(limitedEntry('5h', fiveHour.usedPct, fiveHour.resetsAtMs, FIVE_HOURS_MS));
-  if (sevenDay) entries.push(limitedEntry('7d', sevenDay.usedPct, sevenDay.resetsAtMs, SEVEN_DAYS_MS));
+  if (fiveHour) entries.push(limitedEntry('5h', fiveHour.usedPct, fiveHour.resetsAtMs, FIVE_HOURS_MS, 'statusLine'));
+  if (sevenDay) entries.push(limitedEntry('7d', sevenDay.usedPct, sevenDay.resetsAtMs, SEVEN_DAYS_MS, 'statusLine'));
   const usedTargetIds = new Set<string>();
   for (const window of data.rateLimits.modelScoped) {
     const id = slug(window.label);
     if (!id) continue;
-    const target = scopedTarget(window.label, id);
+    const target = scopedTarget(window.label, id, 'statusLine');
     if (usedTargetIds.has(target.id)) continue;
     usedTargetIds.add(target.id);
     entries.push({
@@ -180,9 +214,100 @@ export function buildClaudeStatusLineQuota(
   };
 }
 
+function compatibilityCredits(usage: ClaudeCompatibilityUsage): Record<string, ProviderCreditBalance> | undefined {
+  const extraUsage = usage.extraUsage;
+  if (!extraUsage?.isEnabled) return undefined;
+  return {
+    extraUsage: {
+      available: Math.max(0, extraUsage.monthlyLimit - extraUsage.usedCredits),
+      used: extraUsage.usedCredits,
+      total: extraUsage.monthlyLimit,
+      remainingPct: Math.max(0, Math.min(100, 100 - extraUsage.utilization)),
+      resetMs: null,
+    },
+  };
+}
+
+export function buildClaudeCompatibilityQuota(
+  usage: ClaudeCompatibilityUsage,
+  capturedAt: number,
+  nowMs: number,
+  credentialMarker?: string | null,
+): ProviderQuotaSnapshot {
+  const entries: QuotaEntry[] = [];
+  if (usage.fiveHour) {
+    entries.push(limitedEntry('5h', usage.fiveHour.usedPct, usage.fiveHour.resetsAtMs, FIVE_HOURS_MS, 'api'));
+  }
+  if (usage.sevenDay) {
+    entries.push(limitedEntry('7d', usage.sevenDay.usedPct, usage.sevenDay.resetsAtMs, SEVEN_DAYS_MS, 'api'));
+  }
+  const usedTargetIds = new Set<string>();
+  for (const window of usage.modelScoped) {
+    const id = slug(window.label);
+    if (!id) continue;
+    const target = scopedTarget(window.label, id, 'api');
+    if (usedTargetIds.has(target.id)) continue;
+    usedTargetIds.add(target.id);
+    entries.push({
+      key: target.id === 'claude.group.fable' ? 'claude.fable.7d' : `claude.model.${id}.7d`,
+      target,
+      scope: { kind: 'model', label: target.label },
+      state: 'limited',
+      usedPct: window.usedPct,
+      resetsAt: window.resetsAtMs,
+      durationMs: SEVEN_DAYS_MS,
+      durationInferred: false,
+      period: '7d',
+    });
+  }
+  const snapshot = ageClaudeQuotaSnapshot({
+    provider: 'claude',
+    source: 'api',
+    capturedAt,
+    entries,
+    accountLabel: usage.planName || undefined,
+    planName: usage.planName || undefined,
+    credits: compatibilityCredits(usage),
+    status: {
+      connected: entries.length > 0,
+      code: entries.length > 0 ? 'compatibility-api' : 'schema-changed',
+      label: entries.length > 0 ? 'compatibility' : 'compatibility changed',
+      detail: entries.length > 0
+        ? 'Read-only Claude Desktop compatibility data; credentials are never refreshed or changed.'
+        : 'Anthropic returned no recognized Claude quota windows.',
+      severity: entries.length > 0 ? 'ok' : 'warning',
+    },
+  }, nowMs);
+  if (credentialMarker) COMPATIBILITY_CREDENTIAL_MARKERS.set(snapshot, credentialMarker);
+  return snapshot;
+}
+
+export function getClaudeQuotaCredentialMarker(snapshot: ProviderQuotaSnapshot): string | null {
+  return COMPATIBILITY_CREDENTIAL_MARKERS.get(snapshot) ?? null;
+}
+
 export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ProviderQuotaSnapshot> {
   const data = readClaudeStatusLineFile(undefined, ctx.nowMs);
-  return data ? buildClaudeStatusLineQuota(data, ctx.nowMs) : waitingClaudeQuota(ctx.nowMs);
+  const local = data ? buildClaudeStatusLineQuota(data, ctx.nowMs) : null;
+  if (local?.status?.connected && local.entries.length > 0) return local;
+
+  const compatibility = await fetchClaudeCompatibilityUsage({ nowMs: ctx.nowMs });
+  if (compatibility.usage) {
+    return buildClaudeCompatibilityQuota(
+      compatibility.usage,
+      compatibility.capturedAt,
+      ctx.nowMs,
+      compatibility.credentialMarker,
+    );
+  }
+  if (local?.entries.length) return local;
+  return {
+    provider: 'claude',
+    source: 'cache',
+    capturedAt: compatibility.capturedAt,
+    entries: [],
+    status: { ...compatibility.status, severity: 'warning' },
+  };
 }
 
 export function isClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): boolean {

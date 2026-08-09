@@ -8,11 +8,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import statusLineModule from '../dist/shared/claudeStatusLine.js';
 import statusLineFileModule from '../dist/bridge/claudeStatusLineFile.js';
 import claudeQuotaModule from '../dist/main/providers/claude/quota.js';
+import compatibilityModule from '../dist/main/providers/claude/readOnlyUsage.js';
 import bridgeWatcherModule from '../dist/main/bridgeWatcher.js';
 
 const { normalizeClaudeStatusLineSnapshot } = statusLineModule;
 const { readClaudeStatusLineFile, writeClaudeStatusLineFile } = statusLineFileModule;
-const { buildClaudeStatusLineQuota, fetchClaudeQuota } = claudeQuotaModule;
+const { buildClaudeCompatibilityQuota, buildClaudeStatusLineQuota, fetchClaudeQuota } = claudeQuotaModule;
+const { __resetClaudeCompatibilityStateForTest, __setClaudeCompatibilityHttpForTest } = compatibilityModule;
 const { BridgeWatcher } = bridgeWatcherModule;
 const tempDirs = [];
 
@@ -52,6 +54,8 @@ function delay(ms) {
 }
 
 test.afterEach(() => {
+  __setClaudeCompatibilityHttpForTest(null);
+  __resetClaudeCompatibilityStateForTest();
   for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -195,6 +199,18 @@ test('quota builder exposes Fable only when Claude reports it locally', () => {
   assert.equal(quota.entries[2].target.badges[0].label, 'Local');
 });
 
+test('compatibility account quota carries an explicit Compat badge', () => {
+  const now = Date.now();
+  const quota = buildClaudeCompatibilityQuota({
+    fiveHour: { usedPct: 12, resetsAtMs: now + 60_000 },
+    sevenDay: { usedPct: 34, resetsAtMs: now + 120_000 },
+    modelScoped: [],
+    planName: 'Max',
+    extraUsage: null,
+  }, now, now);
+  assert.deepEqual(quota.entries.map(entry => entry.target.badges?.[0]?.label), ['Compat', 'Compat']);
+});
+
 test('stale snapshots remain cached only until each reported reset', () => {
   const now = Date.now();
   const snapshot = normalizeClaudeStatusLineSnapshot(legacyPayload(now), { nowMs: now, capturedAtMs: now - 10 * 60_000 });
@@ -248,35 +264,58 @@ test('bundled bridge preserves the last good snapshot on invalid or oversized in
   assert.equal(fs.readFileSync(filePath, 'utf8'), saved);
 });
 
-test('Claude quota fetch reads only the local bridge file', async () => {
+test('Claude quota fetch prefers a fresh local bridge and uses read-only compatibility otherwise', async () => {
   const originalAppData = process.env.APPDATA;
+  const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
   const appData = makeTempDir();
+  const claudeConfig = makeTempDir();
   process.env.APPDATA = appData;
+  process.env.CLAUDE_CONFIG_DIR = claudeConfig;
+  fs.writeFileSync(path.join(claudeConfig, '.credentials.json'), JSON.stringify({
+    claudeAiOauth: { accessToken: 'compat-access', subscriptionType: 'max' },
+  }));
+  let compatibilityCalls = 0;
+  __setClaudeCompatibilityHttpForTest(async () => {
+    compatibilityCalls += 1;
+    return { status: 200, body: JSON.stringify({
+      five_hour: { utilization: 44, resets_at: '2099-01-01T00:00:00Z' },
+      seven_day: { utilization: 55, resets_at: '2099-01-02T00:00:00Z' },
+    }), headers: {} };
+  });
   try {
     const now = Date.now();
-    const waiting = await fetchClaudeQuota({ nowMs: now });
-    assert.equal(waiting.status.code, 'bridge-unavailable');
+    const compatibility = await fetchClaudeQuota({ nowMs: now, force: false });
+    assert.equal(compatibility.status.code, 'compatibility-api');
+    assert.equal(compatibility.source, 'api');
+    assert.equal(compatibilityCalls, 1);
     const filePath = path.join(appData, 'WhereMyTokens', 'live-session.json');
     assert.equal(writeClaudeStatusLineFile(legacyPayload(now), filePath, now), true);
-    const quota = await fetchClaudeQuota({ nowMs: now });
+    const quota = await fetchClaudeQuota({ nowMs: now, force: false });
     assert.equal(quota.source, 'statusLine');
     assert.equal(quota.entries.length, 3);
+    assert.equal(compatibilityCalls, 1);
   } finally {
     if (originalAppData === undefined) delete process.env.APPDATA;
     else process.env.APPDATA = originalAppData;
+    if (originalClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
   }
 });
 
-test('Claude integration source contains no direct Anthropic usage or refresh request', () => {
+test('Claude compatibility source contains no token refresh or credential write path', () => {
   const files = [
     'src/bridge/bridge.ts',
     'src/bridge/claudeStatusLineFile.ts',
     'src/main/providers/claude/quota.ts',
+    'src/main/providers/claude/readOnlyUsage.ts',
     'src/main/stateManager.ts',
     'src/main/index.ts',
   ];
   const source = files.map(file => fs.readFileSync(file, 'utf8')).join('\n');
-  assert.doesNotMatch(source, /api\/oauth\/usage|v1\/oauth\/token|refresh_token|claude-code\/1\.0/i);
+  assert.match(source, /api\/oauth\/usage/);
+  assert.doesNotMatch(source, /v1\/oauth\/token|platform\.claude\.com\/v1\/oauth|refresh_token|refreshToken\s*[:=]/i);
+  const compatibilitySource = fs.readFileSync('src/main/providers/claude/readOnlyUsage.ts', 'utf8');
+  assert.doesNotMatch(compatibilitySource, /writeFile|renameSync|createWriteStream|appendFile/);
   assert.equal(fs.existsSync('src/main/oauthRefresh.ts'), false);
   assert.equal(fs.existsSync('src/main/rateLimitFetcher.ts'), false);
   const bundle = fs.readFileSync('dist/bridge/bridge.js', 'utf8');

@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-Setup.exe"><strong>v1.24.0 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-Setup.exe"><strong>v1.24.1 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.0 は Claude quota を公式のローカル statusLine に移行し、Claude OAuth credential へのアクセスと直接 usage polling を削除します。</em>
+  <em>v1.24.1 は新しい statusLine がなくても既存の Claude Code credential があれば、Claude Desktop 利用中の quota を read-only compatibility fallback で復旧し、credential の更新・書き込みは引き続き行いません。</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 既存の Claude Code credential はあるが新しい statusLine がない Claude Desktop 利用時の quota を復旧。公式 statusLine 優先、token refresh/write 廃止、Anthropic 固定 host、auth-bound cache、非変更 test を追加 |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | Claude quota を公式のローカル `statusLine` に移行し、Claude OAuth credential へのアクセスと直接 usage polling を削除。custom statusLine の保持と、最小化した atomic snapshot・reset-aware cache も追加 |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | Claude と GPT-5.6 のモデル別・時点別 API 換算価格を修正し、検証済み backup、checkpoint 制限 replay、同時変更検出、privacy-safe CLI を備えた lossless SQLite cost repricing を追加 |
 | **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | 7/27 | Fable scoped quota と Codex Resets 表示設定を復旧し、期限前の Claude OAuth token を先に refresh。UsageIndex test clock も固定して release 検証を安定化 |
 | **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | 7/19 | dashboard、alert、tray、compact widget、taskbar helper が同じ動的 Quota Entry を使うよう整理し、報告されない limit は `Unlimited` に合成せず absent のまま保持 |
-| **[v1.22.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.3)** | 7/18 | SQLite 使用履歴を compact projection として読み込み、大きな履歴でもダッシュボードのメモリ使用を大きく下げつつ、today/5h/weekly/モデル別 quota 計算を維持 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +88,11 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-v1.24.0-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-v1.24.1-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -102,7 +102,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.24.0-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.24.1-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -119,10 +119,10 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **ツール使用バー** — 比例色分けバー + ツールチップ（Bash、Edit、Read など）
 
 ### レート制限 & アラート
-- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は公式 `statusLine` の 5h/7d とローカルで実際に報告された `model_scoped` entry、Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
+- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は公式 `statusLine` を優先し、最新値がない場合は既存の Claude Code access token を read-only で使う Desktop compatibility request から 5h/7d と実際に報告された model-scoped entry を取得します。Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
 - **Target 別 quota 表示** — 各 canonical quota target は Settings で Rich、Simple、非表示にでき、Plan Usage、Floating widget、taskbar mini の表示順と表示対象に反映されます。Taskbar mini は正規化された 5h/7d entry を 2 本の physical line に配置し、line ごとに 1-3 個のブロック制限と非表示 target の `+N` 表示をサポートします。prefix の色は quota severity ではなく live/cache/log などのデータ source/status を表します。Codex Resets target は Plan Usage 専用です
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
-- **Claude Code ブリッジ** — `statusLine` プラグインで API ポーリングなしのリアルタイムデータ受信
+- **Claude Code ブリッジ** — `statusLine` で公式ローカルデータを優先し、新しい値がなく Claude Code credential が利用可能な場合は制限付き read-only compatibility request で補完
 - **Windows トースト通知** — 使用量しきい値（50% / 80% / 90%）でアラート
 
 ### 分析 & アクティビティ
@@ -192,11 +192,12 @@ WhereMyTokens は local-first の Electron トレイアプリです。renderer �
 | Claude セッション | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | main process scanner が UsageIndex に書き込み、session projection を公開 | なし |
 | Claude ブリッジ | Claude Code `statusLine` stdin | `%APPDATA%\WhereMyTokens\live-session.json` | なし |
 | Claude 使用量制限 | Claude Code `statusLine` stdin | 5h/7d と任意の model-scoped quota snapshot | なし |
+| Claude Desktop compatibility quota | `~/.claude/.credentials.json` の access token と plan metadata。refresh-token property は無視 | 5h/7d と provider が報告する model-scoped quota | あり、起動時に 1 回、その後は同じ実行中に `api.anthropic.com` へ最短 15 分間隔 |
 | Codex セッション | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner が UsageIndex に書き込み、session projection を公開 | なし |
 | Codex 使用量制限と reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint と reset-credit endpoint | あり、OpenAI/ChatGPT へ直接 |
 | Antigravity セッション/quota | 実行中の Antigravity language server | 127.0.0.1 local RPC、その後 renderer state | なし |
 
-Quota の優先順位は provider ごとに異なります。Claude は最新の `statusLine` bridge snapshot を使い、新しい値が一時的にない場合は報告された reset 時刻と 30 分の cache 上限のうち早い時点まで、最後に信頼した cache を表示します。Claude credentials の読み取りや更新、Anthropic usage endpoint の呼び出しは行いません。Codex の 5h/7d quota entry は live usage を優先し、cache/JSONL ログ内のローカル `rate_limits` イベントへフォールバックできます。報告されない Codex limit は `Unlimited` として合成しません。Codex reset credit は reset-credit endpoint を優先し、auth-bound cache または live usage payload の count-only 値にだけフォールバックします。Antigravity は実行中の IDE の 127.0.0.1 local RPC だけを使います。
+Quota の優先順位は provider ごとに異なります。Claude は最新の `statusLine` bridge snapshot を最優先し、新しい値がなく Claude Code credential がある場合は access token を read-only で使用して `api.anthropic.com` から account quota を取得します。起動時に一度取得する場合があり、同じ実行中の以後の request は 15 分以上空けます。refresh-token property は無視し、credential file の更新・書き込みを行いません。どちらも利用できない場合は、現在の access token に紐づく cache を報告された reset 時刻と 30 分上限のうち早い時点まで表示します。Codex の 5h/7d quota entry は live usage を優先し、cache/JSONL ログ内のローカル `rate_limits` イベントへフォールバックできます。報告されない Codex limit は `Unlimited` として合成しません。Codex reset credit は reset-credit endpoint を優先し、auth-bound cache または live usage payload の count-only 値にだけフォールバックします。Antigravity は実行中の IDE の 127.0.0.1 local RPC だけを使います。
 
 ---
 
@@ -209,6 +210,7 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 | `~/.claude/sessions/*.json` | pid、cwd、モデルなどの Claude セッションメタデータ。 |
 | `~/.claude/projects/**/*.jsonl` | トークン数、コスト、コンテキスト、活動サマリー計算用の Claude 会話ログ。 |
 | Claude Code `statusLine` stdin | 公式 5h/7d quota と Claude Code がローカルで提供する任意の model-scoped quota。 |
+| `~/.claude/.credentials.json` | 新しい statusLine がない場合、Desktop compatibility request 用に access token と plan metadata を抽出。refresh-token property は無視し file write もしません。 |
 | `~/.codex/sessions/**/*.jsonl` | 現在の Codex セッションログ。トークン、cached input、モデル、rate-limit イベント、tool 活動計算に使用します。 |
 | `~/.codex/archived_sessions/**/*.jsonl` | All-time 使用量に含める Codex アーカイブ済みセッションログ。 |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | All-time 使用量に含める Codex cleanup アーカイブログ。 |
@@ -220,9 +222,9 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 | `%APPDATA%\WhereMyTokens\usage-index.sqlite` | incremental checkpoint、長期合計、trend bucket、heatmap に使うローカル usage index。 |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | アプリ設定、ローカルキャッシュ、通知履歴、bridge 状態。 |
 
-WhereMyTokens は API key の貼り付けを求めず、別の credential バックアップも保存しません。Claude monitoring は Claude OAuth credentials を読み書きせず、Codex live usage 機能だけが公式のローカル Codex credential file を読み取ります。
+WhereMyTokens は API key の貼り付けを求めず、別の credential バックアップも保存しません。Claude Desktop compatibility request は既存の Claude Code credential file を読み込み、access token と plan metadata を抽出し、refresh-token property は無視します。credential の更新や file write は行わず、compatibility cache は一方向 token marker に紐づけて login 変更時に破棄します。Codex live usage 機能も公式のローカル Codex credential file を読み取ります。
 
-Claude quota monitoring は Anthropic network request を行わず、ローカル `statusLine` と最小限の quota field だけを使います。Codex live usage と reset-credit check は HTTPS-only request、timeout、レスポンスサイズ制限、cache、個別 backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。ローカル JSONL 解析、Antigravity local RPC、`statusLine` bridge はセッション内容を外部へ送信しません。
+Claude quota monitoring はローカル `statusLine` を優先します。Desktop compatibility request が必要な場合のみ access token を Anthropic の固定 HTTPS host に送ります。起動時に一度取得する場合があり、同じ実行中は 15 分 throttle、timeout、response-size limit、429 backoff を適用し、拒否された同じ access token は再試行しません。session log や statusLine payload 全体は送信しません。Codex live usage と reset-credit check も HTTPS-only request、timeout、レスポンスサイズ制限、cache、個別 backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
 
 Claude Code bridge を無効化するには **Settings -> Claude Code Integration -> Disable** を押します。アプリは WhereMyTokens bridge command が所有する `statusLine` entry だけを削除し、他の custom `statusLine` を上書きまたは削除しません。手動では `~/.claude/settings.json` から WhereMyTokens の `statusLine` entry を削除し、Claude Code を再起動してください。
 
@@ -232,7 +234,7 @@ Claude Code bridge を無効化するには **Settings -> Claude Code Integratio
 
 起動直後は現在のセッションと最近の使用量を先に表示します。`Partial History` が見える場合は、古い履歴を budgeted background slice で同期している途中で、トレイアプリと hotkey popup の応答性を保つための動作です。
 
-ヘッダーの小さな PiP ボタンで Floating Quota Pace ウィジェットを直接オン/オフできます。ヘッダーのステータス pill は provider の重要な状態を 1 か所にまとめます。Claude は最新の statusLine quota がない場合に waiting または cached 状態を表示します。Quota Pace ウィジェットは `Claude OK`、`Codex OK`、`Antigravity OK` のように provider 別の health チップを表示し、pill やチップにホバーすると最新の詳細を確認できます。
+ヘッダーの小さな PiP ボタンで Floating Quota Pace ウィジェットを直接オン/オフできます。ヘッダーのステータス pill は provider の重要な状態を 1 か所にまとめます。Claude は statusLine と Desktop compatibility quota のどちらも取得できない場合に waiting または cached 状態を表示します。`API`/`Compat` chip は read-only compatibility data を示します。Quota Pace ウィジェットは `Claude OK`、`Codex OK`、`Antigravity OK` のように provider 別の health チップを表示し、pill やチップにホバーすると最新の詳細を確認できます。
 
 ---
 
