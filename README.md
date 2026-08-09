@@ -18,7 +18,7 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2"><img alt="Release v1.23.2" src="https://img.shields.io/badge/release-v1.23.2-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0"><img alt="Release v1.24.0" src="https://img.shields.io/badge/release-v1.24.0-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
@@ -61,9 +61,9 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-v1.23.2-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-v1.24.0-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.1)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -83,11 +83,11 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | Aug 10 | Move Claude quota tracking to the official local `statusLine` feed, remove direct Claude OAuth credential access and usage polling, preserve custom status lines, and add minimized atomic snapshots with reset-aware caching |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | Aug 8 | Correct model-specific API-equivalent pricing across Claude and GPT-5.6 price changes, and add lossless SQLite cost repricing with validated backups, checkpoint-bounded replay, concurrent-change protection, and privacy-safe CLI output |
 | **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | Jul 27 | Restore Fable scoped quota visibility and Codex Resets display settings, proactively refresh expiring Claude OAuth tokens, and pin UsageIndex test clocks for stable release validation |
 | **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | Jul 19 | Move provider quota data to canonical dynamic Quota Entries across the dashboard, alerts, tray, compact widget, and taskbar helper while keeping missing limits absent instead of synthesizing `Unlimited` |
 | **[v1.22.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.3)** | Jul 18 | Stream compact usage projection data from SQLite to sharply reduce dashboard memory use with large histories while preserving today, 5h, weekly, and per-model quota calculations |
-| **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | Jul 18 | Stabilize tray-owned dashboard/widget windows to stop taskbar flicker, fix compact widget buttons, and reduce memory pressure for large usage histories while preserving Codex `Unlimited` rows |
 
 [Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 

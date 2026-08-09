@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-Setup.exe"><strong>下载 v1.23.2</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-Setup.exe"><strong>下载 v1.24.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.23.2 按模型与价格变更日期正确计算 API 等值费用，并新增带备份校验和并发变更检测的无损 SQLite 费用重算。</em>
+  <em>v1.24.0 将 Claude quota 迁移到官方本地 statusLine，并移除 Claude OAuth credential 访问与直接 usage polling。</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | 将 Claude quota 迁移到官方本地 `statusLine`，移除 Claude OAuth credential 访问与直接 usage polling，并保留 custom statusLine，加入最小化 atomic snapshot 与 reset-aware cache |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | 修正 Claude 与 GPT-5.6 按模型和时间生效的 API 等值价格，并加入经校验备份、checkpoint 限定 replay、并发变更检测与隐私安全 CLI 的无损 SQLite 费用重算 |
 | **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | 7/27 | 恢复 Fable scoped quota 与 Codex Resets 显示设置，提前 refresh 即将过期的 Claude OAuth token，并固定 UsageIndex 测试时钟以稳定发布验证 |
 | **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | 7/19 | 让 dashboard、alert、tray、compact widget、taskbar helper 使用同一套动态 Quota Entry；未报告的 limit 保持 absent，不再合成为 `Unlimited` |
 | **[v1.22.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.3)** | 7/18 | 将 SQLite 使用历史作为 compact projection 读取，在大型历史下显著降低仪表板内存占用，同时保留 today/5h/weekly/按模型 quota 计算 |
-| **[v1.22.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.22.2)** | 7/18 | 使用 tray-owned dashboard/widget window 减少任务栏闪烁，修复 Compact widget 按钮与隐藏设置保存，并降低大型使用历史的内存压力，同时保留 Codex `Unlimited` 显示 |
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.23.2/WhereMyTokens-v1.23.2-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.0/WhereMyTokens-v1.24.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -99,7 +99,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.23.2-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.24.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
