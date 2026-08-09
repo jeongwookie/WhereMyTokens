@@ -4,7 +4,6 @@ import chokidar from 'chokidar';
 import { projectKeysForCwd } from './providers/shared/repoContext';
 import { UsageData } from './usageWindows';
 import { AppSettings, DEFAULT_SETTINGS, normalizeSettings } from './ipc';
-import { CLAUDE_API_MAX_BACKOFF_MS, ClaudeApiStatus } from './rateLimitFetcher';
 import { CODEX_RESET_CREDITS_CACHE_SCHEMA_VERSION, CODEX_USAGE_MAX_BACKOFF_MS, CodexResetCreditsData, CodexUsageStatus, getCodexAuthIdentityHash, getCodexAuthMtimeMs, hasCodexUsageCredentials, normalizeStoredCodexResetCredits } from './codexUsageFetcher';
 import { checkAlerts } from './usageAlertManager';
 import Store from 'electron-store';
@@ -22,7 +21,6 @@ import { normalizeGitCwdKey, normalizeGitPathKey, preferGitStats, repoKeyFromGit
 import { ActivityBreakdown, ActivityBreakdownKind, FileUsageSummary, SessionSnapshot } from './jsonlTypes';
 import { CodexAccountState, readCodexAccountState } from './codexAccount';
 import { appendDebugMemoryLog, collectRuntimeMemorySnapshot, isDebugInstrumentationEnabled } from './debugInstrumentation';
-import { getOAuthCredentialMarker } from './oauthRefresh';
 import { RefreshRequest, RefreshScheduler, RefreshWork } from './refreshScheduler';
 import { UsageTrendData, emptyUsageTrendData } from './usageTrendTypes';
 import { bucketDateRange, weekKey, type BreakdownGrain } from '../shared/bucketKey';
@@ -34,8 +32,6 @@ import {
 } from '../shared/breakdownTypes';
 import {
   ageProviderQuotaSnapshot,
-  FIVE_HOURS_MS,
-  SEVEN_DAYS_MS,
   validateProviderQuotaSnapshot,
 } from '../shared/quotaDomain';
 import type {
@@ -44,7 +40,6 @@ import type {
   ProviderQuotaStatus,
   ProviderResetCredit,
   ProviderResetCreditsData,
-  QuotaEntry,
 } from '../shared/quotaTypes';
 import { makeStartupStateSnapshot, normalizeStartupStateSnapshot, StateFreshness } from './startupStateSnapshot';
 import { createProviderRegistry, ProviderRegistry } from './providers';
@@ -59,7 +54,13 @@ import type {
   SourceBackedProviderAdapter,
 } from './providers/types';
 import { PROVIDER_IDS, isProviderEnabled } from './providers/settings';
-import { isClaudeQuotaSnapshot } from './providers/claude/quota';
+import {
+  ageClaudeQuotaSnapshot,
+  buildClaudeStatusLineQuota,
+  isClaudeQuotaSnapshot,
+  waitingClaudeQuota,
+} from './providers/claude/quota';
+import { CLAUDE_STATUS_LINE_FRESH_MS } from '../shared/claudeStatusLine';
 import { CodexProviderQuotaSnapshot, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
   buildUsageVisibilityFilter,
@@ -162,6 +163,7 @@ type WatcherProfile = 'wide' | 'recent' | 'off';
 type WatcherMode = 'auto' | 'wide' | 'recent';
 
 const CANONICAL_QUOTA_CACHE_SCHEMA_VERSION = 1;
+const CLAUDE_QUOTA_CACHE_SCHEMA_VERSION = 2;
 
 interface PerfSampleStart {
   wallNs: bigint;
@@ -453,10 +455,6 @@ export class StateManager {
   private apiConnected = false;
   private apiStatusLabel = '';
   private apiError = '';
-  private lastApiCallMs = 0;
-  private apiBackoffMs = 0;
-  private apiRequestSeq = 0;
-  private lastOAuthCredentialMarker: string | null = null;
   private cachedCodexQuota: ProviderQuotaSnapshot | null = null;
   private codexUsageAuthMtimeMs: number | null = null;
   private codexUsageAuthIdentityHash: string | null = null;
@@ -504,7 +502,6 @@ export class StateManager {
   private watcherProfile: WatcherProfile = 'off';
   private watcherTargetCount = 0;
   private repoGitStatsLastRefresh = 0;
-  private static readonly API_MIN_INTERVAL_MS = 300_000;
   private static readonly CODEX_USAGE_MIN_INTERVAL_MS = 300_000;
   private static readonly CODEX_RESET_MIN_INTERVAL_MS = 300_000;
   private static readonly MANUAL_PROVIDER_USAGE_FORCE_MIN_INTERVAL_MS = 60_000;
@@ -543,8 +540,6 @@ export class StateManager {
       this.state,
     );
     if (restoredState) this.state = this.reviveRestoredState(restoredState);
-    const oauthCredentialMarker = getOAuthCredentialMarker();
-    this.lastOAuthCredentialMarker = oauthCredentialMarker;
     this.refreshScheduler = new RefreshScheduler({
       foregroundScanBudgetMs: StateManager.FOREGROUND_SCAN_BUDGET_MS,
       getState: () => ({ uiVisible: this.uiVisible, uiBusy: this.uiBusy }),
@@ -552,8 +547,9 @@ export class StateManager {
     });
     this.deletePersistedValue('_cachedApiPct');
     this.deletePersistedValue('_cachedCodexUsagePct');
-    this.hydrateClaudeQuotaCache(oauthCredentialMarker);
     const settings = this.getSettings();
+    if (settings.enabledProviders.includes('claude')) this.hydrateClaudeQuotaCache();
+    else this.deletePersistedValue('_cachedClaudeQuota');
     if (settings.enabledProviders.includes('codex')) {
       this.hydrateCodexCachesFromStore(settings);
       if (this.cachedCodexQuota || this.codexResetCredits) {
@@ -569,6 +565,9 @@ export class StateManager {
     }
     this.bridgeWatcher = new BridgeWatcher((data) => {
       this.liveSession = data;
+      const quota = buildClaudeStatusLineQuota(data, Date.now());
+      if (quota.entries.length > 0) this.persistClaudeQuotaSnapshot(quota);
+      this.applyApiStatus(quota.status!);
       this.state = {
         ...this.state,
         providerQuotas: this.buildProviderQuotas(Date.now(), this.getSettings()),
@@ -582,7 +581,7 @@ export class StateManager {
         stateFreshness: this.currentStateFreshness(),
       };
       this.publishState();
-    });
+    }, undefined, () => isProviderEnabled(this.getSettings(), 'claude'));
   }
 
   async getBreakdown(grain: BreakdownGrain, bucketKey: string): Promise<BucketBreakdown> {
@@ -746,22 +745,35 @@ export class StateManager {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  private clearClaudeApiCache(): void {
-    this.cachedClaudeQuota = null;
-    this.deletePersistedValue('_cachedClaudeQuota');
-  }
-
-  private hydrateClaudeQuotaCache(currentCredentialMarker: string | null): void {
+  private hydrateClaudeQuotaCache(): void {
     const record = quotaRecord(this.getPersistedValue('_cachedClaudeQuota', null));
-    const marker = quotaString(record?.credentialMarker) ?? null;
     const snapshot = validateProviderQuotaSnapshot(record?.snapshot);
-    if (record?.schemaVersion !== CANONICAL_QUOTA_CACHE_SCHEMA_VERSION
-      || marker !== currentCredentialMarker
-      || snapshot?.provider !== 'claude') {
+    if (record?.schemaVersion !== CLAUDE_QUOTA_CACHE_SCHEMA_VERSION || snapshot?.provider !== 'claude') {
       if (record) this.deletePersistedValue('_cachedClaudeQuota');
       return;
     }
-    this.cachedClaudeQuota = ageProviderQuotaSnapshot({ ...snapshot, source: 'cache' }, Date.now());
+    const aged = ageClaudeQuotaSnapshot({ ...snapshot, source: 'cache' }, Date.now());
+    if (aged.entries.length === 0) {
+      this.deletePersistedValue('_cachedClaudeQuota');
+      return;
+    }
+    this.cachedClaudeQuota = aged;
+    if (aged.entries.length !== snapshot.entries.length) {
+      this.setPersistedValue('_cachedClaudeQuota', {
+        schemaVersion: CLAUDE_QUOTA_CACHE_SCHEMA_VERSION,
+        snapshot: aged,
+      });
+    }
+  }
+
+  private persistClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): void {
+    const publicSnapshot = validateProviderQuotaSnapshot(snapshot);
+    if (!publicSnapshot || publicSnapshot.provider !== 'claude' || publicSnapshot.entries.length === 0) return;
+    this.cachedClaudeQuota = { ...publicSnapshot, source: 'cache' };
+    this.setPersistedValue('_cachedClaudeQuota', {
+      schemaVersion: CLAUDE_QUOTA_CACHE_SCHEMA_VERSION,
+      snapshot: this.cachedClaudeQuota,
+    });
   }
 
   private getSettings(): AppSettings {
@@ -1196,10 +1208,10 @@ export class StateManager {
     appendDebugMemoryLog('state-manager-snapshot', snapshot as unknown as Record<string, unknown>);
   }
 
-  private applyApiStatus(status: ClaudeApiStatus): void {
+  private applyApiStatus(status: ProviderQuotaStatus): void {
     this.apiConnected = status.connected;
-    this.apiStatusLabel = status.label;
-    this.apiError = status.detail;
+    this.apiStatusLabel = status.label ?? '';
+    this.apiError = status.detail ?? '';
   }
 
   private applyCodexStatus(status: CodexUsageStatus): void {
@@ -1210,7 +1222,13 @@ export class StateManager {
 
   private getAgedClaudeQuota(now = Date.now()): ProviderQuotaSnapshot | null {
     if (!this.cachedClaudeQuota) return null;
-    return ageProviderQuotaSnapshot({ ...this.cachedClaudeQuota, source: 'cache' }, now);
+    const aged = ageClaudeQuotaSnapshot({ ...this.cachedClaudeQuota, source: 'cache' }, now);
+    if (this.cachedClaudeQuota.entries.length > 0 && aged.entries.length === 0) {
+      this.cachedClaudeQuota = null;
+      this.deletePersistedValue('_cachedClaudeQuota');
+      return null;
+    }
+    return aged;
   }
 
   private getAgedCodexQuota(now = Date.now()): ProviderQuotaSnapshot | null {
@@ -1226,26 +1244,6 @@ export class StateManager {
       return null;
     }
     return ageProviderQuotaSnapshot({ ...this.cachedCodexQuota, source: 'cache' }, now);
-  }
-
-  private consumeOAuthCredentialChange(): boolean {
-    const marker = getOAuthCredentialMarker() ?? 'missing';
-    const changed = this.lastOAuthCredentialMarker !== null && this.lastOAuthCredentialMarker !== marker;
-    this.lastOAuthCredentialMarker = marker;
-    return changed;
-  }
-
-  private beginClaudeQuotaRequest(force: boolean, now: number): number | null {
-    const credentialsChanged = this.consumeOAuthCredentialChange();
-    if (credentialsChanged) {
-      this.apiBackoffMs = 0;
-      this.clearClaudeApiCache();
-    }
-    const elapsedSinceLastApiCall = now - this.lastApiCallMs;
-    if (!credentialsChanged && this.apiBackoffMs > 0 && elapsedSinceLastApiCall < this.apiBackoffMs) return null;
-    if (!force && !credentialsChanged && elapsedSinceLastApiCall < StateManager.API_MIN_INTERVAL_MS) return null;
-    this.lastApiCallMs = now;
-    return ++this.apiRequestSeq;
   }
 
   private beginCodexQuotaRequest(force: boolean, now: number): { requestSeq: number; skipCodexUsage: boolean; skipCodexResetCredits: boolean } | null {
@@ -1272,45 +1270,16 @@ export class StateManager {
       this.providerQuotaRequestSeqs.set(provider, admission.requestSeq);
       return admission;
     }
-    const requestSeq = provider === 'claude'
-      ? this.beginClaudeQuotaRequest(force, now)
-      : (this.providerQuotaRequestSeqs.get(provider) ?? 0) + 1;
-    if (requestSeq == null) return null;
+    const requestSeq = (this.providerQuotaRequestSeqs.get(provider) ?? 0) + 1;
     this.providerQuotaRequestSeqs.set(provider, requestSeq);
     return { requestSeq };
   }
 
-  private applyClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, requestStartedAtMs: number): boolean {
+  private applyClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot, requestSeq: number, _requestStartedAtMs: number): boolean {
     if (!isClaudeQuotaSnapshot(snapshot)) return false;
-    if (requestSeq !== this.apiRequestSeq) return false;
-    this.applyApiStatus(snapshot.status);
-
-    if (snapshot.status.connected) {
-      const credentialMarker = snapshot.credentialMarker;
-      this.lastOAuthCredentialMarker = credentialMarker;
-      this.cachedClaudeQuota = { ...snapshot, source: 'cache', capturedAt: requestStartedAtMs };
-      this.apiBackoffMs = 0;
-      this.setPersistedValue('_cachedClaudeQuota', {
-        schemaVersion: CANONICAL_QUOTA_CACHE_SCHEMA_VERSION,
-        credentialMarker,
-        snapshot: this.cachedClaudeQuota,
-      });
-      return true;
-    }
-
-    if (snapshot.status.code === 'no-credentials') {
-      this.clearClaudeApiCache();
-    }
-
-    if (snapshot.status.code === 'rate-limited') {
-      this.apiBackoffMs = typeof snapshot.status.retryAfterMs === 'number'
-        ? Math.min(CLAUDE_API_MAX_BACKOFF_MS, Math.max(0, snapshot.status.retryAfterMs))
-        : Math.min(this.apiBackoffMs === 0 ? 120_000 : this.apiBackoffMs * 2, CLAUDE_API_MAX_BACKOFF_MS);
-      this.apiError = `${snapshot.status.detail} Retry in ${Math.max(1, Math.ceil(this.apiBackoffMs / 60000))}m.`;
-      this.apiStatusLabel = snapshot.status.label || 'rate limited';
-    } else {
-      this.apiBackoffMs = 0;
-    }
+    if (this.providerQuotaRequestSeqs.get('claude') !== requestSeq) return false;
+    this.applyApiStatus(snapshot.status!);
+    if (snapshot.entries.length > 0) this.persistClaudeQuotaSnapshot(snapshot);
     return true;
   }
 
@@ -1689,7 +1658,11 @@ export class StateManager {
     const now = Date.now();
     const providerQuotas = this.buildProviderQuotas(now, settings);
     const usageVisibilityFilter = buildUsageVisibilityFilter(settings);
-    const bridgeActive = !!(this.liveSession?._ts && now - this.liveSession._ts < 300_000);
+    const bridgeActive = isProviderEnabled(settings, 'claude') && !!(
+      this.liveSession
+      && now >= this.liveSession.capturedAt
+      && now - this.liveSession.capturedAt < CLAUDE_STATUS_LINE_FRESH_MS
+    );
     const usage = computeUsageFromUsageIndex(
       this.usageIndexProjections,
       now,
@@ -2401,59 +2374,34 @@ export class StateManager {
   }
 
   private buildClaudeProviderQuota(now: number): ProviderQuotaSnapshot {
-    const attempt = validateProviderQuotaSnapshot(this.providerQuotaSnapshots.get('claude'));
-    const status: ProviderQuotaStatus = {
-      connected: this.apiConnected,
-      code: this.apiStatusLabel || (this.apiConnected ? 'connected' : 'unknown'),
-      label: this.apiStatusLabel || undefined,
-      detail: this.apiError || undefined,
-    };
-    if (attempt?.status?.connected) return ageProviderQuotaSnapshot(attempt, now);
+    const rawAttempt = validateProviderQuotaSnapshot(this.providerQuotaSnapshots.get('claude'));
+    const attempt = rawAttempt ? ageClaudeQuotaSnapshot(rawAttempt, now) : null;
+    const live = this.liveSession ? buildClaudeStatusLineQuota(this.liveSession, now) : null;
+    const fresh = [attempt, live]
+      .filter((candidate): candidate is ProviderQuotaSnapshot => (
+        !!candidate?.status?.connected && candidate.entries.length > 0
+      ))
+      .sort((left, right) => right.capturedAt - left.capturedAt)[0];
+    if (fresh) return fresh;
 
-    const bridge = this.buildClaudeStatusLineSnapshot(now, status);
-    if (bridge) return bridge;
-
-    const cached = this.getAgedClaudeQuota(now);
-    if (cached) return { ...cached, status };
-    return { provider: 'claude', source: 'cache', capturedAt: now, entries: [], status };
-  }
-
-  private buildClaudeStatusLineSnapshot(now: number, status: ProviderQuotaStatus): ProviderQuotaSnapshot | null {
-    if (!this.liveSession?._ts || now - this.liveSession._ts >= 300_000) return null;
-    const limits = this.liveSession.rate_limits;
-    const entries: QuotaEntry[] = [];
-    const target = {
-      id: 'claude.group.account',
-      label: 'Claude',
-      defaultMode: 'rich' as const,
-      defaultOrder: 0,
-      taskbarAbbreviation: 'C',
-      cacheMetricTitle: 'Cache read / (cache read + cache creation)',
-    };
-    const addEntry = (
-      period: '5h' | '7d',
-      value: { used_percentage?: number; resets_at?: number } | undefined,
-      durationMs: number,
-    ) => {
-      if (!value || typeof value.used_percentage !== 'number' || !Number.isFinite(value.used_percentage)) return;
-      const resetsAt = typeof value.resets_at === 'number' && Number.isFinite(value.resets_at) ? value.resets_at : null;
-      entries.push({
-        key: `claude.account.${period}`,
-        target,
-        scope: { kind: 'account' },
-        state: 'limited',
-        usedPct: Math.max(0, Math.min(100, value.used_percentage)),
-        resetsAt,
-        durationMs,
-        durationInferred: false,
-        period,
-        usageBinding: { kind: 'all-provider-models' },
-      });
-    };
-    addEntry('5h', limits?.five_hour, FIVE_HOURS_MS);
-    addEntry('7d', limits?.seven_day, SEVEN_DAYS_MS);
-    if (entries.length === 0) return null;
-    return { provider: 'claude', source: 'statusLine', capturedAt: this.liveSession._ts, entries, status };
+    const candidates = [live, attempt, this.getAgedClaudeQuota(now)]
+      .filter((candidate): candidate is ProviderQuotaSnapshot => !!candidate && candidate.entries.length > 0)
+      .sort((left, right) => right.capturedAt - left.capturedAt);
+    const cached = candidates[0];
+    if (cached) {
+      return {
+        ...cached,
+        source: 'cache',
+        status: {
+          connected: false,
+          code: 'bridge-stale',
+          label: 'cached',
+          detail: 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
+          severity: 'warning',
+        },
+      };
+    }
+    return live ?? attempt ?? waitingClaudeQuota(now);
   }
 
   private buildCodexProviderQuota(now: number): ProviderQuotaSnapshot {
@@ -3090,6 +3038,18 @@ export class StateManager {
         this.lastCodexResetCallMs = 0;
         this.codexUsageBackoffMs = 0;
         this.codexResetBackoffMs = 0;
+      }
+      const claudeSelectionChanged = enabled.has('claude') !== previousEnabled.has('claude');
+      if (claudeSelectionChanged && !enabled.has('claude')) {
+        this.cachedClaudeQuota = null;
+        this.liveSession = null;
+        this.providerQuotaSnapshots.delete('claude');
+        this.deletePersistedValue('_cachedClaudeQuota');
+        this.apiConnected = false;
+        this.apiStatusLabel = '';
+        this.apiError = '';
+      } else if (claudeSelectionChanged) {
+        this.hydrateClaudeQuotaCache();
       }
       if (!enabled.has('codex')) {
         this.clearCodexUsageCache({ deletePersisted: false });

@@ -220,36 +220,11 @@ function buildClaudeHeaderStatus(args: {
     };
   }
 
-  switch (apiStatusLabel) {
-    case 'rate limited':
-      return { label: i18n.t('mainView.status.claude.limitedLabel'), title: apiError || i18n.t('mainView.status.claude.limitedTitleDefault'), tone: 'warning' };
-    case 'refresh limited':
-      return { label: i18n.t('mainView.status.claude.refreshLabel'), title: apiError || i18n.t('mainView.status.claude.refreshLimitedTitleDefault'), tone: 'warning' };
-    case 'refresh failed':
-      return { label: i18n.t('mainView.status.claude.refreshLabel'), title: apiError || i18n.t('mainView.status.claude.refreshFailedTitleDefault'), tone: 'danger' };
-    case 'schema changed':
-      return { label: i18n.t('mainView.status.claude.schemaLabel'), title: apiError || i18n.t('mainView.status.claude.schemaTitleDefault'), tone: 'danger' };
-    case 'reset partial':
-      return { label: i18n.t('mainView.status.claude.partialLabel'), title: apiError || i18n.t('mainView.status.claude.partialTitleDefault'), tone: 'warning' };
-    case 'local only':
-      return { label: i18n.t('mainView.status.claude.localLabel'), title: apiError || i18n.t('mainView.status.claude.localOnlyTitleDefault'), tone: 'warning' };
-    case 'auth failed':
-      return { label: i18n.t('mainView.status.claude.authLabel'), title: apiError || i18n.t('mainView.status.claude.authTitleDefault'), tone: 'danger' };
-    case 'login required':
-      return { label: i18n.t('mainView.status.claude.loginLabel'), title: apiError || i18n.t('mainView.status.claude.loginTitleDefault'), tone: 'danger' };
-    case 'forbidden':
-      return { label: i18n.t('mainView.status.claude.blockedLabel'), title: apiError || i18n.t('mainView.status.claude.blockedTitleDefault'), tone: 'danger' };
-    case 'api disconnected':
-      return { label: i18n.t('mainView.status.claude.offlineLabel'), title: apiError || i18n.t('mainView.status.claude.offlineTitleDefault'), tone: 'danger' };
-    default:
-      break;
-  }
-
   if (!apiConnected) {
     return {
-      label: i18n.t('mainView.status.claude.offlineLabel'),
-      title: apiError || i18n.t('mainView.status.claude.offlineTitleDefault'),
-      tone: 'danger',
+      label: i18n.t('mainView.status.claude.localLabel'),
+      title: apiError || i18n.t('mainView.status.claude.localOnlyTitleDefault'),
+      tone: 'warning',
     };
   }
 
@@ -538,7 +513,9 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
   const resolvedApiConnected = claudeStatus?.connected ?? apiConnected;
   const resolvedApiStatusLabel = claudeStatus?.label ?? apiStatusLabel;
   const resolvedApiError = claudeStatus?.detail ?? apiError;
-  const hasClaudeFallback = showClaudeUsage && claudeQuota?.source === 'statusLine';
+  const hasClaudeFallback = showClaudeUsage
+    && claudeQuota?.source === 'cache'
+    && claudeQuota.entries.length > 0;
   const codexFallbackSource = codexQuota?.source === 'localLog' || codexQuota?.source === 'cache'
     ? codexQuota.source
     : undefined;

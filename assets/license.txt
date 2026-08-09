@@ -59,8 +59,7 @@ WhereMyTokens is designed with privacy as a core principle:
     any external server:
       * ~/.claude/sessions/*.json         (session metadata)
       * ~/.claude/projects/**/*.jsonl     (conversation logs)
-      * ~/.claude/.credentials.json      (OAuth token, used only to fetch
-                                          your own usage data from Anthropic)
+      * Claude Code statusLine stdin      (local quota snapshot)
       * %APPDATA%\WhereMyTokens\*        (local app data)
 
   - NO TELEMETRY: The software does not collect crash reports, usage
@@ -69,15 +68,12 @@ WhereMyTokens is designed with privacy as a core principle:
   - NO CLOUD SYNC: No account, registration, or internet connection is
     required for the core functionality of this software.
 
-  - ANTHROPIC API: If your Anthropic credentials are present, the software
-    makes periodic requests to Anthropic's usage API endpoint on your behalf
-    (as if you were viewing your own dashboard) to retrieve rate limit
-    information. These requests are identical to requests you would make
-    yourself by logging into the Anthropic Console.
+  - CLAUDE QUOTA: The software receives Claude quota fields from the official
+    Claude Code statusLine input. It does not read or write Claude OAuth
+    credentials and does not call an Anthropic usage endpoint.
 
-  - THIRD-PARTY SERVICES: The software does not communicate with any
-    third-party services other than Anthropic's own API using your own
-    credentials.
+  - THIRD-PARTY SERVICES: Optional non-Claude provider features may communicate
+    with their provider as described in the in-app help and privacy document.
 
 You are solely responsible for the security of your local machine and any
 credentials stored therein.

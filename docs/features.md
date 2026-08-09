@@ -16,7 +16,7 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 - Quota Pace compares provider usage percentage with elapsed reset-window time whenever reset and duration are both known. A known reset alone still shows its countdown; local token/cost attribution is independent.
 - Optional draggable Windows taskbar mini quota display with two physical lines for provider-reported `5h` and `1w` Quota Entries. Two represented periods use one line each; a single period uses both lines with balanced entry distribution. The display also supports a configurable per-line block limit, compact measured hidden-target counts, content-fitted window bounds, source/status-colored target prefixes, transparent background, and taskbar-background-aware text contrast.
 - Windows toast notifications for configurable usage thresholds.
-- Claude Code `statusLine` bridge support for live local context and fallback quota data.
+- Claude Code `statusLine` bridge support for official 5h/7d quota data and locally reported model-scoped limits such as Fable.
 
 ## Analytics
 

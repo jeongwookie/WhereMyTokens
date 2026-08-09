@@ -122,7 +122,7 @@ export default function NotificationsView({ onBack }: Props) {
             <>
               <TargetLine label={t('notificationsView.targets.claudeFiveHour.label')} detail={t('notificationsView.targets.claudeFiveHour.detail')} />
               <TargetLine label={t('notificationsView.targets.claudeWeekly.label')} detail={t('notificationsView.targets.claudeWeekly.detail')} />
-              <TargetLine label={t('notificationsView.targets.claudeSonnetWeekly.label')} detail={t('notificationsView.targets.claudeSonnetWeekly.detail')} />
+              <TargetLine label={t('notificationsView.targets.claudeModelWeekly.label')} detail={t('notificationsView.targets.claudeModelWeekly.detail')} />
             </>
           )}
           {showCodexTargets && (

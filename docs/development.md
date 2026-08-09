@@ -59,7 +59,6 @@ src/
     providers/
     usageIndex/
     usageWindows.ts
-    rateLimitFetcher.ts
     codexUsageFetcher.ts
     bridgeWatcher.ts
     gitStatsCollector.ts
@@ -67,6 +66,7 @@ src/
     preload.ts
   bridge/
     bridge.ts
+    claudeStatusLineFile.ts
   renderer/
     App.tsx
     views/

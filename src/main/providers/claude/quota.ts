@@ -1,23 +1,22 @@
 import {
-  ClaudeApiStatus,
-  ClaudeUsagePayload,
-  fetchClaudeUsage,
-} from '../../rateLimitFetcher';
-import { getOAuthCredentialMarker } from '../../oauthRefresh';
-import { FIVE_HOURS_MS, SEVEN_DAYS_MS, normalizeQuotaPeriod } from '../../../shared/quotaDomain';
+  FIVE_HOURS_MS,
+  SEVEN_DAYS_MS,
+  ageProviderQuotaSnapshot,
+  normalizeQuotaPeriod,
+} from '../../../shared/quotaDomain';
 import type {
-  ProviderCreditBalance,
   ProviderQuotaSnapshot,
+  ProviderQuotaStatus,
   QuotaEntry,
   QuotaTarget,
 } from '../../../shared/quotaTypes';
+import {
+  CLAUDE_STATUS_LINE_CACHE_MAX_MS,
+  CLAUDE_STATUS_LINE_FRESH_MS,
+  type ClaudeStatusLineSnapshot,
+} from '../../../shared/claudeStatusLine';
+import { readClaudeStatusLineFile } from '../../../bridge/claudeStatusLineFile';
 import type { ProviderContext } from '../types';
-
-export interface ClaudeProviderQuotaSnapshot extends ProviderQuotaSnapshot {
-  provider: 'claude';
-  status: ClaudeApiStatus;
-  credentialMarker: string | null;
-}
 
 const ACCOUNT_TARGET: QuotaTarget = {
   id: 'claude.group.account',
@@ -28,33 +27,6 @@ const ACCOUNT_TARGET: QuotaTarget = {
   cacheMetricTitle: 'Cache read / (cache read + cache creation)',
 };
 
-const FABLE_TARGET: QuotaTarget = {
-  id: 'claude.group.fable',
-  label: 'Fable',
-  defaultMode: 'simple',
-  defaultOrder: 10,
-  taskbarAbbreviation: 'F',
-  hideCost: true,
-};
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
-
-function usedPct(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, value));
-}
-
-function absoluteReset(value: unknown): number | null | undefined {
-  if (value === null) return null;
-  if (typeof value !== 'string' || value.trim() === '') return undefined;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : undefined;
-}
-
 function slug(value: string): string {
   return value
     .normalize('NFKD')
@@ -63,171 +35,156 @@ function slug(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function abbreviation(label: string): string {
-  const match = label.toUpperCase().match(/[A-Z0-9]/);
-  return match?.[0] ?? 'C';
-}
-
-function modelLabel(record: Record<string, unknown>): string | null {
-  const scope = asRecord(record.scope);
-  const model = asRecord(scope?.model);
-  const displayName = typeof model?.display_name === 'string' ? model.display_name.trim() : '';
-  return displayName || null;
-}
-
-function extraUsageCredits(usage: ClaudeUsagePayload | null): Record<string, ProviderCreditBalance> | undefined {
-  const extraUsage = usage?.extraUsage;
-  if (!extraUsage?.isEnabled) return undefined;
+function scopedTarget(label: string, id: string): QuotaTarget {
+  const isFable = /\bfable\b/i.test(label);
   return {
-    extraUsage: {
-      available: Math.max(0, extraUsage.monthlyLimit - extraUsage.usedCredits),
-      used: extraUsage.usedCredits,
-      total: extraUsage.monthlyLimit,
-      remainingPct: Math.max(0, Math.min(100, 100 - extraUsage.utilization)),
-      resetMs: null,
-    },
+    id: isFable ? 'claude.group.fable' : `claude.group.${id}`,
+    label: isFable ? 'Fable' : label,
+    defaultMode: 'simple',
+    defaultOrder: isFable ? 10 : 20,
+    taskbarAbbreviation: (label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? 'C'),
+    hideCost: true,
+    badges: [{
+      key: 'statusline',
+      label: 'Local',
+      title: 'Reported locally by Claude Code statusLine',
+      tone: 'neutral',
+    }],
   };
 }
 
 function limitedEntry(
-  key: string,
-  target: QuotaTarget,
-  scope: QuotaEntry['scope'],
-  percent: number,
+  period: '5h' | '7d',
+  usedPct: number,
   resetsAt: number | null,
   durationMs: number,
-  usageBinding?: QuotaEntry['usageBinding'],
 ): QuotaEntry {
   return {
-    key,
-    target,
-    scope,
+    key: `claude.account.${period}`,
+    target: ACCOUNT_TARGET,
+    scope: { kind: 'account' },
     state: 'limited',
-    usedPct: percent,
+    usedPct,
     resetsAt,
     durationMs,
     durationInferred: false,
     period: normalizeQuotaPeriod(durationMs),
-    ...(usageBinding ? { usageBinding } : {}),
+    usageBinding: { kind: 'all-provider-models' },
   };
 }
 
-export function parseClaudeQuotaEntries(usage: ClaudeUsagePayload): { entries: QuotaEntry[]; activeCandidates: number; invalid: number } {
-  const entries: QuotaEntry[] = [];
-  const scoped: Array<{ record: Record<string, unknown>; label: string; id: string }> = [];
-  let activeCandidates = usage.accountWindowCandidates;
-  let invalid = usage.invalidAccountWindows;
-
-  const fiveHour = usage.accountWindows.fiveHour;
-  if (fiveHour) {
-    entries.push(limitedEntry(
-      'claude.account.5h', ACCOUNT_TARGET, { kind: 'account' }, fiveHour.usedPct, fiveHour.resetsAt, FIVE_HOURS_MS,
-      { kind: 'all-provider-models' },
-    ));
-  }
-  const sevenDay = usage.accountWindows.sevenDay;
-  if (sevenDay) {
-    entries.push(limitedEntry(
-      'claude.account.7d', ACCOUNT_TARGET, { kind: 'account' }, sevenDay.usedPct, sevenDay.resetsAt, SEVEN_DAYS_MS,
-      { kind: 'all-provider-models' },
-    ));
-  }
-
-  for (const raw of usage.limits) {
-    const record = asRecord(raw);
-    if (!record) {
-      activeCandidates += 1;
-      invalid += 1;
-      continue;
-    }
-    const kind = typeof record.kind === 'string' ? record.kind : '';
-    const group = typeof record.group === 'string' ? record.group : '';
-    if ((kind === 'session' && group === 'session') || (kind === 'weekly_all' && group === 'weekly')) {
-      continue;
-    }
-    // is_active marks the currently binding limit (display priority), not
-    // whether the limit exists — inactive scoped rows still carry real quota.
-    activeCandidates += 1;
-    const percent = usedPct(record.percent);
-    const resetsAt = absoluteReset(record.resets_at);
-    if (percent == null || resetsAt === undefined) {
-      invalid += 1;
-      continue;
-    }
-    if (kind === 'weekly_scoped' && group === 'weekly') {
-      const label = modelLabel(record);
-      const id = label ? slug(label) : '';
-      if (!label || !id) invalid += 1;
-      else scoped.push({ record, label, id });
-      continue;
-    }
-    invalid += 1;
-  }
-
-  const labelsById = new Map<string, Set<string>>();
-  for (const candidate of scoped) {
-    const labels = labelsById.get(candidate.id) ?? new Set<string>();
-    labels.add(candidate.label.toLowerCase());
-    labelsById.set(candidate.id, labels);
-  }
-  const seenScopedIds = new Set<string>();
-  for (const candidate of scoped) {
-    if ((labelsById.get(candidate.id)?.size ?? 0) !== 1 || seenScopedIds.has(candidate.id)) {
-      invalid += 1;
-      continue;
-    }
-    seenScopedIds.add(candidate.id);
-    const percent = usedPct(candidate.record.percent)!;
-    const resetsAt = absoluteReset(candidate.record.resets_at)!;
-    const isFable = candidate.id === 'fable';
-    const target = isFable ? FABLE_TARGET : {
-      id: `claude.group.${candidate.id}`,
-      label: candidate.label,
-      defaultMode: 'simple' as const,
-      defaultOrder: 20,
-      taskbarAbbreviation: abbreviation(candidate.label),
-      hideCost: true,
-    };
-    entries.push(limitedEntry(
-      isFable ? 'claude.fable.7d' : `claude.model.${candidate.id}.7d`,
-      target,
-      { kind: 'model', label: candidate.label },
-      percent,
-      resetsAt,
-      SEVEN_DAYS_MS,
-    ));
-  }
-  return { entries, activeCandidates, invalid };
-}
-
-export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ClaudeProviderQuotaSnapshot> {
-  const result = await fetchClaudeUsage();
-  const parsed = result.usage ? parseClaudeQuotaEntries(result.usage) : null;
-  const allActiveInvalid = !!parsed && parsed.activeCandidates > 0 && parsed.entries.length === 0;
-  const status: ClaudeApiStatus = allActiveInvalid
-    ? {
-        code: 'schema-changed',
-        connected: false,
-        label: 'schema changed',
-        detail: 'Claude quota data contained candidates but none could form a canonical quota entry.',
-        responseKeys: result.status.responseKeys,
-      }
-    : parsed && parsed.invalid > 0
-      ? { ...result.status, detail: `${parsed.invalid} malformed or unclassified Claude quota candidate(s) were ignored.` }
-      : result.status;
+export function waitingClaudeQuota(nowMs: number): ProviderQuotaSnapshot {
   return {
     provider: 'claude',
-    source: status.connected ? 'api' : 'cache',
-    capturedAt: ctx.nowMs,
-    entries: status.connected ? (parsed?.entries ?? []) : [],
-    accountLabel: result.usage?.plan || undefined,
-    planName: result.usage?.plan || undefined,
-    credits: extraUsageCredits(result.usage),
-    status,
-    credentialMarker: getOAuthCredentialMarker(),
+    source: 'cache',
+    capturedAt: nowMs,
+    entries: [],
+    status: {
+      connected: false,
+      code: 'bridge-unavailable',
+      label: 'waiting for Claude',
+      detail: 'Use Claude Code once after enabling the statusLine integration to sync plan usage.',
+      severity: 'warning',
+    },
   };
 }
 
-export function isClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): snapshot is ClaudeProviderQuotaSnapshot {
-  return snapshot.provider === 'claude' && !!snapshot.status && 'credentialMarker' in snapshot;
+export function ageClaudeQuotaSnapshot(
+  snapshot: ProviderQuotaSnapshot,
+  nowMs: number,
+): ProviderQuotaSnapshot {
+  const aged = ageProviderQuotaSnapshot(snapshot, nowMs);
+  if (nowMs >= snapshot.capturedAt + CLAUDE_STATUS_LINE_CACHE_MAX_MS) {
+    return { ...aged, entries: [] };
+  }
+  const fresh = nowMs >= snapshot.capturedAt
+    && nowMs - snapshot.capturedAt < CLAUDE_STATUS_LINE_FRESH_MS;
+  if (fresh || aged.entries.length === 0) return aged;
+  return {
+    ...aged,
+    source: 'cache',
+    status: {
+      connected: false,
+      code: 'bridge-stale',
+      label: 'cached',
+      detail: 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
+      severity: 'warning',
+    },
+  };
+}
+
+export function buildClaudeStatusLineQuota(
+  data: ClaudeStatusLineSnapshot,
+  nowMs: number,
+): ProviderQuotaSnapshot {
+  const entries: QuotaEntry[] = [];
+  const fiveHour = data.rateLimits.fiveHour;
+  const sevenDay = data.rateLimits.sevenDay;
+  if (fiveHour) entries.push(limitedEntry('5h', fiveHour.usedPct, fiveHour.resetsAtMs, FIVE_HOURS_MS));
+  if (sevenDay) entries.push(limitedEntry('7d', sevenDay.usedPct, sevenDay.resetsAtMs, SEVEN_DAYS_MS));
+  const usedTargetIds = new Set<string>();
+  for (const window of data.rateLimits.modelScoped) {
+    const id = slug(window.label);
+    if (!id) continue;
+    const target = scopedTarget(window.label, id);
+    if (usedTargetIds.has(target.id)) continue;
+    usedTargetIds.add(target.id);
+    entries.push({
+      key: target.id === 'claude.group.fable' ? 'claude.fable.7d' : `claude.model.${id}.7d`,
+      target,
+      scope: { kind: 'model', label: target.label },
+      state: 'limited',
+      usedPct: window.usedPct,
+      resetsAt: window.resetsAtMs,
+      durationMs: SEVEN_DAYS_MS,
+      durationInferred: false,
+      period: '7d',
+    });
+  }
+
+  const fresh = nowMs >= data.capturedAt && nowMs - data.capturedAt < CLAUDE_STATUS_LINE_FRESH_MS;
+  const status: ProviderQuotaStatus = fresh && entries.length > 0
+    ? { connected: true, code: 'ok', severity: 'ok' }
+    : entries.length > 0
+      ? {
+          connected: false,
+          code: 'bridge-stale',
+          label: 'cached',
+          detail: 'Showing the last Claude Code statusLine quota for up to 30 minutes.',
+          severity: 'warning',
+        }
+      : {
+          connected: false,
+          code: 'bridge-unavailable',
+          label: 'waiting for Claude',
+          detail: 'Claude Code has not reported plan usage yet.',
+          severity: 'warning',
+        };
+  const aged = ageClaudeQuotaSnapshot({
+    provider: 'claude',
+    source: fresh ? 'statusLine' : 'cache',
+    capturedAt: data.capturedAt,
+    entries,
+    status,
+  }, nowMs);
+  if (aged.entries.length > 0) return aged;
+  return {
+    ...aged,
+    status: {
+      connected: false,
+      code: 'bridge-unavailable',
+      label: 'waiting for Claude',
+      detail: 'Claude Code has not reported an active plan-usage window yet.',
+      severity: 'warning',
+    },
+  };
+}
+
+export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ProviderQuotaSnapshot> {
+  const data = readClaudeStatusLineFile(undefined, ctx.nowMs);
+  return data ? buildClaudeStatusLineQuota(data, ctx.nowMs) : waitingClaudeQuota(ctx.nowMs);
+}
+
+export function isClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): boolean {
+  return snapshot.provider === 'claude' && !!snapshot.status;
 }

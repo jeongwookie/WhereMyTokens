@@ -19,7 +19,7 @@
         "title": "Account usage snapshot. Refreshed every few minutes."
       },
       "bridge": {
-        "title": "Local status-line fallback while the API is unavailable."
+        "title": "Fresh quota data reported locally by Claude Code statusLine."
       },
       "cache": {
         "title": "Last trusted usage snapshot. It ages out automatically."
@@ -283,25 +283,8 @@
     "status": {
       "claude": {
         "localLabel": "Claude local",
-        "localTitle": "Using local Claude status-line data while API status is {{status}}{{errorSuffix}}",
-        "limitedLabel": "Claude limited",
-        "limitedTitleDefault": "Claude API returned HTTP 429.",
-        "refreshLabel": "Claude refresh",
-        "refreshLimitedTitleDefault": "Claude OAuth refresh is rate limited.",
-        "refreshFailedTitleDefault": "Claude OAuth refresh failed.",
-        "schemaLabel": "Claude schema",
-        "schemaTitleDefault": "Claude API response changed shape.",
-        "partialLabel": "Claude partial",
-        "partialTitleDefault": "Claude API usage loaded without reset timing.",
-        "localOnlyTitleDefault": "Claude credentials were not found. Showing local data only.",
-        "authLabel": "Claude auth",
-        "authTitleDefault": "Claude CLI token was rejected or expired.",
-        "loginLabel": "Claude login",
-        "loginTitleDefault": "Refresh token rejected. Run `claude /login` to re-authenticate.",
-        "blockedLabel": "Claude blocked",
-        "blockedTitleDefault": "Claude API denied this account or beta surface.",
-        "offlineLabel": "Claude offline",
-        "offlineTitleDefault": "Claude API request failed."
+        "localTitle": "Showing the last Claude Code status-line quota ({{status}}){{errorSuffix}}",
+        "localOnlyTitleDefault": "Use Claude Code once after enabling the status-line integration to sync plan usage."
       },
       "codex": {
         "limitedLabel": "Codex limited",
@@ -588,9 +571,9 @@
         "label": "Claude weekly limit",
         "detail": "Claude usage in the weekly window"
       },
-      "claudeSonnetWeekly": {
-        "label": "Claude Sonnet weekly",
-        "detail": "Sonnet-specific weekly usage"
+      "claudeModelWeekly": {
+        "label": "Claude model-scoped weekly",
+        "detail": "Shown only when Claude Code reports a model-specific limit"
       },
       "codexFiveHour": {
         "label": "Codex 5h limit",
