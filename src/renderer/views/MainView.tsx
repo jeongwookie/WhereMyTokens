@@ -1483,6 +1483,7 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
       {cards.map((cardView, cardIndex) => {
         const { group, row: card } = cardView;
         const source = limitSourceDisplay(card.source);
+        const compatibilityBadge = group.badges.find(badge => badge.key === 'compatibility-api');
         const accountTooltip = providerQuotas[cardView.provider]?.accountTooltip;
         return (
           <TokenStatsCard
@@ -1495,9 +1496,9 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
             usdToKrw={usdToKrw}
             quotaEntry={card.entry}
             apiConnected={card.apiConnected}
-            limitSourceLabel={source.label}
-            limitSourceTitle={source.title}
-            limitSourceTone={source.tone}
+            limitSourceLabel={compatibilityBadge?.label ?? source.label}
+            limitSourceTitle={compatibilityBadge?.title ?? source.title}
+            limitSourceTone={compatibilityBadge?.tone ?? source.tone}
             limitDataState={limitDataState(card.entry, card.pending)}
             pendingLimit={card.pending}
             pendingLimitLabel={t('mainView.quota.pendingLabel')}

@@ -471,6 +471,14 @@ test('rich quota card titles truncate visually while preserving full hover title
   assert.match(source, /\{displayTitle\}/);
 });
 
+test('rich Claude compatibility cards show Compat instead of a generic API source', () => {
+  const source = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+
+  assert.match(source, /group\.badges\.find\(badge => badge\.key === 'compatibility-api'\)/);
+  assert.match(source, /limitSourceLabel=\{compatibilityBadge\?\.label \?\? source\.label\}/);
+  assert.match(source, /limitSourceTitle=\{compatibilityBadge\?\.title \?\? source\.title\}/);
+});
+
 test('tray and header status derive provider data from enabled providers', () => {
   const mainSource = fs.readFileSync(path.resolve('src', 'main', 'index.ts'), 'utf8');
   const rendererSource = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');

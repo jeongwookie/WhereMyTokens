@@ -100,11 +100,21 @@ MIT 라이선스(제10조) 조건에 따른 소스 코드의 오픈소스 재배
       또한 "시작 시 자동 실행"을 활성화하면 소프트웨어는 현재 사용자에 대한 표준
       Windows 자동 시작 항목을 등록합니다.
 
-  5.3 Claude statusLine 데이터
-      선택적 Claude Code 연동이 활성화되면 소프트웨어는 등록된 statusLine 명령에
-      로컬로 전달된 quota 필드를 받습니다. 소프트웨어는 최소화된 로컬 quota
-      snapshot만 저장합니다. Claude OAuth 자격 증명을 읽거나 쓰지 않으며,
-      Anthropic 사용량 엔드포인트에 직접 요청하지 않습니다.
+  5.3 Claude quota 데이터
+      소프트웨어는 등록된 Claude Code statusLine 명령으로 로컬 전달되는 quota
+      필드를 우선 사용하며 최소화된 quota snapshot만 저장합니다. 최신 statusLine
+      quota가 없으면 ~/.claude/.credentials.json을 불러와 기존 access token,
+      rate-limit tier, subscription type을 추출하고 고정 HTTPS 호스트인
+      api.anthropic.com으로 읽기 전용 호환 요청을 보낼 수 있습니다.
+
+      호환 경로는 refresh-token 속성을 무시하고, 자격 증명을 갱신하지 않으며,
+      Claude credential 파일을 절대 쓰지 않습니다. 세션 로그, transcript 경로,
+      전체 statusLine payload도 전송하지 않습니다. 로그인 변경 뒤 이전 계정의
+      cache를 재사용하지 않도록 호환 quota cache에는 access token의 단방향
+      marker만 저장합니다. 호환 요청은 앱 시작 시 한 번 실행될 수 있고, 같은
+      프로세스가 실행되는 동안에는 15분에 한 번으로 제한됩니다. Anthropic이
+      거부한 자격 증명은 access token이 바뀌기 전까지 같은 프로세스에서 다시
+      시도하지 않습니다.
 
   5.4 텔레메트리 없음, 클라우드 동기화 없음
       소프트웨어는 충돌 보고서, 사용 통계, 분석 또는 기타 진단 데이터를
@@ -112,9 +122,10 @@ MIT 라이선스(제10조) 조건에 따른 소스 코드의 오픈소스 재배
       연결이 필요하지 않습니다.
 
   5.5 제3자 서비스
-      선택적 비-Claude provider 기능은 앱 내 도움말과 개인정보 보호 문서에 설명된
-      대로 귀하의 로컬 자격 증명을 사용해 해당 provider와 통신할 수 있습니다.
-      제5.3조의 Claude quota 모니터링은 Anthropic과 직접 통신하지 않습니다.
+      선택적 provider 기능은 앱 내 도움말과 개인정보 보호 문서에 설명된 대로
+      귀하의 로컬 자격 증명을 사용해 해당 provider와 통신할 수 있습니다. Claude
+      statusLine 모니터링은 로컬로 유지되며, 제5.3조의 읽기 전용 호환 경로만
+      api.anthropic.com과 직접 통신합니다.
 
   5.6 로컬 보안
       귀하는 귀하의 로컬 기기 보안 및 그 위에 저장된 자격 증명의 보안에 대해

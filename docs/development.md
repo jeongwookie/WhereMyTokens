@@ -48,6 +48,7 @@ WhereMyTokens is an Electron tray app. The renderer never reads local files or c
 | Preload bridge | Exposes the typed `window.wmt` IPC surface with `contextIsolation` boundaries. |
 | React renderer | Shows the tray dashboard, settings, notifications, activity charts, and compact quota widget. |
 | `statusLine` bridge | Receives Claude Code JSON on stdin and writes a local bridge snapshot for the main process. |
+| Claude compatibility fetcher | Uses a fresh statusLine first; otherwise reads the existing Claude Code access token in the main process and sends a throttled, fixed-host quota request without refresh or credential writes. |
 
 ## Project Structure
 

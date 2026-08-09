@@ -115,12 +115,23 @@ The Software is designed with privacy as a core principle.
       Additionally, if you enable "Launch at login," the Software will
       register a standard Windows auto-start entry for the current user.
 
-  5.3 CLAUDE STATUSLINE DATA
-      When the optional Claude Code Integration is enabled, the Software
-      receives quota fields supplied locally to the registered statusLine
-      command. The Software stores only a minimized local quota snapshot.
-      It does not read or write Claude OAuth credentials and does not make
-      direct requests to an Anthropic usage endpoint.
+  5.3 CLAUDE QUOTA DATA
+      The Software prefers quota fields supplied locally to the registered
+      Claude Code statusLine command and stores only a minimized quota
+      snapshot. When no fresh statusLine quota is available, the Software
+      may load ~/.claude/.credentials.json and extract the existing access
+      token, rate-limit tier, and subscription type for a read-only
+      compatibility request to the fixed HTTPS host api.anthropic.com.
+
+      The compatibility path ignores the refresh-token property, never
+      refreshes credentials, and never writes the Claude credential file.
+      It sends no session logs, transcript paths, or raw statusLine payload.
+      It stores only a one-way access-token marker with cached compatibility
+      quota so data from a previous account is not reused after login changes.
+      A compatibility request may occur once on application launch and is
+      limited to one request per 15 minutes while that process remains
+      running. Credentials rejected by Anthropic are not retried in the same
+      process unless the access token changes.
 
   5.4 NO TELEMETRY, NO CLOUD SYNC
       The Software does not collect crash reports, usage statistics,
@@ -129,10 +140,11 @@ The Software is designed with privacy as a core principle.
       of the Software.
 
   5.5 THIRD-PARTY SERVICES
-      Optional non-Claude provider features may communicate with their
-      provider using the user's local credentials, as described in the
-      in-app help and privacy documentation. Claude quota monitoring under
-      Section 5.3 does not communicate directly with Anthropic.
+      Optional provider features may communicate with their provider using
+      the user's local credentials, as described in the in-app help and
+      privacy documentation. Claude statusLine monitoring remains local; the
+      read-only compatibility path described in Section 5.3 communicates
+      directly only with api.anthropic.com.
 
   5.6 LOCAL SECURITY
       You are solely responsible for the security of your local machine
