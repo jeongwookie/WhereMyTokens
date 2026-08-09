@@ -154,7 +154,10 @@ function normalizeQuotaTargetAbbreviationInput(value: string): string {
 
 function defaultQuotaTargetAbbreviation(provider: ProviderId, label: string): string {
   const normalizedLabel = label.trim().toLowerCase();
-  if (provider === 'claude') return normalizedLabel.includes('sonnet') ? 'S' : 'C';
+  if (provider === 'claude') {
+    if (normalizedLabel === 'claude') return 'C';
+    return label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? 'C';
+  }
   if (provider === 'codex') return 'CX';
   if (provider === 'antigravity') return shortQuotaLabelCode(label, 'AG');
   return label.toUpperCase().match(/[A-Z0-9]/)?.[0] ?? '?';

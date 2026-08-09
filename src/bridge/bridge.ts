@@ -1,31 +1,36 @@
-/**
- * WhereMyTokens stdin bridge
- * Claude Code statusLine plugin: receives JSON via stdin, writes to shared file
- *
- * Setup in ~/.claude/settings.json:
- *   { "statusLine": { "type": "command", "command": "node \"/path/to/bridge.js\"" } }
- */
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import {
+  MAX_CLAUDE_STATUS_LINE_BYTES,
+  writeClaudeStatusLineFile,
+} from './claudeStatusLineFile';
+import { performance } from 'node:perf_hooks';
 
-const outDir = path.join(os.homedir(), 'AppData', 'Roaming', 'WhereMyTokens');
-const outFile = path.join(outDir, 'live-session.json');
+const inputCapturedAtMs = performance.timeOrigin;
+let buffer = '';
+let inputBytes = 0;
+let tooLarge = false;
 
-try { fs.mkdirSync(outDir, { recursive: true }); } catch { /* ignore */ }
-
-let buf = '';
 process.stdin.setEncoding('utf-8');
-process.stdin.on('data', (chunk: string) => { buf += chunk; });
+process.stdin.on('data', (chunk: string) => {
+  inputBytes += Buffer.byteLength(chunk);
+  if (inputBytes > MAX_CLAUDE_STATUS_LINE_BYTES) {
+    tooLarge = true;
+    buffer = '';
+    return;
+  }
+  buffer += chunk;
+});
+
 process.stdin.on('end', () => {
-  try {
-    const data = JSON.parse(buf) as Record<string, unknown>;
-    fs.writeFileSync(outFile, JSON.stringify({ ...data, _ts: Date.now() }), 'utf-8');
-  } catch { /* invalid JSON — ignore */ }
-  // statusLine expects a line of text on stdout; empty = no display
+  if (!tooLarge) {
+    try {
+      writeClaudeStatusLineFile(JSON.parse(buffer) as unknown, undefined, inputCapturedAtMs);
+    } catch {
+      // 잘못된 statusLine 입력은 기존 스냅샷을 보존하고 무시한다.
+    }
+  }
   process.stdout.write('');
   process.exit(0);
 });
 
-// Timeout: if stdin never closes, exit after 5s
+// statusLine 프로세스가 열린 채로 남지 않게 제한한다.
 setTimeout(() => process.exit(0), 5000).unref();

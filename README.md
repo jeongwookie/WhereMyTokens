@@ -77,7 +77,7 @@ Japanese UI is built into the Windows app. It follows your system language by de
 1. Install with `WhereMyTokens-Setup.exe`, or extract the portable ZIP and run `WhereMyTokens.exe`.
 2. Open the dashboard from the Windows tray.
 3. Enable the providers you use: Claude Code, Codex, Antigravity, or any combination.
-4. Optional: enable **Claude Code Integration** to register the `statusLine` bridge for live Claude context and fallback quota data.
+4. Enable **Claude Code Integration** to register the official `statusLine` bridge for live Claude quota data.
 
 ## What's New
 
@@ -96,7 +96,7 @@ Japanese UI is built into the Windows app. It follows your system language by de
 - `provider checkboxes` for Claude Code, Codex, Antigravity, or any combination.
 - Provider adapters live under `src/main/providers/` and translate provider-reported limits into one canonical Quota Entry shape, separate from local token/cost usage.
 - Dynamic Claude Code, Codex, and Antigravity quota cards preserve provider scope, reset time, known-or-unknown duration, and explicit unlimited state. Missing limits are absent rather than synthesized as `Unlimited`.
-- Claude account limits come from the Anthropic usage response's top-level 5h/7d windows; scoped `limits[]` targets such as Fable remain independent regardless of their `is_active` marker and do not receive guessed local token/cost attribution.
+- Claude account limits come from the official Claude Code `statusLine` 5h/7d fields. A model-scoped target such as Fable appears only when Claude Code reports it locally; WhereMyTokens does not infer missing limits.
 - Optional draggable Windows taskbar mini display uses two physical lines for normalized 5h/7d entries. Two represented periods use one line each; a single represented period can use both lines, with configurable 1-3 blocks per line and compact `+N` hidden-target cues.
 - Built-in Japanese UI with a Settings → General → Language selector.
 - Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.
@@ -109,9 +109,9 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 ## Privacy
 
-WhereMyTokens reads local provider files and only calls provider usage endpoints for enabled providers. It does not upload session logs, run cloud sync, or ask you to paste API keys.
+WhereMyTokens reads local provider files and calls only the enabled providers that require a live usage request. It does not upload session logs, run cloud sync, or ask you to paste API keys.
 
-Claude quota polling uses the Claude Code CLI credential file at `~/.claude/.credentials.json`; Claude Desktop or browser login does not automatically refresh that local CLI credential.
+Claude quota monitoring is local-only: WhereMyTokens receives quota fields from Claude Code `statusLine`, stores only a minimized quota snapshot, and never reads, refreshes, or writes Claude OAuth credentials. A cached window expires at the earlier of its reported reset time and a 30-minute cache cap.
 
 Codex live usage and reset-credit checks use `~/.codex/auth.json` only for direct OpenAI/ChatGPT requests when Codex is enabled. Reset-credit cache stores counts, expiry times, fetch status, source labels, a hashed auth marker, and the auth file modified time.
 

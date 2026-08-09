@@ -116,12 +116,11 @@ macOS 用户请使用单独的公开仓库:
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
-- **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都会把 provider 报告的 limit 转成 `providerQuotas` 中的 canonical Quota Entry；Claude 使用 Anthropic usage 的 top-level 5h/7d account window 与 scoped `limits[]`，Codex 使用 live usage snapshot 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用运行中 IDE 的 127.0.0.1 local RPC model quota entry。未报告的 limit 不再合成为 `Unlimited`，而是保持缺席状态
+- **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都会把 provider 报告的 limit 转成 `providerQuotas` 中的 canonical Quota Entry；Claude 使用官方 `statusLine` 的 5h/7d 和本地实际报告的 `model_scoped` entry，Codex 使用 live usage snapshot 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用运行中 IDE 的 127.0.0.1 local RPC model quota entry。未报告的 limit 不再合成为 `Unlimited`，而是保持缺席状态
 - **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。Codex Resets target 仅用于 Plan Usage
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示使用节奏快于重置窗口
 - **Claude Code 桥接** — 注册为 `statusLine` 插件，无需 API 轮询即可获取实时数据
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
-- **Claude Extra Usage 预算** — Claude 月度额度使用量 / 限额 / 利用率
 
 ### 分析与活动
 - **标题栏统计** — today/all-time 切换：费用、API 调用、会话、缓存效率、节省金额、紧凑的 Claude/Codex 元数据，以及 provider 级 health/fallback 状态。`all` 的会话数来自完整使用历史
@@ -190,14 +189,14 @@ WhereMyTokens 是 local-first 的 Electron 托盘应用。renderer 不会直接�
 |--------|------|--------|------|
 | Claude 会话 | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | main process scanner 写入 UsageIndex，并发布 session projection | 否 |
 | Claude 桥接 | Claude Code `statusLine` stdin | `%APPDATA%\WhereMyTokens\live-session.json` | 否 |
-| Claude quota snapshot | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | 是，直接请求 Anthropic |
+| Claude quota snapshot | Claude Code `statusLine` stdin | 5h/7d 与可选 model-scoped quota snapshot | 否 |
 | Codex 会话 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner 写入 UsageIndex，并发布 session projection | 否 |
 | Codex quota snapshot 和 reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint 和 reset-credit endpoint | 是，直接请求 OpenAI/ChatGPT |
 | Antigravity 会话、模型 quota 和使用 metadata | `127.0.0.1` 上运行中的 Antigravity language server | main process local RPC client，然后进入 renderer state | 无外部网络 |
 | 聚合使用索引 | 本地 provider 用量来源 | `%APPDATA%\WhereMyTokens\usage-index.sqlite` | 否 |
 | Git 产出账本 | 本地 git 扫描 | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | 否 |
 
-速率限制优先级按 provider 区分，并统一组装进 `AppState.providerQuotas`：Claude 优先使用 Anthropic API，然后是 `statusLine` bridge 与 cache；Codex 的 5h/7d quota entry 优先使用 live usage，并可回退到 cache 与 JSONL 日志中的本地 `rate_limits` 事件；未报告的 Codex limit 不再合成为 `Unlimited`；Codex reset credit 优先使用 reset-credit endpoint，仅可回退到 auth-bound cache 或 live usage payload 中的 count-only 值；Antigravity 使用运行中 IDE language server 的 local RPC model quota 数据。API/Bridge/Cache/Log/Local RPC 标签由 renderer 根据 snapshot 的 `source` 派生，不再作为主界面的独立状态字段维护。Settings 将 provider 启用状态与 target 展示模式分开保存。`Providers` 控制扫描、quota 拉取、会话显示、统计和提醒范围；`Quota display` 保存每个 target 的 `Rich`、`Simple` 或 `None`，并影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。
+速率限制优先级按 provider 区分，并统一组装进 `AppState.providerQuotas`：Claude 使用最新 `statusLine` bridge snapshot；暂时没有新值时，最后可信 cache 会保留到报告的 reset 时间和 30 分钟 cache 上限中较早的时点。它不读取或刷新 Claude credentials，也不调用 Anthropic usage endpoint。Codex 的 5h/7d quota entry 优先使用 live usage，并可回退到 cache 与 JSONL 日志中的本地 `rate_limits` 事件；未报告的 Codex limit 不再合成为 `Unlimited`；Codex reset credit 优先使用 reset-credit endpoint，仅可回退到 auth-bound cache 或 live usage payload 中的 count-only 值；Antigravity 使用运行中 IDE language server 的 local RPC model quota 数据。API/Bridge/Cache/Log/Local RPC 标签由 renderer 根据 snapshot 的 `source` 派生。Settings 将 provider 启用状态与 target 展示模式分开保存。
 
 ---
 
@@ -209,7 +208,7 @@ WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账
 |----------|------|
 | `~/.claude/sessions/*.json` | Claude 会话元数据，例如 pid、cwd、模型。 |
 | `~/.claude/projects/**/*.jsonl` | 用于令牌数、费用、上下文和活动摘要的 Claude 对话日志。 |
-| `~/.claude/.credentials.json` | Claude OAuth 信息，仅用于 Anthropic 使用量请求和过期 access token refresh。 |
+| Claude Code `statusLine` stdin | 官方 5h/7d quota，以及 Claude Code 在本地提供的可选 model-scoped quota。 |
 | `~/.codex/sessions/**/*.jsonl` | 当前 Codex 会话日志，用于令牌、cached input、模型、rate-limit 事件和 tool 活动。 |
 | `~/.codex/archived_sessions/**/*.jsonl` | 纳入 all-time 使用量的 Codex 归档会话日志。 |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | 纳入 all-time 使用量的 Codex cleanup 归档日志。 |
@@ -222,9 +221,9 @@ WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账
 | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | 聚合后的每日 git 产出快照，供 Code Output 和 Trend 使用。 |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | 应用设置、本地缓存、通知历史和 bridge 状态。 |
 
-凭据处理范围刻意保持很窄。WhereMyTokens 读取官方 CLI 的本地 credential 文件，不要求粘贴 API key，不保存单独的 credential 备份，也会从状态输出中隐藏 credential 细节。如果 Claude access token 过期，应用可能通过 Anthropic refresh，并将更新后的 credentials 原子写回 `~/.claude/.credentials.json`。
+WhereMyTokens 不要求粘贴 API key，也不保存单独的 credential 备份。Claude monitoring 不读取或写入 Claude OAuth credentials；只有 Codex live usage 功能读取官方本地 Codex credential 文件。
 
-网络访问仅限已勾选启用 provider 的 usage endpoint 和本地 loopback。Claude usage polling 最多每 5 分钟执行一次，并带有 429 backoff。Codex live usage 与 reset-credit 查询使用 HTTPS-only request、timeout、响应大小限制、cache 和独立 backoff。Antigravity 只使用 loopback local RPC；不会使用 Google OAuth、refresh token、Google cloud usage endpoint 或离线数据库 fallback。本地 JSONL 解析、Antigravity local RPC 与 `statusLine` bridge 不会把会话内容发送到外部。
+Claude quota monitoring 不向 Anthropic 发起网络请求，只使用本地 `statusLine` 并保存最小化 quota 字段。Codex live usage 与 reset-credit 查询使用 HTTPS-only request、timeout、响应大小限制、cache 和独立 backoff。Antigravity 只使用 loopback local RPC；不会使用 Google OAuth、refresh token、Google cloud usage endpoint 或离线数据库 fallback。本地 JSONL 解析、Antigravity local RPC 与 `statusLine` bridge 不会把会话内容发送到外部。
 
 要禁用 Claude Code bridge，请打开 **Settings -> Claude Code Integration -> Disable**。应用只会在 `statusLine` entry 属于 WhereMyTokens bridge command 时移除它；不会覆盖或删除其他 custom `statusLine`。也可以手动删除 `~/.claude/settings.json` 中的 WhereMyTokens `statusLine` entry，然后重启 Claude Code。
 
@@ -234,7 +233,7 @@ WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账
 
 启动时，仪表板会先显示当前会话和最近用量。如果看到 `Partial History`，说明较早的历史仍在按 budgeted background slice 同步，这样托盘应用和 hotkey popup 可以保持响应。
 
-头部的小型 PiP 按钮可直接开关 Floating Quota Pace 小部件。头部状态 pill 会集中显示最重要的 provider/API 状态。常见标签包括 `Claude local`、`Claude partial`、`Claude refresh`、`Claude login`、`Claude limited`、`Claude offline`、`Antigravity unavailable` 和 `refresh failed`。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK`、`Antigravity OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
+头部的小型 PiP 按钮可直接开关 Floating Quota Pace 小部件。头部状态 pill 会集中显示最重要的 provider 状态。Claude 在没有最新 statusLine quota 时显示 waiting 或 cached。Quota Pace 小部件会分别显示 `Claude OK`、`Codex OK`、`Antigravity OK` 等 provider health 标签；把鼠标移到 pill 或标签上可以查看最新细节。
 
 ---
 
@@ -242,7 +241,7 @@ WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账
 
 ### Claude Code 桥接
 
-WhereMyTokens 可以通过 Claude Code 官方 `statusLine` 插件机制实时接收上下文、模型、费用和回退用的速率限制数据。使用 **Settings -> Claude Code Integration -> Setup** 注册桥接，或使用 **Disable** 移除 WhereMyTokens 拥有的 bridge entry。
+WhereMyTokens 通过 Claude Code 官方 `statusLine` 插件机制在本地接收 5h/7d 和可选 model-scoped quota。保存文件只包含 quota 与采集时间，不保存 session path、transcript 或完整 statusLine payload。使用 **Settings -> Claude Code Integration -> Setup** 注册桥接，或使用 **Disable** 移除 WhereMyTokens 拥有的 bridge entry。
 
 ### Codex 追踪
 

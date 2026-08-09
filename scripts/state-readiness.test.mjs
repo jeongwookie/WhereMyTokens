@@ -225,7 +225,7 @@ test('warmup mode marks Codex local-log limits as provisional and defers alerts'
   assert.match(widgetSource, /tone: 'good'/);
   assert.doesNotMatch(widgetSource, />--<\/span>/);
   assert.doesNotMatch(widgetSource, /bootPending = !state\.initialRefreshComplete/);
-  assert.match(stateSource, /API_MIN_INTERVAL_MS = 300_000/);
+  assert.match(stateSource, /CODEX_USAGE_MIN_INTERVAL_MS = 300_000/);
   assert.match(stateSource, /MANUAL_PROVIDER_USAGE_FORCE_MIN_INTERVAL_MS = 60_000/);
   assert.match(stateSource, /consumeManualProviderUsageForce/);
   assert.match(stateSource, /forceProviderUsage: this\.consumeManualProviderUsageForce\(\)/);

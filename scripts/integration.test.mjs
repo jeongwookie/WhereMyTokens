@@ -10,6 +10,7 @@ const {
   buildBridgeCommand,
   disableIntegration,
   getIntegrationStatus,
+  resolveBridgeScriptPath,
   setupIntegration,
 } = integration;
 
@@ -22,9 +23,29 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function tempBridgePath() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-integration-bridge-'));
+  const bridgeJs = path.join(dir, 'bridge.js');
+  fs.writeFileSync(bridgeJs, "process.stdout.write('');\n", 'utf8');
+  return bridgeJs;
+}
+
+test('bridge path resolves inside dist for development and resources when packaged', () => {
+  const appPath = path.join('C:', 'dev', 'WhereMyTokens');
+  const resourcesPath = path.join('C:', 'Program Files', 'WhereMyTokens', 'resources');
+  assert.equal(
+    resolveBridgeScriptPath(appPath, resourcesPath, false),
+    path.join(appPath, 'dist', 'bridge', 'bridge.js'),
+  );
+  assert.equal(
+    resolveBridgeScriptPath(appPath, resourcesPath, true),
+    path.join(resourcesPath, 'bridge', 'bridge.js'),
+  );
+});
+
 test('setup preserves existing non-statusLine settings', () => {
   const settingsPath = tempSettingsPath();
-  const bridgeJs = path.join(os.tmpdir(), 'WhereMyTokens', 'bridge', 'bridge.js');
+  const bridgeJs = tempBridgePath();
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, JSON.stringify({
     permissions: { allow: ['Read'] },
@@ -43,6 +64,18 @@ test('setup preserves existing non-statusLine settings', () => {
     type: 'command',
     command: buildBridgeCommand(bridgeJs),
   });
+});
+
+test('setup refuses a missing bridge without modifying settings', () => {
+  const settingsPath = tempSettingsPath();
+  const bridgeJs = path.join(os.tmpdir(), 'missing-wmt-bridge', 'bridge.js');
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify({ includeCoAuthoredBy: false }), 'utf8');
+
+  const result = setupIntegration(settingsPath, bridgeJs);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /could not be validated/);
+  assert.deepEqual(readJson(settingsPath), { includeCoAuthoredBy: false });
 });
 
 test('custom statusLine is not overwritten or deleted', () => {

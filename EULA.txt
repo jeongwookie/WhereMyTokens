@@ -98,7 +98,7 @@ The Software is designed with privacy as a core principle.
 
         - ~/.claude/sessions/*.json         (session metadata)
         - ~/.claude/projects/**/*.jsonl     (conversation logs)
-        - ~/.claude/.credentials.json       (OAuth token; see 5.3)
+        - Claude Code statusLine stdin       (local quota fields; see 5.3)
         - %APPDATA%\WhereMyTokens\*         (local app data, including
                                              live-session.json written by
                                              the optional statusLine
@@ -115,22 +115,12 @@ The Software is designed with privacy as a core principle.
       Additionally, if you enable "Launch at login," the Software will
       register a standard Windows auto-start entry for the current user.
 
-  5.3 ANTHROPIC API REQUESTS
-      If Anthropic credentials are present on your system in the location
-      referenced above, and you have not disabled rate-limit polling, the
-      Software makes periodic HTTPS requests to Anthropic's usage API
-      endpoint on your behalf using your own credentials, to retrieve
-      your own rate-limit information. These requests are functionally
-      equivalent to requests you would make yourself by logging into the
-      Anthropic Console.
-
-      You are solely responsible for ensuring that your use of the
-      Software in combination with your Anthropic credentials complies
-      with Anthropic's applicable terms of service, usage policies, and
-      rate limits. The Author is not a party to any agreement between
-      you and Anthropic and accepts no responsibility for any
-      consequences arising from such use, including but not limited to
-      account suspension, throttling, or termination.
+  5.3 CLAUDE STATUSLINE DATA
+      When the optional Claude Code Integration is enabled, the Software
+      receives quota fields supplied locally to the registered statusLine
+      command. The Software stores only a minimized local quota snapshot.
+      It does not read or write Claude OAuth credentials and does not make
+      direct requests to an Anthropic usage endpoint.
 
   5.4 NO TELEMETRY, NO CLOUD SYNC
       The Software does not collect crash reports, usage statistics,
@@ -139,9 +129,10 @@ The Software is designed with privacy as a core principle.
       of the Software.
 
   5.5 THIRD-PARTY SERVICES
-      The Software does not communicate with any third-party services
-      other than Anthropic's own API using your own credentials as
-      described in Section 5.3.
+      Optional non-Claude provider features may communicate with their
+      provider using the user's local credentials, as described in the
+      in-app help and privacy documentation. Claude quota monitoring under
+      Section 5.3 does not communicate directly with Anthropic.
 
   5.6 LOCAL SECURITY
       You are solely responsible for the security of your local machine

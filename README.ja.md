@@ -119,12 +119,11 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **ツール使用バー** — 比例色分けバー + ツールチップ（Bash、Edit、Read など）
 
 ### レート制限 & アラート
-- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は Anthropic usage の top-level 5h/7d account window と scoped `limits[]`、Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
+- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は公式 `statusLine` の 5h/7d とローカルで実際に報告された `model_scoped` entry、Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
 - **Target 別 quota 表示** — 各 canonical quota target は Settings で Rich、Simple、非表示にでき、Plan Usage、Floating widget、taskbar mini の表示順と表示対象に反映されます。Taskbar mini は正規化された 5h/7d entry を 2 本の physical line に配置し、line ごとに 1-3 個のブロック制限と非表示 target の `+N` 表示をサポートします。prefix の色は quota severity ではなく live/cache/log などのデータ source/status を表します。Codex Resets target は Plan Usage 専用です
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` プラグインで API ポーリングなしのリアルタイムデータ受信
 - **Windows トースト通知** — 使用量しきい値（50% / 80% / 90%）でアラート
-- **Claude Extra Usage 予算** — Claude 月間クレジット使用量 / 上限 / 利用率
 
 ### 分析 & アクティビティ
 - **ヘッダー統計** — today/all-time 切替: コスト、API 呼び出し、セッション、キャッシュ効率、節約額、コンパクトな provider メタデータ、provider ごとの health/fallback 状態。`all` のセッション数は全使用履歴に基づきます
@@ -192,12 +191,12 @@ WhereMyTokens は local-first の Electron トレイアプリです。renderer �
 |--------------|--------|------|--------------|
 | Claude セッション | `~/.claude/sessions/*.json`, `~/.claude/projects/**/*.jsonl` | main process scanner が UsageIndex に書き込み、session projection を公開 | なし |
 | Claude ブリッジ | Claude Code `statusLine` stdin | `%APPDATA%\WhereMyTokens\live-session.json` | なし |
-| Claude 使用量制限 | `~/.claude/.credentials.json` OAuth token | Anthropic `/api/oauth/usage` | あり、Anthropic へ直接 |
+| Claude 使用量制限 | Claude Code `statusLine` stdin | 5h/7d と任意の model-scoped quota snapshot | なし |
 | Codex セッション | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner が UsageIndex に書き込み、session projection を公開 | なし |
 | Codex 使用量制限と reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint と reset-credit endpoint | あり、OpenAI/ChatGPT へ直接 |
 | Antigravity セッション/quota | 実行中の Antigravity language server | 127.0.0.1 local RPC、その後 renderer state | なし |
 
-Quota の優先順位は provider ごとに異なります。Claude は Anthropic API を第 1 ソースにし、`statusLine` bridge をフォールバックにします。Codex の 5h/7d quota entry は live usage を優先し、cache/JSONL ログ内のローカル `rate_limits` イベントへフォールバックできます。報告されない Codex limit は `Unlimited` として合成しません。Codex reset credit は reset-credit endpoint を優先し、auth-bound cache または live usage payload の count-only 値にだけフォールバックします。Antigravity は実行中の IDE の 127.0.0.1 local RPC だけを使い、最後の成功値は stale になるまでだけ保持します。
+Quota の優先順位は provider ごとに異なります。Claude は最新の `statusLine` bridge snapshot を使い、新しい値が一時的にない場合は報告された reset 時刻と 30 分の cache 上限のうち早い時点まで、最後に信頼した cache を表示します。Claude credentials の読み取りや更新、Anthropic usage endpoint の呼び出しは行いません。Codex の 5h/7d quota entry は live usage を優先し、cache/JSONL ログ内のローカル `rate_limits` イベントへフォールバックできます。報告されない Codex limit は `Unlimited` として合成しません。Codex reset credit は reset-credit endpoint を優先し、auth-bound cache または live usage payload の count-only 値にだけフォールバックします。Antigravity は実行中の IDE の 127.0.0.1 local RPC だけを使います。
 
 ---
 
@@ -209,7 +208,7 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 |--------------|------|
 | `~/.claude/sessions/*.json` | pid、cwd、モデルなどの Claude セッションメタデータ。 |
 | `~/.claude/projects/**/*.jsonl` | トークン数、コスト、コンテキスト、活動サマリー計算用の Claude 会話ログ。 |
-| `~/.claude/.credentials.json` | Anthropic 使用量取得と期限切れ access token refresh にだけ使う Claude OAuth 情報。 |
+| Claude Code `statusLine` stdin | 公式 5h/7d quota と Claude Code がローカルで提供する任意の model-scoped quota。 |
 | `~/.codex/sessions/**/*.jsonl` | 現在の Codex セッションログ。トークン、cached input、モデル、rate-limit イベント、tool 活動計算に使用します。 |
 | `~/.codex/archived_sessions/**/*.jsonl` | All-time 使用量に含める Codex アーカイブ済みセッションログ。 |
 | `~/.codex/session-cleanup-archive/**/*.jsonl` | All-time 使用量に含める Codex cleanup アーカイブログ。 |
@@ -221,9 +220,9 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 | `%APPDATA%\WhereMyTokens\usage-index.sqlite` | incremental checkpoint、長期合計、trend bucket、heatmap に使うローカル usage index。 |
 | Electron app data (`%APPDATA%\WhereMyTokens`) | アプリ設定、ローカルキャッシュ、通知履歴、bridge 状態。 |
 
-認証情報の扱いは狭く限定されています。WhereMyTokens は公式 CLI のローカル credential ファイルを読み取り、API key の貼り付けを求めず、別の credential バックアップを保存しません。Claude access token が期限切れの場合は Anthropic で refresh し、更新された credentials を `~/.claude/.credentials.json` に原子的に書き戻すことがあります。
+WhereMyTokens は API key の貼り付けを求めず、別の credential バックアップも保存しません。Claude monitoring は Claude OAuth credentials を読み書きせず、Codex live usage 機能だけが公式のローカル Codex credential file を読み取ります。
 
-ネットワークアクセスは有効にした provider チェックボックスの usage endpoint とローカル loopback に限定されます。Claude usage polling は最大 5 分ごとに実行し、429 backoff を適用します。Codex live usage と reset-credit check は HTTPS-only request、timeout、レスポンスサイズ制限、cache、個別 backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。ローカル JSONL 解析、Antigravity local RPC、`statusLine` bridge はセッション内容を外部へ送信しません。
+Claude quota monitoring は Anthropic network request を行わず、ローカル `statusLine` と最小限の quota field だけを使います。Codex live usage と reset-credit check は HTTPS-only request、timeout、レスポンスサイズ制限、cache、個別 backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。ローカル JSONL 解析、Antigravity local RPC、`statusLine` bridge はセッション内容を外部へ送信しません。
 
 Claude Code bridge を無効化するには **Settings -> Claude Code Integration -> Disable** を押します。アプリは WhereMyTokens bridge command が所有する `statusLine` entry だけを削除し、他の custom `statusLine` を上書きまたは削除しません。手動では `~/.claude/settings.json` から WhereMyTokens の `statusLine` entry を削除し、Claude Code を再起動してください。
 
@@ -233,7 +232,7 @@ Claude Code bridge を無効化するには **Settings -> Claude Code Integratio
 
 起動直後は現在のセッションと最近の使用量を先に表示します。`Partial History` が見える場合は、古い履歴を budgeted background slice で同期している途中で、トレイアプリと hotkey popup の応答性を保つための動作です。
 
-ヘッダーの小さな PiP ボタンで Floating Quota Pace ウィジェットを直接オン/オフできます。ヘッダーのステータス pill は provider/API の重要な状態を 1 か所にまとめます。代表的なラベルは `Claude local`、`Claude partial`、`Claude refresh`、`Claude login`、`Claude limited`、`Claude offline`、`refresh failed` です。Quota Pace ウィジェットは `Claude OK`、`Codex OK`、`Antigravity OK` のように provider 別の health チップを表示し、pill やチップにホバーすると最新の詳細を確認できます。
+ヘッダーの小さな PiP ボタンで Floating Quota Pace ウィジェットを直接オン/オフできます。ヘッダーのステータス pill は provider の重要な状態を 1 か所にまとめます。Claude は最新の statusLine quota がない場合に waiting または cached 状態を表示します。Quota Pace ウィジェットは `Claude OK`、`Codex OK`、`Antigravity OK` のように provider 別の health チップを表示し、pill やチップにホバーすると最新の詳細を確認できます。
 
 ---
 
@@ -241,7 +240,7 @@ Claude Code bridge を無効化するには **Settings -> Claude Code Integratio
 
 ### Claude Code ブリッジ
 
-WhereMyTokens は Claude Code の公式 `statusLine` プラグインメカニズムを通じて、コンテキスト、モデル、コスト、フォールバック用レート制限データをリアルタイムで受信できます。**Settings -> Claude Code Integration -> Setup** で登録し、**Disable** で WhereMyTokens が所有する bridge entry を削除します。
+WhereMyTokens は Claude Code の公式 `statusLine` プラグインメカニズムを通じて、5h/7d と任意の model-scoped quota をローカルで受信します。保存ファイルには quota と取得時刻だけを残し、session path、transcript、statusLine payload 全体は保存しません。**Settings -> Claude Code Integration -> Setup** で登録し、**Disable** で WhereMyTokens が所有する bridge entry を削除します。
 
 ### Codex 追跡
 

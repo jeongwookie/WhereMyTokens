@@ -10,6 +10,7 @@ import type { BucketBreakdown } from '../shared/breakdownTypes';
 import {
   disableIntegration,
   getIntegrationStatus,
+  resolveBridgeScriptPath,
   setupIntegration,
 } from './integration';
 import type { ProviderId } from '../shared/quotaTypes';
@@ -326,7 +327,7 @@ function claudeSettingsPath(): string {
 }
 
 function bridgeScriptPath(): string {
-  return path.join(app.getAppPath(), '..', 'bridge', 'bridge.js');
+  return resolveBridgeScriptPath(app.getAppPath(), process.resourcesPath, app.isPackaged);
 }
 
 export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {

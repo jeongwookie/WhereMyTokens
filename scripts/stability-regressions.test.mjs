@@ -5,16 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import stateManagerModule from '../dist/main/stateManager.js';
-import rateLimitFetcherModule from '../dist/main/rateLimitFetcher.js';
 import codexUsageFetcherModule from '../dist/main/codexUsageFetcher.js';
-import oauthRefreshModule from '../dist/main/oauthRefresh.js';
 import quotaDomainModule from '../dist/shared/quotaDomain.js';
 
 const { StateManager } = stateManagerModule;
-const { CLAUDE_API_MAX_BACKOFF_MS } = rateLimitFetcherModule;
 const { getCodexAuthIdentityHash } = codexUsageFetcherModule;
 const { ageProviderQuotaSnapshot, validateProviderQuotaSnapshot } = quotaDomainModule;
-const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 const originalCodexHome = process.env.CODEX_HOME;
 const tempDirs = [];
 
@@ -68,11 +64,10 @@ function entry(provider, period, usedPct, now, overrides = {}) {
 function claudeSnapshot(now, entries, overrides = {}) {
   return {
     provider: 'claude',
-    source: 'api',
+    source: 'statusLine',
     capturedAt: now,
     entries,
     status: { connected: true, code: 'ok', label: '', detail: '' },
-    credentialMarker: oauthRefreshModule.getOAuthCredentialMarker(),
     ...overrides,
   };
 }
@@ -93,16 +88,6 @@ function codexSnapshot(now, entries, auth, overrides = {}) {
   };
 }
 
-function withTempClaudeCredentials(token = 'claude-token') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-stability-'));
-  tempDirs.push(dir);
-  fs.writeFileSync(path.join(dir, '.credentials.json'), JSON.stringify({
-    claudeAiOauth: { accessToken: token, rateLimitTier: 'max_5x', subscriptionType: 'max' },
-  }));
-  process.env.CLAUDE_CONFIG_DIR = dir;
-  return dir;
-}
-
 function withTempCodexAuth(token = 'codex-token') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-codex-stability-'));
   tempDirs.push(dir);
@@ -117,8 +102,7 @@ function withTempCodexAuth(token = 'codex-token') {
 }
 
 function applyClaude(manager, snapshot, startedAt = snapshot.capturedAt) {
-  const seq = (manager.apiRequestSeq ?? 0) + 1;
-  manager.apiRequestSeq = seq;
+  const seq = (manager.providerQuotaRequestSeqs.get('claude') ?? 0) + 1;
   manager.providerQuotaRequestSeqs.set('claude', seq);
   return manager.applyProviderQuotaSnapshot(snapshot, seq, startedAt);
 }
@@ -131,14 +115,12 @@ function applyCodex(manager, snapshot, startedAt = snapshot.capturedAt) {
 }
 
 test.afterEach(() => {
-  if (originalClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-  else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
   if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
   else process.env.CODEX_HOME = originalCodexHome;
   for (const dir of tempDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('canonical aging expires entries independently without source mixing', () => {
+test('canonical aging expires Claude entries independently without source mixing', () => {
   const now = Date.now();
   const snapshot = claudeSnapshot(now - 1_000, [
     entry('claude', '5h', 31, now, { resetsAt: now - 1 }),
@@ -146,7 +128,7 @@ test('canonical aging expires entries independently without source mixing', () =
   ]);
   const aged = ageProviderQuotaSnapshot(snapshot, now);
   assert.deepEqual(aged.entries.map(item => item.key), ['claude.account.7d']);
-  assert.equal(aged.source, 'api');
+  assert.equal(aged.source, 'statusLine');
 });
 
 test('canonical validator rejects old window shape and strips private fields', () => {
@@ -163,15 +145,12 @@ test('canonical validator rejects old window shape and strips private fields', (
   assert.equal('credentialMarker' in valid, false);
 });
 
-test('Claude canonical cache hydrates once and ages individual entries', () => {
-  withTempClaudeCredentials();
+test('Claude statusLine cache hydrates once and ages individual entries', () => {
   const now = Date.now();
-  const marker = oauthRefreshModule.getOAuthCredentialMarker();
   const store = makeStore({
     enabledProviders: ['claude'],
     _cachedClaudeQuota: {
-      schemaVersion: 1,
-      credentialMarker: marker,
+      schemaVersion: 2,
       snapshot: claudeSnapshot(now - 1_000, [
         entry('claude', '5h', 14, now, { resetsAt: now - 1 }),
         entry('claude', '7d', 28, now, { resetsAt: now + 60_000 }),
@@ -183,17 +162,32 @@ test('Claude canonical cache hydrates once and ages individual entries', () => {
   assert.deepEqual(quota.entries.map(item => item.key), ['claude.account.7d']);
   assert.equal(quota.entries[0].usedPct, 28);
   assert.equal(quota.source, 'cache');
+  assert.deepEqual(store.values._cachedClaudeQuota.snapshot.entries.map(item => item.key), ['claude.account.7d']);
 });
 
-test('Claude legacy cache is retired and credential mismatch discards canonical cache', () => {
-  withTempClaudeCredentials();
+test('Claude statusLine cache is deleted on startup after every entry expires', () => {
+  const now = Date.now();
+  const store = makeStore({
+    enabledProviders: ['claude'],
+    _cachedClaudeQuota: {
+      schemaVersion: 2,
+      snapshot: claudeSnapshot(now - 60_000, [
+        entry('claude', '5h', 14, now, { resetsAt: now - 1 }),
+      ]),
+    },
+  });
+  const manager = new StateManager(store, () => {});
+  assert.equal('_cachedClaudeQuota' in store.values, false);
+  assert.deepEqual(manager.buildProviderQuotas(now).claude.entries, []);
+});
+
+test('Claude legacy API cache is retired', () => {
   const now = Date.now();
   const store = makeStore({
     enabledProviders: ['claude'],
     _cachedApiPct: { schemaVersion: 2, h5Pct: 77 },
     _cachedClaudeQuota: {
       schemaVersion: 1,
-      credentialMarker: 'different-credential',
       snapshot: claudeSnapshot(now, [entry('claude', '5h', 77, now)]),
     },
   });
@@ -203,8 +197,7 @@ test('Claude legacy cache is retired and credential mismatch discards canonical 
   assert.equal(manager.buildProviderQuotas(now).claude.entries.length, 0);
 });
 
-test('Claude failed refresh keeps the last whole trusted snapshot without rewriting it', () => {
-  withTempClaudeCredentials();
+test('Claude waiting refresh keeps the last whole trusted statusLine snapshot', () => {
   const now = Date.now();
   const store = makeStore({ enabledProviders: ['claude'] });
   const manager = new StateManager(store, () => {});
@@ -214,19 +207,18 @@ test('Claude failed refresh keeps the last whole trusted snapshot without rewrit
   ]));
   const persisted = store.values._cachedClaudeQuota;
   applyClaude(manager, claudeSnapshot(now + 1, [], {
-    status: { connected: false, code: 'rate-limited', label: 'rate limited', detail: 'slow', retryAfterMs: 90_000 },
+    source: 'cache',
+    status: { connected: false, code: 'bridge-unavailable', label: 'waiting for Claude', detail: 'waiting' },
   }), now + 1);
   assert.equal(store.values._cachedClaudeQuota, persisted);
   assert.deepEqual(manager.buildProviderQuotas(now + 1).claude.entries.map(item => item.usedPct), [33, 44]);
-  assert.equal(manager.apiBackoffMs, 90_000);
+  assert.equal(manager.buildProviderQuotas(now + 1).claude.source, 'cache');
 });
 
-test('Claude Retry-After is capped and a newer request generation wins', () => {
-  withTempClaudeCredentials();
+test('Claude quota request generation rejects older snapshots', () => {
   const now = Date.now();
   const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
-  const oldSeq = (manager.apiRequestSeq ?? 0) + 1;
-  manager.apiRequestSeq = oldSeq;
+  const oldSeq = 1;
   manager.providerQuotaRequestSeqs.set('claude', oldSeq);
   const newSnapshot = claudeSnapshot(now + 2, [entry('claude', '5h', 82, now + 2)]);
   applyClaude(manager, newSnapshot, now + 2);
@@ -236,11 +228,42 @@ test('Claude Retry-After is capped and a newer request generation wins', () => {
     now,
   ), false);
   assert.equal(manager.buildProviderQuotas(now + 3).claude.entries[0].usedPct, 82);
+});
 
-  applyClaude(manager, claudeSnapshot(now + 4, [], {
-    status: { connected: false, code: 'rate-limited', label: 'rate limited', detail: 'slow', retryAfterMs: CLAUDE_API_MAX_BACKOFF_MS * 2 },
-  }), now + 4);
-  assert.equal(manager.apiBackoffMs, CLAUDE_API_MAX_BACKOFF_MS);
+test('newer Claude statusLine data immediately outranks an older refresh snapshot', () => {
+  const now = Date.now();
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  applyClaude(manager, claudeSnapshot(now, [entry('claude', '5h', 12, now)]));
+  manager.liveSession = {
+    schemaVersion: 1,
+    capturedAt: now + 100,
+    rateLimits: {
+      fiveHour: { usedPct: 87, resetsAtMs: now + 60_000 },
+      modelScoped: [],
+    },
+  };
+  assert.equal(manager.buildProviderQuotas(now + 101).claude.entries[0].usedPct, 87);
+});
+
+test('Claude in-memory refresh snapshot becomes visibly cached after five minutes', () => {
+  const now = Date.now();
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  applyClaude(manager, claudeSnapshot(now, [entry('claude', '7d', 48, now)]));
+  const quota = manager.buildProviderQuotas(now + 5 * 60_000);
+  assert.equal(quota.claude.entries[0].usedPct, 48);
+  assert.equal(quota.claude.source, 'cache');
+  assert.equal(quota.claude.status.connected, false);
+  assert.equal(quota.claude.status.code, 'bridge-stale');
+});
+
+test('Claude in-memory attempt expires at reset instead of bypassing aging', () => {
+  const now = Date.now();
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  applyClaude(manager, claudeSnapshot(now, [
+    entry('claude', '5h', 82, now, { resetsAt: now + 10 }),
+  ]));
+  assert.equal(manager.buildProviderQuotas(now + 5).claude.entries.length, 1);
+  assert.deepEqual(manager.buildProviderQuotas(now + 11).claude.entries, []);
 });
 
 test('Codex canonical cache hydrates only for the current auth identity', () => {

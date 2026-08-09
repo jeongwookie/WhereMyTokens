@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 
 export type IntegrationOwner = 'wmt' | 'other' | 'none';
 
@@ -44,6 +45,16 @@ export function buildBridgeCommand(bridgeJs: string): string {
   return `node "${bridgeJs.replace(/\\/g, '\\\\')}"`;
 }
 
+export function resolveBridgeScriptPath(
+  appPath: string,
+  resourcesPath: string,
+  isPackaged: boolean,
+): string {
+  return isPackaged
+    ? path.join(resourcesPath, 'bridge', 'bridge.js')
+    : path.join(appPath, 'dist', 'bridge', 'bridge.js');
+}
+
 export function isWhereMyTokensBridgeCommand(command: string, bridgeJs: string): boolean {
   const normalizedCommand = normalizeCommand(command);
   const expectedCommand = normalizeCommand(buildBridgeCommand(bridgeJs));
@@ -82,6 +93,21 @@ export function setupIntegration(settingsPath: string, bridgeJs: string): Integr
         ok: false,
         ...current,
         error: 'Another statusLine command is already configured. Remove it before setting up WhereMyTokens.',
+      };
+    }
+
+    const check = spawnSync('node', ['--check', bridgeJs], {
+      windowsHide: true,
+      encoding: 'utf8',
+      timeout: 5_000,
+    });
+    if (check.error || check.status !== 0) {
+      return {
+        ok: false,
+        configured: current.configured,
+        owner: current.owner,
+        command: current.command,
+        error: 'The Claude statusLine bridge could not be validated. Check that Node.js and the bridge file are available.',
       };
     }
 
