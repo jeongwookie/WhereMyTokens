@@ -12,6 +12,7 @@ const {
   __setClaudeCompatibilityHttpForTest,
   claudeCompatibilityUsageUrlForTest,
   fetchClaudeCompatibilityUsage,
+  invalidateClaudeCompatibilityUsageCache,
   parseClaudeCompatibilityUsage,
 } = compatibilityModule;
 
@@ -19,7 +20,7 @@ const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/quota/claude-limi
 const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 const tempDirs = [];
 
-function useCredentials(accessToken = 'access-a') {
+function useCredentials(accessToken = 'access-a', expiresAt = undefined) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-readonly-'));
   tempDirs.push(dir);
   process.env.CLAUDE_CONFIG_DIR = dir;
@@ -30,6 +31,7 @@ function useCredentials(accessToken = 'access-a') {
       refreshToken: 'unused',
       rateLimitTier: 'default_claude_max_5x',
       subscriptionType: 'max',
+      ...(expiresAt === undefined ? {} : { expiresAt }),
     },
   }, null, 2));
   return filePath;
@@ -93,6 +95,49 @@ test('compatibility fetch is read-only and throttles successful requests for 15 
   assert.equal(fs.readFileSync(filePath, 'utf8'), before);
   assert.equal(fs.statSync(filePath).mtimeMs, beforeMtime);
   assert.equal(claudeCompatibilityUsageUrlForTest(), 'https://api.anthropic.com/api/oauth/usage');
+});
+
+test('expired credential metadata requires official login without network access or file writes', async () => {
+  const now = Date.now();
+  const filePath = useCredentials('expired-metadata', now - 1);
+  const before = fs.readFileSync(filePath, 'utf8');
+  const beforeMtime = fs.statSync(filePath).mtimeMs;
+  let calls = 0;
+  __setClaudeCompatibilityHttpForTest(async () => {
+    calls += 1;
+    return { status: 200, body: JSON.stringify(fixture), headers: {} };
+  });
+
+  const expired = await fetchClaudeCompatibilityUsage({ nowMs: now });
+  const stillExpired = await fetchClaudeCompatibilityUsage({ nowMs: now + 60_000 });
+
+  assert.equal(expired.status.code, 'credentials-expired');
+  assert.equal(stillExpired.status.code, 'credentials-expired');
+  assert.equal(calls, 0);
+  assert.equal(fs.readFileSync(filePath, 'utf8'), before);
+  assert.equal(fs.statSync(filePath).mtimeMs, beforeMtime);
+});
+
+test('credential-file invalidation retries when login renews metadata without rotating the access token', async () => {
+  const now = Date.now();
+  const filePath = useCredentials('same-access-token', now - 1);
+  let calls = 0;
+  __setClaudeCompatibilityHttpForTest(async () => {
+    calls += 1;
+    return { status: 200, body: JSON.stringify(fixture), headers: {} };
+  });
+
+  const expired = await fetchClaudeCompatibilityUsage({ nowMs: now });
+  const credentials = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  credentials.claudeAiOauth.expiresAt = now + 60 * 60_000;
+  fs.writeFileSync(filePath, JSON.stringify(credentials, null, 2));
+  invalidateClaudeCompatibilityUsageCache();
+  const recovered = await fetchClaudeCompatibilityUsage({ nowMs: now + 1 });
+
+  assert.equal(expired.status.code, 'credentials-expired');
+  assert.equal(recovered.status.code, 'compatibility-api');
+  assert.equal(calls, 1);
+  assert.equal(JSON.parse(fs.readFileSync(filePath, 'utf8')).claudeAiOauth.refreshToken, 'unused');
 });
 
 test('auth failure backs off, while a changed access token retries without reading refresh state', async () => {

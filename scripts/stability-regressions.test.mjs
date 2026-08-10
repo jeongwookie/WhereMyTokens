@@ -253,6 +253,63 @@ test('Claude compatibility cache is bound to the current access token', () => {
   assert.deepEqual(mismatchedManager.buildProviderQuotas(now).claude.entries, []);
 });
 
+test('persisted Claude login-required cache stays bound to the rejected credential', () => {
+  const auth = withTempClaudeAuth('expired-account-a');
+  const now = Date.now();
+  const store = makeStore({ enabledProviders: ['claude'] });
+  const manager = new StateManager(store, () => {});
+  const snapshot = buildClaudeCompatibilityQuota({
+    sevenDay: { usedPct: 57, resetsAtMs: now + 60_000 },
+    modelScoped: [],
+    planName: 'Max',
+    extraUsage: null,
+  }, now, now, auth.authMarker);
+  snapshot.source = 'cache';
+  snapshot.status = {
+    connected: false,
+    code: 'credentials-expired',
+    label: 'Claude login required',
+    detail: 'Continue in the official Claude Code login.',
+    severity: 'danger',
+  };
+
+  manager.persistClaudeQuotaSnapshot(snapshot);
+  assert.equal(store.values._cachedClaudeQuota.authMarker, auth.authMarker);
+
+  fs.writeFileSync(auth.filePath, JSON.stringify({
+    claudeAiOauth: { accessToken: 'expired-account-b', refreshToken: 'unused' },
+  }));
+  const reloaded = new StateManager(store, () => {});
+  assert.equal('_cachedClaudeQuota' in store.values, false);
+  assert.deepEqual(reloaded.buildProviderQuotas(now).claude.entries, []);
+});
+
+test('Claude credential watcher catches a first login after the config directory appears', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-claude-watch-'));
+  tempDirs.push(root);
+  const configDir = path.join(root, '.claude');
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  let observed = false;
+  manager.scheduleClaudeCredentialRefresh = () => { observed = true; };
+  manager.startWatcher('test:first-login', 'recent');
+  try {
+    await new Promise(resolve => setTimeout(resolve, 300));
+    fs.mkdirSync(configDir);
+    fs.writeFileSync(path.join(configDir, '.credentials.json'), JSON.stringify({
+      claudeAiOauth: { accessToken: 'first-login', refreshToken: 'untouched' },
+    }));
+    const deadline = Date.now() + 2_000;
+    while (!observed && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+
+    assert.equal(observed, true);
+  } finally {
+    manager.stop();
+  }
+});
+
 test('Claude compatibility response is rejected if credentials change in flight', () => {
   const auth = withTempClaudeAuth('request-a');
   const now = Date.now();
@@ -336,6 +393,39 @@ test('newer Claude statusLine data immediately outranks an older refresh snapsho
     },
   };
   assert.equal(manager.buildProviderQuotas(now + 101).claude.entries[0].usedPct, 87);
+});
+
+test('Claude login failure outranks stale cached statusLine entries without discarding them', () => {
+  const auth = withTempClaudeAuth();
+  const now = Date.now();
+  const manager = new StateManager(makeStore({ enabledProviders: ['claude'] }), () => {});
+  manager.providerQuotaSnapshots.set('claude', {
+    provider: 'claude',
+    source: 'cache',
+    capturedAt: now,
+    entries: [entry('claude', '5h', 64, now)],
+    status: {
+      connected: false,
+      code: 'credentials-expired',
+      label: 'Claude login required',
+      detail: 'Continue in the official Claude Code login.',
+      severity: 'danger',
+    },
+  });
+  manager.claudeQuotaAttemptAuthMarker = auth.authMarker;
+  manager.liveSession = {
+    schemaVersion: 1,
+    capturedAt: now - 10 * 60_000,
+    rateLimits: {
+      fiveHour: { usedPct: 64, resetsAtMs: now + 60_000 },
+      modelScoped: [],
+    },
+  };
+
+  const quota = manager.buildProviderQuotas(now + 1).claude;
+  assert.equal(quota.status.code, 'credentials-expired');
+  assert.equal(quota.status.severity, 'danger');
+  assert.deepEqual(quota.entries.map(item => item.usedPct), [64]);
 });
 
 test('fresh statusLine stays ahead of a newer compatibility snapshot', () => {

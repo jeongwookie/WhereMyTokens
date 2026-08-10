@@ -19,6 +19,7 @@ const REQUEST_TIMEOUT_MS = 8_000;
 export type ClaudeCompatibilityStatusCode =
   | 'compatibility-api'
   | 'no-credentials'
+  | 'credentials-expired'
   | 'timeout'
   | 'network'
   | 'unauthorized'
@@ -63,6 +64,7 @@ interface ClaudeCredentials {
   accessToken: string;
   marker: string;
   planName: string;
+  expiresAtMs: number | null;
 }
 
 interface UsageHttpResponse {
@@ -174,7 +176,7 @@ export function parseClaudeCompatibilityUsage(
   };
 }
 
-function credentialsPath(): string {
+export function claudeCompatibilityCredentialsPath(): string {
   const configured = process.env.CLAUDE_CONFIG_DIR;
   const directory = configured && configured.trim() ? configured.trim() : path.join(os.homedir(), '.claude');
   return path.join(directory, '.credentials.json');
@@ -192,17 +194,19 @@ function planFromCredentials(rateLimitTier: string, subscriptionType: string): s
 
 function readCredentials(): ClaudeCredentials | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(credentialsPath(), 'utf8')) as unknown;
+    const raw = JSON.parse(fs.readFileSync(claudeCompatibilityCredentialsPath(), 'utf8')) as unknown;
     const oauth = asRecord(asRecord(raw)?.claudeAiOauth);
     const accessToken = typeof oauth?.accessToken === 'string' ? oauth.accessToken : '';
     if (!accessToken) return null;
     const rateLimitTier = typeof oauth?.rateLimitTier === 'string' ? oauth.rateLimitTier : '';
     const subscriptionType = typeof oauth?.subscriptionType === 'string' ? oauth.subscriptionType : '';
+    const expiresAt = finiteNumber(oauth?.expiresAt);
     const digest = crypto.createHash('sha256').update(accessToken).digest('hex').slice(0, 16);
     return {
       accessToken,
       marker: digest,
       planName: planFromCredentials(rateLimitTier, subscriptionType),
+      expiresAtMs: expiresAt != null && expiresAt > 0 ? expiresAt : null,
     };
   } catch {
     return null;
@@ -263,8 +267,12 @@ export function __setClaudeCompatibilityHttpForTest(impl: UsageHttpGet | null): 
   httpsGetImpl = impl ?? httpsGet;
 }
 
-export function __resetClaudeCompatibilityStateForTest(): void {
+export function invalidateClaudeCompatibilityUsageCache(): void {
   cachedResult = null;
+}
+
+export function __resetClaudeCompatibilityStateForTest(): void {
+  invalidateClaudeCompatibilityUsageCache();
 }
 
 function status(
@@ -294,8 +302,8 @@ function failureFromResponse(response: UsageHttpResponse, nowMs: number): Claude
     return status(
       'unauthorized',
       false,
-      'open Claude Code',
-      'The read-only Claude compatibility token expired. Open or update Claude Code once to renew it.',
+      'Claude login required',
+      'Claude Code rejected the saved login. Open the official Claude Code login to continue quota tracking.',
       { httpStatus: 401 },
     );
   }
@@ -337,7 +345,7 @@ function nextDelayForStatus(resultStatus: ClaudeCompatibilityStatus): number {
   if (resultStatus.code === 'rate-limited') {
     return Math.max(CLAUDE_COMPATIBILITY_MIN_INTERVAL_MS, resultStatus.retryAfterMs ?? 0);
   }
-  if (resultStatus.code === 'unauthorized' || resultStatus.code === 'forbidden') {
+  if (resultStatus.code === 'credentials-expired' || resultStatus.code === 'unauthorized' || resultStatus.code === 'forbidden') {
     return Number.POSITIVE_INFINITY;
   }
   if (resultStatus.code === 'schema-changed') {
@@ -358,6 +366,26 @@ export async function fetchClaudeCompatibilityUsage(
       credentialMarker: null,
       status: status('no-credentials', false, 'Claude Code required', 'Claude Code credentials were not found for the read-only compatibility check.'),
     };
+  }
+
+  if (credentials.expiresAtMs != null && credentials.expiresAtMs <= nowMs) {
+    const result: ClaudeCompatibilityFetchResult = {
+      usage: null,
+      capturedAt: nowMs,
+      credentialMarker: credentials.marker,
+      status: status(
+        'credentials-expired',
+        false,
+        'Claude login required',
+        'The saved Claude Code access token expired. Continue in the official Claude Code login to restore quota tracking.',
+      ),
+    };
+    cachedResult = {
+      marker: credentials.marker,
+      result,
+      nextAllowedAt: Number.POSITIVE_INFINITY,
+    };
+    return result;
   }
 
   const sameCredentials = cachedResult?.marker === credentials.marker;

@@ -4,6 +4,7 @@ import type {
   ProviderQuotaSnapshot,
   QuotaDisplayMode,
 } from '../shared/quotaTypes';
+import type { ClaudeLoginLaunchResult } from '../shared/claudeLogin';
 import type {
   BucketBreakdown,
   BreakdownGrain,
@@ -333,6 +334,7 @@ declare global {
       setupIntegration:     () => Promise<IntegrationMutationResult>;
       disableIntegration:   () => Promise<IntegrationMutationResult>;
       getIntegrationStatus: () => Promise<IntegrationStatus>;
+      openClaudeLogin:      () => Promise<ClaudeLoginLaunchResult>;
       quit:               () => Promise<void>;
       minimize:           () => Promise<void>;
       openDashboard:      () => Promise<void>;

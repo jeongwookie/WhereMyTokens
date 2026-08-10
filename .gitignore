@@ -23,6 +23,7 @@ TODO.md
 # 로컬 AI/브라우저 도구 설정 (커밋 제외)
 .claude/settings.local.json
 .codex/
+.lazyweb/
 .playwright-mcp/
 .mcp.json
 

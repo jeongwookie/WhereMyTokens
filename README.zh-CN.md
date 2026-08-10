@@ -120,6 +120,7 @@ macOS 用户请使用单独的公开仓库:
 - **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。Codex Resets target 仅用于 Plan Usage
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示使用节奏快于重置窗口
 - **Claude Code 桥接** — 优先通过 `statusLine` 接收官方本地数据；没有新值且存在 Claude Code credential 时由受限的只读 compatibility request 补充
+- **Claude 重新登录提示** — 登录过期或被拒绝时显示一次 Windows 通知和应用内操作，并打开官方 `claude auth login` 流程。credential 变更后自动重试；WMT 本身不会刷新 token 或写入 credential
 - **Windows 通知** — 在可配置的使用阈值（50% / 80% / 90%）时弹出提醒
 
 ### 分析与活动

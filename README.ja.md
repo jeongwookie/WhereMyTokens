@@ -123,6 +123,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **Target 別 quota 表示** — 各 canonical quota target は Settings で Rich、Simple、非表示にでき、Plan Usage、Floating widget、taskbar mini の表示順と表示対象に反映されます。Taskbar mini は正規化された 5h/7d entry を 2 本の physical line に配置し、line ごとに 1-3 個のブロック制限と非表示 target の `+N` 表示をサポートします。prefix の色は quota severity ではなく live/cache/log などのデータ source/status を表します。Codex Resets target は Plan Usage 専用です
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` で公式ローカルデータを優先し、新しい値がなく Claude Code credential が利用可能な場合は制限付き read-only compatibility request で補完
+- **Claude 再ログイン案内** — login が期限切れまたは拒否された場合、Windows notification を一度表示し、app 内 action から公式 `claude auth login` flow を開きます。credential の変更後に自動で再試行し、WMT 自身は token の更新や credential の書き込みを行いません
 - **Windows トースト通知** — 使用量しきい値（50% / 80% / 90%）でアラート
 
 ### 分析 & アクティビティ

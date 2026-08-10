@@ -34,6 +34,20 @@ const ACCOUNT_TARGET: QuotaTarget = {
 };
 
 const COMPATIBILITY_CREDENTIAL_MARKERS = new WeakMap<object, string>();
+const COMPATIBILITY_STATUS_CODES = new Set([
+  'compatibility-api',
+  'compatibility-stale',
+  'no-credentials',
+  'credentials-expired',
+  'unauthorized',
+  'forbidden',
+  'rate-limited',
+  'schema-changed',
+  'timeout',
+  'network',
+  'http-error',
+]);
+const LOGIN_REQUIRED_STATUS_CODES = new Set(['no-credentials', 'credentials-expired', 'unauthorized']);
 
 function accountTarget(source: 'statusLine' | 'api'): QuotaTarget {
   if (source === 'statusLine') return ACCOUNT_TARGET;
@@ -113,10 +127,13 @@ export function waitingClaudeQuota(nowMs: number): ProviderQuotaSnapshot {
   };
 }
 
-function isCompatibilitySnapshot(snapshot: ProviderQuotaSnapshot): boolean {
+export function isClaudeCompatibilitySnapshot(snapshot: ProviderQuotaSnapshot): boolean {
   return snapshot.source === 'api'
-    || snapshot.status?.code === 'compatibility-api'
-    || snapshot.status?.code === 'compatibility-stale';
+    || COMPATIBILITY_STATUS_CODES.has(snapshot.status?.code ?? '');
+}
+
+export function isClaudeLoginRequiredSnapshot(snapshot: ProviderQuotaSnapshot): boolean {
+  return LOGIN_REQUIRED_STATUS_CODES.has(snapshot.status?.code ?? '');
 }
 
 export function ageClaudeQuotaSnapshot(
@@ -127,7 +144,8 @@ export function ageClaudeQuotaSnapshot(
   if (nowMs >= snapshot.capturedAt + CLAUDE_STATUS_LINE_CACHE_MAX_MS) {
     return { ...aged, entries: [] };
   }
-  const compatibility = isCompatibilitySnapshot(snapshot);
+  if (isClaudeLoginRequiredSnapshot(snapshot)) return aged;
+  const compatibility = isClaudeCompatibilitySnapshot(snapshot);
   const freshMs = compatibility ? CLAUDE_COMPATIBILITY_MIN_INTERVAL_MS : CLAUDE_STATUS_LINE_FRESH_MS;
   const fresh = nowMs >= snapshot.capturedAt
     && nowMs - snapshot.capturedAt < freshMs;
@@ -300,14 +318,22 @@ export async function fetchClaudeQuota(ctx: ProviderContext): Promise<ProviderQu
       compatibility.credentialMarker,
     );
   }
-  if (local?.entries.length) return local;
-  return {
+  const loginRequired = LOGIN_REQUIRED_STATUS_CODES.has(compatibility.status.code);
+  if (local?.entries.length && !loginRequired) return local;
+  const snapshot: ProviderQuotaSnapshot = {
     provider: 'claude',
     source: 'cache',
-    capturedAt: compatibility.capturedAt,
-    entries: [],
-    status: { ...compatibility.status, severity: 'warning' },
+    capturedAt: local?.capturedAt ?? compatibility.capturedAt,
+    entries: loginRequired ? (local?.entries ?? []) : [],
+    status: {
+      ...compatibility.status,
+      severity: loginRequired ? 'danger' : 'warning',
+    },
   };
+  if (compatibility.credentialMarker) {
+    COMPATIBILITY_CREDENTIAL_MARKERS.set(snapshot, compatibility.credentialMarker);
+  }
+  return snapshot;
 }
 
 export function isClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): boolean {

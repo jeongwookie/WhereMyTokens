@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme, screen } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, globalShortcut, ipcMain, nativeTheme, screen, clipboard, dialog, shell } from 'electron';
 import * as path from 'path';
 import Store from 'electron-store';
 import { StateManager, AppState } from './stateManager';
@@ -13,6 +13,8 @@ import { createTaskbarQuotaHelperManager } from './taskbarQuotaHelper';
 import { buildTaskbarQuotaSnapshot } from './taskbarQuotaSnapshot';
 import { addNotification } from './notificationHistory';
 import { openUsageIndex } from './usageIndex';
+import { launchClaudeLogin } from './claudeLoginLauncher';
+import type { ClaudeLoginLaunchResult } from '../shared/claudeLogin';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -44,6 +46,59 @@ const POPUP_MARGIN = 8;
 const POPUP_FOCUS_DEBOUNCE_MS = 250;
 const TASKBAR_MINI_DISABLED_TITLE = 'Taskbar mini disabled';
 const TASKBAR_MINI_DISABLED_BODY = 'The taskbar mini quota helper could not start after repeated attempts. Open Settings to enable it again after checking Windows taskbar support.';
+const CLAUDE_LOGIN_NOTIFICATION_STATUS_CODES = new Set(['credentials-expired', 'unauthorized']);
+const CLAUDE_INSTALL_URL = 'https://code.claude.com/docs/en/setup';
+let claudeLoginNoticeActive = false;
+
+async function openClaudeLoginFlow(): Promise<ClaudeLoginLaunchResult> {
+  const result = await launchClaudeLogin();
+  if (result.ok) return result;
+
+  const options = {
+    type: 'warning' as const,
+    title: 'Claude Code login required',
+    message: result.reason === 'claude-not-found'
+      ? 'Claude Code was not found on this computer.'
+      : 'WhereMyTokens could not open the Claude Code login terminal.',
+    detail: 'Run this official command in a terminal: claude auth login',
+    buttons: result.reason === 'claude-not-found'
+      ? ['Copy command', 'Open install guide', 'Cancel']
+      : ['Copy command', 'Cancel'],
+    defaultId: 0,
+    cancelId: result.reason === 'claude-not-found' ? 2 : 1,
+    noLink: true,
+  };
+  const response = popupWindow
+    ? await dialog.showMessageBox(popupWindow, options)
+    : await dialog.showMessageBox(options);
+  if (response.response === 0) clipboard.writeText('claude auth login');
+  if (result.reason === 'claude-not-found' && response.response === 1) {
+    await shell.openExternal(CLAUDE_INSTALL_URL);
+  }
+  return result;
+}
+
+function updateClaudeLoginNotice(state: AppState): void {
+  const status = state.providerQuotas.claude?.status;
+  const loginRequired = state.settings.enabledProviders.includes('claude')
+    && !!status
+    && CLAUDE_LOGIN_NOTIFICATION_STATUS_CODES.has(status.code);
+  if (!loginRequired) {
+    claudeLoginNoticeActive = false;
+    return;
+  }
+  if (claudeLoginNoticeActive || !Notification.isSupported()) return;
+  claudeLoginNoticeActive = true;
+  const japanese = state.settings.language === 'ja';
+  const title = japanese ? 'Claude Code のログインが必要です' : 'Claude Code login required';
+  const body = japanese
+    ? 'クリックして公式 Claude Code ログインを開きます。WhereMyTokens は認証情報を更新しません。'
+    : 'Click to open the official Claude Code login. WhereMyTokens will not refresh or modify credentials.';
+  addNotification('alert', title, body);
+  const notification = new Notification({ title: `WhereMyTokens - ${title}`, body, silent: false });
+  notification.on('click', () => { void openClaudeLoginFlow(); });
+  notification.show();
+}
 function resolveTaskbarSnapshotTheme(theme: AppSettings['theme']): 'light' | 'dark' {
   if (theme === 'light' || theme === 'dark') return theme;
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
@@ -708,7 +763,10 @@ app.whenReady().then(async () => {
   }
 
   const usageIndex = await openUsageIndex(path.join(app.getPath('userData'), 'usage-index.sqlite'));
-  const manager = new StateManager(store, (state) => updateTray(state), { usageIndex });
+  const manager = new StateManager(store, (state) => {
+    updateClaudeLoginNotice(state);
+    updateTray(state);
+  }, { usageIndex });
   stateManager = manager;
   registerIpcHandlers({
     store,
@@ -721,6 +779,7 @@ app.whenReady().then(async () => {
     },
     resetUsageIndex: () => manager.resetUsageIndex(),
     getDebugMemSnapshot: () => manager.getDebugMemSnapshot('ipc'),
+    openClaudeLogin: () => openClaudeLoginFlow(),
     windowActions: {
       openDashboard: () => showPopup('main'),
       openSettings: () => showPopup('settings'),

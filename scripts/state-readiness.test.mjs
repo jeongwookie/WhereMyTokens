@@ -9,10 +9,12 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import stateManager from '../dist/main/stateManager.js';
 import * as gitStatsKeys from '../dist/main/gitStatsKeys.js';
+import claudeLoginLauncher from '../dist/main/claudeLoginLauncher.js';
 import { tCallRegex } from './test-support/i18n.mjs';
 
 const { StateManager, resolveSessionRepoKeys } = stateManager;
 const { normalizeGitPathKey } = gitStatsKeys;
+const { buildClaudeLoginLaunchSpec, resolveClaudeCommand, resolveWindowsTerminal } = claudeLoginLauncher;
 
 function repoStatsFor(root) {
   const toplevel = normalizeGitPathKey(root);
@@ -121,6 +123,74 @@ test('renderer splash and session stabilization use initial readiness and daily 
   assert.match(source, /normalizeEntryStats/);
   assert.match(source, /validateProviderQuotaSnapshot/);
   assert.doesNotMatch(source, /normalizeProviderWindowUsage|rawWindows/);
+});
+
+test('Claude re-login stays behind preload and exposes an in-app action', () => {
+  const preload = fs.readFileSync(path.resolve('src', 'main', 'preload.ts'), 'utf8');
+  const ipc = fs.readFileSync(path.resolve('src', 'main', 'ipc.ts'), 'utf8');
+  const mainView = fs.readFileSync(path.resolve('src', 'renderer', 'views', 'MainView.tsx'), 'utf8');
+  const stateManagerSource = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
+
+  assert.match(preload, /openClaudeLogin:\s+\(\) => ipcRenderer\.invoke\('open-claude-login'\)/);
+  assert.match(ipc, /ipc\.handle\('open-claude-login'/);
+  assert.match(mainView, /data-testid="claude-login-action"/);
+  assert.match(mainView, /window\.wmt\.openClaudeLogin\(\)/);
+  assert.match(stateManagerSource, /claudeCompatibilityCredentialsPath\(\)/);
+  assert.match(stateManagerSource, /scheduleClaudeCredentialRefresh\(\)/);
+  assert.match(stateManagerSource, /invalidateClaudeCompatibilityUsageCache\(\)/);
+});
+
+test('Claude login launcher resolves known executable names from fixed locations', () => {
+  const env = {
+    PATH: `C:${path.sep}Tools${path.delimiter}C:${path.sep}WindowsApps`,
+    APPDATA: `C:${path.sep}Users${path.sep}test${path.sep}AppData${path.sep}Roaming`,
+    LOCALAPPDATA: `C:${path.sep}Users${path.sep}test${path.sep}AppData${path.sep}Local`,
+  };
+  const existing = new Set([
+    path.join(`C:${path.sep}Tools`, 'claude.cmd'),
+    path.join(`C:${path.sep}WindowsApps`, 'wt.exe'),
+  ]);
+  const exists = candidate => existing.has(candidate);
+
+  assert.equal(resolveClaudeCommand(env, exists), path.join(`C:${path.sep}Tools`, 'claude.cmd'));
+  assert.equal(resolveWindowsTerminal(env, exists), path.join(`C:${path.sep}WindowsApps`, 'wt.exe'));
+});
+
+test('Claude login launch uses fixed arguments without enabling a shell option', () => {
+  const command = 'C:\\Program Files\\Claude\\claude.exe';
+  const terminal = 'C:\\WindowsApps\\wt.exe';
+  const terminalSpec = buildClaudeLoginLaunchSpec(command, terminal);
+  const fallbackSpec = buildClaudeLoginLaunchSpec(command, null);
+
+  assert.equal(terminalSpec.file, terminal);
+  assert.deepEqual(terminalSpec.args, [
+    '-w', 'new', 'new-tab', '--title', 'Claude Code login', command, 'auth', 'login',
+  ]);
+  assert.equal(terminalSpec.options.detached, true);
+  assert.equal(terminalSpec.options.windowsHide, false);
+  assert.equal(terminalSpec.options.shell, undefined);
+  assert.match(fallbackSpec.file, /powershell\.exe$/i);
+  assert.deepEqual(fallbackSpec.args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-EncodedCommand']);
+  const decoded = Buffer.from(fallbackSpec.args[3], 'base64').toString('utf16le');
+  assert.match(decoded, /Start-Process/);
+  assert.match(decoded, /auth/);
+  assert.match(decoded, /login/);
+  assert.equal(fallbackSpec.options.shell, undefined);
+  assert.equal(fallbackSpec.options.windowsHide, true);
+});
+
+test('Claude cmd shim is safely quoted inside the Windows Terminal PowerShell process', () => {
+  const command = 'C:\\Users\\Test User & Team\\AppData\\Roaming\\npm\\claude.cmd';
+  const terminalSpec = buildClaudeLoginLaunchSpec(command, 'C:\\WindowsApps\\wt.exe');
+  const encodedIndex = terminalSpec.args.indexOf('-EncodedCommand');
+
+  assert.ok(encodedIndex > 0);
+  assert.match(terminalSpec.args[encodedIndex - 3], /powershell\.exe$/i);
+  assert.deepEqual(terminalSpec.args.slice(encodedIndex - 2, encodedIndex), ['-NoExit', '-NoProfile']);
+  const decoded = Buffer.from(terminalSpec.args[encodedIndex + 1], 'base64').toString('utf16le');
+  assert.ok(decoded.includes(`$command = '${command}'`));
+  assert.match(decoded, /& \$command 'auth' 'login'/);
+  assert.equal(terminalSpec.options.shell, undefined);
 });
 
 test('renderer mutes cached usage text and shows soft loading states', () => {

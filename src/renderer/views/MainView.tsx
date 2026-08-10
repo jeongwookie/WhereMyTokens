@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PanelBottom, PictureInPicture2 } from 'lucide-react';
+import { LogIn, PanelBottom, PictureInPicture2 } from 'lucide-react';
 import { AppState, SessionInfo } from '../types';
 import type { ProviderQuotaSource, ProviderQuotaStatus } from '../../shared/quotaTypes';
 import { quotaElapsedPct } from '../../shared/quotaDomain';
@@ -46,8 +46,9 @@ interface Props {
 type NavView = 'settings' | 'notifications' | 'help';
 type ProviderId = AppState['settings']['enabledProviders'][number];
 type HeaderStatusTone = 'warning' | 'danger';
-type HeaderStatus = { label: string; title: string; tone: HeaderStatusTone };
+type HeaderStatus = { label: string; title: string; tone: HeaderStatusTone; action?: 'claude-login' };
 const RESET_CREDITS_TOOLTIP_ID = 'codex-reset-credits-tooltip';
+const CLAUDE_LOGIN_STATUS_CODES = new Set(['credentials-expired', 'unauthorized', 'no-credentials']);
 type SessionListItem =
   | { type: 'session'; session: SessionInfo }
   | {
@@ -203,11 +204,21 @@ function buildClaudeHeaderStatus(args: {
   showClaudeUsage: boolean;
   hasClaudeFallback: boolean;
   apiConnected: boolean;
+  apiStatusCode?: string;
   apiStatusLabel?: string;
   apiError?: string;
 }): HeaderStatus | null {
-  const { showClaudeUsage, hasClaudeFallback, apiConnected, apiStatusLabel, apiError } = args;
+  const { showClaudeUsage, hasClaudeFallback, apiConnected, apiStatusCode, apiStatusLabel, apiError } = args;
   if (!showClaudeUsage) return null;
+
+  if (apiStatusCode && CLAUDE_LOGIN_STATUS_CODES.has(apiStatusCode)) {
+    return {
+      label: i18n.t('mainView.status.claude.loginLabel'),
+      title: apiError || i18n.t('mainView.status.claude.loginTitle'),
+      tone: 'danger',
+      action: 'claude-login',
+    };
+  }
 
   if (hasClaudeFallback) {
     return {
@@ -222,7 +233,7 @@ function buildClaudeHeaderStatus(args: {
 
   if (!apiConnected) {
     return {
-      label: i18n.t('mainView.status.claude.localLabel'),
+      label: i18n.t('mainView.status.claude.waitingLabel'),
       title: apiError || i18n.t('mainView.status.claude.localOnlyTitleDefault'),
       tone: 'warning',
     };
@@ -318,6 +329,7 @@ function buildHeaderStatus(args: {
   hasClaudeFallback: boolean;
   hasCodexFallback: boolean;
   apiConnected: boolean;
+  apiStatusCode?: string;
   apiStatusLabel?: string;
   apiError?: string;
   codexUsageConnected: boolean;
@@ -529,6 +541,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
     hasClaudeFallback,
     hasCodexFallback,
     apiConnected: resolvedApiConnected,
+    apiStatusCode: claudeStatus?.code,
     apiStatusLabel: resolvedApiStatusLabel,
     apiError: resolvedApiError,
     codexUsageConnected,
@@ -538,7 +551,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nInstance.language forces
     // recomputation of the translated label/title strings built by buildHeaderStatus after a
     // language switch, since that helper reads the i18next singleton directly.
-  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, enabledProviderList, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage, state.providerQuotas, i18nInstance.language]);
+  }), [resolvedApiConnected, resolvedApiError, resolvedApiStatusLabel, claudeStatus?.code, codexError, codexFallbackSource, codexStatusLabel, codexUsageConnected, enabledProviderList, hasClaudeFallback, hasCodexFallback, showClaudeUsage, showCodexUsage, state.providerQuotas, i18nInstance.language]);
 
   const isAll = period === 'all';
   const cost = isAll ? usage.allTimeCost : usage.todayCost;
@@ -581,7 +594,35 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
           ))}
         </div>
         <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-          {headerStatus && (
+          {headerStatus && (headerStatus.action === 'claude-login' ? (
+            <button
+              type="button"
+              onClick={() => { void window.wmt.openClaudeLogin(); }}
+              title={headerStatus.title}
+              aria-label={headerStatus.title}
+              style={{
+                ...noDrag,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                minWidth: 0,
+                maxWidth: 142,
+                height: 22,
+                padding: '0 7px',
+                borderRadius: 5,
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                flexShrink: 1,
+                ...statusStyles,
+              }}
+            >
+              <LogIn size={12} strokeWidth={2.2} aria-hidden="true" style={{ flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {headerStatus.label}
+              </span>
+            </button>
+          ) : (
             <span
               title={headerStatus.title}
               style={{
@@ -599,7 +640,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
             >
               {headerStatus.label}
             </span>
-          )}
+          ))}
           <button
             type="button"
             onClick={onToggleCompactWidget}
@@ -1448,6 +1489,9 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     formatWarmupEta,
   });
   const showExtraUsage = !!extraUsage?.isEnabled;
+  const claudeQuota = providerQuotas.claude;
+  const claudeLoginRequired = settings.enabledProviders.includes('claude')
+    && CLAUDE_LOGIN_STATUS_CODES.has(claudeQuota?.status?.code ?? '');
   const visibleTargetIds = new Set([...richGroups.map(group => group.id), ...simpleGroups.map(group => group.id)]);
   const orderedTargetIds = targets
     .filter(group => visibleTargetIds.has(group.id))
@@ -1548,6 +1592,54 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
       </div>
 
       <div data-testid="plan-usage-body">
+        {claudeLoginRequired && (
+          <div
+            data-testid="claude-login-action"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) auto',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 12px',
+              borderBottom: `1px solid ${C.border}`,
+              background: `${C.barRed}08`,
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ color: C.text, fontSize: 11, fontWeight: 700, lineHeight: 1.35 }}>
+                {t('mainView.status.claude.loginHeading')}
+              </div>
+              <div style={{ color: C.textMuted, fontSize: 10, lineHeight: 1.45, marginTop: 2 }}>
+                {t('mainView.status.claude.loginDetail')}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { void window.wmt.openClaudeLogin(); }}
+              title={t('mainView.status.claude.loginTitle')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                minWidth: 118,
+                height: 30,
+                padding: '0 9px',
+                borderRadius: 5,
+                border: `1px solid ${C.barRed}55`,
+                background: `${C.barRed}14`,
+                color: C.barRed,
+                fontSize: 10,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <LogIn size={13} strokeWidth={2.2} aria-hidden="true" />
+              {t('mainView.status.claude.loginAction')}
+            </button>
+          </div>
+        )}
         {orderedPlanEntries}
       </div>
 

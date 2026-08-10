@@ -123,6 +123,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 - **Target별 quota 표시** — 각 canonical quota target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Taskbar mini는 정규화된 5h/7d entry를 두 개의 물리적 line에 배치하고, line당 1-3개 블록 제한과 숨김 target `+N` 표시를 지원합니다. prefix 색상은 quota severity가 아니라 live/cache/log 같은 데이터 source/status를 나타냅니다. Codex Resets target은 Plan Usage 전용입니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 공식 로컬 데이터를 우선 수신하고, 최신 값이 없으며 Claude Code credential이 있을 때 제한된 읽기 전용 호환 조회로 보완
+- **Claude 재로그인 안내** — 로그인이 만료되거나 거절되면 Windows 알림 한 번과 앱 내 액션을 표시하고 공식 `claude auth login` 흐름을 엽니다. credential 변경 후 자동 재시도하며 WMT가 token을 갱신하거나 credential을 쓰지 않습니다
 - **Windows 토스트 알림** — 사용량 임계값(50% / 80% / 90%)에서 알림
 
 ### 분석 & 활동

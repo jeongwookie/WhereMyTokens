@@ -58,11 +58,17 @@ import {
   ageClaudeQuotaSnapshot,
   buildClaudeStatusLineQuota,
   getClaudeQuotaCredentialMarker,
+  isClaudeCompatibilitySnapshot,
+  isClaudeLoginRequiredSnapshot,
   isClaudeQuotaSnapshot,
   waitingClaudeQuota,
 } from './providers/claude/quota';
 import { CLAUDE_STATUS_LINE_FRESH_MS } from '../shared/claudeStatusLine';
-import { getClaudeCompatibilityCredentialMarker } from './providers/claude/readOnlyUsage';
+import {
+  claudeCompatibilityCredentialsPath,
+  getClaudeCompatibilityCredentialMarker,
+  invalidateClaudeCompatibilityUsageCache,
+} from './providers/claude/readOnlyUsage';
 import { CodexProviderQuotaSnapshot, isCodexQuotaSnapshot } from './providers/codex/quota';
 import {
   buildUsageVisibilityFilter,
@@ -451,11 +457,13 @@ export class StateManager {
   private heavyTimer: NodeJS.Timeout | null = null;
   private quotaRefreshTimer: NodeJS.Timeout | null = null;
   private watcher: chokidar.FSWatcher | null = null;
+  private claudeCredentialWatcher: chokidar.FSWatcher | null = null;
   private fastDebounce: NodeJS.Timeout | null = null;
   private onUpdate: (s: AppState) => void;
   private cachedClaudeQuota: ProviderQuotaSnapshot | null = null;
   private cachedClaudeQuotaAuthMarker: string | null = null;
   private claudeQuotaAttemptAuthMarker: string | null = null;
+  private claudeCredentialRefreshTimer: NodeJS.Timeout | null = null;
   private apiConnected = false;
   private apiStatusLabel = '';
   private apiError = '';
@@ -760,8 +768,7 @@ export class StateManager {
   private hydrateClaudeQuotaCache(): void {
     const record = quotaRecord(this.getPersistedValue('_cachedClaudeQuota', null));
     const snapshot = validateProviderQuotaSnapshot(record?.snapshot);
-    const compatibility = snapshot?.status?.code === 'compatibility-api'
-      || snapshot?.status?.code === 'compatibility-stale';
+    const compatibility = !!snapshot && isClaudeCompatibilitySnapshot(snapshot);
     const authMarker = typeof record?.authMarker === 'string' ? record.authMarker : null;
     const currentAuthMarker = compatibility ? getClaudeCompatibilityCredentialMarker() : null;
     if (
@@ -795,9 +802,7 @@ export class StateManager {
   private persistClaudeQuotaSnapshot(snapshot: ProviderQuotaSnapshot): void {
     const publicSnapshot = validateProviderQuotaSnapshot(snapshot);
     if (!publicSnapshot || publicSnapshot.provider !== 'claude' || publicSnapshot.entries.length === 0) return;
-    const compatibility = publicSnapshot.source === 'api'
-      || publicSnapshot.status?.code === 'compatibility-api'
-      || publicSnapshot.status?.code === 'compatibility-stale';
+    const compatibility = isClaudeCompatibilitySnapshot(publicSnapshot);
     const authMarker = compatibility ? getClaudeQuotaCredentialMarker(snapshot) : null;
     if (compatibility && (!authMarker || authMarker !== getClaudeCompatibilityCredentialMarker())) return;
     this.cachedClaudeQuota = { ...publicSnapshot, source: 'cache' };
@@ -1024,6 +1029,7 @@ export class StateManager {
     if (this.fastTimer) clearInterval(this.fastTimer);
     if (this.heavyTimer) clearInterval(this.heavyTimer);
     if (this.quotaRefreshTimer) clearInterval(this.quotaRefreshTimer);
+    if (this.claudeCredentialRefreshTimer) clearTimeout(this.claudeCredentialRefreshTimer);
     if (this.debugMemTimer) clearInterval(this.debugMemTimer);
     if (this.fastDebounce) clearTimeout(this.fastDebounce);
     if (this.historyWarmupTimer) clearTimeout(this.historyWarmupTimer);
@@ -1033,6 +1039,7 @@ export class StateManager {
     this.foregroundRefreshTimer = null;
     this.wideWatcherPromotionTimer = null;
     this.watcher?.close();
+    this.claudeCredentialWatcher?.close();
     this.bridgeWatcher.stop();
   }
 
@@ -1322,9 +1329,9 @@ export class StateManager {
     if (!isClaudeQuotaSnapshot(snapshot)) return false;
     if (this.providerQuotaRequestSeqs.get('claude') !== requestSeq) return false;
     this.invalidateClaudeCompatibilityCacheForCredentialChange();
-    const compatibility = snapshot.source === 'api' || snapshot.status?.code === 'compatibility-api';
+    const compatibility = isClaudeCompatibilitySnapshot(snapshot);
     const attemptAuthMarker = compatibility ? getClaudeQuotaCredentialMarker(snapshot) : null;
-    if (compatibility && (!attemptAuthMarker || attemptAuthMarker !== getClaudeCompatibilityCredentialMarker())) {
+    if (compatibility && attemptAuthMarker !== getClaudeCompatibilityCredentialMarker()) {
       return false;
     }
     this.claudeQuotaAttemptAuthMarker = attemptAuthMarker;
@@ -2046,11 +2053,61 @@ export class StateManager {
     return targets;
   }
 
+  private isClaudeCredentialsFile(filePath: string): boolean {
+    return normalizeFileKey(filePath) === normalizeFileKey(claudeCompatibilityCredentialsPath());
+  }
+
+  private scheduleClaudeCredentialRefresh(): void {
+    if (this.claudeCredentialRefreshTimer) clearTimeout(this.claudeCredentialRefreshTimer);
+    this.claudeCredentialRefreshTimer = setTimeout(() => {
+      this.claudeCredentialRefreshTimer = null;
+      const settings = this.getSettings();
+      const claude = this.enabledProviders(settings).find(provider => provider.id === 'claude');
+      if (!claude?.fetchQuota) return;
+      invalidateClaudeCompatibilityUsageCache();
+      void this.refreshProviderQuota(claude, settings, true, claude.fetchQuota)
+        .then(() => this.requestRefresh({ mode: 'fast', reason: 'watcher' }))
+        .catch(() => {});
+    }, 350);
+  }
+
+  private startClaudeCredentialWatcher(enabled: boolean): boolean {
+    this.claudeCredentialWatcher?.close();
+    this.claudeCredentialWatcher = null;
+    if (!enabled) return false;
+
+    const credentialsPath = normalizeFileKey(claudeCompatibilityCredentialsPath());
+    const configDir = normalizeFileKey(path.dirname(credentialsPath));
+    const credentialsKey = credentialsPath.toLowerCase();
+    const configDirKey = configDir.toLowerCase();
+    const shouldIgnore = (candidate: string) => {
+      const candidateKey = normalizeFileKey(candidate).toLowerCase();
+      const configAncestor = configDirKey.startsWith(`${candidateKey}${path.sep.toLowerCase()}`);
+      return candidateKey !== credentialsKey && candidateKey !== configDirKey && !configAncestor;
+    };
+    const onCredentialEvent = (filePath: string) => {
+      if (this.isClaudeCredentialsFile(filePath)) this.scheduleClaudeCredentialRefresh();
+    };
+
+    // 설정 폴더가 아직 없어도 상위 경로부터 좁게 추적해 최초 로그인을 감지한다.
+    this.claudeCredentialWatcher = chokidar.watch(configDir, {
+      ignoreInitial: true,
+      ignored: shouldIgnore,
+    });
+    this.claudeCredentialWatcher.on('add', onCredentialEvent);
+    this.claudeCredentialWatcher.on('change', onCredentialEvent);
+    this.claudeCredentialWatcher.on('unlink', onCredentialEvent);
+    return true;
+  }
+
   private startWatcher(reason = 'refresh', mode: WatcherMode = 'auto') {
     this.watcher?.close();
     this.watcher = null;
 
     const settings = this.getSettings();
+    const credentialWatcherActive = this.startClaudeCredentialWatcher(
+      settings.enabledProviders.includes('claude'),
+    );
     const watchTargets: string[] = [];
     const seenTargets = new Set<string>();
     const pushTarget = (target: string) => {
@@ -2070,14 +2127,19 @@ export class StateManager {
       for (const target of this.buildRecentWatchTargets(settings)) pushTarget(target);
       this.watcherProfile = watchTargets.length > 0 ? 'recent' : 'off';
     }
-    this.watcherTargetCount = watchTargets.length;
+    this.watcherTargetCount = watchTargets.length + (credentialWatcherActive ? 1 : 0);
     if (watchTargets.length === 0) {
+      if (credentialWatcherActive) this.watcherProfile = 'recent';
       this.logWatcherProfile(reason);
       return;
     }
 
     this.watcher = chokidar.watch(watchTargets, { ignoreInitial: true });
     this.watcher.on('add', (filePath: string) => {
+      if (this.isClaudeCredentialsFile(filePath)) {
+        this.scheduleClaudeCredentialRefresh();
+        return;
+      }
       if (filePath.endsWith('.jsonl')) {
         this.debouncedFastRefresh(filePath);
       } else {
@@ -2085,6 +2147,10 @@ export class StateManager {
       }
     });
     this.watcher.on('unlink', (filePath: string) => {
+      if (this.isClaudeCredentialsFile(filePath)) {
+        this.scheduleClaudeCredentialRefresh();
+        return;
+      }
       if (filePath.endsWith('.jsonl')) {
         this.summaries.delete(normalizeFileKey(filePath));
         invalidateSessionMetadataCache(filePath);
@@ -2093,6 +2159,10 @@ export class StateManager {
       this.debouncedFastRefresh();
     });
     this.watcher.on('change', (filePath: string) => {
+      if (this.isClaudeCredentialsFile(filePath)) {
+        this.scheduleClaudeCredentialRefresh();
+        return;
+      }
       this.debouncedFastRefresh(filePath);
     });
     this.logWatcherProfile(reason);
@@ -2425,13 +2495,10 @@ export class StateManager {
 
   private buildClaudeProviderQuota(now: number): ProviderQuotaSnapshot {
     let rawAttempt = validateProviderQuotaSnapshot(this.providerQuotaSnapshots.get('claude'));
-    const compatibilityAttempt = rawAttempt?.source === 'api'
-      || rawAttempt?.status?.code === 'compatibility-api'
-      || rawAttempt?.status?.code === 'compatibility-stale';
+    const compatibilityAttempt = rawAttempt ? isClaudeCompatibilitySnapshot(rawAttempt) : false;
     if (
       compatibilityAttempt
-      && (!this.claudeQuotaAttemptAuthMarker
-        || this.claudeQuotaAttemptAuthMarker !== getClaudeCompatibilityCredentialMarker())
+      && this.claudeQuotaAttemptAuthMarker !== getClaudeCompatibilityCredentialMarker()
     ) {
       this.providerQuotaSnapshots.delete('claude');
       this.claudeQuotaAttemptAuthMarker = null;
@@ -2441,14 +2508,15 @@ export class StateManager {
     const live = this.liveSession ? buildClaudeStatusLineQuota(this.liveSession, now) : null;
     if (live?.status?.connected && live.entries.length > 0) return live;
     if (attempt?.status?.connected && attempt.entries.length > 0) return attempt;
+    if (attempt && isClaudeLoginRequiredSnapshot(attempt)) return { ...attempt, source: 'cache' };
 
     const candidates = [live, attempt, this.getAgedClaudeQuota(now)]
       .filter((candidate): candidate is ProviderQuotaSnapshot => !!candidate && candidate.entries.length > 0)
       .sort((left, right) => right.capturedAt - left.capturedAt);
     const cached = candidates[0];
     if (cached) {
-      const compatibility = cached.status?.code === 'compatibility-api'
-        || cached.status?.code === 'compatibility-stale';
+      if (isClaudeLoginRequiredSnapshot(cached)) return { ...cached, source: 'cache' };
+      const compatibility = isClaudeCompatibilitySnapshot(cached);
       return {
         ...cached,
         source: 'cache',
@@ -2463,7 +2531,7 @@ export class StateManager {
         },
       };
     }
-    return live ?? attempt ?? waitingClaudeQuota(now);
+    return attempt ?? live ?? waitingClaudeQuota(now);
   }
 
   private buildCodexProviderQuota(now: number): ProviderQuotaSnapshot {
