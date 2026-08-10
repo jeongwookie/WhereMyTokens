@@ -14,6 +14,7 @@ import {
   setupIntegration,
 } from './integration';
 import type { ProviderId } from '../shared/quotaTypes';
+import type { ClaudeLoginLaunchResult } from '../shared/claudeLogin';
 import { PROVIDER_IDS, normalizeEnabledProviders } from './providers/settings';
 
 const DEFAULT_MAIN_SECTION_ORDER = ['planUsage', 'codeOutput', 'trend', 'sessions', 'activity', 'modelUsage'];
@@ -313,6 +314,7 @@ export interface RegisterIpcHandlersOptions {
   applySettingsChange: () => void;
   resetUsageIndex?: () => Promise<void>;
   getDebugMemSnapshot?: () => Promise<DebugMemSnapshot>;
+  openClaudeLogin?: () => Promise<ClaudeLoginLaunchResult>;
   windowActions?: {
     openDashboard: () => void;
     openSettings: () => void;
@@ -338,6 +340,7 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
     applySettingsChange,
     resetUsageIndex,
     getDebugMemSnapshot,
+    openClaudeLogin,
     windowActions,
     getBreakdown,
     ipcMain: ipc = ipcMain,
@@ -374,6 +377,10 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
 
   ipc.handle('notifications:get', () => getHistory());
   ipc.handle('notifications:clear', () => { clearHistory(); return []; });
+  ipc.handle('open-claude-login', async () => {
+    if (!openClaudeLogin) return { ok: false, reason: 'launch-failed' } satisfies ClaudeLoginLaunchResult;
+    return openClaudeLogin();
+  });
   ipc.handle('window:open-dashboard', () => windowActions?.openDashboard());
   ipc.handle('window:open-settings', () => windowActions?.openSettings());
   ipc.handle('window:hide-compact-widget', () => windowActions?.hideCompactWidget());

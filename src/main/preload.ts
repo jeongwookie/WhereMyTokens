@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('wmt', {
   setupIntegration:     () => ipcRenderer.invoke('integration-setup'),
   disableIntegration:   () => ipcRenderer.invoke('integration-disable'),
   getIntegrationStatus: () => ipcRenderer.invoke('integration-status'),
+  openClaudeLogin:      () => ipcRenderer.invoke('open-claude-login'),
   quit:                 () => ipcRenderer.invoke('app:quit'),
   minimize:             () => ipcRenderer.invoke('window:minimize'),
   openDashboard:        () => ipcRenderer.invoke('window:open-dashboard'),

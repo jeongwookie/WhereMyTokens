@@ -283,8 +283,14 @@
     "status": {
       "claude": {
         "localLabel": "Claude キャッシュ",
+        "waitingLabel": "Claude 待機中",
         "localTitle": "キャッシュ済みの Claude 制限値を表示しています（{{status}}）{{errorSuffix}}",
-        "localOnlyTitleDefault": "Claude quota は statusLine データまたは利用可能な Claude Code credential を待っています。"
+        "localOnlyTitleDefault": "Claude quota は statusLine データまたは利用可能な Claude Code credential を待っています。",
+        "loginLabel": "Claude ログイン",
+        "loginTitle": "公式の Claude Code ログインを開いて quota tracking を再開します。",
+        "loginHeading": "Claude Code のログインが必要です",
+        "loginDetail": "公式の Claude Code ログインを続行してください。WhereMyTokens は自動的に再試行します。",
+        "loginAction": "Claude Code を開く"
       },
       "codex": {
         "limitedLabel": "Codex 制限",

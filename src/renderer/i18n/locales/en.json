@@ -283,8 +283,14 @@
     "status": {
       "claude": {
         "localLabel": "Claude cached",
+        "waitingLabel": "Claude waiting",
         "localTitle": "Showing cached Claude quota ({{status}}){{errorSuffix}}",
-        "localOnlyTitleDefault": "Claude quota is waiting for statusLine data or available Claude Code credentials."
+        "localOnlyTitleDefault": "Claude quota is waiting for statusLine data or available Claude Code credentials.",
+        "loginLabel": "Claude login",
+        "loginTitle": "Open the official Claude Code login to restore quota tracking.",
+        "loginHeading": "Claude Code login required",
+        "loginDetail": "Continue in the official Claude Code login. WhereMyTokens will retry automatically.",
+        "loginAction": "Open Claude Code"
       },
       "codex": {
         "limitedLabel": "Codex limited",

@@ -302,6 +302,44 @@ test('Claude quota fetch prefers a fresh local bridge and uses read-only compati
   }
 });
 
+test('expired login stays actionable while preserving stale statusLine quota entries', async () => {
+  const originalAppData = process.env.APPDATA;
+  const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
+  const appData = makeTempDir();
+  const claudeConfig = makeTempDir();
+  process.env.APPDATA = appData;
+  process.env.CLAUDE_CONFIG_DIR = claudeConfig;
+  const now = Date.now();
+  fs.writeFileSync(path.join(claudeConfig, '.credentials.json'), JSON.stringify({
+    claudeAiOauth: {
+      accessToken: 'expired-access',
+      expiresAt: now - 1,
+      subscriptionType: 'max',
+    },
+  }));
+  let compatibilityCalls = 0;
+  __setClaudeCompatibilityHttpForTest(async () => {
+    compatibilityCalls += 1;
+    return { status: 200, body: '{}', headers: {} };
+  });
+  try {
+    const filePath = path.join(appData, 'WhereMyTokens', 'live-session.json');
+    assert.equal(writeClaudeStatusLineFile(legacyPayload(now), filePath, now - 10 * 60_000), true);
+    const quota = await fetchClaudeQuota({ nowMs: now, force: false });
+
+    assert.equal(quota.status.code, 'credentials-expired');
+    assert.equal(quota.status.severity, 'danger');
+    assert.equal(quota.source, 'cache');
+    assert.equal(quota.entries.length, 3);
+    assert.equal(compatibilityCalls, 0);
+  } finally {
+    if (originalAppData === undefined) delete process.env.APPDATA;
+    else process.env.APPDATA = originalAppData;
+    if (originalClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+  }
+});
+
 test('Claude compatibility source contains no token refresh or credential write path', () => {
   const files = [
     'src/bridge/bridge.ts',

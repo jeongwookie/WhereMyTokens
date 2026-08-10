@@ -120,6 +120,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 - **Visualización quota por target** — cada canonical quota target puede mostrarse como Rich, Simple u oculto desde Settings; también afecta el orden y la visibilidad en Plan Usage, el widget flotante y el taskbar mini. El taskbar mini reparte entries 5h/7d normalizadas en dos physical lines, permite 1-3 bloques por line y muestra targets ocultos como `+N`; el color del prefix indica source/status de datos como live/cache/log, separado de la severidad de quota. Codex Resets es exclusivo de Plan Usage
 - **Vista Quota Pace** — compara el % de cuota usado con el % de tiempo transcurrido; amarillo/rojo indica que el ritmo va por delante de la ventana de reset
 - **Puente Claude Code** — recibe primero datos locales oficiales mediante `statusLine`; si no hay un valor reciente y existen credentials de Claude Code, usa una solicitud de compatibilidad limitada de solo lectura
+- **Ayuda para volver a iniciar sesión en Claude** — si el login vence o es rechazado, muestra una notificación de Windows y una acción en la app que abre el flujo oficial `claude auth login`. Reintenta automáticamente tras el cambio de credentials; WMT no renueva tokens ni escribe credentials
 - **Notificaciones de Windows** — en umbrales de uso configurables (50% / 80% / 90%)
 
 ### Análisis y Actividad
