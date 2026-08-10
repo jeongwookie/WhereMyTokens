@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.24.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe"><strong>Descargar v1.24.2</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.1 restaura la quota durante el uso de Claude Desktop cuando existen credentials de Claude Code aunque no haya un statusLine reciente, sin renovar ni escribir credenciales.</em>
+  <em>v1.24.2 detecta logins de Claude vencidos o rechazados, abre el reingreso oficial por CLI y recupera automáticamente el seguimiento de quota tras cambiar las credentials. WMT no renueva ni escribe credentials.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 10 ago | Avisa cuando el login de Claude vence o es rechazado, abre el login oficial por CLI y reintenta tras cambiar las credentials. Mantiene visible el problema aunque conserve la última quota y no renueva ni escribe credentials |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 10 ago | Restaura la quota de Claude Desktop cuando hay credentials de Claude Code pero no un statusLine reciente; mantiene statusLine primero y añade host fijo, cache ligada al auth y pruebas de integridad |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 10 ago | Mueve la quota de Claude al `statusLine` local oficial, elimina el acceso a credenciales OAuth y el sondeo directo de usage, conserva statusLine personalizados y añade snapshots atómicos mínimos con cache consciente del reset |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8 ago | Corrige precios equivalentes de API por modelo y fecha para Claude y GPT-5.6, y añade recálculo SQLite sin pérdidas con backup validado, replay limitado por checkpoint, detección de cambios concurrentes y CLI privada |
 | **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | 27 jul | Restaura la visibilidad de Fable scoped quota y la configuración de Codex Resets, refresca Claude OAuth antes de expirar y fija los relojes de prueba de UsageIndex para validar releases de forma estable |
-| **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | 19 jul | Dashboard, alertas, tray, compact widget y taskbar helper usan las mismas Quota Entries dinámicas; los limits no reportados quedan absent en vez de sintetizarse como `Unlimited` |
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +87,9 @@
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-v1.24.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-v1.24.2-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -99,7 +99,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.24.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.24.2-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 

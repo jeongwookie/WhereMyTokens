@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-Setup.exe"><strong>v1.24.1 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe"><strong>v1.24.2 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.1 は新しい statusLine がなくても既存の Claude Code credential があれば、Claude Desktop 利用中の quota を read-only compatibility fallback で復旧し、credential の更新・書き込みは引き続き行いません。</em>
+  <em>v1.24.2 は Claude login の期限切れや拒否を検出し、公式 CLI の再ログイン action を表示します。credential の変更後に quota tracking を自動復旧し、WMT は credential の更新や書き込みを行いません。</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude login の期限切れ・拒否を notification と app 内 action で案内し、公式 CLI login を開いて credential 変更後に自動再試行。以前の quota を保持しても login 問題を隠さず、credential の更新・書き込みは行いません |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 既存の Claude Code credential はあるが新しい statusLine がない Claude Desktop 利用時の quota を復旧。公式 statusLine 優先、token refresh/write 廃止、Anthropic 固定 host、auth-bound cache、非変更 test を追加 |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | Claude quota を公式のローカル `statusLine` に移行し、Claude OAuth credential へのアクセスと直接 usage polling を削除。custom statusLine の保持と、最小化した atomic snapshot・reset-aware cache も追加 |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | Claude と GPT-5.6 のモデル別・時点別 API 換算価格を修正し、検証済み backup、checkpoint 制限 replay、同時変更検出、privacy-safe CLI を備えた lossless SQLite cost repricing を追加 |
 | **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | 7/27 | Fable scoped quota と Codex Resets 表示設定を復旧し、期限前の Claude OAuth token を先に refresh。UsageIndex test clock も固定して release 検証を安定化 |
-| **[v1.23.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.0)** | 7/19 | dashboard、alert、tray、compact widget、taskbar helper が同じ動的 Quota Entry を使うよう整理し、報告されない limit は `Unlimited` に合成せず absent のまま保持 |
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +88,11 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.1/WhereMyTokens-v1.24.1-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-v1.24.2-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -102,7 +102,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.24.1-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.24.2-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 

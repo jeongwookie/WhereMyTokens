@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.24.2 | 2026-08-10 | Add actionable Claude login recovery with a one-time Windows notification, visible official CLI login, credential-change auto-retry, auth-bound stale-quota preservation, and no credential refresh or writes |
 | v1.24.1 | 2026-08-10 | Restore Claude quota when Desktop is active and existing Claude Code credentials are available without fresh statusLine data; never refresh or write Claude credentials; add fixed-host HTTPS, runtime throttling, auth-bound cache, backoff, integrity tests, and corrected privacy/EULA/help documentation |
 | v1.24.0 | 2026-08-10 | Replace direct Claude OAuth usage polling and credential refresh with the official local statusLine quota feed; add minimized atomic snapshots, reset-aware 30-minute cache, optional locally reported Fable limits, and regression/privacy coverage |
 | v1.23.2 | 2026-08-08 | Correct model-specific API-equivalent pricing across Claude and GPT-5.6 price changes; add lossless SQLite cost repricing with validated backups, checkpoint-bounded replay, concurrent-change protection, and privacy-safe CLI output |
