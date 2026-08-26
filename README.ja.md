@@ -259,9 +259,9 @@ WhereMyTokens は Codex のローカル JSONL ログ（`~/.codex/sessions/**/*.j
 
 ### Antigravity 追跡
 
-Antigravity 追跡は、実行中の Antigravity IDE の language server に 127.0.0.1 local RPC でのみ接続します。セッション cascade、モデル quota、generator metadata を読み取り providerQuotas と source-attributed UsageIndex に反映し、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
+Antigravity 追跡は、実行中の Antigravity IDE の language server に 127.0.0.1 local RPC でのみ接続します。Windows では Antigravity 2.x の `language_server.exe` と legacy 実行ファイル名を両方検出します。セッション cascade、quota、generator metadata を providerQuotas と source-attributed UsageIndex に反映し、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
 
-Antigravity のモデル quota カードはデフォルトでは percent-only です。Settings の **Antigravity quota pace** を有効にすると、reset time から 5h/7d pacing を推定します。
+Antigravity 2.x では provider が報告する `Gemini Models` と `Claude and GPT models` の shared quota group、および各 5h/weekly bucket を優先表示します。Grouped RPC を利用できない旧 server では従来のモデル別 quota にフォールバックします。Grouped quota は provider が報告する period を使い、legacy モデル quota は Settings の **旧 Antigravity クォータのペース推定**を有効にした場合だけ reset time から 5h/7d pacing を推定します。
 
 **Prompt キャッシュ計算式：** Codex ログは `input_tokens` と `cached_input_tokens` を提供します。WhereMyTokens は uncached input を `input_tokens - cached_input_tokens`、cached input を cache-read token として保存します。Codex と Antigravity は cache read が prompt token に占める割合をキャッシュ効率として表示します。
 

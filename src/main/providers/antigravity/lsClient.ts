@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import type {
   AntigravityGeneratorMetadataResponse,
+  AntigravityQuotaSummaryResponse,
   AntigravityServerInfo,
   AntigravityTrajectoryResponse,
   AntigravityTrajectorySummariesResponse,
@@ -98,6 +99,16 @@ export class AntigravityLsClient {
 
   getUserStatus(timeoutMs = 6_000): Promise<AntigravityUserStatusResponse> {
     return this.call('GetUserStatus', {
+      metadata: {
+        ideName: 'antigravity',
+        extensionName: 'antigravity',
+        locale: 'en',
+      },
+    }, timeoutMs);
+  }
+
+  retrieveUserQuotaSummary(timeoutMs = 6_000): Promise<AntigravityQuotaSummaryResponse> {
+    return this.call('RetrieveUserQuotaSummary', {
       metadata: {
         ideName: 'antigravity',
         extensionName: 'antigravity',

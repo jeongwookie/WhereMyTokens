@@ -254,9 +254,9 @@ WhereMyTokens también puede leer los logs JSONL locales de Codex desde `~/.code
 
 ### Seguimiento de Antigravity
 
-El seguimiento de Antigravity se conecta únicamente al language server del IDE Antigravity en ejecución mediante 127.0.0.1 local RPC. Lee cascades de sesión, quota por modelo y generator metadata para alimentar providerQuotas y el UsageIndex atribuido por source; no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline.
+El seguimiento de Antigravity se conecta únicamente al language server del IDE Antigravity en ejecución mediante 127.0.0.1 local RPC. En Windows detecta tanto `language_server.exe` de Antigravity 2.x como el ejecutable legacy. Lee cascades de sesión, quota y generator metadata para alimentar providerQuotas y el UsageIndex atribuido por source; no usa Google OAuth, refresh token, Google cloud usage endpoint ni fallback de base de datos offline.
 
-Las tarjetas de quota por modelo de Antigravity son percent-only por defecto. Activa **Antigravity quota pace** en Settings para estimar el pacing de 5h/7d desde los reset times.
+Antigravity 2.x prioriza los shared quota groups `Gemini Models` y `Claude and GPT models`, junto con cada bucket 5h/weekly reportado por el provider. Los servidores antiguos vuelven a la quota por modelo. La quota agrupada usa el period reportado; solo la quota legacy estima pacing 5h/7d desde reset times al activar **Legacy Antigravity quota pace estimate**.
 
 **Cálculo de caché de prompt:** los logs de Codex reportan `input_tokens` y `cached_input_tokens`. WhereMyTokens guarda el input no cacheado como `input_tokens - cached_input_tokens` y el cached input como cache-read tokens. Codex y Antigravity muestran la eficiencia como cache reads sobre prompt tokens:
 

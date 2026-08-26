@@ -33,6 +33,25 @@ export interface AntigravityUserStatusResponse {
   };
 }
 
+export interface AntigravityQuotaSummaryBucket {
+  bucketId?: string;
+  displayName?: string;
+  remainingFraction?: number;
+  resetTime?: string | number;
+}
+
+export interface AntigravityQuotaSummaryGroup {
+  displayName?: string;
+  buckets?: AntigravityQuotaSummaryBucket[];
+}
+
+export interface AntigravityQuotaSummaryResponse {
+  response?: {
+    groups?: AntigravityQuotaSummaryGroup[];
+  };
+  groups?: AntigravityQuotaSummaryGroup[];
+}
+
 export interface AntigravityTrajectorySummary {
   summary?: string;
   createdTime?: string | number;

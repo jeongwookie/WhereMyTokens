@@ -6,9 +6,16 @@ import { normalizeQuotaPeriod } from '../../../shared/quotaDomain';
 import { defaultQuotaModeForModel, normalizeAntigravityModel } from './models';
 import { maskEmail, parseTimestampMs } from './pathUtils';
 import { resolveAntigravityPriceForModel } from './pricing';
-import { findAntigravityServersCached, getTrajectorySummariesCached, getUserStatusCached } from './runtimeCache';
+import {
+  findAntigravityServersCached,
+  getQuotaSummaryCached,
+  getTrajectorySummariesCached,
+  getUserStatusCached,
+} from './runtimeCache';
 import type {
   AntigravityModelConfig,
+  AntigravityQuotaSummaryBucket,
+  AntigravityQuotaSummaryResponse,
   AntigravityServerInfo,
   AntigravityTrajectorySummariesResponse,
   AntigravityUserStatusResponse,
@@ -16,6 +23,8 @@ import type {
 
 const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_QUOTA_SUMMARY_GROUPS = 32;
+const MAX_QUOTA_SUMMARY_BUCKETS = 32;
 
 interface AntigravityQuotaParseOptions {
   inferDurationFromReset?: boolean;
@@ -51,6 +60,79 @@ function durationMsFromReset(resetsAt: number | null, nowMs: number, enabled: bo
 
 function stableModelId(model: string): string {
   return model.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+}
+
+function summaryBucketDurationMs(bucket: AntigravityQuotaSummaryBucket): number | null {
+  const text = `${bucket.bucketId ?? ''} ${bucket.displayName ?? ''}`.toLowerCase();
+  if (text.includes('weekly') || text.includes('week') || text.includes('7d')) return WEEK_MS;
+  if (text.includes('five hour') || text.includes('five-hour') || text.includes('5h') || text.includes('session')) {
+    return FIVE_HOURS_MS;
+  }
+  return null;
+}
+
+function summaryTargetAbbreviation(label: string): string {
+  if (/claude|gpt/i.test(label)) return 'CG';
+  if (/gemini/i.test(label)) return 'G';
+  const initials = label.match(/[A-Za-z0-9]/g)?.slice(0, 2).join('').toUpperCase();
+  return initials || 'A';
+}
+
+export function parseAntigravityQuotaSummary(response: AntigravityQuotaSummaryResponse): QuotaEntry[] {
+  const groups = Array.isArray(response.response?.groups)
+    ? response.response.groups
+    : Array.isArray(response.groups) ? response.groups : [];
+  const entries: QuotaEntry[] = [];
+  const seenGroupIds = new Set<string>();
+
+  groups.slice(0, MAX_QUOTA_SUMMARY_GROUPS).forEach((group, groupIndex) => {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) return;
+    const label = typeof group.displayName === 'string' && group.displayName.trim()
+      ? group.displayName.trim()
+      : `Antigravity quota ${groupIndex + 1}`;
+    const baseGroupId = stableModelId(label);
+    const groupId = seenGroupIds.has(baseGroupId) ? `${baseGroupId}-${groupIndex + 1}` : baseGroupId;
+    seenGroupIds.add(groupId);
+    const target: QuotaEntry['target'] = {
+      id: `antigravity.group.summary.${groupId}`,
+      label,
+      defaultMode: 'simple',
+      defaultOrder: 100 + groupIndex,
+      taskbarAbbreviation: summaryTargetAbbreviation(label),
+      cacheMetricTitle: 'Cache read / prompt tokens',
+      hideCost: true,
+    };
+    const seenBucketIds = new Set<string>();
+    const buckets = Array.isArray(group.buckets) ? group.buckets : [];
+
+    buckets.slice(0, MAX_QUOTA_SUMMARY_BUCKETS).forEach((bucket, bucketIndex) => {
+      if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) return;
+      const remainingPct = remainingPctFromFraction(bucket.remainingFraction);
+      if (remainingPct == null) return;
+      const bucketLabel = typeof bucket.displayName === 'string' && bucket.displayName.trim()
+        ? bucket.displayName.trim()
+        : `Quota ${bucketIndex + 1}`;
+      const baseBucketId = stableModelId(
+        typeof bucket.bucketId === 'string' && bucket.bucketId.trim() ? bucket.bucketId : bucketLabel,
+      );
+      const bucketId = seenBucketIds.has(baseBucketId) ? `${baseBucketId}-${bucketIndex + 1}` : baseBucketId;
+      seenBucketIds.add(bucketId);
+      const durationMs = summaryBucketDurationMs(bucket);
+      entries.push({
+        key: `antigravity.summary.${groupId}.${bucketId}`,
+        target,
+        scope: { kind: 'model', label },
+        state: 'limited',
+        usedPct: clampPercent(100 - remainingPct),
+        resetsAt: resetAtFromValue(bucket.resetTime),
+        durationMs,
+        durationInferred: false,
+        period: normalizeQuotaPeriod(durationMs),
+      });
+    });
+  });
+
+  return entries;
 }
 
 export function parseAntigravityModelQuotas(
@@ -188,14 +270,21 @@ export async function fetchAntigravityQuotaFromServers(
     if (pastDeadline()) break;
     try {
       const status = await getUserStatusCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));
+      const legacySnapshot = snapshotFromStatus(status, ctx.nowMs, {
+        inferDurationFromReset: ctx.settings.antigravityQuotaDurationPaceEnabled === true,
+      });
+      const summary = pastDeadline()
+        ? null
+        : await getQuotaSummaryCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));
+      const summaryEntries = summary ? parseAntigravityQuotaSummary(summary) : [];
       const trajectories = pastDeadline()
         ? null
         : await getTrajectorySummariesCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));
       candidates.push({
         server,
-        snapshot: snapshotFromStatus(status, ctx.nowMs, {
-          inferDurationFromReset: ctx.settings.antigravityQuotaDurationPaceEnabled === true,
-        }),
+        snapshot: summaryEntries.length > 0
+          ? { ...legacySnapshot, entries: summaryEntries }
+          : legacySnapshot,
         newestCascadeMs: newestCascadeMs(trajectories),
       });
     } catch {

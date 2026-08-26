@@ -258,9 +258,9 @@ WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~
 
 ### Antigravity 추적
 
-Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. 세션 cascade, 모델 quota, generator metadata를 읽어 providerQuotas와 source-attributed UsageIndex에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
+Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. Windows에서는 Antigravity 2.x의 `language_server.exe`와 legacy 실행 파일명을 모두 탐지합니다. 세션 cascade, quota, generator metadata를 읽어 providerQuotas와 source-attributed UsageIndex에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
 
-Antigravity 모델 quota 카드는 기본적으로 percent-only로 표시됩니다. Settings의 **Antigravity quota pace**를 켜면 reset time으로 5h/7d pacing을 추정합니다.
+Antigravity 2.x에서는 provider가 보고한 `Gemini Models`, `Claude and GPT models` shared quota group과 각 5h/weekly bucket을 우선 표시합니다. Grouped RPC를 지원하지 않는 이전 서버는 기존 모델별 quota로 폴백합니다. Grouped quota는 provider가 보고한 period를 사용하고, legacy 모델 quota는 Settings의 **Legacy Antigravity quota pace estimate**를 켰을 때만 reset time으로 5h/7d pacing을 추정합니다.
 
 **Prompt 캐시 계산식:** Codex 로그는 `input_tokens`와 `cached_input_tokens`를 제공합니다. WhereMyTokens는 uncached input을 `input_tokens - cached_input_tokens`로, cached input을 cache-read token으로 저장합니다. Codex와 Antigravity는 cache read가 prompt token에서 차지하는 비율을 캐시 효율로 표시합니다.
 
