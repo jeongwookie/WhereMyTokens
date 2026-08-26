@@ -1,4 +1,5 @@
 import type {
+  AntigravityQuotaSummaryResponse,
   AntigravityServerInfo,
   AntigravityTrajectorySummariesResponse,
   AntigravityUserStatusResponse,
@@ -9,10 +10,12 @@ import { AntigravityLsClient } from './lsClient';
 const SERVER_TTL_MS = 10_000;
 const TRAJECTORY_TTL_MS = 10_000;
 const USER_STATUS_TTL_MS = 10_000;
+const QUOTA_SUMMARY_TTL_MS = 10_000;
 
 let cachedServers: { at: number; value: AntigravityServerInfo[] } | null = null;
 const trajectoryCache = new Map<string, { at: number; value: AntigravityTrajectorySummariesResponse }>();
 const userStatusCache = new Map<string, { at: number; value: AntigravityUserStatusResponse }>();
+const quotaSummaryCache = new Map<string, { at: number; value: AntigravityQuotaSummaryResponse | null }>();
 
 function serverKey(server: AntigravityServerInfo): string {
   return `${server.pid}:${server.port}:${server.workspaceId ?? ''}`;
@@ -36,6 +39,24 @@ export async function getUserStatusCached(
   const value = await new AntigravityLsClient(server).getUserStatus(timeoutMs);
   userStatusCache.set(key, { at: nowMs, value });
   return value;
+}
+
+export async function getQuotaSummaryCached(
+  server: AntigravityServerInfo,
+  nowMs = Date.now(),
+  timeoutMs = 6_000,
+): Promise<AntigravityQuotaSummaryResponse | null> {
+  const key = serverKey(server);
+  const cached = quotaSummaryCache.get(key);
+  if (cached && nowMs - cached.at < QUOTA_SUMMARY_TTL_MS) return cached.value;
+  try {
+    const value = await new AntigravityLsClient(server).retrieveUserQuotaSummary(timeoutMs);
+    quotaSummaryCache.set(key, { at: nowMs, value });
+    return value;
+  } catch {
+    quotaSummaryCache.set(key, { at: nowMs, value: null });
+    return null;
+  }
 }
 
 export async function getTrajectorySummariesCached(

@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { parseWindowsProcessCandidates } from '../dist/main/providers/antigravity/processFinder.js';
+import {
+  findWindowsProcessCandidates,
+  parseWindowsProcessCandidates,
+  WINDOWS_LANGUAGE_SERVER_NAMES,
+} from '../dist/main/providers/antigravity/processFinder.js';
 
 test('Antigravity process finder parses Windows CIM JSON arrays and filters unrelated processes', () => {
   const rows = [
@@ -50,6 +54,32 @@ test('Antigravity process finder accepts absolute Antigravity app data paths', (
   assert.equal(candidate[0].pid, 301);
   assert.equal(candidate[0].csrfToken, 'secret-d');
   assert.equal(candidate[0].extensionPort, 34567);
+});
+
+test('Antigravity process finder supports current and legacy Windows executable names', () => {
+  assert.deepEqual(WINDOWS_LANGUAGE_SERVER_NAMES, [
+    'language_server.exe',
+    'language_server_windows_x64.exe',
+  ]);
+});
+
+test('Antigravity process finder falls back when the primary name query is empty', async () => {
+  const scripts = [];
+  const candidate = {
+    ProcessId: 401,
+    CommandLine: 'language_server.exe --csrf_token secret-e --app_data_dir antigravity --extension_server_port 45678',
+  };
+  const result = await findWindowsProcessCandidates(1_000, async script => {
+    scripts.push(script);
+    return scripts.length === 1 ? '[]' : JSON.stringify(candidate);
+  });
+
+  assert.equal(scripts.length, 2);
+  assert.match(scripts[0], /language_server\.exe/);
+  assert.match(scripts[0], /language_server_windows_x64\.exe/);
+  assert.match(scripts[1], /CommandLine/);
+  assert.equal(result[0].pid, 401);
+  assert.equal(result[0].csrfToken, 'secret-e');
 });
 
 test('Antigravity process finder threads a discovery timeout through process and port probes', () => {

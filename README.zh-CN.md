@@ -276,11 +276,11 @@ WhereMyTokens 可以通过 `127.0.0.1` 上运行中的 Antigravity IDE local lan
 
 **Antigravity 追踪包含：**
 - 与 Claude、Codex 共用 provider/session UI 的 cascade 会话分组
-- 来自 `GetUserStatus` 的逐模型 quota 百分比和重置时间
+- 优先读取 `RetrieveUserQuotaSummary` 返回的 `Gemini Models`、`Claude and GPT models` shared quota groups 及其 5h/weekly buckets；旧版 server 回退到 `GetUserStatus` 的逐模型 quota
 - 来自 `GetCascadeTrajectoryGeneratorMetadata` 的 token metadata，并带有有界 full-trajectory fallback
 - 对可识别的本地模型 metadata 显示 API 等价费用估算；未定价模型保持为 0 或隐藏
 
-Antigravity 模型 quota 卡片默认仅显示百分比。在 Settings 中启用 **Antigravity quota pace** 后，会根据 reset time 估算 5h/7d pacing。
+Windows 会同时检测 Antigravity 2.x 的 `language_server.exe` 与 legacy 可执行文件名。Grouped quota 使用 provider 报告的 period；只有 legacy 逐模型 quota 会在 Settings 启用 **Legacy Antigravity quota pace estimate** 后根据 reset time 估算 5h/7d pacing。
 
 Antigravity 支持保持 local-only。它不会读取 Google OAuth credential、refresh token、Google cloud usage endpoint、credits 或离线 `state.vscdb` 数据。
 

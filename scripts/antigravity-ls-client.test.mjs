@@ -38,3 +38,28 @@ test('Antigravity LS client calls local Connect RPC with CSRF and protocol heade
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test('Antigravity LS client requests the grouped quota summary with IDE metadata', async () => {
+  let seenRequest = null;
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      seenRequest = { url: req.url, body: JSON.parse(body) };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ response: { groups: [] } }));
+    });
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const client = new AntigravityLsClient({ pid: 11, port: server.address().port, csrfToken: 'csrf-test' });
+    await client.retrieveUserQuotaSummary(1_000);
+    assert.equal(seenRequest.url, '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary');
+    assert.deepEqual(seenRequest.body, {
+      metadata: { ideName: 'antigravity', extensionName: 'antigravity', locale: 'en' },
+    });
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});

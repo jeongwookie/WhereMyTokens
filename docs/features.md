@@ -11,7 +11,7 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 
 ## Quotas And Alerts
 
-- Provider quota cards for Claude, Codex, Antigravity, and future provider adapters.
+- Provider quota cards for Claude, Codex, Antigravity, and future provider adapters. Antigravity 2.x prefers provider-reported shared quota groups and retains per-model local RPC fallback for older servers.
 - Per-target quota display modes: Rich, Simple, or hidden.
 - Quota Pace compares provider usage percentage with elapsed reset-window time whenever reset and duration are both known. A known reset alone still shows its countdown; local token/cost attribution is independent.
 - Optional draggable Windows taskbar mini quota display with two physical lines for provider-reported `5h` and `1w` Quota Entries. Two represented periods use one line each; a single period uses both lines with balanced entry distribution. The display also supports a configurable per-line block limit, compact measured hidden-target counts, content-fitted window bounds, source/status-colored target prefixes, transparent background, and taskbar-background-aware text contrast.

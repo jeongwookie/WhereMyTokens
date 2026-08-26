@@ -5,6 +5,10 @@ import * as https from 'https';
 import type { AntigravityServerInfo } from './types';
 
 const execFileAsync = promisify(execFile);
+export const WINDOWS_LANGUAGE_SERVER_NAMES = [
+  'language_server.exe',
+  'language_server_windows_x64.exe',
+] as const;
 
 export interface ProcessCandidate {
   pid: number;
@@ -13,12 +17,6 @@ export interface ProcessCandidate {
   csrfToken: string;
   workspaceId?: string;
   processStartedAtMs?: number;
-}
-
-function processName(): string {
-  if (process.platform === 'win32') return 'language_server_windows_x64.exe';
-  if (process.platform === 'darwin') return `language_server_macos${process.arch === 'arm64' ? '_arm' : ''}`;
-  return `language_server_linux${process.arch === 'arm64' ? '_arm' : '_x64'}`;
 }
 
 async function runPowerShell(script: string, timeout = 15_000): Promise<string> {
@@ -98,27 +96,43 @@ export function parseWindowsProcessCandidates(stdout: string): ProcessCandidate[
   return candidates;
 }
 
-async function findWindowsProcessCandidates(timeoutMs = 15_000): Promise<ProcessCandidate[]> {
-  const name = processName();
+type PowerShellRunner = (script: string, timeout: number) => Promise<string>;
+
+export async function findWindowsProcessCandidates(
+  timeoutMs = 15_000,
+  runner: PowerShellRunner = runPowerShell,
+): Promise<ProcessCandidate[]> {
+  const stopAt = Date.now() + Math.max(1, timeoutMs);
+  const processFilter = WINDOWS_LANGUAGE_SERVER_NAMES
+    .map(name => `Name='${name}'`)
+    .join(' OR ');
   const primary = `
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
-    $p = Get-CimInstance Win32_Process -Filter "Name='${name}'" -ErrorAction SilentlyContinue;
+    $p = Get-CimInstance Win32_Process -Filter "${processFilter}" -ErrorAction SilentlyContinue;
     if ($p) { @($p) | Select-Object ProcessId,ParentProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress } else { '[]' }
   `;
 
   try {
-    return parseWindowsProcessCandidates(await runPowerShell(primary, timeoutMs));
+    const candidates = parseWindowsProcessCandidates(
+      await runner(primary, remainingTimeoutMs(stopAt, 15_000)),
+    );
+    if (candidates.length > 0) return candidates;
   } catch {
-    const fallback = `
-      [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
-      $p = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'csrf_token' -and $_.CommandLine -match 'antigravity' };
-      if ($p) { @($p) | Select-Object ProcessId,ParentProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress } else { '[]' }
-    `;
-    try {
-      return parseWindowsProcessCandidates(await runPowerShell(fallback, timeoutMs));
-    } catch {
-      return [];
-    }
+    // command line 기반 fallback으로 이어서 찾습니다.
+  }
+
+  if (Date.now() >= stopAt) return [];
+  const fallback = `
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
+    $p = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'csrf_token' -and $_.CommandLine -match 'antigravity' };
+    if ($p) { @($p) | Select-Object ProcessId,ParentProcessId,CommandLine,CreationDate | ConvertTo-Json -Compress } else { '[]' }
+  `;
+  try {
+    return parseWindowsProcessCandidates(
+      await runner(fallback, remainingTimeoutMs(stopAt, 15_000)),
+    );
+  } catch {
+    return [];
   }
 }
 

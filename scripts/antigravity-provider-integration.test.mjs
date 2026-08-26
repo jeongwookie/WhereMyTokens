@@ -165,6 +165,69 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
   });
 });
 
+test('Antigravity provider prefers grouped quota families and preserves account metadata', async () => {
+  const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
+  await withAntigravityServer((req, res) => {
+    if (req.url.endsWith('/GetUserStatus')) {
+      sendJson(res, {
+        userStatus: {
+          email: 'person@example.com',
+          planStatus: { planInfo: { planName: 'Pro' } },
+          cascadeModelConfigData: {
+            clientModelConfigs: [{
+              label: 'Legacy model row',
+              modelOrAlias: { model: 'legacy-model' },
+              quotaInfo: { remainingFraction: 0.1 },
+            }],
+          },
+        },
+      });
+      return;
+    }
+    if (req.url.endsWith('/RetrieveUserQuotaSummary')) {
+      sendJson(res, {
+        response: {
+          groups: [
+            {
+              displayName: 'Gemini Models',
+              buckets: [{
+                bucketId: 'gemini-weekly',
+                displayName: 'Weekly Limit Remaining',
+                remainingFraction: 0.8,
+                resetTime: new Date(nowMs + 604_800_000).toISOString(),
+              }],
+            },
+            {
+              displayName: 'Claude and GPT models',
+              buckets: [{
+                bucketId: '3p-session',
+                displayName: 'Five Hour Limit Remaining',
+                remainingFraction: 0.5,
+                resetTime: new Date(nowMs + 18_000_000).toISOString(),
+              }],
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (req.url.endsWith('/GetAllCascadeTrajectories')) {
+      sendJson(res, { trajectorySummaries: {} });
+      return;
+    }
+    sendJson(res, {});
+  }, async serverInfo => {
+    const quota = await fetchAntigravityQuotaFromServers(context({ nowMs }), [serverInfo]);
+    assert.equal(quota.planName, 'Pro');
+    assert.equal(quota.accountLabel, 'pe***@example.com');
+    assert.deepEqual(quota.entries.map(entry => [entry.target.label, entry.period, entry.usedPct]), [
+      ['Gemini Models', '7d', 20],
+      ['Claude and GPT models', '5h', 50],
+    ]);
+    assert.equal(quota.entries.some(entry => entry.target.label === 'Legacy model row'), false);
+  });
+});
+
 test('Antigravity quota selection prefers the server with the newest cascade activity', async () => {
   const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
   const handlerFor = ({ remainingFraction, resetMs, newestMs }) => (req, res) => {

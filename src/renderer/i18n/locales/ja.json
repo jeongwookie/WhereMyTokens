@@ -590,8 +590,8 @@
         "detail": "Codexのライブ使用状況、キャッシュ、またはローカルログの週間ウィンドウ"
       },
       "antigravityModelQuotas": {
-        "label": "Antigravity モデル割り当て",
-        "detail": "Antigravity実行中のローカルRPCモデル割り当て使用状況"
+        "label": "Antigravity クォータグループ",
+        "detail": "共有 local RPC クォータグループ。旧バージョンではモデル別表示にフォールバック"
       }
     },
     "footerNote": "アラートは有効になっているプロバイダーおよび割り当て/モデル対象に従います。60秒ごとに自動更新され、アラートごとに1時間のクールダウンがあります。",
@@ -647,8 +647,8 @@
       "heading": "プロバイダー",
       "atLeastOneProvider": "少なくとも1つのプロバイダーを有効にする必要があります。",
       "antigravityDetail": "Antigravity IDEが起動してサインインしている必要があります。ローカルRPCのみを使用します。",
-      "antigravityPace": "Antigravityクォータのペース推定",
-      "antigravityPaceHint": "リセット時刻から5時間または週単位のペースを推定します。オフにするとAntigravityのモデルクォータはパーセント表示のみになります"
+      "antigravityPace": "旧 Antigravity クォータのペース推定",
+      "antigravityPaceHint": "グループクォータは provider が報告する5時間/週の期間を使います。旧モデル別クォータでは reset time から pacing を推定します"
     },
     "quotaDisplay": {
       "heading": "クォータ表示",
