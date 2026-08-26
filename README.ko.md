@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe"><strong>v1.24.2 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe"><strong>v1.24.3 다운로드</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 버전</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.2는 Claude 로그인이 만료되거나 거절되면 공식 CLI 재로그인 액션을 안내하고, credential 변경 후 quota 추적을 자동 복구합니다. WMT는 credential을 갱신하거나 쓰지 않습니다.</em>
+  <em>v1.24.3은 Windows에서 Antigravity 2.x를 다시 탐지하고, provider가 보고한 shared Gemini 및 Claude/GPT quota group을 legacy fallback과 함께 표시합니다.</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows에서 현재·legacy Antigravity language server를 모두 탐지하고, provider가 보고한 shared Gemini 및 Claude/GPT quota group을 우선 표시하며 이전 서버의 모델별 quota fallback을 유지 |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude 로그인 만료·거절을 알림과 앱 내 액션으로 안내하고 공식 CLI 로그인을 열며, credential 변경 후 자동 재시도합니다. 이전 quota를 유지해도 로그인 문제를 숨기지 않고 credential 갱신·쓰기는 하지 않습니다 |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 기존 Claude Code credential은 있지만 최신 statusLine이 없는 Claude Desktop 사용에서 quota를 복구하고, 공식 statusLine 우선·token refresh/write 제거·Anthropic 고정 호스트·auth-bound cache·무변조 테스트를 적용 |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | Claude quota를 공식 로컬 `statusLine`으로 전환하고, Claude OAuth credential 접근과 직접 usage polling을 제거하며, custom statusLine 보존과 최소화된 atomic snapshot·reset-aware cache를 추가 |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | Claude와 GPT-5.6의 모델별·시점별 API 환산 가격을 바로잡고, 검증된 백업·checkpoint 제한 replay·동시 변경 감지·privacy-safe CLI를 갖춘 무손실 SQLite 비용 재산정을 추가 |
-| **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | 7/27 | Fable scoped quota와 Codex Resets 표시 설정을 복구하고, 만료 직전 Claude OAuth 토큰을 선제 refresh하며, UsageIndex 테스트 clock을 고정해 릴리즈 검증을 안정화 |
 
 [→ 전체 변경 이력](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +88,11 @@
 macOS 사용자는 별도 공개 저장소를 사용하세요:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
 > **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-v1.24.2-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-v1.24.3-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -102,7 +102,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.24.2-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.24.3-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 

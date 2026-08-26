@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.24.3 | 2026-08-27 | Restore Antigravity 2.x Windows discovery for current and legacy language server executables; prefer provider-reported shared Gemini and Claude/GPT quota groups with bounded parsing, cached local RPC, and legacy per-model fallback |
 | v1.24.2 | 2026-08-10 | Add actionable Claude login recovery with a one-time Windows notification, visible official CLI login, credential-change auto-retry, auth-bound stale-quota preservation, and no credential refresh or writes |
 | v1.24.1 | 2026-08-10 | Restore Claude quota when Desktop is active and existing Claude Code credentials are available without fresh statusLine data; never refresh or write Claude credentials; add fixed-host HTTPS, runtime throttling, auth-bound cache, backoff, integrity tests, and corrected privacy/EULA/help documentation |
 | v1.24.0 | 2026-08-10 | Replace direct Claude OAuth usage polling and credential refresh with the official local statusLine quota feed; add minimized atomic snapshots, reset-aware 30-minute cache, optional locally reported Fable limits, and regression/privacy coverage |

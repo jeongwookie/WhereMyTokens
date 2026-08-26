@@ -18,7 +18,7 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2"><img alt="Release v1.24.2" src="https://img.shields.io/badge/release-v1.24.2-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3"><img alt="Release v1.24.3" src="https://img.shields.io/badge/release-v1.24.3-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
@@ -61,9 +61,9 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.2/WhereMyTokens-v1.24.2-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-v1.24.3-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.1)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -83,11 +83,11 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | Aug 27 | Restore Antigravity 2.x detection on Windows and show provider-reported shared Gemini and Claude/GPT quota groups with safe legacy per-model fallback |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | Aug 10 | Add actionable Claude login recovery with a one-time Windows notification, the official CLI login flow, credential-change auto-retry, and stale-quota preservation without refreshing or writing credentials |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | Aug 10 | Restore Claude quota when Claude Desktop is active and existing Claude Code credentials are available, even without fresh statusLine data; keep official statusLine first and remove all token refresh/write behavior |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | Aug 10 | Move Claude quota tracking to the official local `statusLine` feed, remove direct Claude OAuth credential access and usage polling, preserve custom status lines, and add minimized atomic snapshots with reset-aware caching |
 | **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | Aug 8 | Correct model-specific API-equivalent pricing across Claude and GPT-5.6 price changes, and add lossless SQLite cost repricing with validated backups, checkpoint-bounded replay, concurrent-change protection, and privacy-safe CLI output |
-| **[v1.23.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.1)** | Jul 27 | Restore Fable scoped quota visibility and Codex Resets display settings, proactively refresh expiring Claude OAuth tokens, and pin UsageIndex test clocks for stable release validation |
 
 [Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 
