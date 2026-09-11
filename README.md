@@ -18,7 +18,7 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3"><img alt="Release v1.24.3" src="https://img.shields.io/badge/release-v1.24.3-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6"><img alt="Release v1.24.6" src="https://img.shields.io/badge/release-v1.24.6-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
@@ -61,9 +61,9 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-v1.24.3-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-v1.24.6-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.1)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -83,11 +83,13 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **[v1.24.5](docs/usage-accounting.md#automatic-historical-accounting-revision)** | 2026-09-10 | Local build: automatically verify and correct proven historical Codex overcounts with backups, resumable source receipts, and a results/recheck view. |
-| **[v1.24.4](docs/usage-accounting.md)** | 2026-09-10 | Local build: fix Codex cost inflation caused by mixed thread and notification counters; preserve counter origins across turns and restarts. |
+| **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Fix Codex counter overcounts, safely correct verified history after upgrade, update Astra pricing, and preserve large Git statistics. |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | Aug 27 | Restore Antigravity 2.x detection on Windows and show provider-reported shared Gemini and Claude/GPT quota groups with safe legacy per-model fallback |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | Aug 10 | Add actionable Claude login recovery with a one-time Windows notification, the official CLI login flow, credential-change auto-retry, and stale-quota preservation without refreshing or writing credentials |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | Aug 10 | Restore Claude quota when Claude Desktop is active and existing Claude Code credentials are available, even without fresh statusLine data; keep official statusLine first and remove all token refresh/write behavior |
+| **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | Aug 10 | Move Claude quota tracking to the official local `statusLine` feed, remove direct Claude OAuth credential access and usage polling, preserve custom status lines, and add minimized atomic snapshots with reset-aware caching |
+
+After upgrade, historical usage is checked locally. When legacy checkpoints need rebuilding, verification retries automatically after initial indexing completes. Only proven overcounts are corrected, with a local backup; unverified history remains unchanged. See Settings → Data for results and rechecking.
 
 [Full changelog](https://github.com/jeongwookie/WhereMyTokens/releases)
 

@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe"><strong>Descargar v1.24.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe"><strong>Descargar v1.24.6</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.3 restaura la detección de Antigravity 2.x en Windows y muestra los shared quota groups de Gemini y Claude/GPT reportados por el provider con fallback legacy.</em>
+  <em>v1.24.6: Corrige sobreconteos de Codex y la verificación tras actualizar; actualiza precios de Astra y estadísticas Git grandes</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,13 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
-| **[v1.24.5](docs/usage-accounting.md#automatic-historical-accounting-revision)** | 2026-09-10 | Compilación local: verifica y corrige sobreconteos históricos de Codex con copias de seguridad, registros reanudables por fuente y detalles con nueva comprobación. |
-| **[v1.24.4](docs/usage-accounting.md)** | 2026-09-10 | Compilación local: corrige costes inflados al mezclar contadores acumulados de hilos y notificaciones de Codex; conserva su origen entre turnos y reinicios. |
+| **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Corrige sobreconteos de Codex y la verificación tras actualizar; actualiza precios de Astra y estadísticas Git grandes |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 27 ago | Detecta los language servers actuales y legacy de Antigravity en Windows, prioriza los shared quota groups de Gemini y Claude/GPT reportados por el provider y conserva el fallback de quota por modelo para servidores antiguos |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 10 ago | Avisa cuando el login de Claude vence o es rechazado, abre el login oficial por CLI y reintenta tras cambiar las credentials. Mantiene visible el problema aunque conserve la última quota y no renueva ni escribe credentials |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 10 ago | Restaura la quota de Claude Desktop cuando hay credentials de Claude Code pero no un statusLine reciente; mantiene statusLine primero y añade host fijo, cache ligada al auth y pruebas de integridad |
+| **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 10 ago | Mueve la quota de Claude al `statusLine` local oficial, elimina el acceso a credenciales OAuth y el sondeo directo de usage, conserva statusLine personalizados y añade snapshots atómicos mínimos con cache consciente del reset |
+
+Si faltan datos de verificación antiguos, se reintenta al terminar la indexación inicial. Solo se corrigen sobreconteos demostrados, con copia local; los registros no verificables se conservan. Consulta resultados y vuelve a comprobar en Settings → Data.
 
 [→ Historial completo](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +89,9 @@
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-v1.24.3-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-v1.24.6-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -99,7 +101,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.24.3-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.24.6-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
