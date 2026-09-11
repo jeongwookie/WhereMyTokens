@@ -42,7 +42,7 @@ test('git daily output builds today all and daily7d code output stats', () => {
     day({ date: '2026-05-24', commits: 1, added: 5, removed: 1 }),
     day({ date: '2026-05-25', commits: 2, added: 10, removed: 3 }),
   ]);
-  const stats = buildCodeOutputFromGitLedger(snapshot, ['repo-a'], '2026-05-25');
+  const stats = buildCodeOutputFromGitLedger(snapshot, { kind: 'all-tracked' }, '2026-05-25');
   assert.equal(stats.today.commits, 2);
   assert.equal(stats.today.added, 10);
   assert.equal(stats.all.commits, 3);

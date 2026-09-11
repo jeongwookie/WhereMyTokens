@@ -21,9 +21,10 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 ## Analytics
 
 - Today and all-time header totals for tokens, API-equivalent estimated cost, calls, sessions, cache efficiency, and savings.
-- Persistent source-attributed local usage index for long-range totals, incremental startup, and project-aware filtering.
+- Explicit GPT-6 Astra Standard API pricing, including cached input and the documented long-context rates. Dated price revisions automatically update matching historical costs from complete retained detail, with a backup and completion receipt; incomplete history is preserved.
+- Persistent source-attributed local usage index for long-range totals, incremental startup, and project-aware filtering. [Usage accounting](usage-accounting.md) documents cumulative deduplication, missing-metadata estimates, and history-preserving upgrades.
 - Usage precision retention: request detail for 8 days, hourly buckets for 35 days, daily buckets for 180 days, and exact monthly authority indefinitely.
-- Non-blocking first indexing with explicit incomplete coverage, plus a destructive `Reset index` action that rebuilds only from currently available sources.
+- Non-blocking first indexing with explicit scan progress and operational failures; approximation uncertainty does not require manual review. Normal refresh preserves existing history. The separate destructive `Reset index` action rebuilds only from currently available sources.
 - Lossless cost repricing with a validated SQLite backup and transactionally enforced non-cost-state hash; unavailable ambiguous raw-model history is preserved rather than guessed or reset.
 - Trend buckets with drill-downs for provider input/output, thinking, response, tools, cache-aware work tokens, billing tokens, and git net-line categories.
 - Activity tabs for 7-day heatmap, 5-month calendar, hourly distribution, weekly comparison, and rhythm breakdown.
@@ -31,7 +32,8 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 
 ## Code Output
 
-- Commit and net-line metrics from local git repositories tied to tracked sessions.
+- Commit and net-line metrics from persistently tracked local git repositories, independent of recent session membership. Temporarily unavailable repositories retain their historical output, and project exclusions are reversible.
+- Git output includes human activity under the existing local-author filter; selecting a model or provider does not attribute commits to that AI source.
 - Cost per 100 added lines for today and all-time views.
 - Output growth chart across recent local days.
 - Local git author email filtering so only your commits are counted.
@@ -46,3 +48,7 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 - Dashboard layout controls for hiding or reordering optional cards.
 - Project hide and exclude controls backed by the same canonical usage query path.
 - Optional start with Windows.
+
+## Historical statistics correction
+
+On upgrade, a background check corrects proven Codex counter-origin overcounts after making a local backup. The result reports corrected and unverified sources separately. Details and a recheck action remain available under Settings → Data after the main-view notice is dismissed. Unavailable or incomplete history keeps its previous estimate; this is separate from Reset index.

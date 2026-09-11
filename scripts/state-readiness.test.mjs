@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 import { build } from 'esbuild';
@@ -10,6 +11,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import stateManager from '../dist/main/stateManager.js';
 import * as gitStatsKeys from '../dist/main/gitStatsKeys.js';
 import claudeLoginLauncher from '../dist/main/claudeLoginLauncher.js';
+import usageIndexModule from '../dist/main/usageIndex/index.js';
+import jsonlTypes from '../dist/main/jsonlTypes.js';
 import { tCallRegex } from './test-support/i18n.mjs';
 
 const { StateManager, resolveSessionRepoKeys } = stateManager;
@@ -66,7 +69,7 @@ function translationKeyExists(catalogKeys, key) {
 }
 
 async function importRendererComponent(entryPoint, name) {
-  const outdir = fs.mkdtempSync(path.resolve(`.tmp-${name}-`));
+  const outdir = fs.mkdtempSync(path.resolve('dist', `.tmp-${name}-`));
   const outfile = path.join(outdir, `${name}.mjs`);
   await build({
     entryPoints: [entryPoint],
@@ -108,7 +111,8 @@ test('repo stats collection includes session cwd candidates', () => {
   const source = fs.readFileSync(path.resolve('src', 'main', 'stateManager.ts'), 'utf8');
 
   assert.match(source, /getRepoGitStats\(settings, force, sessions\)/);
-  assert.match(source, /const cwdSet = new Set\(sessions\.map\(session => session\.cwd\)\)/);
+  assert.match(source, /sessions\.map\(session => session\.cwd\)/);
+  assert.match(source, /getSnapshot\(\)\.repositories/);
 });
 
 test('renderer splash and session stabilization use initial readiness and daily stats', () => {
@@ -684,4 +688,55 @@ test('direct session git stats still scope the repo when cwd differs', () => {
   const scoped = resolveSessionRepoKeys(sessions, { [repoKey]: repoStats });
 
   assert.deepEqual([...scoped], [repoKey]);
+});
+
+test('bounded history scans drain their backlog despite repeated discovery and retain completed session views', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-index-progress-'));
+  t.after(() => { assert.ok(fs.realpathSync(dir).startsWith(fs.realpathSync(os.tmpdir()) + path.sep)); fs.rmSync(dir, { recursive: true, force: true }); });
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-07T00:00:00Z') });
+  const { DefaultUsageIndex, InMemoryUsageIndexStorage } = usageIndexModule;
+  const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage());
+  t.after(() => index.close());
+  const calls = [];
+  const sources = ['a', 'b', 'c'].map(id => {
+    const filePath = path.join(dir, `${id}.jsonl`);
+    fs.writeFileSync(filePath, '\n');
+    return { provider: 'codex', sourceId: `codex:${id}`, filePath };
+  });
+  const provider = {
+    id: 'codex', ownsPath: () => true,
+    listAllSources: () => { t.mock.timers.tick(50); return { sources, truncated: false }; },
+    listRecentSources: () => ({ sources, truncated: false }),
+    usageIndexSource: (_ctx, source) => ({
+      descriptor: { sourceId: source.sourceId, provider: 'codex', kind: 'file', parserVersion: 4,
+        version: { token: 'v1', size: 1, mtimeMs: 1 } },
+      scanner: { scan: async () => {
+        calls.push(source.sourceId);
+        t.mock.timers.tick(10);
+        return { checkpoint: { byteOffset: 1 }, entries: [], rebuildCoverage: { kind: 'full' },
+          sessionProjection: { sourceId: source.sourceId, provider: 'codex', updatedAt: Date.now(), byteSize: 1,
+            payload: { sessionSnapshot: jsonlTypes.emptySessionSnapshot('events') } } };
+      } },
+    }),
+  };
+  const manager = new StateManager({ store: {}, get: () => null }, () => {});
+  manager.usageIndex = index;
+  manager.sourceBackedProviders = () => [provider];
+  manager.enabledProviders = () => [provider];
+  manager.collectTrackedSessionFiles = () => [];
+  manager.providerContext = () => ({});
+  manager.refreshUsageIndexProjections = async () => {};
+  for (let pass = 0; pass < 3; pass++) {
+    const loaded = await manager.loadProviderSummaries(false, 5, undefined, true, true);
+    assert.equal(loaded.partial, pass < 2);
+    assert.equal(loaded.summaries.size, pass + 1);
+    const coverage = (await index.queryUsage({ grain: 'month' })).coverage;
+    assert.equal(coverage.indexedSourceCount, pass + 1);
+    assert.equal(coverage.pendingSourceCount, 2 - pass);
+  }
+  assert.deepEqual(calls, ['codex:a', 'codex:b', 'codex:c']);
+  const loaded = await manager.loadProviderSummaries(false, 5, undefined, true, true);
+  assert.equal(loaded.partial, false);
+  assert.equal(loaded.summaries.size, 3);
+  assert.equal(calls.length, 3);
 });

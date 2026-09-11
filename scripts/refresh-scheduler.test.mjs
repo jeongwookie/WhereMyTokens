@@ -198,3 +198,24 @@ test('non-forced refresh waits while UI is busy', async () => {
   assert.equal(works.length, 1);
   assert.equal(works[0].scanBudgetMs, 2500);
 });
+
+test('exclusive maintenance waits for an active scan and preserves queued changes', async () => {
+  const scanGate=deferred(),maintenanceGate=deferred(),events=[];
+  const scheduler=new RefreshScheduler({foregroundScanBudgetMs:2500,getState:()=>({uiVisible:true,uiBusy:false}),execute:async work=>{
+    events.push([...work.changedFiles]);if(events.length===1)await scanGate.promise;
+  }});
+  const first=scheduler.request({mode:'fast',reason:'watcher',changedFiles:['first']});await tick();
+  const maintenance=scheduler.runExclusive(async()=>{events.push('maintenance');await maintenanceGate.promise;return 42;});
+  const second=scheduler.request({mode:'fast',reason:'watcher',changedFiles:['second']});await tick();
+  assert.deepEqual(events,[['first']]);scanGate.resolve();await first;await tick();assert.deepEqual(events,[['first'],'maintenance']);
+  maintenanceGate.resolve();assert.equal(await maintenance,42);await second;assert.deepEqual(events,[['first'],'maintenance',['second']]);
+});
+
+test('failed maintenance releases queued scans without discarding their work', async () => {
+  const gate=deferred(),events=[];
+  const scheduler=new RefreshScheduler({foregroundScanBudgetMs:2500,getState:()=>({uiVisible:true,uiBusy:false}),execute:async work=>{events.push([...work.changedFiles]);}});
+  const maintenance=scheduler.runExclusive(async()=>{await gate.promise;throw Error('maintenance failed');});
+  const rejected=assert.rejects(maintenance,/maintenance failed/);
+  const scan=scheduler.request({mode:'fast',reason:'watcher',changedFiles:['kept']});await tick();assert.deepEqual(events,[]);
+  gate.resolve();await rejected;await scan;assert.deepEqual(events,[['kept']]);
+});

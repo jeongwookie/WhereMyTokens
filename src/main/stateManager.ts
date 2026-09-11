@@ -14,6 +14,7 @@ import {
   buildCategoryNetLines,
   buildCodeOutputFromGitLedger,
   hasCommitsInRange,
+  trackedGitScope,
 } from './gitOutputLedger';
 import { isSafeLocalCwd } from './pathSafety';
 import { clearSessionMetadataCache, invalidateSessionMetadataCache } from './sessionMetadata';
@@ -388,30 +389,6 @@ export function resolveSessionRepoKeys(
   return scopedRepoKeys;
 }
 
-function currentLedgerRepoStats<T extends Pick<GitStats, 'gitCommonDir' | 'toplevel'>>(
-  sessions: Array<{ cwd: string; gitStats?: Pick<GitStats, 'gitCommonDir' | 'toplevel'> | null }>,
-  repoGitStats: Record<string, T>
-): T[] {
-  const scopedRepoKeys = resolveSessionRepoKeys(sessions, repoGitStats);
-  return Object.entries(repoGitStats)
-    .filter(([key, stats]) => {
-      if (scopedRepoKeys.size === 0) return true;
-      const repoKey = normalizeGitPathKey(key);
-      const topLevelKey = normalizeGitPathKey(stats.toplevel);
-      return (!!repoKey && scopedRepoKeys.has(repoKey)) || (!!topLevelKey && scopedRepoKeys.has(topLevelKey));
-    })
-    .map(([, stats]) => stats);
-}
-
-export function currentLedgerRepoKeys<T extends Pick<GitStats, 'gitCommonDir' | 'toplevel'>>(
-  sessions: Array<{ cwd: string; gitStats?: Pick<GitStats, 'gitCommonDir' | 'toplevel'> | null }>,
-  repoGitStats: Record<string, T>
-): string[] {
-  return currentLedgerRepoStats(sessions, repoGitStats)
-    .map(stats => repoKeyFromGitStats(stats) ?? normalizeGitPathKey(stats.toplevel))
-    .filter((key): key is string => !!key);
-}
-
 function localDateKey(timestampMs: number): string {
   const date = new Date(timestampMs);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -606,13 +583,12 @@ export class StateManager {
 
   async getBreakdown(grain: BreakdownGrain, bucketKey: string): Promise<BucketBreakdown> {
     const settings = this.getSettings();
-    const repoKeys = this.getCurrentLedgerRepoKeys();
-    const enabledProviders = this.enabledProviderSet(settings);
-    const canUseGit = (settings.excludedProjects?.length ?? 0) === 0 && repoKeys.length > 0;
-    const { startDate, endDate } = bucketDateRange(grain, bucketKey);
     const git = this.gitOutputLedgerStore.getSnapshot();
-    const netLines = canUseGit && hasCommitsInRange(git, repoKeys, startDate, endDate)
-      ? buildCategoryNetLines(git, repoKeys, startDate, endDate)
+    const scope = trackedGitScope(git, settings.excludedProjects ?? []);
+    const enabledProviders = this.enabledProviderSet(settings);
+    const { startDate, endDate } = bucketDateRange(grain, bucketKey);
+    const netLines = hasCommitsInRange(git, scope, startDate, endDate)
+      ? buildCategoryNetLines(git, scope, startDate, endDate)
       : null;
     const indexedProviders = await this.queryIndexedProviderBreakdowns(
       grain,
@@ -1626,7 +1602,7 @@ export class StateManager {
   async resetUsageIndex(): Promise<void> {
     this.clearHistoryWarmup();
     this.clearGitWarmup();
-    await this.usageIndex.reset();
+    await this.refreshScheduler.runExclusive(async () => { await this.usageIndex.reset(); });
     this.usageIndexProjections = [];
     this.usageIndexCoverage = incompleteUsageIndexCoverage();
     this.state = {
@@ -1643,6 +1619,20 @@ export class StateManager {
       reason: 'manual',
       force: true,
       includeFullHistory: true,
+    });
+  }
+
+  async runUsageMaintenance<T>(work: () => Promise<T>): Promise<T> {
+    return this.refreshScheduler.runExclusive(async () => {
+      try { return await work(); }
+      finally {
+        const settings = this.getSettings();
+        await this.refreshUsageIndexProjections(settings);
+        const derived = this.computeDerivedUsage(settings);
+        this.state = { ...this.state, usage: derived.usage, usageTrend: this.buildUsageTrend(),
+          usageIndexCoverage: this.usageIndexCoverage, lastUpdated: Date.now() };
+        this.publishState();
+      }
     });
   }
 
@@ -1769,7 +1759,8 @@ export class StateManager {
     this.usageIndexProjections = projections;
     this.usageIndexCoverage = projections.length > 0
       ? {
-        state: projections.every(projection => projection.monthly.coverage.state === 'complete') ? 'complete' : 'incomplete',
+        state: projections.every(projection => projection.monthly.coverage.state === 'complete') ? 'complete'
+          : projections.some(projection => projection.monthly.coverage.state === 'incomplete') ? 'incomplete' : 'updating',
         requiredSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.requiredSourceCount, 0),
         indexedSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.indexedSourceCount, 0),
         pendingSourceCount: projections.reduce((sum, projection) => sum + projection.monthly.coverage.pendingSourceCount, 0),
@@ -2632,15 +2623,17 @@ export class StateManager {
       if (isSourceBackedProvider(provider) || !provider.scanUsage) continue;
       try {
         const result = await provider.scanUsage(ctx);
-        this.usageIndex.declareSources(
+        const pendingIds = new Set(this.usageIndex.declareSources(
           provider.id,
           result.usageIndexSources.map(source => source.descriptor),
           !result.partial,
-        );
+        ));
         for (const source of result.usageIndexSources) {
           try {
-            const refreshed = await this.usageIndex.refreshSource(source.descriptor, source.scanner);
-            if (refreshed.status !== 'unchanged') scannedFiles += 1;
+            if (pendingIds.has(source.descriptor.sourceId)) {
+              const refreshed = await this.usageIndex.refreshSource(source.descriptor, source.scanner);
+              if (refreshed.status !== 'unchanged') scannedFiles += 1;
+            }
             const [projection] = await this.usageIndex.readSessionProjections([source.descriptor.sourceId]);
             if (projection) {
               summaries.set(
@@ -2683,7 +2676,7 @@ export class StateManager {
     let scannedFiles = 0;
     let sourceListPartial = false;
     let scanPartial = false;
-    const startedAt = Date.now();
+    let scanElapsedMs = 0;
     const startupPriority = new Set<string>();
     for (const filePath of priorityFiles ?? []) startupPriority.add(normalizeFileKey(filePath));
     const providers = this.sourceBackedProviders(settings);
@@ -2724,20 +2717,22 @@ export class StateManager {
       prioritySourceIds: startupPriority,
     });
 
-    const shouldStopForBudget = () => budgetMs !== null && Date.now() - startedAt >= budgetMs;
+    // Discovery and restoring existing projections must not consume every slice
+    // before pending sources can make progress.
+    const shouldStopForBudget = () => budgetMs !== null && scanElapsedMs >= budgetMs;
     const shouldPrioritize = (source: ProviderSource) => source.priority === true || startupPriority.has(normalizeFileKey(source.filePath));
 
     const scanSummary = async (
       indexedSource: { descriptor: UsageSourceDescriptor; scanner: UsageSourceScanner },
-    ): Promise<FileUsageSummary | null> => {
+    ): Promise<void> => {
+      const scanStartedAt = Date.now();
       try {
         const refreshed = await this.usageIndex.refreshSource(indexedSource.descriptor, indexedSource.scanner);
         if (refreshed.status !== 'unchanged') scannedFiles += 1;
-        const [projection] = await this.usageIndex.readSessionProjections([indexedSource.descriptor.sourceId]);
-        return projection ? sessionSummaryFromProjection(projection, indexedSource.descriptor) : null;
       } catch {
         scanPartial = true;
-        return null;
+      } finally {
+        scanElapsedMs += Date.now() - scanStartedAt;
       }
     };
 
@@ -2775,33 +2770,48 @@ export class StateManager {
           scanPartial = true;
         }
       }
-      this.usageIndex.declareSources(
+      const pendingIds = this.usageIndex.declareSources(
         provider.id,
         preparedSources.map(prepared => prepared.indexedSource.descriptor),
         !sourceList.truncated && !providerPreparationPartial,
       );
 
-      for (const { source, indexedSource } of preparedSources) {
+      const preparedById = new Map(preparedSources.map(prepared => [prepared.indexedSource.descriptor.sourceId, prepared]));
+      let backgroundAttempted = false;
+      for (const sourceId of pendingIds) {
+        const { source, indexedSource } = preparedById.get(sourceId)!;
         const priority = shouldPrioritize(source);
-        if (!priority && shouldStopForBudget()) {
+        // Even continuously changing priority files cannot starve the backlog.
+        if (!priority && backgroundAttempted && shouldStopForBudget()) {
           scanPartial = true;
           break;
         }
-        const summary = await scanSummary(indexedSource);
-        if (!summary) continue;
-        sessionCount += 1;
-        if (provider.id === 'codex') {
-          codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, summary.sessionSnapshot.codexRateLimits);
+        if (!priority) backgroundAttempted = true;
+        await scanSummary(indexedSource);
+      }
+
+      // Completed sources still supply session views, without re-entering the
+      // scan queue. Bound SQL parameters when restoring a large history.
+      for (let offset = 0; offset < preparedSources.length; offset += 500) {
+        const ids = preparedSources.slice(offset, offset + 500).map(prepared => prepared.indexedSource.descriptor.sourceId);
+        const projections = await this.usageIndex.readSessionProjections(ids);
+        for (const projection of projections) {
+          const { source, indexedSource } = preparedById.get(projection.sourceId)!;
+          const summary = sessionSummaryFromProjection(projection, indexedSource.descriptor);
+          sessionCount += 1;
+          if (provider.id === 'codex') {
+            codexRateLimits = this.mergeCodexRateLimits(codexRateLimits, summary.sessionSnapshot.codexRateLimits);
+          }
+          summaries.set(normalizeFileKey(source.filePath), summary);
         }
-        summaries.set(normalizeFileKey(source.filePath), summary);
       }
     }
 
-    const elapsedMs = Date.now() - startedAt;
-    const remainingBudgetMs = budgetMs === null ? null : Math.max(0, budgetMs - elapsedMs);
-    if (remainingBudgetMs === 0) {
+    const remainingBudgetMs = budgetMs === null ? null : Math.max(0, budgetMs - scanElapsedMs);
+    const hasGenericProviders = this.enabledProviders(settings).some(provider => !isSourceBackedProvider(provider) && provider.scanUsage);
+    if (remainingBudgetMs === 0 && hasGenericProviders) {
       scanPartial = true;
-    } else {
+    } else if (hasGenericProviders) {
       const genericCtx = budgetMs === null
         ? ctx
         : this.providerContext({
@@ -2895,7 +2905,10 @@ export class StateManager {
     }
 
     const isExcluded = makeExcludedMatcher(settings.excludedProjects ?? []);
-    const cwdSet = new Set(sessions.map(session => session.cwd));
+    const cwdSet = new Set([
+      ...sessions.map(session => session.cwd),
+      ...Object.values(this.gitOutputLedgerStore.getSnapshot().repositories).flatMap(repo => repo.locators),
+    ]);
     const allCwds = [...cwdSet]
       .filter(cwd => isSafeLocalCwd(cwd) && !isExcluded(projectKeysForCwd(cwd)));
     if (allCwds.length === 0) {
@@ -2922,67 +2935,9 @@ export class StateManager {
     return sessions.some(session => resolveSessionRepoKeys([session], repoGitStats).size === 0);
   }
 
-  private getCurrentLedgerRepoKeys(
-    sessions: SessionInfo[] = this.state.sessions,
-    repoGitStats: Record<string, GitStats> = this.state.repoGitStats,
-  ): string[] {
-    return currentLedgerRepoKeys(sessions, repoGitStats);
-  }
-
-  private buildCodeOutputStats(sessions: SessionInfo[], repoGitStats: Record<string, GitStats>): CodeOutputStats {
-    const today = { commits: 0, added: 0, removed: 0 };
-    const repoStats = currentLedgerRepoStats(sessions, repoGitStats);
-    let dailySources = repoStats;
-    let repoCount = repoStats.length;
-    let scopeLabel = repoStats.length > 0
-      ? `Current session repos (${repoStats.length})`
-      : 'Current session repos';
-
-    if (repoStats.length > 0) {
-      for (const stats of repoStats) {
-        today.commits += stats.commitsToday;
-        today.added += stats.linesAdded;
-        today.removed += stats.linesRemoved;
-      }
-    } else {
-      const seenToday = new Set<string>();
-      const fallbackStats: GitStats[] = [];
-      for (const session of sessions) {
-        if (!session.gitStats) continue;
-        const repoKey = repoKeyFromGitStats(session.gitStats) ?? normalizeGitCwdKey(session.cwd);
-        if (seenToday.has(repoKey)) continue;
-        seenToday.add(repoKey);
-        today.commits += session.gitStats.commitsToday;
-        today.added += session.gitStats.linesAdded;
-        today.removed += session.gitStats.linesRemoved;
-        fallbackStats.push(session.gitStats);
-      }
-      dailySources = fallbackStats;
-      repoCount = fallbackStats.length;
-      if (fallbackStats.length > 0) scopeLabel = `Current session repos (${fallbackStats.length})`;
-    }
-
-    const all = { commits: 0, added: 0, removed: 0 };
-    for (const stats of repoStats) {
-      all.commits += stats.totalCommits;
-      all.added += stats.totalLinesAdded;
-      all.removed += stats.totalLinesRemoved ?? 0;
-    }
-
-    const ledgerRepoKeys = this.getCurrentLedgerRepoKeys(sessions, repoGitStats);
-    const ledgerStats = buildCodeOutputFromGitLedger(this.gitOutputLedgerStore.getSnapshot(), ledgerRepoKeys, undefined, scopeLabel);
-    if (ledgerRepoKeys.length > 0 && ledgerStats.dailyAll.length > 0) {
-      return { ...ledgerStats, repoCount, scopeLabel };
-    }
-
-    return {
-      today,
-      all,
-      daily7d: aggregateDailyStats(dailySources),
-      dailyAll: aggregateDailyAllStats(dailySources),
-      repoCount,
-      scopeLabel,
-    };
+  private buildCodeOutputStats(_sessions: SessionInfo[], _repoGitStats: Record<string, GitStats>): CodeOutputStats {
+    const snapshot = this.gitOutputLedgerStore.getSnapshot();
+    return buildCodeOutputFromGitLedger(snapshot, trackedGitScope(snapshot, this.getSettings().excludedProjects ?? []));
   }
 
   private attachCachedGitStats(sessions: SessionInfo[]): SessionInfo[] {

@@ -5,6 +5,7 @@ import { AppState, SessionInfo } from '../types';
 import type { ProviderQuotaSource, ProviderQuotaStatus } from '../../shared/quotaTypes';
 import { quotaElapsedPct } from '../../shared/quotaDomain';
 import { useTheme } from '../ThemeContext';
+import AccountingRevisionNotice from '../components/AccountingRevisionNotice';
 import { fmtTokens, fmtCost, fmtRelative, modelColor, quotaPctBarColor, quotaSourceBadgeToneStyle } from '../theme';
 // Plain (non-component) helper functions below call the i18next singleton's `.t()` directly
 // (same pattern as limitDisplay.ts), since React hooks cannot be used outside components.
@@ -746,6 +747,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
               )}
             </div>
           )}
+          <div style={{ fontSize: 10, color: C.headerSub, marginBottom: 4 }}>{t('mainView.header.estimatedCost')}</div>
           <div style={{ fontSize: 28, fontWeight: 800, color: C.headerText, lineHeight: 1, fontFamily: C.fontMono, whiteSpace: 'nowrap' }}>
             {fmtCost(cost, currency, usdToKrw)}
           </div>
@@ -1702,10 +1704,10 @@ const IndexCoverageBanner = React.memo(function IndexCoverageBanner({ coverage }
       color: C.textDim,
     }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: C.headerAccent, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-        {t('mainView.usageIndexCoverage.title')}
+        {t(coverage.failedSourceCount > 0 ? 'mainView.usageIndexCoverage.failureTitle' : 'mainView.usageIndexCoverage.title')}
       </div>
       <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
-        {t('mainView.usageIndexCoverage.body', { progress, failures })}
+        {t(coverage.failedSourceCount > 0 ? 'mainView.usageIndexCoverage.failureBody' : 'mainView.usageIndexCoverage.body', { progress, failures })}
       </div>
     </div>
   );
@@ -2308,6 +2310,7 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
         <HeaderMetrics state={state} onQuit={onQuit} onToggleCompactWidget={onToggleCompactWidget} onToggleTaskbarQuota={onToggleTaskbarQuota} />
       </RenderErrorBoundary>
       <div ref={scrollRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8, overflowAnchor: 'none' }}>
+        <AccountingRevisionNotice />
         {state.usageIndexHealth.state !== 'ready' && (
           <RenderErrorBoundary label={t('mainView.errorBoundary.usageIndexHealthBanner')}>
             <UsageIndexHealthBanner health={state.usageIndexHealth} />

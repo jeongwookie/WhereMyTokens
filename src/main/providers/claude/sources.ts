@@ -99,7 +99,7 @@ export function buildClaudeUsageIndexSource(_ctx: ProviderContext, source: Provi
       sourceId: `claude:${normalizeSourcePath(source.filePath)}`,
       provider: 'claude' as const,
       kind: 'file' as const,
-      parserVersion: 1,
+      parserVersion: 3,
       version: {
         token: `${stat.size}:${stat.mtimeMs}`,
         size: stat.size,

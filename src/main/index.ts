@@ -13,6 +13,9 @@ import { createTaskbarQuotaHelperManager } from './taskbarQuotaHelper';
 import { buildTaskbarQuotaSnapshot } from './taskbarQuotaSnapshot';
 import { addNotification } from './notificationHistory';
 import { openUsageIndex } from './usageIndex';
+import { reconcileUsagePricingAtStartup } from './usagePricingStartup';
+import { reconcileUsageAccountingInWorker } from './usageAccountingStartup';
+import type { AccountingRevisionStatus } from '../shared/accountingRevision';
 import { launchClaudeLogin } from './claudeLoginLauncher';
 import type { ClaudeLoginLaunchResult } from '../shared/claudeLogin';
 
@@ -763,11 +766,62 @@ app.whenReady().then(async () => {
   }
 
   const usageIndex = await openUsageIndex(path.join(app.getPath('userData'), 'usage-index.sqlite'));
+  try {
+    const revisions = await reconcileUsagePricingAtStartup({
+      databasePath: path.join(app.getPath('userData'), 'usage-index.sqlite'),
+      backupDirectory: path.join(app.getPath('userData'), 'usage-pricing-backups'),
+    });
+    const revisionKey = revisions.map(r => `${r.revisionId}:${r.signature}`).join('|');
+    const metadata = store as unknown as Store<Record<string, unknown>>;
+    if (metadata.get('_startupStatePricingRevision') !== revisionKey) {
+      metadata.delete('_startupStateSnapshot');
+      metadata.set('_startupStatePricingRevision', revisionKey);
+    }
+  } catch (error) {
+    // No completion receipt is committed on failure; retry at the next start.
+    appendCrashLog('usage-pricing-update-failed', buildErrorPayload(error));
+  }
+  let maybeRetryAccountingBootstrap = () => {};
   const manager = new StateManager(store, (state) => {
     updateClaudeLoginNotice(state);
     updateTray(state);
+    maybeRetryAccountingBootstrap();
   }, { usageIndex });
   stateManager = manager;
+  const metadata = store as unknown as Store<Record<string, unknown>>;
+  let accountingStatus: AccountingRevisionStatus = { state: 'idle', checkedSources: 0, totalSources: 0, notice: false, report: null };
+  let accountingRun: Promise<void> | null = null;
+  const publishAccounting = () => {
+    if (popupWindow && !popupWindow.isDestroyed()) popupWindow.webContents.send('usage-accounting:updated', accountingStatus);
+  };
+  const runAccounting = (retryPreserved = false): Promise<void> => {
+    if (accountingRun) return accountingRun;
+    accountingStatus = { state: 'running', checkedSources: 0, totalSources: 0, notice: true, report: null };
+    publishAccounting();
+    accountingRun = manager.runUsageMaintenance(() => reconcileUsageAccountingInWorker({
+      databasePath: path.join(app.getPath('userData'), 'usage-index.sqlite'),
+      backupDirectory: path.join(app.getPath('userData'), 'usage-accounting-backups'), retryPreserved,
+    }, (checkedSources, totalSources) => {
+      accountingStatus = { ...accountingStatus, checkedSources, totalSources }; publishAccounting();
+    })).then(report => {
+      accountingStatus = { state: 'complete', checkedSources: report.checkedSources, totalSources: report.checkedSources,
+        notice: report.checkedSources > 0 && metadata.get('_usageAccountingDismissed') !== report.resultKey, report };
+    }).catch(error => {
+      accountingStatus = { ...accountingStatus, state: 'failed', notice: true };
+      appendCrashLog('usage-accounting-revision-failed', buildErrorPayload(error));
+    }).finally(() => { accountingRun = null; publishAccounting(); maybeRetryAccountingBootstrap(); });
+    return accountingRun;
+  };
+  let bootstrapRetryScheduled = false;
+  maybeRetryAccountingBootstrap = () => {
+    const state = manager.getState();
+    if (bootstrapRetryScheduled || accountingRun || !state.initialRefreshComplete
+      || state.usageIndexCoverage.state !== 'complete'
+      || !accountingStatus.report?.sources.some(source => source.reason === 'invalid-source')) return;
+    // 보호된 초기 스캔이 끝난 뒤 한 번만 재검사하며, 유지보수 큐의 재진입을 피한다.
+    bootstrapRetryScheduled = true;
+    queueMicrotask(() => { void runAccounting(); });
+  };
   registerIpcHandlers({
     store,
     getState: () => manager.getState(),
@@ -777,7 +831,17 @@ app.whenReady().then(async () => {
       applyRuntimeSettings();
       taskbarQuotaHelper.syncTaskbarQuotaHelper(manager.getState());
     },
-    resetUsageIndex: () => manager.resetUsageIndex(),
+    resetUsageIndex: async () => {
+      if (accountingRun) throw new Error('Historical usage check is running');
+      await manager.resetUsageIndex();
+      accountingStatus = { state: 'idle', checkedSources: 0, totalSources: 0, notice: false, report: null }; publishAccounting();
+    },
+    getAccountingRevision: () => accountingStatus,
+    retryAccountingRevision: () => { void runAccounting(true); return accountingStatus; },
+    dismissAccountingRevision: () => {
+      if (accountingStatus.report) metadata.set('_usageAccountingDismissed', accountingStatus.report.resultKey);
+      accountingStatus = { ...accountingStatus, notice: false }; publishAccounting(); return accountingStatus;
+    },
     getDebugMemSnapshot: () => manager.getDebugMemSnapshot('ipc'),
     openClaudeLogin: () => openClaudeLoginFlow(),
     windowActions: {
@@ -791,6 +855,7 @@ app.whenReady().then(async () => {
   tray = createTray();
   rebuildTrayMenu();
   popupWindow = createPopupWindow();
+  void runAccounting();
   manager.start();
   syncCompactWidget();
   app.once('before-quit', () => {

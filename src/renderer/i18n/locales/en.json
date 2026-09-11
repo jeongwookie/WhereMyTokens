@@ -326,6 +326,7 @@
       }
     },
     "header": {
+      "estimatedCost": "Estimated cost",
       "periodToday": "today",
       "periodAll": "all",
       "hideCompactWidget": "Hide floating Quota Pace widget",
@@ -421,6 +422,8 @@
       "body": "Historical totals are using recent fallback data until the local usage ledger is rebuilt from Settings."
     },
     "usageIndexCoverage": {
+      "failureTitle": "Usage Update Failed",
+      "failureBody": "Some usage sources could not be read. Existing totals are preserved.{{failures}}",
       "title": "Indexing Usage History",
       "discovering": "Discovering usage sources.",
       "progress": "{{indexed}}/{{required}} sources indexed.",
@@ -711,5 +714,36 @@
       "dark": "Dark"
     },
     "save": "Save"
+  },
+  "accountingRevision": {
+    "title": "Historical statistics check",
+    "dismiss": "Dismiss",
+    "running": "Checking history: {{count}} / {{total}} sources. Totals may change.",
+    "failed": "The check could not finish. Completed corrections were kept; pending sources can be retried.",
+    "corrected": "Records corrected: {{count}}. Estimated cost reduced by ${{amount}} USD.",
+    "preserved": "{{count}} sources could not be fully verified; their unverified contributions were kept.",
+    "details": "View correction details",
+    "checked": "Checked {{count}} sources; {{unchanged}} needed no correction.",
+    "source": "Source {{id}}",
+    "previous": "Previous",
+    "next": "Next",
+    "backup": "A validated local backup is saved before historical quantities change. This is an API-equivalent estimate, not an invoice.",
+    "recheck": "Recheck unresolved history",
+    "outcomes": {
+      "corrected": "Corrected",
+      "partial": "Partly corrected",
+      "preserved": "Kept unverified",
+      "unchanged": "No correction needed"
+    },
+    "reasons": {
+      "no-detail": "Request details are no longer retained.",
+      "missing-file": "The original source file is unavailable.",
+      "rewritten-source": "The source was rewritten; original coverage cannot be proven.",
+      "changed-source": "The source or ledger changed during verification.",
+      "unverified-records": "Some differences do not match a proven defect.",
+      "incomplete-buckets": "Retained details do not reconcile with all affected summaries.",
+      "identity-conflict": "Execution identities overlap another retained contribution.",
+      "invalid-source": "The original source boundary cannot be verified."
+    }
   }
 }

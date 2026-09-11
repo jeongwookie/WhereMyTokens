@@ -4,6 +4,7 @@ import { AppSettings, AppState, IntegrationStatus } from '../types';
 import type { QuotaDisplayMode } from '../../shared/quotaTypes';
 import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
+import AccountingRevisionNotice from '../components/AccountingRevisionNotice';
 import { DEFAULT_MAIN_SECTION_ORDER, MainSectionId, normalizeHiddenMainSections, normalizeMainSectionOrder } from '../mainSections';
 import { buildQuotaTargetSettingsOptions } from '../quotaDisplayModels';
 import { quotaSourceBadgeToneStyle } from '../theme';
@@ -734,6 +735,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         )}
 
         <SectionHeader label={t('settingsView.data.heading')} />
+        <AccountingRevisionNotice persistent />
         <div style={row}>
           <div>
             <div style={labelStyle}>{t('settingsView.data.usageHistory')}</div>

@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe"><strong>v1.24.3 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe"><strong>v1.24.6 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.3 は Windows で Antigravity 2.x の検出を復旧し、provider が報告する shared Gemini / Claude・GPT quota group を legacy fallback 付きで表示します。</em>
+  <em>v1.24.6: Codex の過大計上と更新後の自動修正、Astra 料金、大規模 Git 統計を改善</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,13 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Codex の過大計上と更新後の自動修正、Astra 料金、大規模 Git 統計を改善 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows で現在と legacy の Antigravity language server を検出し、provider が報告する shared Gemini / Claude・GPT quota group を優先表示。旧 server のモデル別 quota fallback も維持 |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude login の期限切れ・拒否を notification と app 内 action で案内し、公式 CLI login を開いて credential 変更後に自動再試行。以前の quota を保持しても login 問題を隠さず、credential の更新・書き込みは行いません |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 既存の Claude Code credential はあるが新しい statusLine がない Claude Desktop 利用時の quota を復旧。公式 statusLine 優先、token refresh/write 廃止、Anthropic 固定 host、auth-bound cache、非変更 test を追加 |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | Claude quota を公式のローカル `statusLine` に移行し、Claude OAuth credential へのアクセスと直接 usage polling を削除。custom statusLine の保持と、最小化した atomic snapshot・reset-aware cache も追加 |
-| **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | Claude と GPT-5.6 のモデル別・時点別 API 換算価格を修正し、検証済み backup、checkpoint 制限 replay、同時変更検出、privacy-safe CLI を備えた lossless SQLite cost repricing を追加 |
+
+旧版の検証情報が不足する場合は初期インデックス完了後に自動再検証します。証明できた過大計上のみバックアップ後に修正し、不明な履歴は保持します。Settings → Data で結果と再検証を確認できます。
 
 [→ 全変更履歴](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -88,11 +90,11 @@
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-v1.24.3-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-v1.24.6-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -102,7 +104,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.24.3-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.24.6-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -142,7 +144,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **Git ベース指標** — コミット数、純変更行数、**$/100 Added**（100 追加行あたりのコスト）
 - **Today vs All-time** — 今日の追加行あたり実コストと全期間平均を比較
 - **Output 成長グラフ** — 直近 7 日のローカル日付ごとに全期間累積の純増行数を表示
-- **現在のセッション repo 範囲** — Code Output は現在追跡中のセッションに結び付いた repo 集計であることをラベル表示
+- **永続的な repo 範囲** — Code Output は最近のセッションの有無に依存せず、保存された追跡対象 repo 全体を集計します。プロジェクト除外は元に戻せ、一時的にアクセスできない repo の履歴も保持します
 - **ブランチ対応の全期間** — Code Output の全期間は、ローカルブランチ全体のコミットと行変更をローカル git author email 基準で集計
 - **自動検出** — Claude プロジェクトは `~/.claude/projects/` から agent 使用ログも含め、Codex セッションは `~/.codex/sessions/`、`~/.codex/archived_sessions/`、`~/.codex/session-cleanup-archive/` から自動検出し、Antigravity は実行中のローカル language server の cascade を local RPC で読み取ります
 - **自分のコミットのみ** — `git config user.email` でフィルタリング

@@ -39,7 +39,7 @@ function callTimestampMs(gm: Record<string, unknown>, fallbackMs: number): numbe
   for (const candidate of [csm.createdAt, csm.startTime, gm.createdAt, gm.timestamp]) {
     if (typeof candidate !== 'string') continue;
     const ts = new Date(candidate).getTime();
-    if (Number.isFinite(ts)) return ts;
+    if (Number.isFinite(ts) && ts >= 0) return ts;
   }
   return fallbackMs;
 }
@@ -78,6 +78,7 @@ export function parseAntigravityGmEntry(
   gm: Record<string, unknown>,
   fallbackMs: number,
   labelMap?: Map<string, string>,
+  observationIndex = 0,
 ): AntigravityUsageCall | null {
   const cm = (gm.chatModel || {}) as Record<string, unknown>;
   const usage = (cm.usage || {}) as Record<string, unknown>;
@@ -101,11 +102,10 @@ export function parseAntigravityGmEntry(
     .filter((value, index, values) => value && values.indexOf(value) === index)
     .join(' ') || modelIdentity;
   const stepIndices = Array.isArray(gm.stepIndices)
-    ? gm.stepIndices.filter((item): item is number => typeof item === 'number')
-    : [];
+    ? [...new Set(gm.stepIndices.filter((item): item is number => typeof item === 'number' && Number.isSafeInteger(item) && item >= 0))].sort((a, b) => a - b)
+    : [observationIndex];
   const timestampMs = callTimestampMs(gm, fallbackMs);
-  const executionId = stringValue(gm.executionId)
-    || `${cascadeId}:${stepIndices.join(',') || timestampMs}:${rawModel}`;
+  const executionId = stringValue(gm.executionId) || 'row:' + observationIndex;
 
   return {
     cascadeId,
@@ -126,7 +126,7 @@ export function parseAntigravityGmEntry(
 }
 
 export function antigravityCallRequestId(call: AntigravityUsageCall): string {
-  const stepKey = call.stepIndices.length > 0 ? call.stepIndices.join(',') : String(call.timestampMs);
+  const stepKey = [...new Set(call.stepIndices)].sort((a, b) => a - b).join(',');
   return `antigravity:${call.cascadeId}:${call.executionId}:${stepKey}`;
 }
 
@@ -135,12 +135,7 @@ export function totalAntigravityCallTokens(call: AntigravityUsageCall): number {
 }
 
 export function antigravityCallKey(call: AntigravityUsageCall): string {
-  if (call.executionId && call.stepIndices.length > 0) {
-    return `exec:${call.executionId}|steps:${call.stepIndices.join(',')}`;
-  }
-  if (call.executionId) return `exec:${call.executionId}`;
-  if (call.stepIndices.length > 0) return `steps:${call.stepIndices.join(',')}|model:${call.rawModel || call.model}`;
-  return `time:${call.timestampMs}|model:${call.rawModel || call.model}`;
+  return antigravityCallRequestId(call);
 }
 
 export function antigravityCallFingerprint(call: AntigravityUsageCall): string {
@@ -181,11 +176,17 @@ export function parseAntigravityGmEntries(
   fallbackMs: number,
   labelMap?: Map<string, string>,
 ): AntigravityUsageCall[] {
-  return rawGm
-    .filter((gm): gm is Record<string, unknown> => !!gm && typeof gm === 'object' && !Array.isArray(gm))
-    .map(gm => parseAntigravityGmEntry(cascadeId, gm, fallbackMs, labelMap))
+  let precedingTimestampMs = fallbackMs;
+  const parsed = rawGm
+    .map((gm, index) => {
+      if (!gm || typeof gm !== 'object' || Array.isArray(gm)) return null;
+      const call = parseAntigravityGmEntry(cascadeId, gm as Record<string, unknown>, precedingTimestampMs, labelMap, index);
+      if (call) precedingTimestampMs = call.timestampMs;
+      return call;
+    })
     .filter((call): call is AntigravityUsageCall => !!call)
     .sort((a, b) => a.timestampMs - b.timestampMs);
+  return mergeAntigravityCalls([], parsed);
 }
 
 export function mergeAntigravityCalls(
@@ -194,17 +195,17 @@ export function mergeAntigravityCalls(
 ): AntigravityUsageCall[] {
   const byKey = new Map<string, AntigravityUsageCall>();
 
-  for (const call of primary) byKey.set(antigravityCallKey(call), call);
-
-  for (const call of embedded) {
+  for (const call of [...primary, ...embedded]) {
     const key = antigravityCallKey(call);
     const existing = byKey.get(key);
     if (!existing) {
       byKey.set(key, call);
       continue;
     }
-    if (totalAntigravityCallTokens(call) > totalAntigravityCallTokens(existing)) {
-      byKey.set(key, { ...existing, ...call });
+    if (call.model === existing.model
+      && (['inputTokens', 'outputTokens', 'cacheCreationTokens', 'cacheReadTokens'] as const).every(k => call[k] >= existing[k])
+      && totalAntigravityCallTokens(call) > totalAntigravityCallTokens(existing)) {
+      byKey.set(key, { ...existing, ...call, timestampMs: existing.timestampMs });
     }
   }
 

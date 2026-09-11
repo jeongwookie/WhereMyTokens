@@ -22,6 +22,7 @@ import {
 } from './types';
 import { UsageEntryProjectionBuilder } from './entryProjection';
 import { usageRetentionCutoffs } from './retention';
+import { canonicalSessionProjection, executionFingerprint, identityAccepts, reviseClaudePayload, sameExecutionOrigin, validUsageRevision, type ExecutionIdentity } from './executionIdentity';
 import {
   addUsageBreakdown,
   addUsageMetrics,
@@ -94,6 +95,12 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
   private buckets = new Map<string, UsageBucketDelta>();
   private sessions = new Map<string, UsageSessionProjection>();
   private closed = false;
+  private identities = new Map<string, ExecutionIdentity>();
+
+  identitySource(provider: ProviderId, key: string): string | undefined {
+    this.assertOpen();
+    return this.identities.get(provider + '\0' + key)?.sourceId;
+  }
 
   async getSource(sourceId: string): Promise<StoredUsageSource | null> {
     this.assertOpen();
@@ -123,6 +130,24 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
     const nextEntries = new Map(this.entries);
     const nextBuckets = new Map([...this.buckets].map(([key, bucket]) => [key, cloneBucket(bucket)]));
     const nextSessions = new Map(this.sessions);
+    const nextIdentities = new Map(this.identities);
+    const keyFor = (key: string) => `${commit.source.provider}\0${key}`;
+    const owner = (key: string) => nextIdentities.get(keyFor(key));
+    for (const seed of commit.batch.identitySeeds ?? []) {
+      const retained = nextEntries.get(commit.source.sourceId)?.get(seed.requestId);
+      const known = owner(seed.key);
+      if (retained && known?.sourceId === commit.source.sourceId && known.requestId === `protected:${seed.requestId}`) {
+        for (const [key, alias] of nextIdentities) {
+          if (key.startsWith(commit.source.provider + '\0') && alias.sourceId === known.sourceId && alias.requestId === known.requestId) {
+            nextIdentities.set(key, { sourceId: known.sourceId, requestId: retained.requestId, timestampMs: retained.timestampMs,
+              originId: retained.identityOrigin ?? '', fingerprint: executionFingerprint(retained) });
+          }
+        }
+      }
+      if (!known) nextIdentities.set(keyFor(seed.key), { sourceId: commit.source.sourceId,
+        requestId: retained?.requestId ?? `protected:${seed.requestId}`, timestampMs: retained?.timestampMs ?? seed.timestampMs,
+        originId: retained?.identityOrigin ?? '', fingerprint: retained ? executionFingerprint(retained) : '' });
+    }
     const existingEntries = new Map(nextEntries.get(commit.source.sourceId) ?? []);
     const sourceEntries = new Map(existingEntries);
     const replacedEntries = new Map<string, UsageEntry>();
@@ -143,7 +168,72 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
       }
     }
 
-    const entriesToCommit = entriesAtOrAfterSeal(commit.batch.entries, storedSource?.sealedBeforeMs);
+    const identityIssues = new Set<string>();
+    const crossUpdates: Array<{ known: ExecutionIdentity; previous: UsageEntry; entry: UsageEntry }> = [];
+    const suffix = commit.source.sourceId.slice(commit.source.sourceId.indexOf(':cascade:'));
+    const uncertainCascade = !storedSource && commit.source.provider === 'antigravity' && commit.source.sourceId.includes(':cascade:')
+      && [...this.sources.values()].find(s => s.descriptor.provider === 'antigravity'
+        && s.descriptor.sourceId !== commit.source.sourceId && s.descriptor.sourceId.endsWith(suffix)
+        && ((s.descriptor.parserVersion < 2 || s.descriptor.sourceId.startsWith('antigravity:unknown:'))
+          && !s.providerMetadata?.resolvedUsageScope || commit.source.sourceId.startsWith('antigravity:unknown:')));
+    if (uncertainCascade && !commit.source.sourceId.startsWith('antigravity:unknown:')) {
+      nextSources.set(uncertainCascade.descriptor.sourceId, { ...uncertainCascade,
+        providerMetadata: { ...uncertainCascade.providerMetadata, resolvedUsageScope: commit.source.sourceId } });
+    }
+    const entriesToCommit = [...commit.batch.entries].map(entry => ({ ...entry })).filter(entry => {
+      const keys = [entry.identityKey, ...(entry.identityAliases ?? [])].filter((k): k is string => !!k);
+      const protect = (): void => {
+        for (const key of keys) if (!owner(key)) nextIdentities.set(keyFor(key), { sourceId: commit.source.sourceId,
+          requestId: 'protected:' + entry.requestId, timestampMs: entry.timestampMs, originId: '', fingerprint: '' });
+      };
+      if (uncertainCascade) { protect(); return false; }
+      const scopeWitness = entry.provider === 'antigravity' && entry.identityOrigin ? owner(entry.identityOrigin) : undefined;
+      const witnessedScope = scopeWitness ? nextSources.get(scopeWitness.sourceId)?.providerMetadata?.resolvedUsageScope : undefined;
+      if (scopeWitness && scopeWitness.sourceId !== commit.source.sourceId
+        && (commit.source.sourceId.startsWith('antigravity:unknown:')
+          || scopeWitness.sourceId.startsWith('antigravity:unknown:') && (!witnessedScope || witnessedScope === commit.source.sourceId))) {
+        protect(); return false;
+      }
+      const knownValues = keys.map(owner).filter((v): v is ExecutionIdentity => !!v);
+      const known = knownValues[0];
+      if (knownValues.some(v => v.sourceId !== known?.sourceId || v.requestId !== known?.requestId)) { identityIssues.add('identity-conflict'); return false; }
+      if (known && known.sourceId !== commit.source.sourceId) {
+        if (sameExecutionOrigin(entry, known) && executionFingerprint(entry) === known.fingerprint) return false;
+        const previous = this.entries.get(known.sourceId)?.get(known.requestId);
+        const resumeState = this.sources.get(known.sourceId)?.checkpoint.resumeState;
+        if (previous && validUsageRevision(entry, previous, known, resumeState ? JSON.parse(resumeState).payload : {}, commit.batch.sessionProjection?.payload)) crossUpdates.push({ known, previous, entry: { ...entry, requestId: known.requestId } });
+        else identityIssues.add('cross-source-execution-conflict');
+        return false;
+      }
+      if (known) {
+        for (const key of keys) if (!owner(key)) nextIdentities.set(keyFor(key), known);
+        if (!known.requestId.startsWith('protected:')) entry.requestId = known.requestId;
+        entry.timestampMs = known.timestampMs;
+      }
+      if (!identityAccepts(entry, commit.source.sourceId, known)) return false;
+      if (known) {
+        const previous = existingEntries.get(known.requestId);
+        if (!previous || known.fingerprint === executionFingerprint(entry)) return false;
+        const oldPayload = storedSource?.checkpoint.resumeState ? JSON.parse(storedSource.checkpoint.resumeState).payload ?? {} : {};
+        if (!validUsageRevision(entry, previous, known, oldPayload, commit.batch.sessionProjection?.payload)) {
+          identityIssues.add('identity-conflict'); return false;
+        }
+      }
+      for (const key of keys) if (!owner(key)) nextIdentities.set(keyFor(key), { sourceId: commit.source.sourceId, requestId: entry.requestId, timestampMs: entry.timestampMs, originId: entry.identityOrigin ?? '', fingerprint: executionFingerprint(entry) });
+      if (entry.provider === 'antigravity' && entry.identityOrigin && !owner(entry.identityOrigin)) {
+        nextIdentities.set(keyFor(entry.identityOrigin), { sourceId: commit.source.sourceId, requestId: entry.requestId,
+          timestampMs: entry.timestampMs, originId: entry.identityOrigin, fingerprint: executionFingerprint(entry) });
+      }
+      return true;
+    });
+    for (const link of commit.batch.identityLinks ?? []) {
+      const target = owner(link.target), existing = owner(link.alias);
+      if (!target) continue;
+      if (existing && (existing.sourceId !== target.sourceId || existing.requestId !== target.requestId)) {
+        identityIssues.add('identity-conflict'); continue;
+      }
+      if (!existing) nextIdentities.set(keyFor(link.alias), { ...target });
+    }
     for (const entry of entriesToCommit) {
       const previous = existingEntries.get(entry.requestId);
       if (previous && !replacedEntries.has(entry.requestId)) replacedEntries.set(entry.requestId, previous);
@@ -152,6 +242,31 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
     const bucketDeltas = new Map<string, UsageBucketDelta>();
     collectUsageBucketDeltas(bucketDeltas, commit.source.sourceId, [...replacedEntries.values()], -1);
     collectUsageBucketDeltas(bucketDeltas, commit.source.sourceId, entriesToCommit, 1);
+    for (const update of crossUpdates) {
+      const e = update.entry;
+      const entries = new Map(nextEntries.get(update.known.sourceId));
+      entries.set(e.requestId, cloneEntry(e)); nextEntries.set(update.known.sourceId, entries);
+      collectUsageBucketDeltas(bucketDeltas, update.known.sourceId, [update.previous], -1);
+      collectUsageBucketDeltas(bucketDeltas, update.known.sourceId, [e], 1);
+      const original = nextSources.get(update.known.sourceId)!;
+      if (original.checkpoint.resumeState) {
+        const resume = JSON.parse(original.checkpoint.resumeState);
+        const payload = reviseClaudePayload(resume.payload ?? {}, e.requestId, commit.batch.sessionProjection?.payload ?? {});
+        if (payload) nextSources.set(update.known.sourceId, { ...original, checkpoint: { ...original.checkpoint, resumeState: JSON.stringify({ ...resume, payload }) } });
+      }
+      const hot = nextSessions.get(update.known.sourceId);
+      if (hot) {
+        const payload = reviseClaudePayload(hot.payload, e.requestId, commit.batch.sessionProjection?.payload ?? {});
+        if (payload) nextSessions.set(update.known.sourceId, { ...hot, payload });
+      }
+    }
+    const identityUpdates = new Map<string, UsageEntry>();
+    for (const e of entriesToCommit) identityUpdates.set(commit.source.sourceId + '\0' + e.requestId, e);
+    for (const update of crossUpdates) identityUpdates.set(update.known.sourceId + '\0' + update.entry.requestId, update.entry);
+    for (const [key, known] of nextIdentities) {
+      const e = identityUpdates.get(known.sourceId + '\0' + known.requestId);
+      if (e) nextIdentities.set(key, { ...known, originId: e.identityOrigin ?? '', fingerprint: executionFingerprint(e) });
+    }
     for (const [key, delta] of bucketDeltas) {
       const bucket = nextBuckets.get(key) ?? {
         ...delta,
@@ -169,16 +284,24 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
       descriptor: cloneDescriptor(commit.source),
       checkpoint: { ...commit.batch.checkpoint },
       ...(storedSource?.sealedBeforeMs === undefined ? {} : { sealedBeforeMs: storedSource.sealedBeforeMs }),
-      ...(commit.batch.providerMetadata ? { providerMetadata: { ...commit.batch.providerMetadata } } : {}),
+      ...(commit.batch.providerMetadata || identityIssues.size || storedSource?.providerMetadata?.resolvedUsageScope ? { providerMetadata: {
+        ...commit.batch.providerMetadata,
+        ...(storedSource?.providerMetadata?.resolvedUsageScope ? { resolvedUsageScope: storedSource.providerMetadata.resolvedUsageScope } : {}),
+        accountingIssues: [
+          ...((commit.batch.providerMetadata?.accountingIssues as string[] | undefined) ?? []),
+          ...identityIssues,
+        ],
+      } } : {}),
     });
 
     if (commit.batch.sessionProjection === null || (commit.mode === 'rebuild' && commit.batch.sessionProjection === undefined)) {
       nextSessions.delete(commit.source.sourceId);
     } else if (commit.batch.sessionProjection) {
-      nextSessions.set(commit.source.sourceId, cloneProjection(commit.batch.sessionProjection));
+      nextSessions.set(commit.source.sourceId, canonicalSessionProjection(commit.batch.sessionProjection, owner));
     }
 
     this.sources = nextSources;
+    this.identities = nextIdentities;
     this.entries = nextEntries;
     this.buckets = nextBuckets;
     this.sessions = nextSessions;
@@ -336,6 +459,7 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
   async reset(): Promise<void> {
     this.assertOpen();
     this.sources.clear();
+    this.identities.clear();
     this.entries.clear();
     this.buckets.clear();
     this.sessions.clear();

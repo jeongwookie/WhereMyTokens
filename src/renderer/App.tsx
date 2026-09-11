@@ -205,7 +205,7 @@ function normalizeUsageIndexCoverage(value: unknown): AppState['usageIndexCovera
       : 0;
   };
   return {
-    state: record.state === 'complete' ? 'complete' : 'incomplete',
+    state: record.state === 'complete' || record.state === 'updating' ? record.state : 'incomplete',
     requiredSourceCount: count('requiredSourceCount'),
     indexedSourceCount: count('indexedSourceCount'),
     pendingSourceCount: count('pendingSourceCount'),

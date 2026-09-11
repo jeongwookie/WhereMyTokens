@@ -559,7 +559,7 @@ test('compact projection preserves dynamic window calculations across storage ad
   }
 });
 
-test('append selects tail and rewrite replaces only the affected source', async () => {
+test('append selects tail and rewrite preserves history for the affected source', async () => {
   const now = Date.parse('2026-07-16T01:00:00Z');
   const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => now);
 
@@ -585,15 +585,15 @@ test('append selects tail and rewrite replaces only the affected source', async 
 
   await index.refreshSource(source('codex:one', 'v3', 6), {
     scan: async plan => {
-      assert.equal(plan.mode, 'rebuild');
-      assert.equal(plan.checkpoint, null);
-      return batch(6, [entry('replacement', now + 2, 3)]);
+      assert.equal(plan.mode, 'tail');
+      assert.equal(plan.checkpoint.byteOffset, 20);
+      return { ...batch(6, []), rebased: true };
     },
   });
 
   const usage = await index.queryUsage({ grain: 'month' });
-  assert.equal(usage.aggregate.requestCount, 2);
-  assert.equal(usage.aggregate.totalTokens, 10);
+  assert.equal(usage.aggregate.requestCount, 3);
+  assert.equal(usage.aggregate.totalTokens, 22);
 });
 
 test('a live file may grow past its discovery stat without rejecting the committed checkpoint', async () => {
@@ -619,7 +619,7 @@ test('a live file may grow past its discovery stat without rejecting the committ
   await index.close();
 });
 
-test('range rebuild preserves sealed history outside reconstructible coverage', async () => {
+test('rebasing a partial source preserves both sealed and recent history', async () => {
   const sealedTimestamp = Date.parse('2025-01-01T00:00:00Z');
   const rebuildTimestamp = Date.parse('2026-07-16T01:00:00Z');
   const index = new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => rebuildTimestamp);
@@ -633,18 +633,14 @@ test('range rebuild preserves sealed history outside reconstructible coverage', 
 
   await index.refreshSource(source('codex:repair', 'v2', 10), {
     scan: async plan => {
-      assert.equal(plan.mode, 'rebuild');
-      return batch(10, [entry('replacement', rebuildTimestamp, 3)], {
-        kind: 'range',
-        fromMs: rebuildTimestamp,
-        toMs: rebuildTimestamp + 1,
-      });
+      assert.equal(plan.mode, 'tail');
+      return { ...batch(10, [], { kind: 'none' }), rebased: true };
     },
   });
 
   const usage = await index.queryUsage({ grain: 'month' });
   assert.equal(usage.aggregate.requestCount, 2);
-  assert.equal(usage.aggregate.totalTokens, 14);
+  assert.equal(usage.aggregate.totalTokens, 24);
 });
 
 test('project exclusion filters sources before reduction without multi-project double counting', async () => {
@@ -814,7 +810,7 @@ test('Codex scanner reads one payload stream and commits usage plus session proj
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('Codex scanner deduplicates repeated usage rows with collision-resistant request IDs', async () => {
+test('Codex scanner preserves distinct single observations without cumulative counts or stable IDs', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-codex-duplicate-'));
   const filePath = path.join(tempDir, 'session.jsonl');
   const timestamp = '2026-07-16T01:00:00.000Z';
@@ -832,8 +828,8 @@ test('Codex scanner deduplicates repeated usage rows with collision-resistant re
     createCodexUsageIndexScanner(filePath, { now: () => Date.parse(timestamp) }),
   );
 
-  assert.equal(result.scannedEntries, 1);
-  assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 1);
+  assert.equal(result.scannedEntries, 2);
+  assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 2);
   await index.close();
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
@@ -966,7 +962,7 @@ test('JSONL stream callback errors reject the scan and remain inside UsageIndex 
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('file scanner rebuilds fully remove usage deleted by truncation or an empty rewrite', async () => {
+test('file scanners retain usage after truncation or an empty rewrite', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-file-rebuild-replacement-'));
   const now = Date.parse('2026-07-16T02:00:00.000Z');
   const providers = [
@@ -1016,12 +1012,12 @@ test('file scanner rebuilds fully remove usage deleted by truncation or an empty
         fs.writeFileSync(filePath, `${provider.rewrittenLines.join('\n')}\n`, 'utf8');
         stat = fs.statSync(filePath);
         await index.refreshSource(provider.descriptor('v2', stat.size), scanner);
-        assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 1, `${provider.id}/${adapter} truncated`);
+        assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 2, `${provider.id}/${adapter} truncated`);
 
         fs.writeFileSync(filePath, '', 'utf8');
         stat = fs.statSync(filePath);
         await index.refreshSource(provider.descriptor('v3', stat.size), scanner);
-        assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 0, `${provider.id}/${adapter} emptied`);
+        assert.equal((await index.queryUsage({ grain: 'month' })).aggregate.requestCount, 2, `${provider.id}/${adapter} emptied`);
         await index.close();
       }
     }
@@ -1258,11 +1254,11 @@ test('SQLite schema v1 migrates in place and backfills aggregate buckets', () =>
   database.close();
 
   const storage = new SqliteUsageIndexStorage(dbPath);
-  assert.equal(usageIndexSchemaVersion(), 4);
+  assert.equal(usageIndexSchemaVersion(), 6);
   storage.close();
 
   const migrated = new DatabaseSync(dbPath);
-  assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 4);
+  assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 6);
   const providerTables = migrated.prepare(`
     SELECT sql FROM sqlite_master
     WHERE type = 'table' AND name IN ('usage_source', 'usage_entry', 'usage_bucket', 'usage_session_hot')
@@ -1308,4 +1304,33 @@ test('Electron runtime loads the built-in SQLite adapter without native modules'
     encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr || result.stdout || result.error?.message);
+});
+
+test('completed history remains complete through unchanged bounded discovery', async () => {
+ const index=new DefaultUsageIndex(new InMemoryUsageIndexStorage());const s=source('codex:quiet','v1',1);
+ index.declareSources('codex',[s],true);await index.refreshSource(s,{scan:async()=>batch(1,[])});
+ assert.equal((await index.queryUsage({grain:'month'})).coverage.state,'complete');
+ assert.deepEqual(index.declareSources('codex',[s],false),[]);
+ assert.equal((await index.queryUsage({grain:'month'})).coverage.state,'complete');await index.close();
+});
+test('new logs and appended records update silently after history completes but failures remain visible', async () => {
+ const index=new DefaultUsageIndex(new InMemoryUsageIndexStorage());const s=source('codex:quiet','v1',1);
+ index.declareSources('codex',[s],true);await index.refreshSource(s,{scan:async()=>batch(1,[])});
+ await index.queryUsage({grain:'month'});
+ const changed=source(s.sourceId,'v2',2),newSource=source('codex:new','v1',1);
+ assert.equal(index.declareSources('codex',[changed,newSource],false).length,2);
+ let coverage=(await index.queryUsage({grain:'month'})).coverage;assert.equal(coverage.state,'updating');assert.equal(coverage.pendingSourceCount,2);
+ await index.refreshSource(changed,{scan:async()=>batch(2,[])});
+ await assert.rejects(index.refreshSource(newSource,{scan:async()=>{throw Error('read failure')}}));
+ coverage=(await index.queryUsage({grain:'month'})).coverage;assert.equal(coverage.state,'incomplete');assert.equal(coverage.failedSourceCount,1);
+ await index.refreshSource(newSource,{scan:async()=>batch(1,[])});
+ assert.equal((await index.queryUsage({grain:'month'})).coverage.state,'complete');await index.close();
+});
+test('parser upgrade invalidates historical readiness until the upgrade queue completes', async () => {
+ const index=new DefaultUsageIndex(new InMemoryUsageIndexStorage());const s=source('codex:upgrade','v1',1);
+ index.declareSources('codex',[s],true);await index.refreshSource(s,{scan:async()=>batch(1,[])});await index.queryUsage({grain:'month'});
+ const upgraded={...s,parserVersion:2};index.declareSources('codex',[upgraded],false);
+ assert.equal((await index.queryUsage({grain:'month'})).coverage.state,'incomplete');
+ await index.refreshSource(upgraded,{scan:async()=>batch(1,[])});
+ assert.equal((await index.queryUsage({grain:'month'})).coverage.state,'complete');await index.close();
 });

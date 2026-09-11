@@ -2,7 +2,7 @@ import type { ProviderContext, ProviderUsageScanResult } from '../types';
 import { buildModelLabelMap } from './models';
 import { fileUriToPath, parseTimestampMs } from './pathUtils';
 import { findAntigravityServersCached, getTrajectorySummariesCached, getUserStatusCached } from './runtimeCache';
-import { antigravityCascadeSummaryKey, antigravityServerOwnerKey } from './serverIdentity';
+import { antigravityCascadeSummaryKey, antigravityUsageOwnerKey } from './serverIdentity';
 import { projectKeysForCwd } from '../shared/repoContext';
 import { createAntigravityUsageIndexScanner } from './usageIndexScanner';
 import type { AntigravityServerInfo, AntigravityTrajectorySummary } from './types';
@@ -17,6 +17,14 @@ function deadlineMs(ctx: ProviderContext): number {
 
 function remainingTimeoutMs(stopAt: number): number {
   return Math.max(1, Math.min(8_000, stopAt - Date.now()));
+}
+
+function usageSummaryTimestamp(summary: AntigravityTrajectorySummary, fallbackMs: number): number {
+  for (const value of [summary.lastModifiedTime, summary.createdTime]) {
+    const timestamp = parseTimestampMs(value, NaN);
+    if (Number.isFinite(timestamp) && timestamp >= 0) return timestamp;
+  }
+  return fallbackMs;
 }
 
 function newestCascadeMs(response: unknown): number {
@@ -82,7 +90,8 @@ export async function scanAntigravityUsageFromServers(
   if (!trajectories) return { usageIndexSources: [], partial: true };
 
   const labels = buildModelLabelMap(userStatus?.userStatus?.cascadeModelConfigData?.clientModelConfigs ?? []);
-  const ownerKey = antigravityServerOwnerKey(primaryServer);
+  const email = userStatus?.userStatus?.email;
+  const ownerKey = antigravityUsageOwnerKey(email);
   const limit = ctx.includeFullHistory ? FULL_SCAN_LIMIT : DEFAULT_SCAN_LIMIT;
   const summaries = Object.entries(trajectories.trajectorySummaries ?? {})
     .filter((entry): entry is [string, AntigravityTrajectorySummary] =>
@@ -90,7 +99,7 @@ export async function scanAntigravityUsageFromServers(
     .map(([cascadeId, summary]) => ({
       cascadeId,
       summary,
-      lastModifiedMs: parseTimestampMs(summary.lastModifiedTime ?? summary.createdTime, ctx.nowMs),
+      lastModifiedMs: usageSummaryTimestamp(summary, ctx.nowMs),
     }))
     .sort((a, b) => b.lastModifiedMs - a.lastModifiedMs);
   const usageIndexSources = summaries
@@ -105,7 +114,7 @@ export async function scanAntigravityUsageFromServers(
           sourceId,
           provider: 'antigravity' as const,
           kind: 'remote' as const,
-          parserVersion: 1,
+          parserVersion: 3,
           version: {
             token: `${stepCount}:${lastModifiedMs}:${runStatus}${isRunningStatus(runStatus) ? `:live:${ctx.nowMs}` : ''}`,
             mtimeMs: lastModifiedMs,

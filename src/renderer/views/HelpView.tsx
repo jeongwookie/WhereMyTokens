@@ -155,7 +155,7 @@ function ContentEN() {
           <B>Cache Efficiency</B> uses provider-specific math: Claude = cache read ÷ (cache read + cache creation); Codex and Antigravity = cache read ÷ prompt tokens.
         </div>
         <div style={{ marginBottom: 6 }}>
-          <B>Pricing</B> uses model-specific API rates and known dated price changes. Historical cost repricing preserves unavailable ambiguous history instead of guessing or resetting it.
+          <B>Pricing</B> uses model-specific API rates and known dated price changes, including GPT-6 Astra. Historical cost repricing preserves unavailable ambiguous history instead of guessing or resetting it. After upgrade, verified Codex overcounts are corrected with local backups. Legacy checkpoints are rechecked automatically after initial indexing. Settings → Data shows progress, results, preserved history, and rechecking; Reset index remains separate.
         </div>
         <UsageTable
           headers={['Display', 'Scope', 'tok', '$']}
@@ -180,7 +180,7 @@ function ContentEN() {
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — cost per 100 lines of code added. <B>today</B> tab shows today's actual cost-per-added-line with the all-time average for comparison. <B>all</B> tab shows the all-time average $/100 added. Lower = more efficient.</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — all-time cumulative net line progress with today's commit count.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — toggle between today and all-time stats. All-time session counts come from usage-bearing history logs.</div>
-        <div style={{ marginBottom: 5 }}><B>Current session repo scope</B> — git totals follow repos linked to the sessions currently tracked in the dashboard, so they can differ from just the repo you are viewing.</div>
+        <div style={{ marginBottom: 5 }}><B>Tracked repository scope</B> — git totals use persistently tracked repos, independent of recent sessions. Project exclusions are reversible, and temporarily unavailable repos retain their historical output.</div>
         <div style={{ marginBottom: 5 }}><B>All-time scope</B> — counts commits and line changes across local branches, not only the current HEAD.</div>
         <div><B>Author filter</B> — only your own commits are counted, filtered by your local <code>git config user.email</code>.</div>
       </Section>
@@ -282,7 +282,7 @@ function ContentKO() {
           <B>Cache Efficiency</B> 계산식은 provider별로 다릅니다. Claude = cache read ÷ (cache read + cache creation), Codex/Antigravity = cache read ÷ prompt tokens.
         </div>
         <div style={{ marginBottom: 6 }}>
-          <B>가격</B>은 모델별 API 단가와 확인된 가격 변경 날짜를 반영합니다. 과거 비용 재산정은 원본이 없어 모델을 확정할 수 없는 기록을 추측하거나 reset하지 않고 그대로 보존합니다.
+          <B>가격</B>은 GPT-6 Astra를 포함한 모델별 API 단가와 확인된 가격 변경 날짜를 반영합니다. 과거 비용 재산정은 원본이 없어 모델을 확정할 수 없는 기록을 추측하거나 reset하지 않고 그대로 보존합니다. 업그레이드 후 검증된 Codex 과다 집계만 로컬 백업 후 보정하며, 구버전 검증 정보는 초기 인덱싱 후 자동 재검사합니다. Settings → Data에서 진행 상황, 결과, 보존된 기록과 재검사를 확인할 수 있습니다. Reset index는 별도 작업입니다.
         </div>
         <UsageTable
           headers={['표시 위치', '범위', 'tok', '$']}
@@ -307,7 +307,7 @@ function ContentKO() {
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 라인 추가당 비용. <B>today</B> 탭은 오늘의 실제 추가 라인당 비용과 전체 평균을 비교 표시. <B>all</B> 탭은 전체 기간 평균 $/100 added. 값이 낮을수록 효율적.</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 전체 기간 순 라인 누적 성장과 오늘 커밋 수를 보여줍니다.</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 오늘과 전체 기간 통계 전환. 전체 기간 세션 수는 사용량이 있는 전체 기록 로그 기준입니다.</div>
-        <div style={{ marginBottom: 5 }}><B>현재 세션 repo 범위</B> — git 합계는 대시보드에서 현재 추적 중인 세션에 연결된 repo 기준으로 잡히므로, 지금 보고 있는 단일 저장소 값과 다를 수 있습니다.</div>
+        <div style={{ marginBottom: 5 }}><B>영구 추적 repo 범위</B> — git 합계는 최근 세션 유무와 관계없이 저장된 추적 repo를 기준으로 합니다. 프로젝트 제외는 되돌릴 수 있으며 일시적으로 접근할 수 없는 repo의 이력도 유지합니다.</div>
         <div style={{ marginBottom: 5 }}><B>전체 기간 범위</B> — 현재 HEAD만이 아니라 로컬 브랜치 전체의 커밋과 라인 변경을 집계합니다.</div>
         <div><B>작성자 필터</B> — 본인 커밋만 집계됩니다. 로컬 <code>git config user.email</code> 기준으로 자동 필터링.</div>
       </Section>
@@ -407,7 +407,7 @@ function ContentJA() {
           <B>Cache Efficiency</B> は provider ごとに計算式が異なります。Claude = cache read ÷ (cache read + cache creation)、Codex/Antigravity = cache read ÷ prompt tokens。
         </div>
         <div style={{ marginBottom: 6 }}>
-          <B>価格</B>はモデル別 API 単価と確認済みの価格改定日を反映します。履歴コストの再計算では、raw data がなくモデルを特定できない履歴を推測や reset せず保持します。
+          <B>価格</B>は GPT-6 Astra を含むモデル別 API 単価と確認済みの価格改定日を反映します。履歴コストの再計算では、raw data がなくモデルを特定できない履歴を推測や reset せず保持します。更新後、確認できた Codex の過大計上のみローカルバックアップ後に修正します。旧版の検証情報は初期インデックス後に自動再検証します。Settings → Data で進捗、結果、保持された履歴と再検証を確認できます。Reset index は別の操作です。
         </div>
         <UsageTable
           headers={['表示場所', '集計期間', 'tok', '$']}
@@ -432,7 +432,7 @@ function ContentJA() {
         <div style={{ marginBottom: 5 }}><B>$/100 Added</B> — 100 行追加あたりのコスト。<B>today</B> タブは今日の実際の追加行あたりコストと全期間平均を比較表示。<B>all</B> タブは全期間平均の $/100 added。値が低いほど効率的。</div>
         <div style={{ marginBottom: 5 }}><B>Output Growth</B> — 全期間の純変更の累積成長と今日のコミット数を表示します。</div>
         <div style={{ marginBottom: 5 }}><B>today / all</B> — 今日と全期間の統計を切り替え。全期間のセッション数は使用量を含む履歴ログに基づきます。</div>
-        <div style={{ marginBottom: 5 }}><B>現在のセッション repo 範囲</B> — git 合計はダッシュボードで現在追跡中のセッションに結び付いた repo を基準にするため、いま見ている単一リポジトリの値とは異なる場合があります。</div>
+        <div style={{ marginBottom: 5 }}><B>永続的な repo 範囲</B> — git 合計は最近のセッションの有無に依存せず、保存された追跡対象 repo を集計します。プロジェクト除外は元に戻せ、一時的にアクセスできない repo の履歴も保持します。</div>
         <div style={{ marginBottom: 5 }}><B>全期間の範囲</B> — 現在の HEAD だけでなく、ローカルブランチ全体のコミットと行変更を集計します。</div>
         <div><B>作者フィルター</B> — 自分のコミットのみカウント。ローカルの <code>git config user.email</code> で自動フィルタリング。</div>
       </Section>

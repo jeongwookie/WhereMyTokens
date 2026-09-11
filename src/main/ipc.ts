@@ -308,6 +308,9 @@ type IpcMainHandle = {
 };
 
 export interface RegisterIpcHandlersOptions {
+  getAccountingRevision?: () => import('../shared/accountingRevision').AccountingRevisionStatus;
+  retryAccountingRevision?: () => import('../shared/accountingRevision').AccountingRevisionStatus;
+  dismissAccountingRevision?: () => import('../shared/accountingRevision').AccountingRevisionStatus;
   store: Store<AppSettings>;
   getState: () => AppState;
   forceRefresh: () => Promise<void>;
@@ -347,6 +350,14 @@ export function registerIpcHandlers(options: RegisterIpcHandlersOptions) {
   } = options;
 
   ipc.handle('state:get', () => getState());
+  for (const [channel, handler] of [
+    ['usage-accounting:get', options.getAccountingRevision],
+    ['usage-accounting:retry', options.retryAccountingRevision],
+    ['usage-accounting:dismiss', options.dismissAccountingRevision],
+  ] as const) ipc.handle(channel, () => {
+    if (!handler) throw new Error(`${channel} not wired`);
+    return handler();
+  });
   ipc.handle('state:refresh', async () => { await forceRefresh(); return getState(); });
   ipc.handle('usage-index:reset', async () => {
     if (!resetUsageIndex) throw new Error('usage-index:reset not wired');

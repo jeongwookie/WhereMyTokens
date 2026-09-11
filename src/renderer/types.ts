@@ -230,7 +230,7 @@ export interface CodexAccountState {
 }
 
 export interface UsageIndexCoverage {
-  state: 'complete' | 'incomplete';
+  state: 'complete' | 'updating' | 'incomplete';
   requiredSourceCount: number;
   indexedSourceCount: number;
   pendingSourceCount: number;
@@ -323,6 +323,10 @@ export interface IntegrationMutationResult extends IntegrationStatus {
 declare global {
   interface Window {
     wmt: {
+      getAccountingRevision: () => Promise<import('../shared/accountingRevision').AccountingRevisionStatus>;
+      retryAccountingRevision: () => Promise<import('../shared/accountingRevision').AccountingRevisionStatus>;
+      dismissAccountingRevision: () => Promise<import('../shared/accountingRevision').AccountingRevisionStatus>;
+      onAccountingRevision: (cb: (status: import('../shared/accountingRevision').AccountingRevisionStatus) => void) => () => void;
       getState:           () => Promise<AppState>;
       forceRefresh:       () => Promise<AppState>;
       resetIndex:         () => Promise<AppState>;

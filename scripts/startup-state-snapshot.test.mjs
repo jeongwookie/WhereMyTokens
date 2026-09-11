@@ -15,8 +15,8 @@ const BASE = {
   providerQuotas: {},
 };
 
-test('startup snapshot schema is bumped for the atomic quota cutover', () => {
-  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 6);
+test('startup snapshot schema rejects earlier accounting-review presentation', () => {
+  assert.equal(STARTUP_STATE_SNAPSHOT_SCHEMA_VERSION, 9);
 });
 
 test('startup persistence strips every provider quota snapshot', () => {

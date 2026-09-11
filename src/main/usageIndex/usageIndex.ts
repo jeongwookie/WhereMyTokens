@@ -22,10 +22,27 @@ import type { ProviderId } from '../../shared/quotaTypes';
 
 type CoverageSourceStatus = 'queued' | 'scanning' | 'indexed' | 'failed';
 
-interface ProviderCoverageState {
-  discoveryComplete: boolean;
-  sources: Map<string, CoverageSourceStatus>;
+interface CoverageSource {
+  descriptor: UsageSourceDescriptor;
+  status: CoverageSourceStatus;
 }
+
+interface ProviderCoverageState {
+  historyComplete: boolean;
+  discoveryComplete: boolean;
+  sources: Map<string, CoverageSource>;
+}
+
+function sameCoverageVersion(previous: UsageSourceDescriptor, current: UsageSourceDescriptor): boolean {
+  return previous.provider === current.provider
+    && previous.kind === current.kind
+    && previous.parserVersion === current.parserVersion
+    && previous.version.token === current.version.token
+    && (current.projectKeys === undefined
+      || (previous.projectKeys ?? []).length === current.projectKeys.length
+        && current.projectKeys.every((key, index) => key === previous.projectKeys?.[index]));
+}
+
 
 export const USAGE_COMPACTION_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -106,6 +123,9 @@ function assertBatch(
   mode: UsageScanMode,
   batch: UsageSourceBatch,
 ): void {
+  if (batch.rebased && (mode !== 'tail' || !stored || batch.entries.length > 0)) {
+    throw new Error('A source rebase may only establish state for existing history');
+  }
   const coverage = batch.rebuildCoverage;
   if (batch.projectKeys?.some(key => typeof key !== 'string')) {
     throw new Error(`Usage source ${source.sourceId} returned invalid project attribution`);
@@ -121,6 +141,9 @@ function assertBatch(
     }
   }
 
+  for (const link of batch.identityLinks ?? []) {
+    if (!link.alias.trim() || !link.target.trim()) throw new Error('Empty execution identity link');
+  }
   const requestIds = new Set<string>();
   for (const entry of batch.entries) {
     assertEntry(source, entry);
@@ -143,7 +166,7 @@ function assertBatch(
       throw new Error(`File usage source ${source.sourceId} returned an invalid byteOffset`);
     }
     const previousOffset = stored?.checkpoint.byteOffset;
-    if (mode === 'tail' && previousOffset !== undefined && byteOffset < previousOffset) {
+    if (mode === 'tail' && !batch.rebased && previousOffset !== undefined && byteOffset < previousOffset) {
       throw new Error(`File usage source ${source.sourceId} moved its tail checkpoint backwards`);
     }
   }
@@ -175,6 +198,7 @@ function sameProjects(stored: StoredUsageSource, source: UsageSourceDescriptor):
 }
 
 function appendOnlyFileAlreadyIndexed(stored: StoredUsageSource, source: UsageSourceDescriptor): boolean {
+  if (stored.checkpoint.resumeState && stored.descriptor.version.token !== source.version.token) return false;
   if (source.kind !== 'file' || stored.descriptor.kind !== 'file') return false;
   if (stored.descriptor.parserVersion !== source.parserVersion) return false;
   const previousSize = stored.descriptor.version.size;
@@ -187,17 +211,9 @@ function appendOnlyFileAlreadyIndexed(stored: StoredUsageSource, source: UsageSo
     && previousOffset === currentSize;
 }
 
-function selectScanMode(stored: StoredUsageSource | null, source: UsageSourceDescriptor): UsageScanMode {
-  if (!stored) return 'rebuild';
-  if (stored.descriptor.parserVersion !== source.parserVersion) return 'rebuild';
-
-  if (source.kind === 'remote') return stored.checkpoint.cursor ? 'tail' : 'rebuild';
-
-  const previousSize = stored.descriptor.version.size;
-  const currentSize = source.version.size;
-  const previousOffset = stored.checkpoint.byteOffset;
-  if (previousSize === undefined || currentSize === undefined || previousOffset === undefined) return 'rebuild';
-  return currentSize > previousSize && currentSize >= previousOffset ? 'tail' : 'rebuild';
+function selectScanMode(stored: StoredUsageSource | null, _source: UsageSourceDescriptor): UsageScanMode {
+  // Existing history is append/revision-only. Scanners rebase invalid physical sources without replacing it.
+  return stored ? 'tail' : 'rebuild';
 }
 
 export class DefaultUsageIndex implements UsageIndex {
@@ -220,21 +236,40 @@ export class DefaultUsageIndex implements UsageIndex {
     provider: ProviderId,
     sources: readonly UsageSourceDescriptor[],
     discoveryComplete: boolean,
-  ): void {
+  ): readonly string[] {
     this.assertOpen();
-    const required = new Map<string, CoverageSourceStatus>();
+    const previous = this.coverageByProvider.get(provider);
+    let historyComplete = !!previous && (previous.historyComplete || previous.discoveryComplete && [...previous.sources.values()].every(s => s.status === 'indexed'));
+    // A bounded discovery must not discard work known from an earlier full pass.
+    const required = discoveryComplete
+      ? new Map<string, CoverageSource>()
+      : new Map(previous?.sources);
+    const declared = new Set<string>();
+    const pending: string[] = [];
+    const failed: string[] = [];
     for (const source of sources) {
       const normalized = normalizeDescriptor(source);
       assertDescriptor(normalized);
       if (normalized.provider !== provider) {
         throw new Error(`Usage source ${normalized.sourceId} belongs to ${normalized.provider}, not ${provider}`);
       }
-      if (required.has(normalized.sourceId)) {
+      if (declared.has(normalized.sourceId)) {
         throw new Error(`Usage source ${normalized.sourceId} was declared more than once`);
       }
-      required.set(normalized.sourceId, 'queued');
+      declared.add(normalized.sourceId);
+      const prior = previous?.sources.get(normalized.sourceId);
+      if (prior && prior.descriptor.parserVersion !== normalized.parserVersion) historyComplete = false;
+      const current: CoverageSource = {
+        descriptor: normalized,
+        status: prior && sameCoverageVersion(prior.descriptor, normalized) ? prior.status : 'queued',
+      };
+      required.set(normalized.sourceId, current);
+      if (current.status === 'queued') pending.push(normalized.sourceId);
+      else if (current.status === 'failed') failed.push(normalized.sourceId);
     }
-    this.coverageByProvider.set(provider, { discoveryComplete, sources: required });
+    this.coverageByProvider.set(provider, { historyComplete, discoveryComplete: discoveryComplete || previous?.discoveryComplete === true, sources: required });
+    // A permanently failing source cannot keep unattempted sources behind it.
+    return [...pending, ...failed];
   }
 
   async refreshSource(
@@ -279,6 +314,7 @@ export class DefaultUsageIndex implements UsageIndex {
       const mode = selectScanMode(stored, normalizedSource);
       const batch = await scanner.scan({
         mode,
+        identitySource: key => this.storage.identitySource(normalizedSource.provider, key),
         source: normalizedSource,
         checkpoint: mode === 'tail' ? stored?.checkpoint ?? null : null,
         previousSessionProjection: mode === 'tail' ? stored?.sessionProjection ?? null : null,
@@ -382,10 +418,17 @@ export class DefaultUsageIndex implements UsageIndex {
 
   private markCoverageSource(source: UsageSourceDescriptor, status: CoverageSourceStatus): void {
     const coverage = this.coverageByProvider.get(source.provider) ?? {
+      historyComplete: false,
       discoveryComplete: false,
-      sources: new Map<string, CoverageSourceStatus>(),
+      sources: new Map<string, CoverageSource>(),
     };
-    coverage.sources.set(source.sourceId, status);
+    const previous = coverage.sources.get(source.sourceId);
+    // Do not publish an old in-flight version as completing a newly declared one.
+    if (status !== 'scanning' && previous && !sameCoverageVersion(previous.descriptor, source)) return;
+    coverage.sources.set(source.sourceId, {
+      descriptor: source,
+      status,
+    });
     this.coverageByProvider.set(source.provider, coverage);
   }
 
@@ -396,22 +439,27 @@ export class DefaultUsageIndex implements UsageIndex {
     let pendingSourceCount = 0;
     let failedSourceCount = 0;
     let discoveryComplete = selectedProviders.length > 0;
+    let historyComplete = selectedProviders.length > 0;
     for (const provider of selectedProviders) {
       const coverage = this.coverageByProvider.get(provider);
       if (!coverage) {
         discoveryComplete = false;
+        historyComplete = false;
         continue;
       }
       discoveryComplete = discoveryComplete && coverage.discoveryComplete;
-      for (const status of coverage.sources.values()) {
+      if (coverage.discoveryComplete && [...coverage.sources.values()].every(s => s.status === 'indexed')) coverage.historyComplete = true;
+      historyComplete = historyComplete && coverage.historyComplete;
+      for (const { status } of coverage.sources.values()) {
         requiredSourceCount += 1;
         if (status === 'indexed') indexedSourceCount += 1;
         else if (status === 'failed') failedSourceCount += 1;
         else pendingSourceCount += 1;
       }
     }
+    const scanComplete = discoveryComplete && pendingSourceCount === 0 && failedSourceCount === 0;
     return {
-      state: discoveryComplete && pendingSourceCount === 0 && failedSourceCount === 0 ? 'complete' : 'incomplete',
+      state: scanComplete ? 'complete' : historyComplete && failedSourceCount === 0 ? 'updating' : 'incomplete',
       requiredSourceCount,
       indexedSourceCount,
       pendingSourceCount,

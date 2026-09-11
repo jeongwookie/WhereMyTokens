@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { estimateUsageCost } from '../modelPricing';
+import { executionFingerprint } from './executionIdentity';
 import {
   collectUsageBucketDeltas,
   usageBucketStart,
@@ -39,6 +40,7 @@ interface EntryRow {
   cache_read_tokens: number;
   cost_usd: number;
   cache_savings_usd: number;
+  breakdown_json: string | null;
 }
 
 interface BucketRow {
@@ -115,6 +117,8 @@ const NON_COST_HASH_QUERIES = [
     FROM usage_bucket ORDER BY source_id, provider, model, bucket_kind, bucket_start_ms`,
   `SELECT source_id, provider, updated_at, byte_size, payload_json
     FROM usage_session_hot ORDER BY source_id`,
+  `SELECT provider, identity_key, source_id, request_id, timestamp_ms, origin_id
+    FROM usage_identity ORDER BY provider, identity_key`,
 ] as const;
 
 const FULL_STATE_HASH_QUERIES = [
@@ -131,9 +135,10 @@ const FULL_STATE_HASH_QUERIES = [
     FROM usage_bucket ORDER BY source_id, provider, model, bucket_kind, bucket_start_ms`,
   `SELECT source_id, provider, updated_at, byte_size, payload_json
     FROM usage_session_hot ORDER BY source_id`,
+  `SELECT * FROM usage_identity ORDER BY provider, identity_key`,
 ] as const;
 
-function assertIntegrity(database: DatabaseSync, label: string): void {
+export function assertIntegrity(database: DatabaseSync, label: string): void {
   const rows = database.prepare('PRAGMA integrity_check').all() as Array<{ integrity_check: string }>;
   if (rows.length !== 1 || rows[0]?.integrity_check !== 'ok') {
     throw new Error(`${label} failed SQLite integrity_check: ${JSON.stringify(rows)}`);
@@ -147,20 +152,29 @@ function hashState(database: DatabaseSync, queries: readonly string[]): string {
   for (const sql of queries) {
     hash.update(sql);
     hash.update('\0');
-    const rows = database.prepare(sql).all() as Array<Record<string, unknown>>;
-    for (const row of rows) {
-      hash.update(JSON.stringify(Object.values(row)));
-      hash.update('\n');
+    const [selection, order] = sql.split(' ORDER BY ');
+    const keys = order!.split(',').map(key => key.trim());
+    const firstPage = database.prepare(`${sql} LIMIT 1000`);
+    const nextPage = database.prepare(`${selection} WHERE (${keys.join(',')}) > (${keys.map(() => '?').join(',')}) ORDER BY ${order} LIMIT 1000`);
+    let cursor: Array<string | number> | undefined;
+    for (;;) {
+      const rows = (cursor ? nextPage.all(...cursor) : firstPage.all()) as Array<Record<string, unknown>>;
+      for (const row of rows) {
+        hash.update(JSON.stringify(Object.values(row)));
+        hash.update('\n');
+      }
+      if (rows.length < 1000) break;
+      cursor = keys.map(key => rows[rows.length - 1]![key] as string | number);
     }
   }
   return hash.digest('hex');
 }
 
-function hashNonCostState(database: DatabaseSync): string {
+export function hashNonCostState(database: DatabaseSync): string {
   return hashState(database, NON_COST_HASH_QUERIES);
 }
 
-function hashFullState(database: DatabaseSync): string {
+export function hashFullState(database: DatabaseSync): string {
   return hashState(database, FULL_STATE_HASH_QUERIES);
 }
 
@@ -233,8 +247,26 @@ function needsRawReplay(provider: string, model: string): boolean {
     || (provider === 'codex' && model.startsWith('GPT-5.6'));
 }
 
-function sameNumber(left: number, right: number): boolean {
+export function sameNumber(left: number, right: number): boolean {
   return Math.abs(left - right) <= 1e-9;
+}
+
+// The existing execution digest includes derived costs. Refresh it without changing
+// canonical ownership or aliases, otherwise a later duplicate can appear conflicting.
+export function syncExecutionPriceFingerprint(database: DatabaseSync, sourceId: string, entry: UsageEntry): number {
+  const fingerprint = executionFingerprint(entry);
+  return Number(database.prepare(`UPDATE usage_identity SET fingerprint=?
+    WHERE provider=? AND source_id=? AND request_id=? AND fingerprint<>?`)
+    .run(fingerprint, entry.provider, sourceId, entry.requestId, fingerprint).changes);
+}
+
+function syncRowPriceFingerprint(database: DatabaseSync, row: EntryRow, costUSD: number, cacheSavingsUSD: number): void {
+  syncExecutionPriceFingerprint(database, row.source_id, {
+    requestId: row.request_id, timestampMs: row.timestamp_ms, provider: row.provider as UsageEntry['provider'],
+    model: row.model, inputTokens: row.input_tokens, outputTokens: row.output_tokens,
+    cacheCreationTokens: row.cache_creation_tokens, cacheReadTokens: row.cache_read_tokens,
+    costUSD, cacheSavingsUSD, ...(row.breakdown_json ? { breakdown: JSON.parse(row.breakdown_json) } : {}),
+  });
 }
 
 function assertEntryIdentity(row: EntryRow, entry: UsageEntry): void {
@@ -298,6 +330,7 @@ function repriceReplayedSource(
       && sameNumber(row.cache_savings_usd, entry.cacheSavingsUSD)) continue;
     const result = updateEntry.run(entry.costUSD, entry.cacheSavingsUSD, sourceId, row.request_id);
     if (result.changes !== 1) throw new Error(`Failed to reprice ${label}`);
+    syncRowPriceFingerprint(database, row, entry.costUSD, entry.cacheSavingsUSD);
     updatedEntryRows += 1;
   }
 
@@ -369,6 +402,7 @@ function repriceUnambiguousFableRows(
     if (sameNumber(row.cost_usd, estimate.costUSD)
       && sameNumber(row.cache_savings_usd, estimate.cacheSavingsUSD)) continue;
     updateEntry.run(estimate.costUSD, estimate.cacheSavingsUSD, row.source_id, row.request_id);
+    syncRowPriceFingerprint(database, row, estimate.costUSD, estimate.cacheSavingsUSD);
     updatedEntryRows += 1;
   }
 
@@ -406,7 +440,7 @@ function repriceUnambiguousFableRows(
   return { updatedEntryRows, updatedBucketRows };
 }
 
-function createBackup(database: DatabaseSync, databasePath: string, backupPath: string): string {
+export function createBackup(database: DatabaseSync, databasePath: string, backupPath: string): string {
   const resolvedDatabase = path.resolve(databasePath);
   const resolvedBackup = path.resolve(backupPath);
   if (resolvedBackup === resolvedDatabase) throw new Error('Backup path must differ from the live UsageIndex path');

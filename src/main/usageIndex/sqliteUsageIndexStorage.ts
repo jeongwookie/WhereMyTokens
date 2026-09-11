@@ -32,6 +32,7 @@ import {
 } from './types';
 import { UsageEntryProjectionBuilder } from './entryProjection';
 import { usageRetentionCutoffs } from './retention';
+import { canonicalSessionProjection, executionFingerprint, identityAccepts, reviseClaudePayload, sameExecutionOrigin, validUsageRevision, type ExecutionIdentity } from './executionIdentity';
 import {
   addUsageBreakdown,
   addUsageMetrics,
@@ -41,7 +42,15 @@ import {
   type UsageBucketKind,
 } from './usageBucketAggregation';
 
-const USAGE_INDEX_SCHEMA_VERSION = 4;
+const USAGE_INDEX_SCHEMA_VERSION = 6;
+const EXECUTION_TABLES_SQL = `
+  CREATE TABLE usage_identity (
+    provider TEXT NOT NULL, identity_key TEXT NOT NULL, source_id TEXT NOT NULL,
+    request_id TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, origin_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
+    PRIMARY KEY(provider, identity_key)
+  ) STRICT;
+  CREATE INDEX usage_identity_owner ON usage_identity(provider, source_id, request_id);
+`;
 const USAGE_BUCKET_TABLE_SQL = `
   CREATE TABLE usage_bucket (
     source_id TEXT NOT NULL REFERENCES usage_source(source_id) ON DELETE CASCADE,
@@ -296,6 +305,11 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
     }
   }
 
+  identitySource(provider: ProviderId, key: string): string | undefined {
+    this.assertOpen();
+    return (this.database.prepare('SELECT source_id FROM usage_identity WHERE provider=? AND identity_key=?').get(provider, key) as { source_id: string } | undefined)?.source_id;
+  }
+
   async getSource(sourceId: string): Promise<StoredUsageSource | null> {
     this.assertOpen();
     const row = this.database.prepare('SELECT * FROM usage_source WHERE source_id = ?').get(sourceId) as SourceRow | undefined;
@@ -361,9 +375,102 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
     this.transaction(() => {
       const storedSource = this.database.prepare('SELECT * FROM usage_source WHERE source_id = ?')
         .get(commit.source.sourceId) as SourceRow | undefined;
-      const entriesToCommit = storedSource?.sealed_before_ms == null
-        ? commit.batch.entries
-        : commit.batch.entries.filter(entry => entry.timestampMs >= storedSource.sealed_before_ms!);
+      const lookup = this.database.prepare('SELECT source_id AS sourceId, request_id AS requestId, timestamp_ms AS timestampMs, origin_id AS originId, fingerprint FROM usage_identity WHERE provider = ? AND identity_key = ?');
+      const owner = (key: string) => lookup.get(commit.source.provider, key) as ExecutionIdentity | undefined;
+      const register = this.database.prepare('INSERT OR IGNORE INTO usage_identity VALUES (?, ?, ?, ?, ?, ?, ?)');
+      for (const seed of commit.batch.identitySeeds ?? []) {
+        let row = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(commit.source.sourceId, seed.requestId) as EntryRow | undefined;
+        // 구버전 응답 ID는 새 카운터 ID와 다르므로 원본 응답과 시각이 일치할 때만 연결한다.
+        if (!row && commit.source.provider === 'codex' && seed.key.startsWith('codex:response:')) {
+          row = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=? AND timestamp_ms=?')
+            .get(commit.source.sourceId, seed.key, seed.timestampMs) as EntryRow | undefined;
+        }
+        const retained = row ? entryFromRow(row) : undefined;
+        const known = owner(seed.key);
+        if (retained && known?.sourceId === commit.source.sourceId && known.requestId === `protected:${seed.requestId}`) {
+          this.database.prepare('UPDATE usage_identity SET request_id=?, timestamp_ms=?, origin_id=?, fingerprint=? WHERE provider=? AND source_id=? AND request_id=?')
+            .run(retained.requestId, retained.timestampMs, retained.identityOrigin ?? '', executionFingerprint(retained), commit.source.provider, known.sourceId, known.requestId);
+        }
+        register.run(commit.source.provider, seed.key, commit.source.sourceId, retained?.requestId ?? `protected:${seed.requestId}`,
+          retained?.timestampMs ?? seed.timestampMs, retained?.identityOrigin ?? '', retained ? executionFingerprint(retained) : '');
+      }
+      const identityIssues = new Set<string>();
+      const crossUpdates: Array<{ known: ExecutionIdentity; previous: UsageEntry; entry: UsageEntry }> = [];
+      const cascadeSuffix = commit.source.sourceId.slice(commit.source.sourceId.indexOf(':cascade:'));
+      const uncertainCascade = !storedSource && commit.source.provider === 'antigravity'
+        && commit.source.sourceId.includes(':cascade:') && this.database.prepare(
+          "SELECT source_id, provider_metadata_json FROM usage_source WHERE provider='antigravity' AND source_id<>? AND substr(source_id, -length(?))=? AND ((parser_version < 2 OR source_id LIKE 'antigravity:unknown:%') AND json_extract(provider_metadata_json, '$.resolvedUsageScope') IS NULL OR ? LIKE 'antigravity:unknown:%') LIMIT 1",
+        ).get(commit.source.sourceId, cascadeSuffix, cascadeSuffix, commit.source.sourceId) as { source_id: string; provider_metadata_json: string | null } | undefined;
+      if (uncertainCascade && !commit.source.sourceId.startsWith('antigravity:unknown:')) {
+        const metadata = uncertainCascade.provider_metadata_json ? JSON.parse(uncertainCascade.provider_metadata_json) : {};
+        metadata.resolvedUsageScope = commit.source.sourceId;
+        this.database.prepare('UPDATE usage_source SET provider_metadata_json=? WHERE source_id=?').run(JSON.stringify(metadata), uncertainCascade.source_id);
+      }
+      const entriesToCommit = commit.batch.entries.map(entry => ({ ...entry })).filter(entry => {
+        const keys = [entry.identityKey, ...(entry.identityAliases ?? [])].filter((k): k is string => !!k);
+        if (uncertainCascade) {
+          for (const key of keys) register.run(entry.provider, key, commit.source.sourceId, 'protected:' + entry.requestId, entry.timestampMs, '', '');
+          return false;
+        }
+        const scopeWitness = entry.provider === 'antigravity' && entry.identityOrigin ? owner(entry.identityOrigin) : undefined;
+        let witnessedScope: string | undefined;
+        if (scopeWitness?.sourceId.startsWith('antigravity:unknown:')) {
+          const row = this.database.prepare('SELECT provider_metadata_json FROM usage_source WHERE source_id=?').get(scopeWitness.sourceId) as { provider_metadata_json: string | null } | undefined;
+          witnessedScope = row?.provider_metadata_json ? JSON.parse(row.provider_metadata_json).resolvedUsageScope : undefined;
+        }
+        if (scopeWitness && scopeWitness.sourceId !== commit.source.sourceId
+          && (commit.source.sourceId.startsWith('antigravity:unknown:')
+            || scopeWitness.sourceId.startsWith('antigravity:unknown:') && (!witnessedScope || witnessedScope === commit.source.sourceId))) {
+          for (const key of keys) register.run(entry.provider, key, commit.source.sourceId, 'protected:' + entry.requestId, entry.timestampMs, '', '');
+          return false;
+        }
+        const knownValues = keys.map(owner).filter((v): v is ExecutionIdentity => !!v);
+        const known = knownValues[0];
+        if (knownValues.some(v => v.sourceId !== known?.sourceId || v.requestId !== known?.requestId)) { identityIssues.add('identity-conflict'); return false; }
+        if (known && known.sourceId !== commit.source.sourceId) {
+          if (sameExecutionOrigin(entry, known) && executionFingerprint(entry) === known.fingerprint) return false;
+          const row = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(known.sourceId, known.requestId) as EntryRow | undefined;
+          const originalState = this.database.prepare('SELECT checkpoint_json FROM usage_source WHERE source_id=?').get(known.sourceId) as { checkpoint_json: string } | undefined;
+          const resumeState = originalState ? JSON.parse(originalState.checkpoint_json).resumeState : undefined;
+          const oldPayload = resumeState ? JSON.parse(resumeState).payload : {};
+          if (row && validUsageRevision(entry, entryFromRow(row), known, oldPayload, commit.batch.sessionProjection?.payload)) {
+            crossUpdates.push({ known, previous: entryFromRow(row), entry: { ...entry, requestId: known.requestId } });
+          } else identityIssues.add('cross-source-execution-conflict');
+          return false;
+        }
+        if (known) {
+          for (const key of keys) register.run(entry.provider, key, known.sourceId, known.requestId, known.timestampMs, known.originId, known.fingerprint);
+          if (!known.requestId.startsWith('protected:')) entry.requestId = known.requestId;
+          entry.timestampMs = known.timestampMs;
+        }
+        if (!identityAccepts(entry, commit.source.sourceId, known)) return false;
+        if (known) {
+          const previousRow = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(known.sourceId, known.requestId) as EntryRow | undefined;
+          if (!previousRow || known.fingerprint === executionFingerprint(entry)) return false;
+          const oldCheckpoint = storedSource ? JSON.parse(storedSource.checkpoint_json) : {};
+          const oldPayload = oldCheckpoint.resumeState ? JSON.parse(oldCheckpoint.resumeState).payload ?? {} : {};
+          if (!validUsageRevision(entry, entryFromRow(previousRow), known, oldPayload, commit.batch.sessionProjection?.payload)) {
+            identityIssues.add('identity-conflict'); return false;
+          }
+        }
+        for (const key of keys) register.run(entry.provider, key, commit.source.sourceId, entry.requestId, entry.timestampMs, entry.identityOrigin ?? '', executionFingerprint(entry));
+        if (entry.provider === 'antigravity' && entry.identityOrigin) {
+          register.run(entry.provider, entry.identityOrigin, commit.source.sourceId, entry.requestId, entry.timestampMs, entry.identityOrigin, executionFingerprint(entry));
+        }
+        return true;
+      });
+      for (const link of commit.batch.identityLinks ?? []) {
+        const target = owner(link.target), existing = owner(link.alias);
+        if (!target) continue;
+        if (existing && (existing.sourceId !== target.sourceId || existing.requestId !== target.requestId)) {
+          identityIssues.add('identity-conflict'); continue;
+        }
+        register.run(commit.source.provider, link.alias, target.sourceId, target.requestId, target.timestampMs, target.originId, target.fingerprint);
+      }
+      const providerMetadata = { ...commit.batch.providerMetadata };
+      const storedMetadata = storedSource?.provider_metadata_json ? JSON.parse(storedSource.provider_metadata_json) : {};
+      if (storedMetadata.resolvedUsageScope) providerMetadata.resolvedUsageScope = storedMetadata.resolvedUsageScope;
+      if (identityIssues.size) providerMetadata.accountingIssues = [...((providerMetadata.accountingIssues as string[] | undefined) ?? []), ...identityIssues];
       const replacedEntries = new Map<string, UsageEntry>();
       if (commit.mode === 'rebuild') {
         const coverage = commit.batch.rebuildCoverage;
@@ -409,7 +516,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
         commit.source.version.size ?? null,
         commit.source.version.mtimeMs ?? null,
         JSON.stringify(commit.batch.checkpoint),
-        commit.batch.providerMetadata ? JSON.stringify(commit.batch.providerMetadata) : null,
+        Object.keys(providerMetadata).length ? JSON.stringify(providerMetadata) : null,
       );
       this.replaceProjects(commit.source);
 
@@ -463,13 +570,36 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
         -1,
       );
       collectUsageBucketDeltas(bucketDeltas, commit.source.sourceId, entriesToCommit, 1);
+      for (const update of crossUpdates) {
+        const e = update.entry;
+        insertEntry.run(update.known.sourceId, e.requestId, e.timestampMs, e.provider, e.model, e.inputTokens, e.outputTokens, e.cacheCreationTokens, e.cacheReadTokens, e.costUSD, e.cacheSavingsUSD, e.breakdown ? JSON.stringify(e.breakdown) : null);
+        collectUsageBucketDeltas(bucketDeltas, update.known.sourceId, [update.previous], -1);
+        collectUsageBucketDeltas(bucketDeltas, update.known.sourceId, [e], 1);
+        this.database.prepare('UPDATE usage_identity SET fingerprint=? WHERE provider=? AND source_id=? AND request_id=?').run(executionFingerprint(e), e.provider, update.known.sourceId, e.requestId);
+        const original = this.database.prepare('SELECT checkpoint_json FROM usage_source WHERE source_id=?').get(update.known.sourceId) as { checkpoint_json: string };
+        const checkpoint = JSON.parse(original.checkpoint_json);
+        if (checkpoint.resumeState) {
+          const resume = JSON.parse(checkpoint.resumeState);
+          const revised = reviseClaudePayload(resume.payload ?? {}, e.requestId, commit.batch.sessionProjection?.payload ?? {});
+          if (revised) {
+            resume.payload = revised; checkpoint.resumeState = JSON.stringify(resume);
+            this.database.prepare('UPDATE usage_source SET checkpoint_json=? WHERE source_id=?').run(JSON.stringify(checkpoint), update.known.sourceId);
+          }
+        }
+        const hot = this.database.prepare('SELECT payload_json FROM usage_session_hot WHERE source_id=?').get(update.known.sourceId) as { payload_json: string } | undefined;
+        if (hot) {
+          const revised = reviseClaudePayload(JSON.parse(hot.payload_json), e.requestId, commit.batch.sessionProjection?.payload ?? {});
+          if (revised) this.database.prepare('UPDATE usage_session_hot SET payload_json=? WHERE source_id=?').run(JSON.stringify(revised), update.known.sourceId);
+        }
+      }
+      for (const e of entriesToCommit) this.database.prepare('UPDATE usage_identity SET fingerprint=?, origin_id=? WHERE provider=? AND source_id=? AND request_id=?').run(executionFingerprint(e), e.identityOrigin ?? '', e.provider, commit.source.sourceId, e.requestId);
       this.applyBucketDeltas(bucketDeltas.values());
 
       if (commit.batch.sessionProjection === null
         || (commit.mode === 'rebuild' && commit.batch.sessionProjection === undefined)) {
         this.database.prepare('DELETE FROM usage_session_hot WHERE source_id = ?').run(commit.source.sourceId);
       } else if (commit.batch.sessionProjection) {
-        const projection = commit.batch.sessionProjection;
+        const projection = canonicalSessionProjection(commit.batch.sessionProjection, owner);
         this.database.prepare(`
           INSERT INTO usage_session_hot (source_id, provider, updated_at, byte_size, payload_json)
           VALUES (?, ?, ?, ?, ?)
@@ -646,6 +776,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
     this.assertOpen();
     this.transaction(() => {
       this.database.prepare('DELETE FROM usage_source').run();
+      this.database.exec('DELETE FROM usage_identity;');
     });
   }
 
@@ -659,6 +790,34 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
     const row = this.database.prepare('PRAGMA user_version').get() as { user_version: number };
     let version = row.user_version;
     if (version === USAGE_INDEX_SCHEMA_VERSION) return;
+    if (version === 4 || version === 5) {
+      this.transaction(() => {
+        if (version === 4) this.database.exec(EXECUTION_TABLES_SQL);
+        else this.database.exec('CREATE INDEX IF NOT EXISTS usage_identity_owner ON usage_identity(provider, source_id, request_id)');
+        // One-time checkpoint migration: retain the committed physical boundary, discard old parser state.
+        const rows = this.database.prepare('SELECT source_id, checkpoint_json, provider_metadata_json FROM usage_source').all() as Array<{
+          source_id: string; checkpoint_json: string; provider_metadata_json: string | null;
+        }>;
+        const update = this.database.prepare('UPDATE usage_source SET checkpoint_json=?, provider_metadata_json=? WHERE source_id=?');
+        for (const row of rows) {
+          const checkpoint = JSON.parse(row.checkpoint_json);
+          if (typeof checkpoint.resumeState === 'string') {
+            try {
+              const previous = JSON.parse(checkpoint.resumeState);
+              if (typeof previous.fingerprint === 'string') checkpoint.fingerprint = previous.fingerprint;
+            } catch { /* A durable byte boundary is sufficient for a conservative bootstrap. */ }
+          }
+          delete checkpoint.resumeState;
+          const metadata = row.provider_metadata_json ? JSON.parse(row.provider_metadata_json) : {};
+          delete metadata.accountingIssues;
+          delete metadata.inheritedKeys;
+          update.run(JSON.stringify(checkpoint), JSON.stringify(metadata), row.source_id);
+        }
+        this.database.exec('DROP TABLE IF EXISTS usage_history_guard; DROP TABLE IF EXISTS usage_repair_receipt;');
+        this.database.exec('PRAGMA user_version = 6');
+      });
+      return;
+    }
 
     if (version === 2) {
       this.transaction(() => {
@@ -742,6 +901,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
           payload_json TEXT NOT NULL
         ) STRICT;
 
+        ${EXECUTION_TABLES_SQL}
         PRAGMA user_version = ${USAGE_INDEX_SCHEMA_VERSION};
       `);
     });
@@ -819,6 +979,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
         DROP TABLE usage_session_hot_v3;
         DROP TABLE usage_source_v3;
 
+        ${EXECUTION_TABLES_SQL}
         PRAGMA user_version = ${USAGE_INDEX_SCHEMA_VERSION};
       `);
     });
@@ -836,17 +997,65 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
   }
 
   private applyBucketDeltas(deltas: Iterable<UsageBucketDelta>): void {
-    const read = this.database.prepare(`
+    applyUsageBucketDeltas(this.database, deltas);
+  }
+
+  private replaceProjects(source: UsageSourceDescriptor): void {
+    this.database.prepare('DELETE FROM usage_source_project WHERE source_id = ?').run(source.sourceId);
+    const insert = this.database.prepare(
+      'INSERT INTO usage_source_project (source_id, project_key) VALUES (?, ?)',
+    );
+    for (const projectKey of source.projectKeys ?? []) insert.run(source.sourceId, projectKey);
+  }
+
+  private transaction(work: () => void): void {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      work();
+      this.database.exec('COMMIT');
+    } catch (error) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private assertOpen(): void {
+    if (this.closed) throw new Error('SqliteUsageIndexStorage is closed');
+  }
+
+  private addEntryProjectionRow(builder: UsageEntryProjectionBuilder, row: EntryProjectionRow): void {
+    if (!isProviderId(row.provider)) throw new Error(`Invalid provider ${row.provider} in UsageIndex entry`);
+    builder.add({
+      timestampMs: row.timestamp_ms,
+      provider: row.provider,
+      model: row.model,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cacheCreationTokens: row.cache_creation_tokens,
+      cacheReadTokens: row.cache_read_tokens,
+      costUSD: row.cost_usd,
+      cacheSavingsUSD: row.cache_savings_usd,
+    });
+  }
+}
+
+export function usageIndexSchemaVersion(): number {
+  return USAGE_INDEX_SCHEMA_VERSION;
+}
+
+/** Shared transactional bucket updater for ingestion and certified historical corrections. */
+export function applyUsageBucketDeltas(database: DatabaseSync, deltas: Iterable<UsageBucketDelta>): void {
+    const read = database.prepare(`
       SELECT * FROM usage_bucket
       WHERE source_id = ? AND provider = ? AND model = ?
         AND bucket_kind = ? AND bucket_start_ms = ?
     `);
-    const remove = this.database.prepare(`
+    const remove = database.prepare(`
       DELETE FROM usage_bucket
       WHERE source_id = ? AND provider = ? AND model = ?
         AND bucket_kind = ? AND bucket_start_ms = ?
     `);
-    const upsert = this.database.prepare(`
+    const upsert = database.prepare(`
       INSERT INTO usage_bucket (
         source_id, provider, model, bucket_kind, bucket_start_ms,
         request_count, input_tokens, output_tokens, cache_creation_tokens,
@@ -915,46 +1124,3 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
       );
     }
   }
-
-  private replaceProjects(source: UsageSourceDescriptor): void {
-    this.database.prepare('DELETE FROM usage_source_project WHERE source_id = ?').run(source.sourceId);
-    const insert = this.database.prepare(
-      'INSERT INTO usage_source_project (source_id, project_key) VALUES (?, ?)',
-    );
-    for (const projectKey of source.projectKeys ?? []) insert.run(source.sourceId, projectKey);
-  }
-
-  private transaction(work: () => void): void {
-    this.database.exec('BEGIN IMMEDIATE');
-    try {
-      work();
-      this.database.exec('COMMIT');
-    } catch (error) {
-      this.database.exec('ROLLBACK');
-      throw error;
-    }
-  }
-
-  private assertOpen(): void {
-    if (this.closed) throw new Error('SqliteUsageIndexStorage is closed');
-  }
-
-  private addEntryProjectionRow(builder: UsageEntryProjectionBuilder, row: EntryProjectionRow): void {
-    if (!isProviderId(row.provider)) throw new Error(`Invalid provider ${row.provider} in UsageIndex entry`);
-    builder.add({
-      timestampMs: row.timestamp_ms,
-      provider: row.provider,
-      model: row.model,
-      inputTokens: row.input_tokens,
-      outputTokens: row.output_tokens,
-      cacheCreationTokens: row.cache_creation_tokens,
-      cacheReadTokens: row.cache_read_tokens,
-      costUSD: row.cost_usd,
-      cacheSavingsUSD: row.cache_savings_usd,
-    });
-  }
-}
-
-export function usageIndexSchemaVersion(): number {
-  return USAGE_INDEX_SCHEMA_VERSION;
-}

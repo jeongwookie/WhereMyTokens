@@ -10,6 +10,7 @@ import usageIndexModule from '../dist/main/usageIndex/index.js';
 import {
   antigravityCascadeSummaryKey,
   antigravityServerOwnerKey,
+  antigravityUsageOwnerKey,
 } from '../dist/main/providers/antigravity/serverIdentity.js';
 const { DefaultUsageIndex, InMemoryUsageIndexStorage } = usageIndexModule;
 
@@ -158,7 +159,7 @@ test('Antigravity provider maps local quota and usage RPC data into WMT provider
     assert.equal(quotaWithPace.entries[0].durationMs, 5 * 60 * 60 * 1000);
     assert.equal(quotaWithPace.entries[0].period, '5h');
     assert.equal(quotaWithPace.entries[0].durationInferred, true);
-    assert.equal(usage.usageIndexSources[0].descriptor.sourceId, summaryKey(serverInfo, 'c1'));
+    assert.equal(usage.usageIndexSources[0].descriptor.sourceId, antigravityCascadeSummaryKey(antigravityUsageOwnerKey('person@example.com'), 'c1'));
     assert.equal(indexed.usage.aggregate.requestCount, 1);
     assert.equal(indexed.usage.aggregate.inputTokens, 10);
     assert.equal(indexed.usage.aggregate.outputTokens, 5);
@@ -796,5 +797,24 @@ test('Antigravity session discovery returns near deadline when trajectory summar
 
     assert.deepEqual(sessions, []);
     assert.ok(elapsed < 500, `discovery took ${elapsed}ms`);
+  });
+});
+
+test('Antigravity invalid summary and GM dates keep the source eligible for usage indexing', async () => {
+  const nowMs = Date.parse('2026-09-07T00:00:00Z'), createdTime = new Date(nowMs - 1000).toISOString();
+  await withAntigravityServer((req, res) => {
+    if (req.url.endsWith('/GetUserStatus')) return sendJson(res, { userStatus: { email: 'dates@example.com' } });
+    if (req.url.endsWith('/GetAllCascadeTrajectories')) return sendJson(res, { trajectorySummaries: {
+      sample: { stepCount: 1, lastModifiedTime: '0001-01-01T00:00:00Z', createdTime, status: 'CASCADE_RUN_STATUS_IDLE' },
+    } });
+    return sendJson(res, { generatorMetadata: [{ executionId: 'sample', stepIndices: [0], createdAt: '0001-01-01T00:00:00Z',
+      chatModel: { model: 'gemini-3.1-pro', responseModel: 'gemini-3.1-pro', usage: { inputTokens: 100, outputTokens: 10 } } }] });
+  }, async server => {
+    const discovery = await scanAntigravityUsageFromServers(context({ nowMs }), [server]);
+    assert.equal(discovery.usageIndexSources[0].descriptor.version.mtimeMs, nowMs - 1000);
+    const result = await materialize(discovery);
+    try { assert.equal(result.partial, false); assert.equal(result.usage.aggregate.totalTokens, 110);
+      assert.equal(result.entries[0].timestampMs, nowMs - 1000); }
+    finally { await result.index.close(); }
   });
 });

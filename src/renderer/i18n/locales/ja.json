@@ -326,6 +326,7 @@
       }
     },
     "header": {
+      "estimatedCost": "推定コスト",
       "periodToday": "今日",
       "periodAll": "全期間",
       "hideCompactWidget": "フローティング Quota Pace ウィジェットを非表示",
@@ -467,6 +468,8 @@
       "usageIndexHealthBanner": "使用履歴インデックスの状態バナー"
     },
     "usageIndexCoverage": {
+      "failureTitle": "使用量の更新に失敗しました",
+      "failureBody": "一部の使用量ソースを読み取れませんでした。既存の集計は保持されています。{{failures}}",
       "title": "使用履歴をインデックス中",
       "discovering": "使用ソースを検出しています。",
       "progress": "{{indexed}}/{{required}} 件のソースをインデックス済み。",
@@ -711,5 +714,36 @@
       "dark": "ダーク"
     },
     "save": "保存"
+  },
+  "accountingRevision": {
+    "title": "過去の使用量を検証",
+    "dismiss": "閉じる",
+    "running": "履歴を検証中: {{count}} / {{total}} 件。集計値は更新される場合があります。",
+    "failed": "検証を完了できませんでした。完了済みの修正は保持され、未完了の検証を再実行できます。",
+    "corrected": "{{count}} 件を修正し、推定費用を ${{amount}} USD 減額しました。",
+    "preserved": "{{count}} 件のソースは完全に検証できなかったため、未検証の値を保持しました。",
+    "details": "修正の詳細を表示",
+    "checked": "{{count}} 件を検証し、{{unchanged}} 件は修正不要でした。",
+    "source": "ソース {{id}}",
+    "previous": "前へ",
+    "next": "次へ",
+    "backup": "過去の使用量を変更する前に、検証済みのローカルバックアップを保存します。費用は API 相当の推定値であり、請求額ではありません。",
+    "recheck": "未解決の履歴を再検証",
+    "outcomes": {
+      "corrected": "修正済み",
+      "partial": "一部修正",
+      "preserved": "未検証のまま保持",
+      "unchanged": "修正不要"
+    },
+    "reasons": {
+      "no-detail": "リクエスト明細が保持されていません。",
+      "missing-file": "元のソースファイルを利用できません。",
+      "rewritten-source": "ソースが書き換えられ、元の記録範囲を確認できません。",
+      "changed-source": "検証中にソースまたは台帳が変更されました。",
+      "unverified-records": "一部の差異は確認済みの不具合と一致しません。",
+      "incomplete-buckets": "保持された明細と関連する集計値が一致しません。",
+      "identity-conflict": "実行 ID が別の記録と重複しています。",
+      "invalid-source": "元のソース範囲を検証できません。"
+    }
   }
 }

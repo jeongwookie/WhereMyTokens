@@ -24,8 +24,29 @@ interface ResolvedPrice {
   longContext: boolean;
 }
 
+export interface UsagePriceRevision {
+  id: string;
+  provider: 'claude' | 'codex' | 'antigravity';
+  model: string;
+  effectiveFromMs: number;
+  effectiveUntilMs?: number;
+  rates: TokenRates;
+  longContext: boolean;
+  source: string;
+}
+
+// Append a new revision when correcting a published rule; completed IDs are immutable.
+// The release day is the UTC date boundary, not a claim about the exact rollout hour.
+export const USAGE_PRICE_REVISIONS: readonly UsagePriceRevision[] = [{
+  id: 'gpt-6-astra-standard-2026-09-03-v1',
+  provider: 'codex', model: 'gpt-6-astra', effectiveFromMs: Date.UTC(2026, 8, 3),
+  rates: { input: 10, output: 50, cacheWrite: 12.5, cacheRead: 1 },
+  longContext: true,
+  source: 'https://developers.openai.com/api/docs/models/gpt-6-astra',
+}];
+
 const PER_MILLION = 1_000_000;
-const GPT_5_6_LONG_CONTEXT_THRESHOLD = 272_000;
+const OPENAI_LONG_CONTEXT_THRESHOLD = 272_000;
 const GPT_5_6_PRICE_CUT_MS = Date.UTC(2026, 6, 30);
 const SONNET_5_STANDARD_PRICE_START_MS = Date.UTC(2026, 8, 1);
 
@@ -63,6 +84,10 @@ function resolvePrice(model: string, timestampMs: number): ResolvedPrice {
   const lower = model.trim().toLowerCase();
   const beforeGpt56PriceCut = timestampMs > 0 && timestampMs < GPT_5_6_PRICE_CUT_MS;
 
+  const revision = [...USAGE_PRICE_REVISIONS].reverse().find(rule => rule.model === lower
+    && timestampMs >= rule.effectiveFromMs
+    && (rule.effectiveUntilMs === undefined || timestampMs < rule.effectiveUntilMs));
+  if (revision) return revision;
   if (lower.includes('gpt-5.6-luna')) {
     return { rates: beforeGpt56PriceCut ? RATE.gpt56LunaLaunch : RATE.gpt56Luna, longContext: true };
   }
@@ -103,6 +128,9 @@ function resolvePrice(model: string, timestampMs: number): ResolvedPrice {
   if (lower.includes('claude-haiku')) return { rates: RATE.claudeHaikuLegacy, longContext: false };
   if (lower.includes('gpt-4o')) return { rates: RATE.gpt4o, longContext: false };
   if (lower.includes('gpt-4')) return { rates: RATE.gpt4, longContext: false };
+  // Family/platform references for unlisted models; known dated prices above remain authoritative estimates.
+  if (lower.startsWith('gpt') || lower === 'codex') return { rates: RATE.gpt54, longContext: false };
+  if (lower.startsWith('claude')) return { rates: RATE.claudeSonnet, longContext: false };
   return { rates: RATE.fallback, longContext: false };
 }
 
@@ -113,14 +141,21 @@ function assertTokenCount(value: number, field: keyof UsageCostInput): void {
 }
 
 export function estimateUsageCost(input: UsageCostInput): UsageCostEstimate {
+  return estimateAtPrice(input, resolvePrice(input.model, input.timestampMs));
+}
+
+export function estimatePriceRevisionCost(revision: UsagePriceRevision, input: UsageCostInput): UsageCostEstimate {
+  return estimateAtPrice(input, revision);
+}
+
+function estimateAtPrice(input: UsageCostInput, resolved: ResolvedPrice): UsageCostEstimate {
   assertTokenCount(input.inputTokens, 'inputTokens');
   assertTokenCount(input.outputTokens, 'outputTokens');
   assertTokenCount(input.cacheCreationTokens, 'cacheCreationTokens');
   assertTokenCount(input.cacheReadTokens, 'cacheReadTokens');
 
-  const resolved = resolvePrice(input.model, input.timestampMs);
   const promptTokens = input.inputTokens + input.cacheCreationTokens + input.cacheReadTokens;
-  const longContext = resolved.longContext && promptTokens > GPT_5_6_LONG_CONTEXT_THRESHOLD;
+  const longContext = resolved.longContext && promptTokens > OPENAI_LONG_CONTEXT_THRESHOLD;
   const inputMultiplier = longContext ? 2 : 1;
   const outputMultiplier = longContext ? 1.5 : 1;
   const inputRate = resolved.rates.input * inputMultiplier;

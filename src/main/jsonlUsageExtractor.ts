@@ -63,14 +63,14 @@ export function codexEntryId(sourceKey: string, line: string, timestamp?: string
 function parseTimestampMs(timestamp: unknown, fallbackMs: number): number {
   if (typeof timestamp !== 'string') return fallbackMs;
   const timestampMs = new Date(timestamp).getTime();
-  return Number.isFinite(timestampMs) ? timestampMs : fallbackMs;
+  return Number.isFinite(timestampMs) && timestampMs >= 0 ? timestampMs : fallbackMs;
 }
 
 function finiteToken(value: unknown): number {
   return Math.max(0, asNumber(value));
 }
 
-export function extractClaudeUsageLine(line: string, now: number): ExtractedUsageLine | null {
+export function extractClaudeUsageLine(line: string, now: number, observationId = ''): ExtractedUsageLine | null {
   let obj: Record<string, unknown>;
   try {
     obj = JSON.parse(line) as Record<string, unknown>;
@@ -88,9 +88,9 @@ export function extractClaudeUsageLine(line: string, now: number): ExtractedUsag
   const topModel = obj.model as string | undefined;
 
   const usage = msgUsage ?? topUsage;
-  const rawModel = msgModel ?? topModel ?? '';
+  const rawModel = asString(msgModel) || asString(topModel) || 'claude';
   const timestamp = obj.timestamp as string | undefined;
-  if (!usage || !rawModel) return null;
+  if (!usage || !(asString(reqId) || observationId)) return null;
 
   const inp = finiteToken(usage.input_tokens);
   const out = finiteToken(usage.output_tokens);
@@ -98,7 +98,7 @@ export function extractClaudeUsageLine(line: string, now: number): ExtractedUsag
   const cr = finiteToken(usage.cache_read_input_tokens ?? usage.cached_prompt_tokens);
   if (inp + out + cw + cr === 0) return null;
 
-  const timestampMs = timestamp ? parseTimestampMs(timestamp, now) : 0;
+  const timestampMs = parseTimestampMs(timestamp, now);
   const estimate = estimateUsageCost({
     model: rawModel,
     timestampMs,
@@ -121,10 +121,10 @@ export function extractClaudeUsageLine(line: string, now: number): ExtractedUsag
   return {
     rawModel,
     entry: {
-      requestId: reqId ?? `${rawModel}-${timestamp}-${inp}-${out}`,
+      requestId: asString(reqId) || observationId,
       timestampMs,
       model: normalizeModel(rawModel),
-      provider: getProvider(rawModel),
+      provider: 'claude',
       inputTokens: inp,
       outputTokens: out,
       cacheCreationTokens: cw,
@@ -141,6 +141,7 @@ export function extractCodexUsageLine(
   line: string,
   now: number,
   fallbackRawModel = '',
+  adoptedUsage?: readonly [number, number, number, number],
 ): ExtractedUsageLine | null {
   let obj: Record<string, unknown>;
   try {
@@ -150,13 +151,16 @@ export function extractCodexUsageLine(
   }
 
   const timestamp = obj.timestamp as string | undefined;
-  const timestampMs = timestamp ? parseTimestampMs(timestamp, now) : 0;
+  const timestampMs = parseTimestampMs(timestamp, now);
   const payload = obj.payload as Record<string, unknown> | undefined;
   if (!payload) return null;
 
   if (obj.type === 'event_msg' && payload.type === 'token_count') {
     const info = payload.info as Record<string, unknown> | null | undefined;
-    const usage = info?.last_token_usage as Record<string, unknown> | undefined;
+    const usage = adoptedUsage ? {
+      input_tokens: adoptedUsage[0], cached_input_tokens: adoptedUsage[1],
+      output_tokens: adoptedUsage[2], reasoning_output_tokens: adoptedUsage[3],
+    } : info?.last_token_usage as Record<string, unknown> | undefined;
     if (!usage) return null;
 
     const rawInput = finiteToken(usage.input_tokens);
@@ -167,8 +171,7 @@ export function extractCodexUsageLine(
     const cr = cachedInput;
     if (inp + out + cr === 0) return null;
 
-    const rawModel = fallbackRawModel || inferCodexModel(payload, info, usage);
-    if (!rawModel) return null;
+    const rawModel = inferCodexModel(payload, info, usage) || fallbackRawModel || 'codex';
     const estimate = estimateUsageCost({
       model: rawModel,
       timestampMs,
@@ -198,32 +201,38 @@ export function extractCodexUsageLine(
     };
   }
 
-  const usage = (payload.usage ?? payload) as Record<string, unknown>;
-  if (payload.type !== 'usage' && !payload.usage) return null;
+  // This is a provider record, not an arbitrary object containing a usage field.
+  if (obj.type !== 'token_usage_record') return null;
+  const usage = adoptedUsage ? {
+    input_tokens: adoptedUsage[0], cached_input_tokens: adoptedUsage[1],
+    output_tokens: adoptedUsage[2], reasoning_output_tokens: adoptedUsage[3],
+  } as Record<string, unknown> : payload.usage as Record<string, unknown> | undefined;
+  if (!usage) return null;
 
-  const rawInput = finiteToken(usage.input_tokens ?? usage.inputTokens);
-  const out = finiteToken(usage.output_tokens ?? usage.outputTokens);
-  const cr = finiteToken(usage.cached_input_tokens ?? usage.cacheReadTokens);
+  const rawInput = finiteToken(usage.input_tokens);
+  const out = finiteToken(usage.output_tokens);
+  const cr = Math.min(rawInput, finiteToken(usage.cached_input_tokens));
   if (rawInput + out + cr === 0) return null;
 
-  const rawModel = fallbackRawModel || inferCodexModel(payload, usage) || 'gpt-5-codex';
+  const rawModel = inferCodexModel(payload, usage) || fallbackRawModel || 'codex';
   const estimate = estimateUsageCost({
     model: rawModel,
     timestampMs,
-    inputTokens: rawInput,
+    inputTokens: rawInput - cr,
     outputTokens: out,
     cacheCreationTokens: 0,
     cacheReadTokens: cr,
   });
   return {
     rawModel,
+    reasoningOutputTokens: finiteToken(usage.reasoning_output_tokens),
     contextMax: asNumber(usage.model_context_window ?? payload.model_context_window),
     entry: {
-      requestId: codexEntryId(sourceKey, line, timestamp),
+      requestId: asString(payload.response_id) ? `codex:response:${asString(payload.response_id)}` : sourceKey,
       timestampMs,
       model: normalizeModel(rawModel),
       provider: 'codex',
-      inputTokens: rawInput,
+      inputTokens: rawInput - cr,
       outputTokens: out,
       cacheCreationTokens: 0,
       cacheReadTokens: cr,

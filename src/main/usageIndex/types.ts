@@ -34,6 +34,9 @@ export interface UsageSourceDescriptor {
 }
 
 export interface UsageSourceCheckpoint {
+  fingerprint?: string;
+  generation?: number;
+  fallbackTimestampMs?: number;
   byteOffset?: number;
   cursor?: string;
   resumeState?: string;
@@ -41,6 +44,10 @@ export interface UsageSourceCheckpoint {
 }
 
 export interface UsageEntry {
+  /** Provider execution identity, independent of physical source and presentation time. */
+  identityKey?: string;
+  identityAliases?: readonly string[];
+  identityOrigin?: string;
   requestId: string;
   timestampMs: number;
   provider: ProviderId;
@@ -83,6 +90,12 @@ export type UsageRebuildCoverage =
   | { kind: 'none' };
 
 export interface UsageSourceBatch {
+  /** A late provider identity names an observation already counted; this adds no quantity. */
+  identityLinks?: readonly { alias: string; target: string }[];
+  /** A changed physical file established a new checkpoint without replacing existing usage. */
+  rebased?: boolean;
+  /** Executions in a previously accounted prefix; register identity without adding usage. */
+  identitySeeds?: readonly { key: string; requestId: string; timestampMs: number }[];
   checkpoint: UsageSourceCheckpoint;
   entries: readonly UsageEntry[];
   /** Fresh source attribution discovered by the scanner in the same payload pass. */
@@ -93,6 +106,8 @@ export interface UsageSourceBatch {
 }
 
 export interface UsageSourceScanPlan {
+  /** The durable index can identify a replay before it contaminates a cumulative baseline. */
+  identitySource?: (key: string) => string | undefined;
   mode: UsageScanMode;
   source: UsageSourceDescriptor;
   checkpoint: UsageSourceCheckpoint | null;
@@ -136,7 +151,7 @@ export interface UsageTimeBucketTotal {
 }
 
 export interface UsageIndexCoverage {
-  state: 'complete' | 'incomplete';
+  state: 'complete' | 'updating' | 'incomplete';
   requiredSourceCount: number;
   indexedSourceCount: number;
   pendingSourceCount: number;
@@ -199,6 +214,7 @@ export interface UsageCompactionResult {
 }
 
 export interface UsageIndexStorage {
+  identitySource(provider: ProviderId, key: string): string | undefined;
   getSource(sourceId: string): Promise<StoredUsageSource | null>;
   updateSourceDescriptor(source: UsageSourceDescriptor): Promise<void>;
   commitSource(commit: UsageSourceCommit): Promise<void>;
@@ -214,11 +230,12 @@ export interface UsageIndexStorage {
 
 export interface UsageIndex {
   getHealth(): UsageIndexHealth;
+  /** Returns source IDs needing refresh, with unattempted work before failed retries. */
   declareSources(
     provider: ProviderId,
     sources: readonly UsageSourceDescriptor[],
     discoveryComplete: boolean,
-  ): void;
+  ): readonly string[];
   refreshSource(
     source: UsageSourceDescriptor,
     scanner: UsageSourceScanner,

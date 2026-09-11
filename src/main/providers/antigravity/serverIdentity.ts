@@ -13,6 +13,12 @@ export function antigravityServerOwnerKey(
 }
 
 export function antigravityCascadeSummaryKey(ownerKey: string, cascadeId: string): string {
-  if (ownerKey === 'legacy') return `antigravity:cascade:${cascadeId}`;
   return `antigravity:${ownerKey}:cascade:${cascadeId}`;
+}
+
+/** Persistent usage scope. Connection/process identity must never become ledger identity. */
+export function antigravityUsageOwnerKey(email: string | undefined): string {
+  const normalized = email?.trim().toLowerCase() ?? '';
+  if (!normalized || !normalized.includes('@')) return 'unknown';
+  return crypto.createHash('sha256').update(`antigravity-account:${normalized}`).digest('base64url');
 }

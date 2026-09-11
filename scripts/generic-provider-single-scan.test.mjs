@@ -29,7 +29,7 @@ test('generic provider scanUsage results are committed to UsageIndex in one heav
   const loadBody = methodBody('loadProviderSummaries');
   const genericBody = methodBody('scanGenericProviderUsage');
 
-  assert.match(loadBody, /const remainingBudgetMs = budgetMs === null \? null : Math\.max\(0, budgetMs - elapsedMs\)/);
+  assert.match(loadBody, /const remainingBudgetMs = budgetMs === null \? null : Math\.max\(0, budgetMs - scanElapsedMs\)/);
   assert.match(loadBody, /const genericUsage = await this\.scanGenericProviderUsage\(settings, genericCtx\)/);
   assert.match(genericBody, /result\.usageIndexSources/);
   assert.match(genericBody, /this\.usageIndex\.declareSources/);

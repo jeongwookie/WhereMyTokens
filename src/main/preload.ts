@@ -4,6 +4,14 @@ contextBridge.exposeInMainWorld('wmt', {
   getState:             () => ipcRenderer.invoke('state:get'),
   forceRefresh:         () => ipcRenderer.invoke('state:refresh'),
   resetIndex:           () => ipcRenderer.invoke('usage-index:reset'),
+  getAccountingRevision: () => ipcRenderer.invoke('usage-accounting:get'),
+  retryAccountingRevision: () => ipcRenderer.invoke('usage-accounting:retry'),
+  dismissAccountingRevision: () => ipcRenderer.invoke('usage-accounting:dismiss'),
+  onAccountingRevision: (cb: (status: unknown) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, status: unknown) => cb(status);
+    ipcRenderer.on('usage-accounting:updated', handler);
+    return () => ipcRenderer.removeListener('usage-accounting:updated', handler);
+  },
   getBreakdown:         (grain: string, bucketKey: string) => ipcRenderer.invoke('breakdown:get', grain, bucketKey),
   getSettings:          () => ipcRenderer.invoke('settings:get'),
   setSettings:          (p: Record<string, unknown>) => ipcRenderer.invoke('settings:set', p),

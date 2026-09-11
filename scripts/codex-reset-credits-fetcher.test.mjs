@@ -523,6 +523,7 @@ function applyCodex(mgr, snapshot) {
 }
 
 function suppressSettingsSideEffects(mgr) {
+  mgr.gitOutputLedgerStore = { getSnapshot: () => ({ schemaVersion: 3, dailyOutput: {}, repositories: {} }) };
   mgr.publishState = () => {};
   mgr.startWatcher = () => {};
   mgr.clearHistoryWarmup = () => {};

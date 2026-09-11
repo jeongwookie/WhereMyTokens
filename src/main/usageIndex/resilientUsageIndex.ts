@@ -121,15 +121,15 @@ export class ResilientUsageIndex implements UsageIndex {
     provider: ProviderId,
     sources: readonly UsageSourceDescriptor[],
     discoveryComplete: boolean,
-  ): void {
+  ): readonly string[] {
     if (this.delegate) {
-      this.delegate.declareSources(provider, sources, discoveryComplete);
-      return;
+      return this.delegate.declareSources(provider, sources, discoveryComplete);
     }
     this.unavailableCoverage.set(provider, {
       discoveryComplete,
       sources: new Map(sources.map(source => [source.sourceId, 'queued'])),
     });
+    return sources.map(source => source.sourceId);
   }
 
   async refreshSource(

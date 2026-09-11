@@ -86,9 +86,13 @@ async function fetchCalls(input: AntigravityUsageScannerInput): Promise<Antigrav
 export function createAntigravityUsageIndexScanner(input: AntigravityUsageScannerInput): UsageSourceScanner {
   return {
     async scan(plan): Promise<UsageSourceBatch> {
-      const calls = await fetchCalls(input);
+      const candidateTimestamp = plan.checkpoint?.fallbackTimestampMs ?? input.lastModifiedMs;
+      const fallbackTimestampMs = Number.isFinite(candidateTimestamp) && candidateTimestamp >= 0 ? candidateTimestamp : Date.now();
+      const calls = await fetchCalls({ ...input, lastModifiedMs: fallbackTimestampMs });
       const entries: UsageEntry[] = calls.map(call => ({
         ...antigravityUsageEntryFromCall(call),
+        identityKey: `${plan.source.sourceId}:${antigravityUsageEntryFromCall(call).requestId}`,
+        identityOrigin: 'antigravity:observation:' + antigravityUsageEntryFromCall(call).requestId,
         breakdown: breakdownFromCall(call),
       }));
       const rebuildCoverage = entries.length > 0
@@ -100,9 +104,9 @@ export function createAntigravityUsageIndexScanner(input: AntigravityUsageScanne
         : { kind: 'none' as const };
       const updatedAt = entries.length > 0
         ? Math.max(...entries.map(entry => entry.timestampMs))
-        : input.lastModifiedMs;
+        : fallbackTimestampMs;
       return {
-        checkpoint: { cursor: plan.source.version.token },
+        checkpoint: { cursor: plan.source.version.token, fallbackTimestampMs },
         entries,
         ...(plan.mode === 'rebuild' ? { rebuildCoverage } : {}),
         sessionProjection: {

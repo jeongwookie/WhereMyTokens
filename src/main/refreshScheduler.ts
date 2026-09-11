@@ -62,6 +62,7 @@ export class RefreshScheduler {
   private pending: PendingRefresh | null = null;
   private running = false;
   private drainScheduled = false;
+  private exclusive: Array<() => Promise<void>> = [];
 
   constructor(private readonly options: RefreshSchedulerOptions) {}
 
@@ -78,6 +79,14 @@ export class RefreshScheduler {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  /** Serialize local maintenance with scans; queued refresh requests retain their work. */
+  runExclusive<T>(work: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.exclusive.push(async () => { try { resolve(await work()); } catch (error) { reject(error); } });
+      this.scheduleDrain();
+    });
   }
 
   getPendingChangedFileCount(): number {
@@ -128,7 +137,13 @@ export class RefreshScheduler {
   private async drain(): Promise<void> {
     if (this.running) return;
 
-    while (this.pending) {
+    while (this.pending || this.exclusive.length) {
+      const exclusive = this.exclusive.shift();
+      if (exclusive) {
+        this.running = true;
+        try { await exclusive(); } finally { this.running = false; }
+        continue;
+      }
       const work = this.takeRunnableWork();
       if (!work) return;
 

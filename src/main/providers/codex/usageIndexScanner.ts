@@ -17,6 +17,9 @@ import type {
   UsageSourceScanner,
 } from '../../usageIndex';
 import { codexQuotaEntries } from './quota';
+import { codexUsageDecision, newCodexAccountingState, type CodexAccountingState } from './accounting';
+import { beginFileScan, checkpointFingerprint, usageTimestamp } from '../shared/fileCheckpoint';
+import { validUsageRevision } from '../../usageIndex/executionIdentity';
 import {
   emptyToolActivity,
   emptyToolOutput,
@@ -32,6 +35,7 @@ interface CodexSessionPayload extends Record<string, unknown> {
 export interface CodexUsageIndexScannerOptions {
   now?: () => number;
   onPayloadBytesRead?: (byteCount: number) => void;
+  onValidationBytesRead?: (byteCount: number) => void;
   endOffsetExclusive?: number;
 }
 
@@ -122,123 +126,135 @@ export function createCodexUsageIndexScanner(
   return {
     async scan(plan: UsageSourceScanPlan): Promise<UsageSourceBatch> {
       if (plan.source.provider !== 'codex' || plan.source.kind !== 'file') {
-        throw new Error(`Codex scanner cannot scan ${plan.source.provider}:${plan.source.kind}`);
+        throw new Error('Codex scanner received an incompatible source');
       }
-
       const now = options.now?.() ?? Date.now();
-      const startOffset = plan.checkpoint?.byteOffset ?? 0;
-      const snapshot = plan.mode === 'tail'
-        ? restoredSnapshot(plan.previousSessionProjection)
-        : emptySessionSnapshot('events');
+      // Reject obsolete accounting state as a whole; replay only establishes context
+      // through the retained checkpoint, it never recharges protected history.
+      let checkpoint = plan.checkpoint;
+      if (checkpoint?.resumeState) {
+        try {
+          if (JSON.parse(checkpoint.resumeState)?.accounting?.version !== 4) checkpoint = { ...checkpoint, resumeState: undefined };
+        } catch { checkpoint = { ...checkpoint, resumeState: undefined }; }
+      }
+      const start = beginFileScan(filePath, { ...plan, checkpoint }, now, options.endOffsetExclusive, options.onValidationBytesRead);
+      const resume = start.resume;
+      const accounting: CodexAccountingState = resume?.accounting?.version === 4
+        ? resume.accounting : newCodexAccountingState(start.generation);
+      accounting.generation = start.generation;
+      const snapshot = resume?.snapshot ? cloneSessionSnapshot(resume.snapshot) : restoredSnapshot(plan.previousSessionProjection);
       let rawModel = plan.checkpoint?.rawModel ?? snapshot.rawModel;
-      let pending = newPendingTurn();
-      let checkpointOffset = startOffset;
+      let pending: PendingTurn = resume?.pending ?? newPendingTurn();
+      let lastValidTimestampMs = Number(resume?.lastValidTimestampMs) || 0;
+      let checkpointOffset = start.startOffset;
       let lastUsageTimestamp = plan.previousSessionProjection?.updatedAt ?? 0;
       let discoveredProjectKeys: string[] | undefined;
       const entries = new Map<string, UsageEntry>();
+      const identitySeeds: NonNullable<UsageSourceBatch['identitySeeds']>[number][] = [];
+      const identityLinks: NonNullable<UsageSourceBatch['identityLinks']>[number][] = [];
+      const localIdentities = new Set<string>();
+      const identitySource = (key: string): string | undefined => localIdentities.has(key) ? plan.source.sourceId : plan.identitySource?.(key);
 
-      await scanJsonlLines(filePath, startOffset, options.onPayloadBytesRead, (line, offsetAfterLine) => {
+      await scanJsonlLines(filePath, start.startOffset, options.onPayloadBytesRead, (line, offsetAfterLine) => {
+        checkpointOffset = offsetAfterLine;
         let object: Record<string, unknown>;
-        try {
-          object = JSON.parse(line) as Record<string, unknown>;
-        } catch {
-          return;
-        }
+        try { object = JSON.parse(line); } catch { return; }
         const payload = object.payload as Record<string, unknown> | undefined;
         if (!payload) return;
-
-        if (typeof payload.cwd === 'string' && isSafeLocalCwd(payload.cwd)) {
-          discoveredProjectKeys = projectKeysForCwd(payload.cwd);
+        const parsedTime = typeof object.timestamp === 'string' ? Date.parse(object.timestamp) : NaN;
+        if (Number.isFinite(parsedTime) && parsedTime >= 0) lastValidTimestampMs = parsedTime;
+        const isPrefix = offsetAfterLine <= start.accountedOffset;
+        const physicalId = 'codex:position:' + plan.source.sourceId + ':' + start.generation + ':' + offsetAfterLine;
+        const decision = codexUsageDecision(accounting, object, plan.source.sourceId, physicalId,
+          isPrefix ? undefined : identitySource);
+        if (object.type === 'event_msg' && payload.type === 'task_started') pending = newPendingTurn();
+        const observedAt = usageTimestamp(object.timestamp, lastValidTimestampMs, accounting.createdMs, start.fallbackTimestampMs);
+        const rateLimits = parseRateLimits(payload, observedAt, offsetAfterLine);
+        if (rateLimits && (!snapshot.codexRateLimits || rateLimits.capturedAt > snapshot.codexRateLimits.capturedAt
+          || rateLimits.capturedAt === snapshot.codexRateLimits.capturedAt && rateLimits.position >= snapshot.codexRateLimits.position)) {
+          snapshot.codexRateLimits = rateLimits;
         }
-
-        if (object.type === 'session_meta'
-          || object.type === 'turn_context'
-          || (object.type === 'event_msg' && payload.type === 'task_started')) {
-          const model = inferCodexModel(payload);
-          if (model) rawModel = model;
+        if (typeof payload.cwd === 'string' && isSafeLocalCwd(payload.cwd)) discoveredProjectKeys = projectKeysForCwd(payload.cwd);
+        if (object.type === 'session_meta' || object.type === 'turn_context'
+          || object.type === 'event_msg' && payload.type === 'task_started') {
+          rawModel = inferCodexModel(payload) || rawModel;
           return;
         }
-
-        if (object.type === 'response_item' && payload.type === 'function_call' && typeof payload.name === 'string') {
-          const category = codexFunctionCallCategory(payload.name, payload.arguments);
-          const argumentChars = String(payload.arguments ?? '').length + payload.name.length;
-          pending.toolChars[category] += argumentChars;
-          pending.toolCounts[category] += 1;
-          pending.toolNames[payload.name] = (pending.toolNames[payload.name] ?? 0) + 1;
-          return;
-        }
-
         if (object.type === 'response_item') {
-          pending.responseChars += assistantResponseChars(payload);
+          if (accounting.inherited) return;
+          if ((payload.type === 'function_call' || payload.type === 'custom_tool_call') && typeof payload.name === 'string') {
+            const category = codexFunctionCallCategory(payload.name, payload.arguments);
+            pending.toolChars[category] += String(payload.arguments ?? '').length + payload.name.length;
+            pending.toolCounts[category] += 1;
+            if (Object.keys(pending.toolNames).length < 128 || payload.name in pending.toolNames) {
+              pending.toolNames[payload.name] = (pending.toolNames[payload.name] ?? 0) + 1;
+            }
+          } else pending.responseChars += assistantResponseChars(payload);
           return;
         }
-
-        const extracted = extractCodexUsageLine(plan.source.sourceId, line, now, rawModel);
-        if (!extracted || extracted.entry.provider !== 'codex') return;
-        if (entries.has(extracted.entry.requestId)) {
-          checkpointOffset = offsetAfterLine;
+        if (!decision) return;
+        if (decision.kind === 'alias') {
+          for (const alias of new Set([decision.observationKey, decision.responseKey].filter((key): key is string => !!key && key !== decision.identityKey))) {
+            identityLinks.push({ alias, target: decision.identityKey });
+            if (identitySource(decision.identityKey)) localIdentities.add(alias);
+          }
           return;
         }
-        rawModel = extracted.rawModel || rawModel;
-        const breakdown = compositionToDelta(splitOutput({
-          thinkingChars: 0,
-          responseChars: pending.responseChars,
-          toolChars: pending.toolChars,
+        if (isPrefix) {
+          for (const key of [decision.identityKey, decision.observationKey, decision.responseKey].filter((key): key is string => !!key)) {
+            identitySeeds.push({ key, requestId: decision.requestId, timestampMs: observedAt });
+            localIdentities.add(key);
+          }
+          pending = newPendingTurn();
+          return;
+        }
+        const extracted = extractCodexUsageLine(physicalId, line, observedAt, rawModel, decision.usage);
+        if (!extracted) return;
+        rawModel = extracted.rawModel;
+        const breakdown = compositionToDelta(splitOutput({ thinkingChars: 0,
+          responseChars: pending.responseChars, toolChars: pending.toolChars,
         }, extracted.entry.outputTokens, extracted.reasoningOutputTokens));
         for (const key of TOOL_ACTIVITY_KEYS) breakdown[key] = pending.toolCounts[key];
-
-        entries.set(extracted.entry.requestId, {
-          ...extracted.entry,
-          provider: 'codex',
-          breakdown,
-        });
+        const entry: UsageEntry = { ...extracted.entry, provider: 'codex', requestId: decision.requestId,
+          identityKey: decision.identityKey, identityOrigin: decision.identityOrigin,
+          identityAliases: [decision.observationKey, decision.responseKey].filter((key): key is string => !!key), breakdown };
+        const previous = entries.get(entry.requestId);
+        if (previous) {
+          if (!validUsageRevision(entry, previous, { sourceId: plan.source.sourceId, requestId: previous.requestId,
+            timestampMs: previous.timestampMs, originId: previous.identityOrigin ?? '', fingerprint: '' })) return;
+          entry.timestampMs = previous.timestampMs;
+        }
+        entries.set(entry.requestId, entry);
+        for (const key of [entry.identityKey, ...(entry.identityAliases ?? [])]) if (key) localIdentities.add(key);
         snapshot.rawModel = rawModel;
         snapshot.modelName = normalizeModel(rawModel);
-        snapshot.latestInputTokens = extracted.entry.inputTokens;
-        snapshot.latestCacheCreationTokens = 0;
-        snapshot.latestCacheReadTokens = extracted.entry.cacheReadTokens;
-        if ((extracted.contextMax ?? 0) > 0) snapshot.contextMax = extracted.contextMax;
-        const observedAt = timestampMs(object.timestamp, now);
-        const nextRateLimits = parseRateLimits(payload, observedAt, offsetAfterLine);
-        if (nextRateLimits && (!snapshot.codexRateLimits
-          || nextRateLimits.capturedAt > snapshot.codexRateLimits.capturedAt
-          || (nextRateLimits.capturedAt === snapshot.codexRateLimits.capturedAt
-            && nextRateLimits.position >= snapshot.codexRateLimits.position))) {
-          snapshot.codexRateLimits = nextRateLimits;
-        }
+        snapshot.latestInputTokens = entry.inputTokens;
+        snapshot.latestCacheCreationTokens = entry.cacheCreationTokens;
+        snapshot.latestCacheReadTokens = entry.cacheReadTokens;
+        if (extracted.contextMax) snapshot.contextMax = extracted.contextMax;
         for (const [name, count] of Object.entries(pending.toolNames)) {
-          snapshot.toolCounts[name] = (snapshot.toolCounts[name] ?? 0) + count;
-        }
-        for (const key of TOOL_ACTIVITY_KEYS) {
-          snapshot.activityBreakdown[key] += pending.toolCounts[key];
-        }
-        pending = newPendingTurn();
-        checkpointOffset = offsetAfterLine;
-        lastUsageTimestamp = Math.max(lastUsageTimestamp, extracted.entry.timestampMs);
-      }, options.endOffsetExclusive);
-
-      const sessionPayload: CodexSessionPayload = { sessionSnapshot: snapshot };
-      return {
-        checkpoint: {
-          byteOffset: checkpointOffset,
-          ...(rawModel ? { rawModel } : {}),
-        },
-        entries: [...entries.values()],
-        ...(plan.mode === 'rebuild'
-          ? { projectKeys: discoveredProjectKeys ?? [] }
-          : discoveredProjectKeys
-            ? { projectKeys: discoveredProjectKeys }
-            : {}),
-        ...(plan.mode === 'rebuild' ? { rebuildCoverage: { kind: 'full' as const } } : {}),
-        sessionProjection: entries.size > 0 || plan.previousSessionProjection
-          ? {
-            sourceId: plan.source.sourceId,
-            provider: 'codex',
-            updatedAt: lastUsageTimestamp || now,
-            byteSize: plan.source.version.size ?? checkpointOffset,
-            payload: sessionPayload,
+          if (Object.keys(snapshot.toolCounts).length < 128 || name in snapshot.toolCounts) {
+            snapshot.toolCounts[name] = (snapshot.toolCounts[name] ?? 0) + count;
           }
-          : null,
+        }
+        for (const key of TOOL_ACTIVITY_KEYS) snapshot.activityBreakdown[key] += pending.toolCounts[key];
+        pending = newPendingTurn();
+        lastUsageTimestamp = Math.max(lastUsageTimestamp, entry.timestampMs);
+      }, start.endOffset);
+
+      return {
+        checkpoint: { byteOffset: checkpointOffset,
+          fingerprint: checkpointFingerprint(filePath, checkpointOffset, options.onValidationBytesRead),
+          generation: start.generation, fallbackTimestampMs: start.fallbackTimestampMs,
+          resumeState: JSON.stringify({ version: 2, accounting, snapshot, pending, lastValidTimestampMs }),
+          ...(rawModel ? { rawModel } : {}) },
+        entries: [...entries.values()], identitySeeds, identityLinks,
+        ...(start.rebased ? { rebased: true } : {}),
+        ...(plan.mode === 'rebuild' ? { rebuildCoverage: { kind: 'full' as const } } : {}),
+        ...(discoveredProjectKeys ? { projectKeys: discoveredProjectKeys } : {}),
+        sessionProjection: { sourceId: plan.source.sourceId, provider: 'codex',
+          updatedAt: lastUsageTimestamp || start.fallbackTimestampMs,
+          byteSize: plan.source.version.size ?? checkpointOffset, payload: { sessionSnapshot: snapshot } },
       };
     },
   };

@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe"><strong>下载 v1.24.3</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe"><strong>下载 v1.24.6</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.3 恢复 Windows 上的 Antigravity 2.x 检测，并以 legacy fallback 显示 provider 报告的 shared Gemini 与 Claude/GPT quota groups。</em>
+  <em>v1.24.6: 修复 Codex 过量统计和升级后的自动校正，更新 Astra 价格并改善大型 Git 统计</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,13 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | 修复 Codex 过量统计和升级后的自动校正，更新 Astra 价格并改善大型 Git 统计 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | 在 Windows 同时检测当前与 legacy Antigravity language server，优先显示 provider 报告的 shared Gemini、Claude/GPT quota groups，并保留旧 server 的逐模型 quota fallback |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | 通过 Windows 通知和应用内操作提示 Claude 登录过期或被拒绝，打开官方 CLI 登录，并在 credential 变更后自动重试。保留旧 quota 时仍会显示登录问题，且不会刷新或写入 credential |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 在已有 Claude Code credential 但没有新 statusLine 的 Claude Desktop 使用中恢复 quota；继续优先官方 statusLine，并加入固定 host、auth-bound cache 与 credential 不变测试 |
 | **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | 将 Claude quota 迁移到官方本地 `statusLine`，移除 Claude OAuth credential 访问与直接 usage polling，并保留 custom statusLine，加入最小化 atomic snapshot 与 reset-aware cache |
-| **[v1.23.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.23.2)** | 8/8 | 修正 Claude 与 GPT-5.6 按模型和时间生效的 API 等值价格，并加入经校验备份、checkpoint 限定 replay、并发变更检测与隐私安全 CLI 的无损 SQLite 费用重算 |
+
+旧版验证信息不足时，初始索引完成后会自动重试。仅在本地备份后修正已证实的过量统计，无法验证的记录保持不变。可在 Settings → Data 查看结果并重新检查。
 
 [→ 完整更新日志](https://github.com/jeongwookie/WhereMyTokens/releases)
 
@@ -87,9 +89,9 @@
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.3/WhereMyTokens-v1.24.3-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-v1.24.6-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -99,7 +101,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.24.3-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.24.6-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -139,7 +141,7 @@ macOS 用户请使用单独的公开仓库:
 - **Git 指标** — 提交数、净变更行数、**$/100 Added**（每100行新增的成本）
 - **今日 vs 全部** — 今日显示每新增行实际成本与历史平均对比
 - **Output 增长图** — 按最近 7 个本地日期显示全时段累计净行数增长
-- **当前会话 repo 范围** — Code Output 会明确标注其 git 汇总是基于当前正在追踪的会话关联 repo
+- **持久仓库范围** — Code Output 按持续保留的仓库目录汇总，不依赖最近会话是否仍存在；项目排除可随时撤销，暂时不可访问的仓库历史仍保留
 - **分支感知的全时段** — Code Output 的全时段会按本地 git 作者邮箱统计所有本地分支的提交和行变更
 - **自动发现** — Claude 项目来自 `~/.claude/projects/` 并包含 agent 使用日志，Codex 会话来自 `~/.codex/sessions/`、`~/.codex/archived_sessions/`、`~/.codex/session-cleanup-archive/`，Antigravity 会话来自运行中的 IDE local RPC cascade
 - **仅统计您的提交** — 按 `git config user.email` 过滤

@@ -89,9 +89,11 @@ function resolveAntigravityPriceFromText(
   return null;
 }
 
-export function resolveAntigravityPrice(call: AntigravityUsageCall): AntigravityPrice | null {
+export function resolveAntigravityPrice(call: AntigravityUsageCall): AntigravityPrice {
   const text = `${call.model} ${call.rawModel}`.toLowerCase();
-  return resolveAntigravityPriceFromText(text, estimateAntigravityPromptTokens(call));
+  // Unknown models use a platform reference estimate; this is not a billed vendor rate.
+  return resolveAntigravityPriceFromText(text, estimateAntigravityPromptTokens(call))
+    ?? { in: 2, out: 12, cw: 2, cr: 0.2 };
 }
 
 export function resolveAntigravityPriceForModel(model: string, rawModel = ''): AntigravityPrice | null {
@@ -100,7 +102,6 @@ export function resolveAntigravityPriceForModel(model: string, rawModel = ''): A
 
 export function estimateAntigravityCostUSD(call: AntigravityUsageCall): number {
   const price = resolveAntigravityPrice(call);
-  if (!price) return 0;
 
   return (
     call.inputTokens * price.in +
@@ -112,7 +113,6 @@ export function estimateAntigravityCostUSD(call: AntigravityUsageCall): number {
 
 export function estimateAntigravityCacheSavingsUSD(call: AntigravityUsageCall): number {
   const price = resolveAntigravityPrice(call);
-  if (!price) return 0;
 
   return Math.max(0, price.in - price.cr) * call.cacheReadTokens / 1_000_000;
 }

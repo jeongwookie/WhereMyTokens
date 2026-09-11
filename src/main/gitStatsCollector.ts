@@ -1,4 +1,5 @@
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
+import { createInterface } from 'readline';
 import path from 'path';
 import Store from 'electron-store';
 import { getGitOutputLedgerStore, normalizeByCategory } from './gitOutputLedger';
@@ -112,8 +113,7 @@ function saveStats(cwd: string, stats: GitStats): void {
     const key = normalizeGitCwdKey(cwd);
     const normalizedStats = normalizeStatsPaths(stats);
     const current = store.get('cache') ?? {};
-    const preferred = preferGitStats(current[key], normalizedStats);
-    store.set('cache', { ...current, [key]: preferred ?? normalizedStats });
+    store.set('cache', { ...current, [key]: normalizedStats });
     const repoKey = normalizedStats.gitCommonDir ?? normalizedStats.toplevel ?? key;
     getGitOutputLedgerStore().mergeRepoDays(repoKey, normalizedStats.dailyAll);
   } catch { /* 저장 실패는 무시 */ }
@@ -244,34 +244,40 @@ export function parseDaily7dLog(output: string, days: GitDailyStats[] = buildDai
   return days.map(day => byDate.get(day.date) ?? cloneDailyStats(day));
 }
 
-export function parseDailyAllLog(output: string): GitDailyStats[] {
+function dailyLogAccumulator() {
   const byDate = new Map<string, GitDailyStats>();
   let currentDate: string | null = null;
 
-  for (const line of output.split('\n')) {
-    if (!line.trim()) continue;
+  const accept = (line: string) => {
+    if (!line.trim()) return;
     if (line.startsWith(DAILY_LOG_DATE_MARKER)) {
       currentDate = line.slice(DAILY_LOG_DATE_MARKER.length).trim();
-      if (!currentDate) continue;
+      if (!currentDate) return;
       const bucket = byDate.get(currentDate) ?? { date: currentDate, commits: 0, added: 0, removed: 0, byCategory: emptyNetLinesByCategory() };
       bucket.commits += 1;
       byDate.set(currentDate, bucket);
-      continue;
+      return;
     }
 
-    if (!currentDate) continue;
+    if (!currentDate) return;
     const parts = line.split('\t');
-    if (parts.length < 3) continue;
+    if (parts.length < 3) return;
     const a = parseNumstatCount(parts[0]);
     const r = parseNumstatCount(parts[1]);
     const bucket = byDate.get(currentDate);
-    if (!bucket) continue;
+    if (!bucket) return;
     bucket.added += a;
     bucket.removed += r;
     addNumstatPath(bucket.byCategory, parts[2], a, r);
-  }
+  };
 
-  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  return { accept, result: () => [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)) };
+}
+
+export function parseDailyAllLog(output: string): GitDailyStats[] {
+  const accumulator = dailyLogAccumulator();
+  for (const line of output.split('\n')) accumulator.accept(line);
+  return accumulator.result();
 }
 
 export function aggregateDailyStats(statsList: Array<{ daily7d?: GitDailyStats[] }>, days: GitDailyStats[] = buildDaily7dWindow()): GitDailyStats[] {
@@ -317,9 +323,55 @@ function execGitAsync(args: string[], cwd: string, timeout = 5000): Promise<stri
   });
 }
 
-function countLines(output: string): number {
-  if (!output) return 0;
-  return output.split('\n').length;
+// Retain only parsed aggregates, never the complete Git log. Resolve only after
+// successful exit, so a killed or failed process cannot publish partial history.
+export function execGitLines(args: string[], cwd: string, accept: (line: string) => void, timeout = 30000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, timeout, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+    let failure: Error | undefined;
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => { stderr = (stderr + chunk).slice(-4096); });
+    lines.on('line', line => {
+      if (failure) return;
+      try { accept(line); } catch (error) {
+        failure = error instanceof Error ? error : new Error(String(error));
+        child.kill();
+      }
+    });
+    child.on('error', error => { failure = error; });
+    child.stdout.on('error', error => { failure = error; child.kill(); });
+    child.on('close', (code, signal) => {
+      lines.close();
+      if (failure) reject(failure);
+      else if (code !== 0 || signal) reject(new Error(`Git ${args[0]} failed (${signal ?? code}): ${stderr.trim()}`));
+      else resolve();
+    });
+  });
+}
+
+async function countGitLines(args: string[], cwd: string, timeout: number): Promise<number> {
+  let count = 0;
+  await execGitLines(args, cwd, line => { if (line.trim()) count++; }, timeout);
+  return count;
+}
+
+async function collectNumstat(args: string[], cwd: string, timeout: number) {
+  const total = { added: 0, removed: 0, byCategory: emptyNetLinesByCategory() };
+  await execGitLines(args, cwd, line => {
+    const parsed = parseNumstat(line);
+    total.added += parsed.added;
+    total.removed += parsed.removed;
+    addCategoryLines(total.byCategory, parsed.byCategory);
+  }, timeout);
+  return total;
+}
+
+async function collectDailyLog(args: string[], cwd: string, timeout: number): Promise<GitDailyStats[]> {
+  const accumulator = dailyLogAccumulator();
+  await execGitLines(args, cwd, accumulator.accept, timeout);
+  return accumulator.result();
 }
 
 async function collectStats(cwd: string): Promise<GitStats | null> {
@@ -337,10 +389,10 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
       execGitAsync(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).catch(() => null),
       execGitAsync(['rev-parse', '--show-toplevel'], cwd).catch(() => null),
       execGitAsync(['rev-parse', '--git-common-dir'], cwd),
-      execGitAsync(['log', '--since=midnight', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
-      execGitAsync(['log', '--since=midnight', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 15000),
+      countGitLines(['log', '--since=midnight', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
+      collectNumstat(['log', '--since=midnight', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 15000),
       execGitAsync(['rev-list', '--count', '--branches', ...authorArgs], cwd, 15000),
-      execGitAsync(['log', `--since=${dailySince}`, '--branches', '--date=short', `--format=${DAILY_LOG_DATE_MARKER}%ad`, '--numstat', ...authorArgs], cwd, 20000),
+      collectDailyLog(['log', `--since=${dailySince}`, '--branches', '--date=short', `--format=${DAILY_LOG_DATE_MARKER}%ad`, '--numstat', ...authorArgs], cwd, 20000),
     ]);
     // cwd가 유효한 git 저장소가 아닌 경우(삭제된 워크트리 등) null 반환 → 영속 stats 복원
     if (!gitCommonDirRaw) return null;
@@ -350,32 +402,30 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
     const gitCommonDir = normalizeGitPathKey(resolved);
     if (!gitCommonDir) return null;
 
-    const commitsToday = countLines(todayLog);
-    const today = parseNumstat(todayNumstat);
+    const commitsToday = todayLog;
+    const today = todayNumstat;
     const totalCommits = parseInt(totalCountStr, 10) || 0;
-    const daily7d = parseDaily7dLog(daily7dLog, daily7dWindow);
+    const daily7d = aggregateDailyStats([{ daily7d: daily7dLog }], daily7dWindow);
 
     // 7d/30d/all numstat — 순차 실행 (무거운 작업이므로 하나씩)
     // shortlog --summary로 커밋 수만 세고, numstat은 최소한으로
     const [log7d, numstat7d] = await Promise.all([
-      execGitAsync(['log', '--since=7 days ago', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
-      execGitAsync(['log', '--since=7 days ago', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 15000),
+      countGitLines(['log', '--since=7 days ago', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
+      collectNumstat(['log', '--since=7 days ago', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 15000),
     ]);
-    const commits7d = countLines(log7d);
-    const d7 = parseNumstat(numstat7d);
+    const commits7d = log7d;
+    const d7 = numstat7d;
 
     const [log30d, numstat30d] = await Promise.all([
-      execGitAsync(['log', '--since=30 days ago', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
-      execGitAsync(['log', '--since=30 days ago', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 20000),
+      countGitLines(['log', '--since=30 days ago', '--branches', '--format=%H', ...authorArgs], cwd, 10000),
+      collectNumstat(['log', '--since=30 days ago', '--branches', '--numstat', '--format=', ...authorArgs], cwd, 20000),
     ]);
-    const commits30d = countLines(log30d);
-    const d30 = parseNumstat(numstat30d);
+    const commits30d = log30d;
+    const d30 = numstat30d;
 
-    // 전체 numstat — 가장 무거움, shortstat으로 대체
-    const allStat = await execGitAsync(['log', '--branches', '--format=', '--numstat', ...authorArgs], cwd, 30000);
-    const dailyAllLog = await execGitAsync(['log', '--branches', '--date=short', `--format=${DAILY_LOG_DATE_MARKER}%ad`, '--numstat', ...authorArgs], cwd, 30000).catch(() => '');
-    const total = parseNumstat(allStat);
-    const dailyAll = parseDailyAllLog(dailyAllLog);
+    // One streamed history scan supplies both daily buckets and all-time lines.
+    const dailyAll = await collectDailyLog(['log', '--branches', '--date=short', `--format=${DAILY_LOG_DATE_MARKER}%ad`, '--numstat', ...authorArgs], cwd, 30000);
+    const total = dailyAll.reduce((sum, day) => ({ added: sum.added + day.added, removed: sum.removed + day.removed }), { added: 0, removed: 0 });
 
     return {
       branch,
@@ -396,7 +446,8 @@ async function collectStats(cwd: string): Promise<GitStats | null> {
       daily7d,
       dailyAll,
     };
-  } catch {
+  } catch (error) {
+    console.warn('[GitStats] Collection failed; retaining last successful statistics:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
