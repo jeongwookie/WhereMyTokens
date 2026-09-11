@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { spawnSync } from 'node:child_process';
+import vm from 'node:vm';
 import revision from '../dist/main/usageIndex/accountingRevisions.js';
 import storageModule from '../dist/main/usageIndex/sqliteUsageIndexStorage.js';
 import scanner from '../dist/main/providers/codex/usageIndexScanner.js';
@@ -41,7 +42,7 @@ async function fixture(t) {
 const open=f=>new DatabaseSync(f.databasePath);
 const metrics=db=>db.prepare("SELECT SUM(total_tokens) tokens,SUM(cost_usd) cost,SUM(request_count) requests FROM usage_bucket WHERE bucket_kind='month'").get();
 
-test('Review reproduction: legacy checkpoint receipt prevents automatic retry after bootstrap', async t => {
+test('Legacy checkpoint receipt is automatically retried after bootstrap', async t => {
   const f = await fixture(t);
   let db = open(f);
   const checkpoint = db.prepare('SELECT checkpoint_json FROM usage_source').get().checkpoint_json;
@@ -62,14 +63,81 @@ test('Review reproduction: legacy checkpoint receipt prevents automatic retry af
   db.prepare('UPDATE usage_source SET checkpoint_json=?').run(checkpoint);
   db.close();
   const restarted = await revision.reconcileUsageAccounting(f.options);
-  assert.equal(restarted.sources[0].reason, 'invalid-source');
-  assert.equal(restarted.correctedEntries, 0);
+  assert.equal(restarted.correctedEntries, 2);
   db = open(f);
-  assert.deepEqual(metrics(db), before);
+  assert.ok(metrics(db).tokens < before.tokens);
   db.close();
 
   const explicitRetry = await revision.reconcileUsageAccounting({ ...f.options, retryPreserved: true });
   assert.equal(explicitRetry.correctedEntries, 2);
+});
+
+test('Schema 4 upgrade bootstraps real response ownership without changing protected quantities', async t => {
+  const f = await fixture(t);
+  let db = open(f);
+  const cp = JSON.parse(db.prepare('SELECT checkpoint_json FROM usage_source').get().checkpoint_json);
+  db.prepare('UPDATE usage_entry SET request_id=? WHERE request_id=?').run('codex:response:a', f.first.requestId);
+  db.prepare('UPDATE usage_entry SET request_id=? WHERE request_id=?').run('codex:response:b', 'codex:counter:broken');
+  db.prepare('UPDATE usage_source SET checkpoint_json=?').run(JSON.stringify({ byteOffset: cp.byteOffset, rawModel: 'gpt-6-astra' }));
+  db.exec('DROP TABLE usage_identity; PRAGMA user_version=4');
+  const before = metrics(db);
+  db.close();
+
+  const storage = new storageModule.SqliteUsageIndexStorage(f.databasePath);
+  const first = await revision.reconcileUsageAccounting(f.options);
+  assert.equal(first.sources[0].reason, 'invalid-source');
+  db = open(f);
+  const checkpoint = JSON.parse(db.prepare('SELECT checkpoint_json FROM usage_source').get().checkpoint_json);
+  db.close();
+  const source = { ...f.source, parserVersion: 7 };
+  const batch = await scanner.createCodexUsageIndexScanner(f.file).scan({
+    source, mode: 'tail', checkpoint, previousSessionProjection: null,
+  });
+  assert.equal(batch.entries.length, 0);
+  await storage.commitSource({ mode: 'tail', source, batch });
+  await storage.close();
+  db = open(f);
+  assert.deepEqual(metrics(db), before);
+  assert.equal(db.prepare("SELECT request_id FROM usage_identity WHERE identity_key='codex:response:b'").get().request_id, 'codex:response:b');
+  db.close();
+
+  const result = await revision.reconcileUsageAccounting(f.options);
+  assert.equal(result.correctedEntries, 2);
+  db = open(f);
+  assert.equal(metrics(db).tokens, 220);
+  assert.ok(db.prepare("SELECT 1 FROM usage_entry WHERE request_id='codex:response:b'").get());
+  db.close();
+  assert.equal((await revision.reconcileUsageAccounting(f.options)).resultKey, result.resultKey);
+});
+
+test('Startup retries bootstrap once after complete coverage, never during scans or recursively', () => {
+  const source = fs.readFileSync('src/main/index.ts', 'utf8');
+  const start = source.indexOf('  let bootstrapRetryScheduled = false;');
+  const end = source.indexOf('  registerIpcHandlers({', start);
+  assert.ok(start > 0 && end > start);
+  const queued = [];
+  let runs = 0;
+  const state = { initialRefreshComplete: false, usageIndexCoverage: { state: 'incomplete' } };
+  const context = vm.createContext({ manager: { getState: () => state }, accountingRun: null,
+    accountingStatus: { report: { sources: [{ reason: 'invalid-source' }] } },
+    queueMicrotask: fn => queued.push(fn), runAccounting: () => { runs++; }, maybeRetryAccountingBootstrap: null });
+  vm.runInContext(source.slice(start, end), context);
+  context.maybeRetryAccountingBootstrap();
+  assert.equal(queued.length, 0);
+  state.initialRefreshComplete = true;
+  state.usageIndexCoverage.state = 'complete';
+  context.accountingRun = Promise.resolve();
+  context.maybeRetryAccountingBootstrap();
+  assert.equal(queued.length, 0);
+  context.accountingRun = null;
+  context.maybeRetryAccountingBootstrap();
+  context.maybeRetryAccountingBootstrap();
+  assert.equal(queued.length, 1);
+  assert.equal(runs, 0);
+  queued.shift()();
+  context.maybeRetryAccountingBootstrap();
+  assert.equal(runs, 1);
+  assert.equal(queued.length, 0);
 });
 
 test('Automatic correction proves raw defect equations, updates buckets/identities, and is idempotent',async t=>{

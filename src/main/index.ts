@@ -781,9 +781,11 @@ app.whenReady().then(async () => {
     // No completion receipt is committed on failure; retry at the next start.
     appendCrashLog('usage-pricing-update-failed', buildErrorPayload(error));
   }
+  let maybeRetryAccountingBootstrap = () => {};
   const manager = new StateManager(store, (state) => {
     updateClaudeLoginNotice(state);
     updateTray(state);
+    maybeRetryAccountingBootstrap();
   }, { usageIndex });
   stateManager = manager;
   const metadata = store as unknown as Store<Record<string, unknown>>;
@@ -807,8 +809,18 @@ app.whenReady().then(async () => {
     }).catch(error => {
       accountingStatus = { ...accountingStatus, state: 'failed', notice: true };
       appendCrashLog('usage-accounting-revision-failed', buildErrorPayload(error));
-    }).finally(() => { accountingRun = null; publishAccounting(); });
+    }).finally(() => { accountingRun = null; publishAccounting(); maybeRetryAccountingBootstrap(); });
     return accountingRun;
+  };
+  let bootstrapRetryScheduled = false;
+  maybeRetryAccountingBootstrap = () => {
+    const state = manager.getState();
+    if (bootstrapRetryScheduled || accountingRun || !state.initialRefreshComplete
+      || state.usageIndexCoverage.state !== 'complete'
+      || !accountingStatus.report?.sources.some(source => source.reason === 'invalid-source')) return;
+    // 보호된 초기 스캔이 끝난 뒤 한 번만 재검사하며, 유지보수 큐의 재진입을 피한다.
+    bootstrapRetryScheduled = true;
+    queueMicrotask(() => { void runAccounting(); });
   };
   registerIpcHandlers({
     store,

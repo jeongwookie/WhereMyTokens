@@ -207,7 +207,8 @@ export async function reconcileUsageAccounting(options: AccountingRevisionOption
     for (const job of manifest) {
       const previous: AccountingSourceReport | null = job.report_json ? JSON.parse(job.report_json) : null;
       const retry = previous && (previous.outcome === 'preserved' || previous.outcome === 'partial')
-        && (options.retryPreserved || previous.reason === 'missing-file' && sourceFiles().has(job.source_id));
+        && (options.retryPreserved || previous.reason === 'invalid-source'
+          || previous.reason === 'missing-file' && sourceFiles().has(job.source_id));
       if (previous && !retry) { reports.push(previous); continue; }
       const row = db.prepare('SELECT * FROM usage_source WHERE source_id=?').get(job.source_id) as unknown as SourceRow | undefined;
       if (!row) continue;

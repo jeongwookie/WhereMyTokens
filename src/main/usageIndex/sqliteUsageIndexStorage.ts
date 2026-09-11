@@ -379,7 +379,12 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
       const owner = (key: string) => lookup.get(commit.source.provider, key) as ExecutionIdentity | undefined;
       const register = this.database.prepare('INSERT OR IGNORE INTO usage_identity VALUES (?, ?, ?, ?, ?, ?, ?)');
       for (const seed of commit.batch.identitySeeds ?? []) {
-        const row = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(commit.source.sourceId, seed.requestId) as EntryRow | undefined;
+        let row = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(commit.source.sourceId, seed.requestId) as EntryRow | undefined;
+        // 구버전 응답 ID는 새 카운터 ID와 다르므로 원본 응답과 시각이 일치할 때만 연결한다.
+        if (!row && commit.source.provider === 'codex' && seed.key.startsWith('codex:response:')) {
+          row = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=? AND timestamp_ms=?')
+            .get(commit.source.sourceId, seed.key, seed.timestampMs) as EntryRow | undefined;
+        }
         const retained = row ? entryFromRow(row) : undefined;
         const known = owner(seed.key);
         if (retained && known?.sourceId === commit.source.sourceId && known.requestId === `protected:${seed.requestId}`) {
