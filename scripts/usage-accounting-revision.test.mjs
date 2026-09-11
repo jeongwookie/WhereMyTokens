@@ -41,6 +41,37 @@ async function fixture(t) {
 const open=f=>new DatabaseSync(f.databasePath);
 const metrics=db=>db.prepare("SELECT SUM(total_tokens) tokens,SUM(cost_usd) cost,SUM(request_count) requests FROM usage_bucket WHERE bucket_kind='month'").get();
 
+test('Review reproduction: legacy checkpoint receipt prevents automatic retry after bootstrap', async t => {
+  const f = await fixture(t);
+  let db = open(f);
+  const checkpoint = db.prepare('SELECT checkpoint_json FROM usage_source').get().checkpoint_json;
+  const legacy = JSON.parse(checkpoint);
+  delete legacy.fingerprint;
+  delete legacy.generation;
+  delete legacy.resumeState;
+  db.prepare('UPDATE usage_source SET checkpoint_json=?').run(JSON.stringify(legacy));
+  const before = metrics(db);
+  db.close();
+
+  const first = await revision.reconcileUsageAccounting(f.options);
+  assert.equal(first.sources[0].reason, 'invalid-source');
+  assert.equal(first.correctedEntries, 0);
+
+  // 정상 스캔이 검증 가능한 체크포인트를 복원한 이후를 재현한다.
+  db = open(f);
+  db.prepare('UPDATE usage_source SET checkpoint_json=?').run(checkpoint);
+  db.close();
+  const restarted = await revision.reconcileUsageAccounting(f.options);
+  assert.equal(restarted.sources[0].reason, 'invalid-source');
+  assert.equal(restarted.correctedEntries, 0);
+  db = open(f);
+  assert.deepEqual(metrics(db), before);
+  db.close();
+
+  const explicitRetry = await revision.reconcileUsageAccounting({ ...f.options, retryPreserved: true });
+  assert.equal(explicitRetry.correctedEntries, 2);
+});
+
 test('Automatic correction proves raw defect equations, updates buckets/identities, and is idempotent',async t=>{
   const f=await fixture(t);let db=open(f);const before=metrics(db);db.close();
   const preview=await revision.reconcileUsageAccounting({...f.options,dryRun:true});
