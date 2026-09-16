@@ -264,6 +264,12 @@ export function fmtTokens(n: number): string {
 
 export function fmtCost(usd: number, currency: string, rate: number): string {
   if (currency === 'KRW') return `₩${Math.round(usd * rate).toLocaleString()}`;
+  if (currency === 'CNY') {
+    const cny = usd * rate;
+    if (cny >= 100) return `¥${cny.toFixed(2)}`;
+    if (cny >= 1)   return `¥${cny.toFixed(2)}`;
+    return `¥${cny.toFixed(4)}`;
+  }
   if (usd >= 100) return `$${Math.round(usd)}`;
   if (usd >= 1)   return `$${usd.toFixed(2)}`;
   return `$${usd.toFixed(4)}`;
@@ -276,6 +282,14 @@ export function fmtCostShort(usd: number, currency: string, rate: number): strin
     if (krw >= 1_000_000) return `₩${(krw / 1_000_000).toFixed(1)}M`;
     if (krw >= 10_000)    return `₩${Math.round(krw / 1_000)}K`;
     return `₩${krw.toLocaleString()}`;
+  }
+  if (currency === 'CNY') {
+    const cny = usd * rate;
+    if (cny >= 1_000_000) return `¥${(cny / 1_000_000).toFixed(1)}M`;
+    if (cny >= 10_000)    return `¥${Math.round(cny / 1_000)}K`;
+    if (cny >= 100)       return `¥${Math.round(cny)}`;
+    if (cny >= 1)         return `¥${cny.toFixed(2)}`;
+    return `¥${cny.toFixed(4)}`;
   }
   if (usd >= 1_000) return `$${(usd / 1_000).toFixed(1)}K`;
   if (usd >= 100)   return `$${Math.round(usd)}`;

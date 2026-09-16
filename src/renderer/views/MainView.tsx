@@ -513,7 +513,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
     codexError,
     codexStatusLabel,
   } = state;
-  const { currency, usdToKrw } = settings;
+  const { currency } = settings;
+  const usdToKrw = settings.currency === 'CNY' ? (settings.usdToCny ?? 7.2) : settings.usdToKrw;
   const compactWidgetEnabled = settings.compactWidgetEnabled === true;
   const taskbarQuotaEnabled = settings.taskbarQuotaEnabled === true;
   const enabledProviderList = settings.enabledProviders;
@@ -1481,7 +1482,8 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
 }) {
   const C = useTheme();
   const { t } = useTranslation();
-  const { currency, usdToKrw } = settings;
+  const { currency } = settings;
+  const usdToKrw = settings.currency === 'CNY' ? (settings.usdToCny ?? 7.2) : settings.usdToKrw;
   const { targets, richGroups, simpleGroups, extraUsage, resetCredits } = buildQuotaDisplayModels({
     usage,
     providerQuotas,
@@ -2214,7 +2216,8 @@ export default function MainView({ state, onNav, onQuit, onRefresh, onScrollActi
   const C = useTheme();
   const { t } = useTranslation();
   const { sessions, usage, settings } = state;
-  const { currency, usdToKrw } = settings;
+  const { currency } = settings;
+  const usdToKrw = settings.currency === 'CNY' ? (settings.usdToCny ?? 7.2) : settings.usdToKrw;
   const allTimeCost = useMemo(() => usage.models.reduce((sum, model) => sum + model.costUSD, 0), [usage.models]);
   const [refreshing, setRefreshing] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);

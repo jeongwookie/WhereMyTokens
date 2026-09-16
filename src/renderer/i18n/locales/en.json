@@ -684,7 +684,8 @@
       "label": "Currency",
       "usd": "USD ($)",
       "krw": "KRW (₩)",
-      "exchangeRate": "Exchange rate (1 USD)"
+      "exchangeRate": "Exchange rate (1 USD)",
+      "cny": "CNY (¥)"
     },
     "tray": {
       "heading": "Tray",

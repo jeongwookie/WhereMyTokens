@@ -93,8 +93,15 @@ function updateClaudeLoginNotice(state: AppState): void {
   if (claudeLoginNoticeActive || !Notification.isSupported()) return;
   claudeLoginNoticeActive = true;
   const japanese = state.settings.language === 'ja';
-  const title = japanese ? 'Claude Code のログインが必要です' : 'Claude Code login required';
-  const body = japanese
+  const chinese = state.settings.language === 'zh';
+  const title = chinese
+    ? '需要登录 Claude Code'
+    : japanese
+    ? 'Claude Code のログインが必要です'
+    : 'Claude Code login required';
+  const body = chinese
+    ? '点击以打开官方 Claude Code 登录。WhereMyTokens 不会刷新或修改认证信息。'
+    : japanese
     ? 'クリックして公式 Claude Code ログインを開きます。WhereMyTokens は認証情報を更新しません。'
     : 'Click to open the official Claude Code login. WhereMyTokens will not refresh or modify credentials.';
   addNotification('alert', title, body);
@@ -686,6 +693,8 @@ function buildTrayTitle(state: AppState): string {
       const c = h5Cost;
       return settings.currency === 'KRW'
         ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
+        : settings.currency === 'CNY'
+        ? `¥${(c * (settings.usdToCny ?? 7.2)).toFixed(2)}`
         : `$${c.toFixed(2)}`;
     }
     default: return '';
@@ -700,6 +709,8 @@ function updateTray(state: AppState) {
   const c = state.usage.todayCost;
   const costStr = settings.currency === 'KRW'
     ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
+    : settings.currency === 'CNY'
+    ? `¥${(c * (settings.usdToCny ?? 7.2)).toFixed(2)}`
     : `$${c.toFixed(2)}`;
   const tooltip = `WhereMyTokens  |  Today ${t.toLocaleString()} tok  ${costStr}`;
   if (tooltip !== lastTrayTooltip) {

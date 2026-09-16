@@ -86,6 +86,7 @@ const EDITABLE_SETTING_KEYS: EditableSettingKey[] = [
   'alertThresholds',
   'currency',
   'usdToKrw',
+  'usdToCny',
   'globalHotkey',
   'language',
   'openAtLogin',
@@ -111,6 +112,7 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
   const mainSectionOrder = normalizeMainSectionOrder(settings.mainSectionOrder);
   return {
     ...settings,
+    usdToCny: settings.usdToCny ?? 7.2,
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
     taskbarQuotaEnabled: settings.taskbarQuotaEnabled === true,
@@ -447,6 +449,7 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
             style={{ ...sel, width: 140 }}
           >
             <option value="system">{t('settingsView.general.languageSystem')}</option>
+            <option value="zh">简体中文</option>
             <option value="en">English</option>
             <option value="ja">日本語</option>
           </select>
@@ -768,15 +771,22 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
         <SectionHeader label={t('settingsView.currency.heading')} />
         <div style={row}>
           <span style={labelStyle}>{t('settingsView.currency.label')}</span>
-          <select style={sel} value={s.currency} onChange={e => setS({ ...s, currency: e.target.value as 'USD' | 'KRW' })}>
+          <select style={sel} value={s.currency} onChange={e => setS({ ...s, currency: e.target.value as 'USD' | 'KRW' | 'CNY' })}>
             <option value="USD">{t('settingsView.currency.usd')}</option>
+            <option value="CNY">{t('settingsView.currency.cny')}</option>
             <option value="KRW">{t('settingsView.currency.krw')}</option>
           </select>
         </div>
-        {s.currency === 'KRW' && (
+        {(s.currency === 'KRW' || s.currency === 'CNY') && (
           <div style={row}>
             <span style={labelStyle}>{t('settingsView.currency.exchangeRate')}</span>
-            <input style={inp} type="number" value={s.usdToKrw} onChange={e => setS({ ...s, usdToKrw: Number(e.target.value) })} />
+            <input
+              style={inp}
+              type="number"
+              step={s.currency === 'CNY' ? '0.01' : '1'}
+              value={s.currency === 'CNY' ? (s.usdToCny ?? 7.2) : s.usdToKrw}
+              onChange={e => setS(s.currency === 'CNY' ? { ...s, usdToCny: Number(e.target.value) } : { ...s, usdToKrw: Number(e.target.value) })}
+            />
           </div>
         )}
 
