@@ -761,6 +761,8 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
                 fontSize: 11,
                 cursor: resettingIndex ? 'wait' : 'pointer',
                 fontWeight: 600,
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
               }}
             >
               {t('settingsView.data.resetButton')}

@@ -3,11 +3,32 @@ import fs from 'node:fs';
 import test from 'node:test';
 import codexFetcher from '../dist/main/codexUsageFetcher.js';
 import codexProvider from '../dist/main/providers/codex/quota.js';
+import quotaDomain from '../dist/shared/quotaDomain.js';
 
 const { parseCodexQuotaPayload, resolveCodexUsageUrl, normalizeCodexUsageBaseUrl } = codexFetcher;
 const { codexQuotaEntries } = codexProvider;
 const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/quota/codex-windows.json', import.meta.url), 'utf8'));
 const NOW = Date.parse('2026-07-18T00:00:00Z');
+
+test('credit-bearing Codex adapter snapshots pass the shared validator without dropping windows', async (t) => {
+  const resetCredits = { credits: [], availableCount: 0, totalEarnedCount: 0, checkedAt: NOW,
+    countOnly: false, source: 'api', status: { code: 'ok', connected: true } };
+  t.mock.method(codexFetcher, 'fetchCodexResetCredits', async () => ({ data: resetCredits }));
+  for (const credits of [undefined, { hasCredits: false }, { hasCredits: true, unlimited: false }, { hasCredits: true, unlimited: true }]) {
+    const usage = { ...parseCodexQuotaPayload(fixture.reversed, NOW).usage, credits };
+    t.mock.method(codexFetcher, 'fetchCodexQuota', async () => ({ usage, status: { code: 'ok', connected: true } }));
+    const snapshot = await codexProvider.fetchCodexQuota({ nowMs: NOW });
+    const valid = quotaDomain.validateProviderQuotaSnapshot(snapshot);
+    assert.ok(valid);
+    assert.deepEqual(valid.entries, snapshot.entries);
+    assert.equal(valid.entries.length, 2);
+    assert.deepEqual(valid.resetCredits, resetCredits);
+    if (credits?.hasCredits) {
+      assert.deepEqual(valid.credits, { 'account-credits': { available: credits.unlimited ? Number.MAX_SAFE_INTEGER : 0, resetMs: null } });
+      assert.equal(quotaDomain.validateProviderQuotaSnapshot({ ...snapshot, credits: { accountCredits: { available: 0 } } }), null);
+    } else assert.equal(valid.credits, undefined);
+  }
+});
 
 test('Codex usage URL remains on the official backend path', () => {
   assert.equal(resolveCodexUsageUrl('https://chatgpt.com'), 'https://chatgpt.com/backend-api/wham/usage');

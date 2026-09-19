@@ -18,6 +18,7 @@ import { reconcileUsageAccountingInWorker } from './usageAccountingStartup';
 import type { AccountingRevisionStatus } from '../shared/accountingRevision';
 import { launchClaudeLogin } from './claudeLoginLauncher';
 import type { ClaudeLoginLaunchResult } from '../shared/claudeLogin';
+import { isSimplifiedChineseLocale } from '../shared/language';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -42,6 +43,21 @@ let registeredGlobalHotkey = '';
 let lastPopupFocusAt = 0;
 const readyWidgetWindows = new WeakSet<BrowserWindow>();
 
+type NativeLanguage = 'en' | 'ja' | 'zh';
+function getNativeLanguage(): NativeLanguage {
+  const preference = getSettings().language;
+  if (preference === 'en' || preference === 'ja' || preference === 'zh') return preference;
+  const systemLanguage = app.getLocale().toLowerCase();
+  if (systemLanguage.startsWith('ja')) return 'ja';
+  if (isSimplifiedChineseLocale(systemLanguage)) return 'zh';
+  return 'en';
+}
+
+function nativeText(en: string, ja: string, zhCN: string): string {
+  const language = getNativeLanguage();
+  return language === 'ja' ? ja : language === 'zh' ? zhCN : en;
+}
+
 type AppView = 'main' | 'settings' | 'notifications' | 'help';
 const POPUP_WIDTH = 462;
 const POPUP_HEIGHT = 1078;
@@ -57,16 +73,19 @@ async function openClaudeLoginFlow(): Promise<ClaudeLoginLaunchResult> {
   const result = await launchClaudeLogin();
   if (result.ok) return result;
 
+  const commandButton = nativeText('Copy command', 'コマンドをコピー', '复制命令');
+  const openGuideButton = nativeText('Open install guide', 'インストールガイドを開く', '打开安装指南');
+  const cancelButton = nativeText('Cancel', 'キャンセル', '取消');
   const options = {
     type: 'warning' as const,
-    title: 'Claude Code login required',
+    title: nativeText('Claude Code login required', 'Claude Code のログインが必要です', '需要登录 Claude Code'),
     message: result.reason === 'claude-not-found'
-      ? 'Claude Code was not found on this computer.'
-      : 'WhereMyTokens could not open the Claude Code login terminal.',
-    detail: 'Run this official command in a terminal: claude auth login',
+      ? nativeText('Claude Code was not found on this computer.', 'このコンピューターに Claude Code が見つかりません。', '此电脑上未找到 Claude Code。')
+      : nativeText('WhereMyTokens could not open the Claude Code login terminal.', 'WhereMyTokens は Claude Code のログイン用ターミナルを開けませんでした。', 'WhereMyTokens 无法打开 Claude Code 登录终端。'),
+    detail: nativeText('Run this official command in a terminal: claude auth login', 'ターミナルで次の公式コマンドを実行してください: claude auth login', '请在终端中运行此官方命令：claude auth login'),
     buttons: result.reason === 'claude-not-found'
-      ? ['Copy command', 'Open install guide', 'Cancel']
-      : ['Copy command', 'Cancel'],
+      ? [commandButton, openGuideButton, cancelButton]
+      : [commandButton, cancelButton],
     defaultId: 0,
     cancelId: result.reason === 'claude-not-found' ? 2 : 1,
     noLink: true,
@@ -92,18 +111,12 @@ function updateClaudeLoginNotice(state: AppState): void {
   }
   if (claudeLoginNoticeActive || !Notification.isSupported()) return;
   claudeLoginNoticeActive = true;
-  const japanese = state.settings.language === 'ja';
-  const chinese = state.settings.language === 'zh';
-  const title = chinese
-    ? '需要登录 Claude Code'
-    : japanese
-    ? 'Claude Code のログインが必要です'
-    : 'Claude Code login required';
-  const body = chinese
-    ? '点击以打开官方 Claude Code 登录。WhereMyTokens 不会刷新或修改认证信息。'
-    : japanese
-    ? 'クリックして公式 Claude Code ログインを開きます。WhereMyTokens は認証情報を更新しません。'
-    : 'Click to open the official Claude Code login. WhereMyTokens will not refresh or modify credentials.';
+  const title = nativeText('Claude Code login required', 'Claude Code のログインが必要です', '需要登录 Claude Code');
+  const body = nativeText(
+    'Click to open the official Claude Code login. WhereMyTokens will not refresh or modify credentials.',
+    'クリックして公式 Claude Code ログインを開きます。WhereMyTokens は認証情報を更新しません。',
+    '点击以打开 Claude Code 官方登录流程。WhereMyTokens 不会刷新或修改凭据。',
+  );
   addNotification('alert', title, body);
   const notification = new Notification({ title: `WhereMyTokens - ${title}`, body, silent: false });
   notification.on('click', () => { void openClaudeLoginFlow(); });
@@ -117,19 +130,25 @@ const taskbarQuotaHelper = createTaskbarQuotaHelperManager({
   openDashboard: () => showPopup('main'),
   buildSnapshot: state => buildTaskbarQuotaSnapshot(state, resolveTaskbarSnapshotTheme(state.settings.theme)),
   onRuntimeDisabled: () => {
+    const disabledTitle = nativeText(TASKBAR_MINI_DISABLED_TITLE, 'タスクバーのミニ表示を無効にしました', '任务栏迷你配额显示已关闭');
+    const disabledBody = nativeText(
+      TASKBAR_MINI_DISABLED_BODY,
+      'タスクバーのミニクォータヘルパーが繰り返し起動に失敗しました。Windows のタスクバー対応を確認してから、設定で再度有効にしてください。',
+      '任务栏迷你配额助手多次启动失败。请检查 Windows 任务栏支持情况，然后在设置中重新启用。',
+    );
     try {
       store.set('taskbarQuotaEnabled', false);
     } catch { /* 설정 저장 실패와 사용자 알림은 서로 독립적으로 처리한다. */ }
     try {
       addNotification(
         'alert',
-        TASKBAR_MINI_DISABLED_TITLE,
-        TASKBAR_MINI_DISABLED_BODY,
+        disabledTitle,
+        disabledBody,
       );
     } catch { /* 알림 기록 실패가 화면 상태 갱신을 막지 않게 한다. */ }
     try {
       if (Notification.isSupported()) {
-        new Notification({ title: `WhereMyTokens ${TASKBAR_MINI_DISABLED_TITLE}`, body: TASKBAR_MINI_DISABLED_BODY }).show();
+        new Notification({ title: `WhereMyTokens ${disabledTitle}`, body: disabledBody }).show();
       }
     } catch { /* 알림 표시 실패는 설정 복구 흐름을 막지 않는다. */ }
     try {
@@ -205,15 +224,17 @@ function rebuildTrayMenu() {
   if (!tray) return;
   const settings = getSettings();
   const widgetVisible = isCompactWidgetVisible();
-  const widgetLabel = settings.compactWidgetEnabled && widgetVisible ? 'Hide Widget' : 'Show Widget';
+  const widgetLabel = settings.compactWidgetEnabled && widgetVisible
+    ? nativeText('Hide Widget', 'ウィジェットを隠す', '隐藏小组件')
+    : nativeText('Show Widget', 'ウィジェットを表示', '显示小组件');
   const widgetAction = settings.compactWidgetEnabled && widgetVisible ? hideCompactWidget : showCompactWidget;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open WhereMyTokens', click: () => showPopup() },
+    { label: nativeText('Open WhereMyTokens', 'WhereMyTokens を開く', '打开 WhereMyTokens'), click: () => showPopup() },
     { type: 'separator' },
     { label: widgetLabel, click: widgetAction },
-    { label: 'Settings', click: () => showPopup('settings') },
+    { label: nativeText('Settings', '設定', '设置'), click: () => showPopup('settings') },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.quit(); } },
+    { label: nativeText('Quit', '終了', '退出'), click: () => { app.quit(); } },
   ]));
 }
 
@@ -399,26 +420,26 @@ function revealCompactWidget(win = widgetWindow, settings = getSettings()) {
 function openWidgetContextMenu() {
   if (!widgetWindow || widgetWindow.isDestroyed()) return;
   Menu.buildFromTemplate([
-    { label: 'Open dashboard', click: () => showPopup('main') },
-    { label: 'Refresh now', click: () => stateManager?.forceRefresh().catch(() => {}) },
-    { label: 'Settings', click: () => showPopup('settings') },
+    { label: nativeText('Open dashboard', 'ダッシュボードを開く', '打开仪表板'), click: () => showPopup('main') },
+    { label: nativeText('Refresh now', '今すぐ更新', '立即刷新'), click: () => stateManager?.forceRefresh().catch(() => {}) },
+    { label: nativeText('Settings', '設定', '设置'), click: () => showPopup('settings') },
     { type: 'separator' },
-    { label: 'Hide widget', click: hideCompactWidget },
+    { label: nativeText('Hide widget', 'ウィジェットを隠す', '隐藏小组件'), click: hideCompactWidget },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.quit(); } },
+    { label: nativeText('Quit', '終了', '退出'), click: () => { app.quit(); } },
   ]).popup({ window: widgetWindow });
 }
 
 function openDashboardContextMenu() {
   if (!popupWindow || popupWindow.isDestroyed()) return;
   Menu.buildFromTemplate([
-    { label: 'Hide dashboard', click: () => popupWindow?.hide() },
-    { label: 'Refresh now', click: () => stateManager?.forceRefresh().catch(() => {}) },
-    { label: 'Settings', click: () => showPopup('settings') },
+    { label: nativeText('Hide dashboard', 'ダッシュボードを隠す', '隐藏仪表板'), click: () => popupWindow?.hide() },
+    { label: nativeText('Refresh now', '今すぐ更新', '立即刷新'), click: () => stateManager?.forceRefresh().catch(() => {}) },
+    { label: nativeText('Settings', '設定', '设置'), click: () => showPopup('settings') },
     { type: 'separator' },
-    { label: 'Show widget', click: showCompactWidget },
+    { label: nativeText('Show widget', 'ウィジェットを表示', '显示小组件'), click: showCompactWidget },
     { type: 'separator' },
-    { label: 'Quit', click: () => { app.quit(); } },
+    { label: nativeText('Quit', '終了', '退出'), click: () => { app.quit(); } },
   ]).popup({ window: popupWindow });
 }
 
@@ -712,7 +733,8 @@ function updateTray(state: AppState) {
     : settings.currency === 'CNY'
     ? `¥${(c * (settings.usdToCny ?? 7.2)).toFixed(2)}`
     : `$${c.toFixed(2)}`;
-  const tooltip = `WhereMyTokens  |  Today ${t.toLocaleString()} tok  ${costStr}`;
+  const todayLabel = nativeText('Today', '今日', '今日');
+  const tooltip = `WhereMyTokens  |  ${todayLabel} ${t.toLocaleString()} tok  ${costStr}`;
   if (tooltip !== lastTrayTooltip) {
     tray.setToolTip(tooltip);
     lastTrayTooltip = tooltip;

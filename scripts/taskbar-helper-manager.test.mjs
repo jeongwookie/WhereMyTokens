@@ -390,8 +390,10 @@ test('taskbar helper runtime disable turns the setting off through main state', 
   assert.ok(match);
   const body = match[1];
   assert.match(body, /try\s*\{\s*store\.set\('taskbarQuotaEnabled',\s*false\)/);
-  assert.match(body, /addNotification\(\s*'alert',\s*TASKBAR_MINI_DISABLED_TITLE/);
-  assert.match(body, /new Notification\(\{\s*title:\s*`WhereMyTokens \$\{TASKBAR_MINI_DISABLED_TITLE\}`/);
+  assert.match(body, /disabledTitle = nativeText\(TASKBAR_MINI_DISABLED_TITLE/);
+  assert.match(body, /disabledBody = nativeText\(\s*TASKBAR_MINI_DISABLED_BODY/);
+  assert.match(body, /addNotification\(\s*'alert',\s*disabledTitle,\s*disabledBody/);
+  assert.match(body, /new Notification\(\{\s*title:\s*`WhereMyTokens \$\{disabledTitle\}`, body: disabledBody/);
   assert.match(body, /stateManager\?\.applySettingsChange\(\)/);
   assert.match(body, /rebuildTrayMenu\(\)/);
 });

@@ -2293,6 +2293,7 @@ export class StateManager {
         checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: this.state.historyWarmupPending,
           quotaTargetModes: settings.quotaTargetModes,
+          language: settings.language,
         });
         this.logPerfTrace('heavyRefresh:deferred', totalPerf, {
           uiVisible: false,
@@ -2376,6 +2377,7 @@ export class StateManager {
         checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
           deferCodexLocalLog: partialHistoryScan,
           quotaTargetModes: settings.quotaTargetModes,
+          language: settings.language,
         });
         await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
         if (!this.uiVisible) this.startWatcher('heavyRefresh:startupsync');
@@ -2435,6 +2437,7 @@ export class StateManager {
       checkAlerts(derived.providerQuotas, settings.alertThresholds, settings.enableAlerts, this.enabledProviderSet(settings), {
         deferCodexLocalLog: partialHistoryScan,
         quotaTargetModes: settings.quotaTargetModes,
+        language: settings.language,
       });
       await this.logMemorySnapshot('heavyRefresh:end', totalScannedFiles);
       if (!this.uiVisible) this.startWatcher('heavyRefresh:hidden');

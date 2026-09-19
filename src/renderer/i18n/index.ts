@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { isSimplifiedChineseLocale } from '../../shared/language';
 import en from './locales/en.json';
 import ja from './locales/ja.json';
 import zh from './locales/zh.json';
@@ -10,7 +11,7 @@ export type LanguagePreference = 'system' | SupportedLanguage;
 // Electron renderer의 navigator.language는 Chromium이 app locale에서 채우므로 IPC 없이 시스템 언어를 추정할 수 있다.
 export function detectSystemLanguage(): SupportedLanguage {
   const navLang = typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en';
-  if (navLang.toLowerCase().startsWith('zh')) return 'zh';
+  if (isSimplifiedChineseLocale(navLang)) return 'zh';
   return navLang.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 

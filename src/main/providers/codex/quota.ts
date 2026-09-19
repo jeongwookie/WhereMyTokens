@@ -39,7 +39,7 @@ function codexCredits(usage: CodexQuotaPayload | null): Record<string, ProviderC
   const credits = usage?.credits;
   if (!credits?.hasCredits) return undefined;
   return {
-    accountCredits: {
+    'account-credits': {
       available: credits.unlimited ? Number.MAX_SAFE_INTEGER : 0,
       resetMs: null,
     },
