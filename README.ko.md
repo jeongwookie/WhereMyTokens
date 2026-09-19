@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe"><strong>v1.24.6 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe"><strong>v1.25.0 다운로드</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 버전</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.24.6: Codex 과다 집계·업그레이드 자동 보정 수정, Astra 가격 반영, 대규모 Git 통계 안정화</em>
+  <em>v1.25.0: 중국어 간체 UI·위안화 표시, Codex 크레딧 quota 수정, 보안 의존성 갱신</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 중국어 간체 UI·위안화 표시 추가, Codex 크레딧 포함 quota 표시 수정, 취약 의존성 갱신 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Codex 과다 집계·업그레이드 자동 보정 수정, Astra 가격 반영, 대규모 Git 통계 안정화 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows에서 현재·legacy Antigravity language server를 모두 탐지하고, provider가 보고한 shared Gemini 및 Claude/GPT quota group을 우선 표시하며 이전 서버의 모델별 quota fallback을 유지 |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude 로그인 만료·거절을 알림과 앱 내 액션으로 안내하고 공식 CLI 로그인을 열며, credential 변경 후 자동 재시도합니다. 이전 quota를 유지해도 로그인 문제를 숨기지 않고 credential 갱신·쓰기는 하지 않습니다 |
 | **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 기존 Claude Code credential은 있지만 최신 statusLine이 없는 Claude Desktop 사용에서 quota를 복구하고, 공식 statusLine 우선·token refresh/write 제거·Anthropic 고정 호스트·auth-bound cache·무변조 테스트를 적용 |
-| **[v1.24.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.0)** | 8/10 | Claude quota를 공식 로컬 `statusLine`으로 전환하고, Claude OAuth credential 접근과 직접 usage polling을 제거하며, custom statusLine 보존과 최소화된 atomic snapshot·reset-aware cache를 추가 |
 
 구버전 검증 정보가 부족하면 초기 인덱싱 완료 후 자동 재검사합니다. 입증된 과다 집계만 로컬 백업 후 보정하고 검증 불가 기록은 보존합니다. Settings → Data에서 결과와 재검사를 확인할 수 있습니다.
 
@@ -87,14 +87,20 @@
 
 ## 다운로드
 
+### 중국어 UI와 통화
+
+Settings → General → Language에서 简体中文을 선택할 수 있습니다. 간체 중국어 Windows는 자동 감지하며 번체 환경은 영어로 유지합니다. 도움말·트레이 메뉴·로그인 알림·사용량 알림을 포함합니다. [@lizi1997](https://github.com/lizi1997) 님의 [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) 및 #60 번역 패치를 통합했습니다.
+
+USD·KRW·CNY를 지원하며 환율은 수동 입력입니다(CNY 기본값: 1 USD = 7.2 CNY). 실시간 환율 조회는 하지 않고 저장된 USD 사용량을 바꾸지 않으며 화면과 트레이 표시만 변환합니다. 계정 크레딧이 있을 때 Codex가 잘못 오프라인으로 보이던 문제도 수정했습니다. 이 수정에 재로그인이나 기록 초기화는 필요하지 않습니다.
+
 macOS 사용자는 별도 공개 저장소를 사용하세요:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
-> **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
+> **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語 / 简体中文를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.24.6/WhereMyTokens-v1.24.6-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-v1.25.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -104,7 +110,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.24.6-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.25.0-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -151,7 +157,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 
 ### 커스터마이징
 - **Auto/Light/Dark 테마** — 기본값은 시스템 설정 따름
-- **언어** — 시스템 설정을 따르거나 English / 日本語로 고정
+- **언어** — 시스템 설정을 따르거나 English / 日本語 / 简体中文로 고정
 - **비용 표시** — USD 또는 KRW, 환율 설정 가능
 - **Floating usage widget** — 항상 위에 표시되는 작은 Quota Pace 창; 메인 헤더, 트레이 메뉴, Settings, 위젯 버튼에서 표시/숨김 가능. Waiting 애니메이션은 기본 꺼짐이며 Settings에서 다시 켤 수 있습니다
 - **트레이 라벨** — 사용량 %, 토큰 수, 비용 직접 표시
