@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogIn, PanelBottom, PictureInPicture2 } from 'lucide-react';
+import { LogIn, Minus, PanelBottom, PictureInPicture2, X } from 'lucide-react';
 import { AppState, SessionInfo } from '../types';
 import type { ProviderQuotaSource, ProviderQuotaStatus } from '../../shared/quotaTypes';
 import { quotaElapsedPct } from '../../shared/quotaDomain';
@@ -581,21 +581,21 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
 
   return (
     <div style={{ background: C.headerBg, flexShrink: 0, borderBottom: `1px solid ${C.headerBorder}` }}>
-      <div style={{ ...drag, padding: '8px 12px 6px', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: -0.3, flexShrink: 0, whiteSpace: 'nowrap' }}>
-          WhereMyTokens
-        </span>
-        <span style={{ fontSize: 8, color: C.headerSub, opacity: 0.42, flexShrink: 0, whiteSpace: 'nowrap', marginLeft: -3 }}>
-          by jeongwookie
-        </span>
-        <div style={{ ...noDrag, display: 'inline-flex', gap: 3, marginLeft: 4, flexShrink: 0 }}>
-          {(['today', 'all'] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={headerPeriodButtonStyle(period === p, C)}>
-              {p === 'today' ? t('mainView.header.periodToday') : t('mainView.header.periodAll')}
-            </button>
-          ))}
-        </div>
-        <div style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+      <div data-testid="dashboard-titlebar" style={{ ...drag, padding: '8px 12px 6px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'start', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, minWidth: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: C.headerAccent, letterSpacing: 0, flexShrink: 0, whiteSpace: 'nowrap' }}>
+            WhereMyTokens
+          </span>
+          <span style={{ fontSize: 8, color: C.headerSub, opacity: 0.42, flexShrink: 0, whiteSpace: 'nowrap', marginLeft: -3 }}>
+            by jeongwookie
+          </span>
+          <div style={{ ...noDrag, display: 'inline-flex', gap: 3, marginLeft: 4, flexShrink: 0 }}>
+            {(['today', 'all'] as const).map(p => (
+              <button key={p} onClick={() => setPeriod(p)} style={headerPeriodButtonStyle(period === p, C)}>
+                {p === 'today' ? t('mainView.header.periodToday') : t('mainView.header.periodAll')}
+              </button>
+            ))}
+          </div>
           {headerStatus && (headerStatus.action === 'claude-login' ? (
             <button
               type="button"
@@ -628,6 +628,7 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
             <span
               title={headerStatus.title}
               style={{
+                ...noDrag,
                 fontSize: 10,
                 borderRadius: 999,
                 padding: '2px 8px',
@@ -643,6 +644,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
               {headerStatus.label}
             </span>
           ))}
+        </div>
+        <div data-testid="dashboard-window-controls" style={{ ...noDrag, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <button
             type="button"
             onClick={onToggleCompactWidget}
@@ -694,8 +697,8 @@ const HeaderMetrics = React.memo(function HeaderMetrics({
             )}
           </button>
           <div style={{ width: 1, height: 14, background: C.headerBorder, flexShrink: 0 }} />
-          <button onClick={() => window.wmt.minimize().catch(() => {})} title={t('mainView.header.minimize')} style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 16, borderRadius: 4, lineHeight: 1, fontWeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>-</button>
-          <button onClick={onQuit} title={t('mainView.header.quit')} style={{ ...noDrag, width: 24, height: 20, background: 'none', border: 'none', color: C.headerSub, cursor: 'pointer', fontSize: 14, borderRadius: 4, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>x</button>
+          <button type="button" data-testid="dashboard-minimize" onClick={() => window.wmt.minimize().catch(() => {})} aria-label={t('mainView.header.minimize')} title={t('mainView.header.minimize')} style={headerIconButtonStyle(false, C)}><Minus size={14} aria-hidden="true" /></button>
+          <button type="button" data-testid="dashboard-quit" onClick={onQuit} aria-label={t('mainView.header.quit')} title={t('mainView.header.quit')} style={headerIconButtonStyle(false, C)}><X size={14} aria-hidden="true" /></button>
         </div>
       </div>
 
