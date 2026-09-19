@@ -248,6 +248,7 @@ function ContentEN() {
           <InfoRow label="Provider">Settings → Providers uses provider checkboxes. Disabled providers are not scanned locally and do not make live usage requests.</InfoRow>
           <InfoRow label="Language">Settings → General → Language follows your system language by default. Choose English, 日本語, or 简体中文 to override the UI language.</InfoRow>
           <InfoRow label="Currency">USD, KRW, and CNY are supported. Exchange rates are entered manually, not fetched online; they only affect display, not stored USD usage.</InfoRow>
+          <InfoRow label="Window controls">Minimize and quit (X) stay at the top right. Long header labels wrap without hiding these controls.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display controls Rich, Simple, or hidden presentation per provider window or model target. It also affects Plan Usage, the floating widget, and taskbar mini order/visibility; Codex Resets is Plan Usage only.</InfoRow>
           <InfoRow label="Taskbar mini">Enable it from the header taskbar button or Settings. It renders two physical lines from normalized 5h/7d quota entries and can be dragged to reposition. Two represented periods use one line each; a single period can use both lines. Target prefixes use source/status tone, quota numbers keep pace/severity colors, and +N marks targets hidden by the per-line block limit. The helper receives summarized display lines plus the resolved light/dark theme fallback; its taskbar-relative layout is saved locally. It locally samples the visible taskbar background for contrast and does not store or transmit pixels. If the helper repeatedly fails, WhereMyTokens turns it off and shows a notification.</InfoRow>
           <InfoRow label="Claude safety">statusLine stays first. The Desktop compatibility path ignores the refresh-token property, never refreshes credentials, never writes the credential file, and discards cached compatibility quota after the access token changes.</InfoRow>
@@ -374,6 +375,7 @@ function ContentKO() {
           <InfoRow label="Provider">Settings → Providers의 provider 체크박스로 선택합니다. 꺼진 provider는 로컬 스캔과 live usage 요청을 모두 하지 않습니다.</InfoRow>
           <InfoRow label="Language">Settings → General → Language는 기본적으로 시스템 언어를 따릅니다. English, 日本語 또는 简体中文을 선택해 UI 언어를 고정할 수 있습니다.</InfoRow>
           <InfoRow label="Currency">USD, KRW, CNY를 지원합니다. 환율은 수동 입력하며 외부에서 가져오지 않습니다. 표시만 바뀌고 저장된 USD 사용량은 그대로입니다.</InfoRow>
+          <InfoRow label="창 제어">최소화와 종료(X)는 오른쪽 위에 고정됩니다. 긴 헤더 문구는 버튼을 가리지 않고 줄바꿈됩니다.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display에서 provider window 또는 model target별 Rich, Simple, 숨김 표시를 선택합니다. Plan Usage, Floating widget, taskbar mini의 순서와 노출에도 반영되며, Codex Resets는 Plan Usage 전용입니다.</InfoRow>
           <InfoRow label="Taskbar mini">상단 taskbar 버튼이나 Settings에서 켤 수 있습니다. 정규화된 5h/7d quota entry를 두 개의 물리적 line에 표시하고 드래그로 위치를 옮길 수 있습니다. 두 period가 있으면 line을 하나씩 쓰고, 하나뿐이면 두 line을 모두 사용할 수 있습니다. 대상 prefix 색은 source/status 상태를, quota 숫자 색은 pace/severity를 뜻하며, line 제한으로 숨겨진 target은 +N으로 표시됩니다. helper에는 요약 display line과 resolved light/dark theme fallback만 전달됩니다.</InfoRow>
           <InfoRow label="Claude 안전">statusLine을 우선합니다. Desktop 호환 경로는 refresh-token 속성을 무시하고 credential 갱신과 파일 쓰기를 하지 않으며, access token이 바뀌면 이전 호환 cache를 폐기합니다.</InfoRow>
@@ -500,6 +502,7 @@ function ContentJA() {
           <InfoRow label="Provider">Settings → Providers の provider チェックボックスで選択します。無効な provider はローカルスキャンも live usage request も行いません。</InfoRow>
           <InfoRow label="言語">Settings → 一般 → 言語はデフォルトでシステム言語に従います。English、日本語、または简体中文を選択して UI 言語を固定できます。</InfoRow>
           <InfoRow label="通貨">USD、KRW、CNY に対応。為替レートは手動入力で、オンライン取得はしません。表示のみ変更し、保存済みの USD 使用量は変わりません。</InfoRow>
+          <InfoRow label="ウィンドウ操作">最小化と終了(X)は右上に固定されます。長いヘッダー表示は折り返し、ボタンを隠しません。</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display で provider window または model target ごとの Rich、Simple、非表示を選択します。Plan Usage、Floating widget、taskbar mini の順序と表示対象にも反映され、Codex Resets は Plan Usage 専用です。</InfoRow>
           <InfoRow label="Taskbar mini">ヘッダーの taskbar ボタンまたは Settings から有効にできます。正規化された 5h/7d quota entry を二つの物理 line に表示し、ドラッグで位置を調整できます。二つの period があれば各 line をひとつずつ使い、一つだけなら両方の line を使えます。target prefix は source/status、quota 数値は pace/severity を示し、line 上限で隠れた target は +N で表示されます。helper には要約 display line と resolved light/dark theme fallback だけが渡されます。</InfoRow>
           <InfoRow label="Claude safety">statusLine を優先します。Desktop compatibility path は refresh-token property を無視し、credential refresh や file write を行わず、access token が変わると以前の compatibility cache を破棄します。</InfoRow>
@@ -577,6 +580,7 @@ function ContentZH() {
           <InfoRow label="服务商">在“设置 → 服务商”中启用或停用。已停用的服务商不会进行本地扫描或实时请求。</InfoRow>
           <InfoRow label="语言">“设置 → 常规 → 语言”默认跟随系统；也可固定为 English、日本語或简体中文。</InfoRow>
           <InfoRow label="货币">支持 USD、KRW 和 CNY。汇率为手动设置，不会联网更新；只改变显示，不改变保存的美元用量记录。</InfoRow>
+          <InfoRow label="窗口按钮">最小化和退出(X)固定在右上角。较长的标题文字会自动换行，不会遮挡按钮。</InfoRow>
           <InfoRow label="历史检查">升级后会在本地检查历史统计；修正前保存备份。旧检查点完成初始化后自动重试，无法验证的历史保持不变。“重置索引”是另一项操作，会丢失无法从现有日志重建的历史。</InfoRow>
           <InfoRow label="配额显示">可按服务商周期或模型目标选择详细、简洁或隐藏，并应用于套餐用量、悬浮小组件和任务栏迷你显示。</InfoRow>
           <InfoRow label="任务栏迷你显示">可从顶部任务栏按钮或设置中启用。支持时显示 5 小时 / 7 天配额，可拖动调整位置。</InfoRow>

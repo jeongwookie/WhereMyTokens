@@ -19,6 +19,15 @@ const originalCodexHome = process.env.CODEX_HOME;
 const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 const tempDirs = [];
 
+test('dashboard window controls keep their own non-shrinking grid column', () => {
+  const source = fs.readFileSync('src/renderer/views/MainView.tsx', 'utf8');
+  assert.match(source, /data-testid="dashboard-titlebar"[^\n]+gridTemplateColumns: 'minmax\(0, 1fr\) auto'/);
+  assert.match(source, /flexWrap: 'wrap', gap: 8, minWidth: 0/);
+  assert.match(source, /data-testid="dashboard-window-controls"[^\n]+flexShrink: 0/);
+  assert.match(source, /data-testid="dashboard-minimize"[^\n]+window\.wmt\.minimize\(\)[^\n]+aria-label=/);
+  assert.match(source, /data-testid="dashboard-quit"[^\n]+onClick=\{onQuit\}[^\n]+aria-label=/);
+});
+
 function makeStore(overrides = {}) {
   const values = { ...overrides };
   return {
