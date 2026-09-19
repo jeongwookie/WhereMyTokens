@@ -56,3 +56,15 @@ test('reset boundary re-arms only the matching entry key', () => {
   assert.equal(emitted.length, 2);
   assert.match(emitted[1].body, /resets in/);
 });
+
+test('usage alerts can be localized to Simplified Chinese', () => {
+  const emitted = [];
+  const emitNotification = (title, body) => emitted.push({ title, body });
+  const usage = snapshot([entry('alert.chinese.5h', 'claude.group.account', 'Claude', '5h', 60)]);
+
+  const checks = quotaChecks({ claude: usage }, new Set(['claude']), { language: 'zh' });
+  assert.equal(checks[0].label, 'Claude 5 小时用量');
+  checkAlerts({ claude: usage }, [50], true, new Set(['claude']), { language: 'zh', nowMs: NOW, emitNotification });
+  assert.match(emitted[0].title, /用量提醒/);
+  assert.match(emitted[0].body, /当前用量 60%/);
+});

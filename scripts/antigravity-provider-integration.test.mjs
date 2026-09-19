@@ -812,7 +812,7 @@ test('Antigravity invalid summary and GM dates keep the source eligible for usag
   }, async server => {
     const discovery = await scanAntigravityUsageFromServers(context({ nowMs }), [server]);
     assert.equal(discovery.usageIndexSources[0].descriptor.version.mtimeMs, nowMs - 1000);
-    const result = await materialize(discovery);
+    const result = await materialize(discovery, new DefaultUsageIndex(new InMemoryUsageIndexStorage(), () => nowMs));
     try { assert.equal(result.partial, false); assert.equal(result.usage.aggregate.totalTokens, 110);
       assert.equal(result.entries[0].timestampMs, nowMs - 1000); }
     finally { await result.index.close(); }

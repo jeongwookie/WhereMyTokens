@@ -5,7 +5,7 @@ import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 
 interface Props { onBack: () => void }
-type Lang = 'en' | 'ko' | 'ja';
+type Lang = 'en' | 'ko' | 'ja' | 'zh-CN';
 
 function B({ children }: { children: React.ReactNode }) {
   const C = useTheme();
@@ -246,7 +246,8 @@ function ContentEN() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Providers uses provider checkboxes. Disabled providers are not scanned locally and do not make live usage requests.</InfoRow>
-          <InfoRow label="Language">Settings → General → Language follows your system language by default. Choose English or 日本語 to override the UI language.</InfoRow>
+          <InfoRow label="Language">Settings → General → Language follows your system language by default. Choose English, 日本語, or 简体中文 to override the UI language.</InfoRow>
+          <InfoRow label="Currency">USD, KRW, and CNY are supported. Exchange rates are entered manually, not fetched online; they only affect display, not stored USD usage.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display controls Rich, Simple, or hidden presentation per provider window or model target. It also affects Plan Usage, the floating widget, and taskbar mini order/visibility; Codex Resets is Plan Usage only.</InfoRow>
           <InfoRow label="Taskbar mini">Enable it from the header taskbar button or Settings. It renders two physical lines from normalized 5h/7d quota entries and can be dragged to reposition. Two represented periods use one line each; a single period can use both lines. Target prefixes use source/status tone, quota numbers keep pace/severity colors, and +N marks targets hidden by the per-line block limit. The helper receives summarized display lines plus the resolved light/dark theme fallback; its taskbar-relative layout is saved locally. It locally samples the visible taskbar background for contrast and does not store or transmit pixels. If the helper repeatedly fails, WhereMyTokens turns it off and shows a notification.</InfoRow>
           <InfoRow label="Claude safety">statusLine stays first. The Desktop compatibility path ignores the refresh-token property, never refreshes credentials, never writes the credential file, and discards cached compatibility quota after the access token changes.</InfoRow>
@@ -371,7 +372,8 @@ function ContentKO() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Providers의 provider 체크박스로 선택합니다. 꺼진 provider는 로컬 스캔과 live usage 요청을 모두 하지 않습니다.</InfoRow>
-          <InfoRow label="Language">Settings → General → Language는 기본적으로 시스템 언어를 따릅니다. English 또는 日本語를 선택해 UI 언어를 고정할 수 있습니다.</InfoRow>
+          <InfoRow label="Language">Settings → General → Language는 기본적으로 시스템 언어를 따릅니다. English, 日本語 또는 简体中文을 선택해 UI 언어를 고정할 수 있습니다.</InfoRow>
+          <InfoRow label="Currency">USD, KRW, CNY를 지원합니다. 환율은 수동 입력하며 외부에서 가져오지 않습니다. 표시만 바뀌고 저장된 USD 사용량은 그대로입니다.</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display에서 provider window 또는 model target별 Rich, Simple, 숨김 표시를 선택합니다. Plan Usage, Floating widget, taskbar mini의 순서와 노출에도 반영되며, Codex Resets는 Plan Usage 전용입니다.</InfoRow>
           <InfoRow label="Taskbar mini">상단 taskbar 버튼이나 Settings에서 켤 수 있습니다. 정규화된 5h/7d quota entry를 두 개의 물리적 line에 표시하고 드래그로 위치를 옮길 수 있습니다. 두 period가 있으면 line을 하나씩 쓰고, 하나뿐이면 두 line을 모두 사용할 수 있습니다. 대상 prefix 색은 source/status 상태를, quota 숫자 색은 pace/severity를 뜻하며, line 제한으로 숨겨진 target은 +N으로 표시됩니다. helper에는 요약 display line과 resolved light/dark theme fallback만 전달됩니다.</InfoRow>
           <InfoRow label="Claude 안전">statusLine을 우선합니다. Desktop 호환 경로는 refresh-token 속성을 무시하고 credential 갱신과 파일 쓰기를 하지 않으며, access token이 바뀌면 이전 호환 cache를 폐기합니다.</InfoRow>
@@ -496,7 +498,8 @@ function ContentJA() {
         </SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="Provider">Settings → Providers の provider チェックボックスで選択します。無効な provider はローカルスキャンも live usage request も行いません。</InfoRow>
-          <InfoRow label="言語">Settings → 一般 → 言語はデフォルトでシステム言語に従います。English または 日本語を選択して UI 言語を固定できます。</InfoRow>
+          <InfoRow label="言語">Settings → 一般 → 言語はデフォルトでシステム言語に従います。English、日本語、または简体中文を選択して UI 言語を固定できます。</InfoRow>
+          <InfoRow label="通貨">USD、KRW、CNY に対応。為替レートは手動入力で、オンライン取得はしません。表示のみ変更し、保存済みの USD 使用量は変わりません。</InfoRow>
           <InfoRow label="Quota display">Settings → Quota display で provider window または model target ごとの Rich、Simple、非表示を選択します。Plan Usage、Floating widget、taskbar mini の順序と表示対象にも反映され、Codex Resets は Plan Usage 専用です。</InfoRow>
           <InfoRow label="Taskbar mini">ヘッダーの taskbar ボタンまたは Settings から有効にできます。正規化された 5h/7d quota entry を二つの物理 line に表示し、ドラッグで位置を調整できます。二つの period があれば各 line をひとつずつ使い、一つだけなら両方の line を使えます。target prefix は source/status、quota 数値は pace/severity を示し、line 上限で隠れた target は +N で表示されます。helper には要約 display line と resolved light/dark theme fallback だけが渡されます。</InfoRow>
           <InfoRow label="Claude safety">statusLine を優先します。Desktop compatibility path は refresh-token property を無視し、credential refresh や file write を行わず、access token が変わると以前の compatibility cache を破棄します。</InfoRow>
@@ -509,25 +512,102 @@ function ContentJA() {
   );
 }
 
+// 중국어 간체 도움말
+function ContentZH() {
+  return (
+    <>
+      <Section icon={<Signal size={15} />} title="服务商跟踪">
+        <div style={{ marginBottom: 6 }}>WhereMyTokens 可跟踪 <B>Claude Code</B>、<B>Codex</B> 和 <B>Antigravity</B>。在“设置 → 服务商”中勾选要启用的服务商。</div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B> 在本地读取会话 JSONL 以统计 token 活动，并优先使用官方 statusLine 报告 5 小时 / 7 天配额。statusLine 数据不可用时，在存在 Claude Code 凭据的情况下，可能会限频发起只读兼容请求。</div>
+        <div style={{ marginBottom: 5 }}><B>Codex</B> 优先使用完整的实时配额快照；不可用时回退到完整缓存或本地会话日志估算。缺失的限额保持缺失，不会被推断为“无限”。重置额度单独显示。</div>
+        <div><B>Antigravity</B> 仅通过本机 <code>127.0.0.1</code> 上运行中的 IDE language server 读取数据。2.x 使用服务商报告的共享配额组；旧版本回退到按模型显示。不会使用 Google OAuth、刷新令牌或云端备用请求。</div>
+      </Section>
+      <Divider />
+      <Section icon={<Hash size={15} />} title="用量与费用">
+        <div style={{ marginBottom: 6 }}><B>token</B> = 输入 + 输出 + 缓存创建 + 缓存读取。不同服务商的缓存效率使用各自的计算方式。</div>
+        <div style={{ marginBottom: 6 }}><B>费用</B>按模型 API 价格估算，表示 API 等值用量，不是你的实际账单。Max / Pro 等订阅仍按月收费。</div>
+        <UsageTable headers={['位置', '范围', '统计内容', '费用']} rows={[
+          ['顶部（今日）', '今日零点以来', '输入 / 输出 / 缓存、调用数、会话数', 'API 等值 + 缓存节省'],
+          ['顶部（累计）', '累计', '输入 / 输出 / 缓存、调用数、会话数', 'API 等值 + 缓存节省'],
+          ['套餐用量', '当前账单周期', '所有类型', 'API 等值'],
+          ['代码产出', '今日 / 累计', 'Git 统计', '每新增 100 行费用'],
+          ['模型用量', '累计前 4 个模型', '所有类型', 'API 等值'],
+        ]} />
+        <Note><B>$</B> 是 API 等值估算，不代表实际账单。Max / Pro 订阅是固定月费。</Note>
+      </Section>
+      <Divider />
+      <Section icon={<Code size={15} />} title="代码产出">
+        <div style={{ marginBottom: 5 }}><B>提交数</B> — 所选周期内的 Git 提交次数。</div>
+        <div style={{ marginBottom: 5 }}><B>净增行数</B> — 新增行数减去删除行数。</div>
+        <div style={{ marginBottom: 5 }}><B>每新增 100 行费用</B> — 新增代码每 100 行的费用；“今天”显示今日数据并与累计平均值对比，“全部”显示累计平均值。数值越低表示产出效率越高。</div>
+        <div style={{ marginBottom: 5 }}><B>统计范围</B> — 使用持续跟踪的本地 Git 仓库，涵盖本地分支，不只统计当前 HEAD。作者筛选依据本机 <code>git config user.email</code>。</div>
+      </Section>
+      <Divider />
+      <Section icon={<GitBranch size={15} />} title="会话">
+        <div style={{ marginBottom: 5 }}><B>项目 → 分支 → 会话</B> — 按 Git 项目和分支分组。Claude 与 Codex 会话可以同时出现在列表中。</div>
+        <div style={{ marginBottom: 5 }}><B>堆叠行</B> — 相同服务商、来源、模型和状态的会话会合并显示；展开后可查看每个会话。</div>
+        <div style={{ marginBottom: 5 }}><B>上下文进度</B> — 70% 黄色、85% 橙色、95% 红色；95–99% 为“接近限额”，100% 为“已达限额”。</div>
+        <div style={{ marginBottom: 7 }}><B>活动明细</B> — 点击会话行中的“详情”。Claude 显示各类别输出 token；Codex 显示工具事件次数，因为其日志记录工具调用而非每个工具的输出 token。</div>
+        <CatRow icon="💭" label="思考" color="#2dd4bf">扩展思考内容</CatRow>
+        <CatRow icon="💬" label="回复" color="#94a3b8">最终回答文本</CatRow>
+        <CatRow icon="📄" label="读取" color="#60a5fa">读取工具</CatRow>
+        <CatRow icon="✏️" label="编辑 / 写入" color="#a78bfa">Edit、Write、MultiEdit、NotebookEdit</CatRow>
+        <CatRow icon="🔍" label="搜索" color="#38bdf8">Grep、Glob、LS、TodoRead、TodoWrite</CatRow>
+        <CatRow icon="🌿" label="Git" color="#4ade80">以 git 开头的 Bash 命令</CatRow>
+        <CatRow icon="⚙️" label="构建 / 测试" color="#fb923c">npm、tsc、jest、cargo、python、go build 等 Bash 命令</CatRow>
+        <CatRow icon="💻" label="终端" color="#fbbf24">其他 Bash 命令和 mcp__* 工具</CatRow>
+        <CatRow icon="🤖" label="子代理" color="#f472b6">Agent 工具</CatRow>
+        <CatRow icon="🌐" label="网页" color="#c084fc">WebFetch、WebSearch</CatRow>
+        <Note>归因方式：按各内容块的字符数占比分配每轮输出 token；值为零的类别会隐藏。</Note>
+      </Section>
+      <Divider />
+      <Section icon={<Activity size={15} />} title="活动">
+        <div style={{ marginBottom: 5 }}><B>趋势</B> — 查看按日、周或月汇总的费用 / token 历史及 Git 净增行数。点击区间可查看输入输出、思考 / 回复 / 工具用量、缓存和 Git 明细。</div>
+        <div style={{ marginBottom: 5 }}><B>7d</B> — 近 7 天 × 24 小时热力图。</div>
+        <div style={{ marginBottom: 5 }}><B>5mo</B> — 类似 GitHub 的近 5 个月日历；悬停可查看日期和 token 数。</div>
+        <div style={{ marginBottom: 5 }}><B>Hourly / Weekly</B> — 分别查看近 30 天每小时分布和近 4 周用量。</div>
+        <div><B>Rhythm</B> — 查看近 30 天上午、下午、晚上和夜间的费用分布及峰值统计，使用本地时区。</div>
+      </Section>
+      <Divider />
+      <Section icon={<Signal size={15} />} title="数据来源与设置">
+        <SrcRow badge="1st"><B>本地来源</B> — Claude 和 Codex JSONL 在本地解析；Antigravity 仅通过本地 RPC 读取正在运行的 IDE 服务。</SrcRow>
+        <SrcRow badge="2nd"><B>限额来源</B> — Claude 优先使用 statusLine，其次只读兼容 API，再使用与当前凭据绑定的缓存。Codex 在实时数据、本地日志和缓存中选择一份完整快照，不会混合不同来源的周期。Antigravity 优先使用共享 RPC 配额组。</SrcRow>
+        <SrcRow badge="FB"><B>缓存值</B> — 实时数据不可用时保留最近可信的快照；缓存会随报告的重置时间或有效期自动过期。</SrcRow>
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label="服务商">在“设置 → 服务商”中启用或停用。已停用的服务商不会进行本地扫描或实时请求。</InfoRow>
+          <InfoRow label="语言">“设置 → 常规 → 语言”默认跟随系统；也可固定为 English、日本語或简体中文。</InfoRow>
+          <InfoRow label="货币">支持 USD、KRW 和 CNY。汇率为手动设置，不会联网更新；只改变显示，不改变保存的美元用量记录。</InfoRow>
+          <InfoRow label="历史检查">升级后会在本地检查历史统计；修正前保存备份。旧检查点完成初始化后自动重试，无法验证的历史保持不变。“重置索引”是另一项操作，会丢失无法从现有日志重建的历史。</InfoRow>
+          <InfoRow label="配额显示">可按服务商周期或模型目标选择详细、简洁或隐藏，并应用于套餐用量、悬浮小组件和任务栏迷你显示。</InfoRow>
+          <InfoRow label="任务栏迷你显示">可从顶部任务栏按钮或设置中启用。支持时显示 5 小时 / 7 天配额，可拖动调整位置。</InfoRow>
+          <InfoRow label="Claude 安全">statusLine 优先。桌面兼容路径忽略刷新令牌，不刷新凭据、不写入凭据文件；访问令牌变更后会丢弃旧缓存。</InfoRow>
+          <InfoRow label="Claude 登录">登录过期或被拒绝时会提示。WhereMyTokens 会打开官方 <code>claude auth login</code> 流程，并在凭据文件变化后自动重试配额跟踪。</InfoRow>
+          <InfoRow label="集成">前往“设置 → Claude Code 集成 → 设置”。</InfoRow>
+          <InfoRow label="小组件">在“设置 → 悬浮用量小组件”或顶部 PiP 按钮中开关置顶的配额速率窗口。黄色 / 红色表示用量速度可能赶在重置前耗尽配额。</InfoRow>
+        </div>
+      </Section>
+    </>
+  );
+}
+
 export default function HelpView({ onBack }: Props) {
   const C = useTheme();
   const { t, i18n } = useTranslation();
-  // Help content is a self-contained EN/KO/JA switcher (predates app-wide i18n); default its
-  // panel to the app's current UI language instead of always starting on English.
-  const [lang, setLang] = useState<Lang>(() => (i18n.language.startsWith('ja') ? 'ja' : 'en'));
+  // 도움말의 독립 언어 탭은 현재 앱 언어로 시작한다.
+  const [lang, setLang] = useState<Lang>(() => i18n.language.startsWith('ja') ? 'ja' : i18n.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
       <ViewHeader title={t('help.title')} onBack={onBack} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 0', gap: 4, flexShrink: 0 }}>
-        {(['en', 'ko', 'ja'] as Lang[]).map(l => (
+        {(['en', 'ko', 'ja', 'zh-CN'] as Lang[]).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{
             padding: '2px 8px', fontSize: 11, border: 'none', borderRadius: 10, cursor: 'pointer',
             background: lang === l ? C.accent : C.bgRow,
             color: lang === l ? '#fff' : C.textDim,
             fontWeight: lang === l ? 700 : 400,
           }}>
-            {l.toUpperCase()}
+            {l === 'zh-CN' ? '简中' : l.toUpperCase()}
           </button>
         ))}
       </div>
@@ -535,6 +615,7 @@ export default function HelpView({ onBack }: Props) {
         {lang === 'en' && <ContentEN />}
         {lang === 'ko' && <ContentKO />}
         {lang === 'ja' && <ContentJA />}
+        {lang === 'zh-CN' && <ContentZH />}
       </div>
     </div>
   );

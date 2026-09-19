@@ -1,0 +1,750 @@
+{
+  "common": {
+    "state": {
+      "active": "活跃",
+      "waiting": "等待中",
+      "idle": "空闲",
+      "compacting": "压缩中"
+    },
+    "mainSections": {
+      "planUsage": "套餐配额",
+      "codeOutput": "代码产出",
+      "trend": "使用趋势",
+      "sessions": "会话列表",
+      "activity": "活动分布",
+      "modelUsage": "模型使用"
+    },
+    "limitSource": {
+      "api": {
+        "title": "账户使用量快照。每隔几分钟自动刷新。"
+      },
+      "bridge": {
+        "title": "由 Claude Code statusLine 本地实时上报的最新配额数据。"
+      },
+      "cache": {
+        "title": "最后一次可信的使用量快照，会随时间自动老化。"
+      },
+      "localLog": {
+        "title": "本地会话日志估算值，可能落后于账户级实时限制。"
+      },
+      "localRpc": {
+        "title": "本地提供商运行时快照。"
+      }
+    }
+  },
+  "app": {
+    "bootFallback": {
+      "eyebrow": "启动恢复",
+      "title": "WhereMyTokens 仍在加载中。",
+      "retry": "重试",
+      "minimize": "最小化",
+      "quit": "退出",
+      "messageInitial": "仍在等待初始会话与使用量数据。",
+      "messageEmptyState": "应用返回了空的启动状态，请尝试刷新一次。",
+      "messageGetStateFailed": "主进程未返回启动数据，请尝试刷新或重新打开托盘窗口。",
+      "messageTimeout": "后台仍在继续加载最近的会话与使用量数据，当前显示恢复视图。"
+    }
+  },
+  "help": {
+    "title": "帮助"
+  },
+  "activityBreakdown": {
+    "categories": {
+      "read": "读取",
+      "editWrite": "编辑 / 写入",
+      "search": "搜索",
+      "git": "Git",
+      "buildTest": "构建 / 测试",
+      "terminal": "终端",
+      "subagents": "子智能体",
+      "thinking": "思考 (Thinking)",
+      "response": "回复",
+      "web": "网页检索"
+    },
+    "categoryTooltip": "{{label}}: {{pct}}%",
+    "totalLabel": {
+      "events": "本会话工具调用事件",
+      "tokens": "本会话输出 Token"
+    }
+  },
+  "activityChart": {
+    "noData": "暂无数据",
+    "noTokens": "无",
+    "tokensValue": "{{value}} tok",
+    "captions": {
+      "fiveMonth": "近 5 个月活动",
+      "hourly30d": "按小时分布 (30天)",
+      "weekly4w": "按周分布 (4周)"
+    },
+    "legend": {
+      "less": "少",
+      "more": "多"
+    },
+    "weekly": {
+      "current": "本周",
+      "weeksAgo": "{{count}}周前",
+      "fourWeekTotal": "4周总计",
+      "peak": "峰值"
+    },
+    "tod": {
+      "morning": "上午",
+      "afternoon": "下午",
+      "evening": "晚上",
+      "night": "深夜",
+      "peakLabel": "峰值:",
+      "rangeTotal": "30天 · 共计 {{cost}}",
+      "pctOfTotal": "占总计 {{pct}}%",
+      "columns": {
+        "tokens": "Tokens",
+        "cost": "费用",
+        "requests": "请求数"
+      }
+    }
+  },
+  "codeOutputCard": {
+    "period": {
+      "today": "今日",
+      "all": "全部"
+    },
+    "kpi": {
+      "commits": "提交数 (Commits)",
+      "netLines": "净增行数",
+      "costPerHundredAdded": "每新增百行花费"
+    },
+    "totalLines": "{{value}} 行",
+    "avgCost": "均价 {{cost}}",
+    "commitsSub": {
+      "totalCount": "共 {{count}} 次",
+      "allTime": "历史累计"
+    },
+    "scanningGitHistory": "正在扫描 Git 历史",
+    "loadingHint": "本地代码仓库统计完成后将显示代码产出数据。",
+    "outputGrowth": {
+      "title": "产出增长",
+      "caption": "过去 7 天对比历史基线",
+      "totalNetSuffix": "累计净增",
+      "totalSuffix": "总计",
+      "daySuffix": "天"
+    },
+    "summary": {
+      "commits_one": "{{count}} 次提交",
+      "commits_other": "{{count}} 次提交",
+      "netLines": "净增 {{value}} 行",
+      "costPerHundred": "每新增百行花费 {{cost}}"
+    }
+  },
+  "extraUsageCard": {
+    "title": {
+      "overCap": "Claude 超额用量已超出月度上限",
+      "nearCap": "Claude 超额用量接近月度上限",
+      "monthly": "Claude 超额用量 - 按月统计"
+    }
+  },
+  "modelBreakdown": {
+    "top4AllTime": "Top 4 - 历史累计",
+    "otherProvider": "其他"
+  },
+  "renderErrorBoundary": {
+    "rendererError": "渲染错误",
+    "renderingFailed": "{{label}} 渲染失败。",
+    "reload": "重新加载",
+    "minimize": "最小化",
+    "quit": "退出"
+  },
+  "sessionRow": {
+    "hideBreakdown": "收起明细",
+    "showBreakdown": "查看明细",
+    "hideSessionBreakdown": "收起会话明细",
+    "showSessionBreakdown": "查看会话明细",
+    "hide": "隐藏",
+    "details": "详情",
+    "context": "上下文 {{pct}}%",
+    "atLimit": "已达上限",
+    "nearLimit": "接近上限",
+    "compactSoon": "即将压缩",
+    "tokensLeft": "剩余 {{tokens}}"
+  },
+  "tokenStatsCard": {
+    "syncing": "同步中",
+    "waiting": "等待中",
+    "unlimited": "无限制",
+    "syncingTooltip": "配额限制数据正在后台同步中。",
+    "waitingTooltip": "正在等待提供商返回配额限制数据。",
+    "unlimitedTooltip": "提供商当前报告此限制窗口为无限制。",
+    "unlimitedReset": "无重置窗口",
+    "cachedSuffix": "(缓存)",
+    "usageWindowCost": "当前窗口估算费用",
+    "resets": "{{day}} 重置",
+    "timeElapsed": "时间已过去",
+    "windowElapsedTooltip": "本 {{period}} 窗口的时间已过去 {{pct}}%",
+    "providerCacheMetric": "提供商缓存指标"
+  },
+  "trendBreakdownCard": {
+    "unavailable": "明细不可用",
+    "loading": "正在加载明细...",
+    "breakdownSince": "明细数据起始于 {{date}}",
+    "tokenPanorama": "Token 全景",
+    "inputOutputNoCache": "输入 + 输出 · 未命中缓存",
+    "noTokenData": "暂无 Token 数据",
+    "toolUsage": "工具使用情况",
+    "toolUsageAllProviders": "工具使用情况 · 所有提供商",
+    "callsApproxTok": "调用次数 · 约消耗 Token",
+    "netLinesCommitted": "净提交代码行数",
+    "gitLines": "Git · 行数",
+    "noCommits": "该周期内无提交",
+    "input": "输入",
+    "output": "输出",
+    "thinking": "思考",
+    "response": "回复",
+    "showMore": "展开更多 ({{count}})",
+    "collapse": "收起",
+    "noToolData": "暂无工具数据",
+    "callsCount": "{{count}} 次调用",
+    "toolCallsApprox": "工具调用 · 约 {{tokens}} tok",
+    "callsApproxTokValue": "{{count}} 次调用 · 约 {{tokens}} tok",
+    "addedRemoved": "新增 {{added}} / 删除 {{removed}}",
+    "netPrefix": "净增:{{value}}",
+    "tools": {
+      "read": "读取",
+      "editWrite": "编辑 / 写入",
+      "search": "搜索",
+      "git": "Git",
+      "buildTest": "构建 / 测试",
+      "terminal": "终端",
+      "subagents": "子智能体",
+      "web": "网页检索"
+    },
+    "paths": {
+      "product_code": "生产代码",
+      "test_code": "测试代码",
+      "docs_spec": "文档 / 规范",
+      "config_build": "配置 / 构建",
+      "schema_migration": "模型 / 迁移脚本",
+      "vendor": "第三方依赖",
+      "asset": "静态资源"
+    }
+  },
+  "trendCard": {
+    "trend": "趋势",
+    "noTrendDataYet": "暂无趋势数据",
+    "noTrendDataYetSvg": "暂无趋势数据",
+    "usagePending": "使用量待同步",
+    "outputPending": "产出数据待同步",
+    "netSuffix": "净增",
+    "metricLabel": "指标",
+    "cacheLabel": "缓存",
+    "rangeLabel": "时间跨度",
+    "metric": {
+      "cost": "费用",
+      "tokens": "Token"
+    },
+    "cacheView": {
+      "work": "工作量 (Work)",
+      "billing": "计费 (Billing)"
+    },
+    "grain": {
+      "day": "日",
+      "week": "周",
+      "month": "月"
+    },
+    "selectBucketAriaLabel": "选择一个趋势数据块以查看明细",
+    "netLines": "净增代码行",
+    "requestsCount_one": "{{count}} 个请求",
+    "requestsCount_other": "{{count}} 个请求",
+    "weekPrefix": "第 {{label}} 周"
+  },
+  "mainView": {
+    "refresh": {
+      "label": "刷新",
+      "justNow": "刚刚",
+      "secondsAgo": "{{n}} 秒前",
+      "minutesAgo": "{{n}} 分钟前",
+      "hoursAgo": "{{n}} 小时前",
+      "lastRun": "上次更新 · {{age}}",
+      "refreshing": "正在刷新...",
+      "scan": "扫描预计 {{eta}}"
+    },
+    "warmup": {
+      "queued": "排队中",
+      "syncing": "正在同步...",
+      "inMinutesSeconds": "{{minutes}}分{{seconds}}秒后",
+      "inSeconds": "{{seconds}}秒后",
+      "statusQueued": "正在排队",
+      "statusSyncing": "正在同步中",
+      "statusStarts": "{{eta}} 后开始",
+      "bannerTitle": "历史数据加载中",
+      "bannerBody": "已优先展示当前会话与最新使用量。完整历史记录{{status}}。在此提示消失前，趋势和统计总数可能会有变动。"
+    },
+    "cacheMetric": {
+      "singleSimple": "{{provider}}: 缓存读取 / 提示词 Token",
+      "singleClaude": "{{provider}}: 缓存读取 / (缓存读取 + 缓存写入)",
+      "combined": "聚合视图: 各提供商的缓存指标已汇总"
+    },
+    "status": {
+      "claude": {
+        "localLabel": "Claude 缓存",
+        "waitingLabel": "Claude 等待中",
+        "localTitle": "当前显示已缓存的 Claude 配额 ({{status}}){{errorSuffix}}",
+        "localOnlyTitleDefault": "Claude 配额正在等待 statusLine 数据或可用的 Claude Code 凭据。",
+        "loginLabel": "Claude 登录",
+        "loginTitle": "打开官方 Claude Code 登录以恢复配额跟踪。",
+        "loginHeading": "需要登录 Claude Code",
+        "loginDetail": "请在官方 Claude Code 中完成登录，WhereMyTokens 将自动重新尝试。",
+        "loginAction": "打开 Claude Code"
+      },
+      "codex": {
+        "limitedLabel": "Codex 受限",
+        "limitedTitleDefault": "Codex 使用量接口返回了 HTTP 429 (频率超限)。",
+        "schemaLabel": "Codex 数据格式",
+        "schemaTitleDefault": "Codex 使用量响应数据结构发生变化。",
+        "endpointLabel": "Codex 节点",
+        "endpointTitleDefault": "自定义的 Codex 基础 URL 未纳入 Token 安全监控范围。",
+        "localLabel": "Codex 本地",
+        "localTitleDefault": "未找到 Codex 凭据，当前仅显示本地日志估算数据。",
+        "authLabel": "Codex 认证",
+        "authTitleDefault": "Codex Token 已失效或被拒绝。",
+        "blockedLabel": "Codex 拒绝访问",
+        "blockedTitleDefault": "当前账号已被拒绝访问 Codex 使用量服务。",
+        "timeoutLabel": "Codex 超时",
+        "timeoutTitleDefault": "请求 Codex 使用量接口超时。",
+        "offlineLabel": "Codex 离线",
+        "offlineTitleDefault": "请求 Codex 使用量接口失败。",
+        "cacheLabel": "Codex 缓存",
+        "logLabel": "Codex 日志",
+        "fallbackSourceCache": "最近缓存的使用量快照",
+        "fallbackSourceLog": "本地日志估算",
+        "fallbackTitle": "Codex 实时使用量不可用；当前采用{{source}}。",
+        "offlineNoDetail": "Codex 实时使用量不可用。"
+      },
+      "provider": {
+        "unavailable": "不可用",
+        "startAntigravity": "启动 Antigravity",
+        "offCompact": "{{label}} 关闭",
+        "offlineCompact": "{{label}} 离线",
+        "genericCompact": "{{label}} {{status}}",
+        "genericTitle": "{{label}} 提供商状态: {{status}}。"
+      }
+    },
+    "header": {
+      "estimatedCost": "预估费用",
+      "periodToday": "今日",
+      "periodAll": "全部",
+      "hideCompactWidget": "隐藏悬浮配额小部件",
+      "showCompactWidget": "显示悬浮配额小部件",
+      "hideTaskbarQuota": "隐藏任务栏迷你配额显示",
+      "showTaskbarQuota": "显示任务栏迷你配额显示",
+      "minimize": "最小化",
+      "quit": "退出",
+      "allTimeCost": "历史总费用",
+      "todayCost": "今日费用",
+      "claudePlanTooltip": "Claude 订阅套餐: {{plan}}",
+      "codexTierTooltip": "Codex 服务级别: {{tier}}",
+      "calls": "次调用",
+      "sessions": "个会话",
+      "avgCacheEfficiency": "平均缓存效率",
+      "cacheEfficiency": "缓存效率",
+      "savedTotal": "累计节省 + {{saved}}",
+      "savedToday": "今日节省 + {{saved}}"
+    },
+    "quota": {
+      "waitingReset": "等待中",
+      "syncingLabel": "同步中",
+      "unlimitedLabel": "无限制",
+      "unlimitedReset": "无重置",
+      "estimatedDuration": "根据提供商重置时间推算的预估时长",
+      "usedTooltip": "已用",
+      "usedElapsedTooltip": "已用 / 时间进度",
+      "tokenBadgeSingle": "该配额目标的 Token 总量",
+      "tokenBadgeMulti": "该配额目标最大时间窗口的 Token 计数",
+      "tokenBadgeSuffix": "{{tokens}} tok",
+      "pendingLabel": "同步中"
+    },
+    "resetCredits": {
+      "heading": "Codex 重置配额点数",
+      "cardHeading": "CODEX 重置点数",
+      "rowHeading": "Codex 重置点数",
+      "detailsAriaLabel": "Codex 重置配额点数详情",
+      "badge": {
+        "error": "错误",
+        "limited": "受限",
+        "stale": "已过期",
+        "usage": "实时用量",
+        "partial": "部分",
+        "api": "API",
+        "cache": "缓存",
+        "fromApi": "来自 API",
+        "fromCache": "来自缓存数据",
+        "usageOnlyTitle": "仅根据实时用量统计；过期列表不可用",
+        "partialOnlyTitle": "仅有点数数量；过期列表不可用",
+        "degradedTitle": "重置点数 {{sourceDesc}}；状态: {{code}}",
+        "okTitle": "重置点数 {{sourceDesc}}"
+      },
+      "status": {
+        "unsupported": "重置接口不受支持",
+        "loginRequired": "需要登录 Codex",
+        "loginExpired": "Codex 登录已过期",
+        "accessDenied": "Codex 访问被拒绝",
+        "limited": "重置检查受限",
+        "changed": "重置检查格式变动",
+        "offline": "重置检查离线",
+        "unavailable": "重置数据不可用"
+      },
+      "tooltip": {
+        "unknown": "未知",
+        "listUnavailable": "列表不可用",
+        "statusLabel": "状态",
+        "lastUpdate": "上次更新",
+        "sourceLabel": "来源",
+        "countOnlyNote": "仅提供数量可用性；过期列表不可用。",
+        "available": "可用",
+        "nextExpires": "下一次过期",
+        "earned": "已获取",
+        "expiresIn": "{{duration}} 内过期",
+        "updatedFooter": "更新时间: {{date}}",
+        "sourceFooter": "来源: {{source}}"
+      },
+      "card": {
+        "available": "可用",
+        "nextExpiresLabel": "下次过期",
+        "noResets": "无可用重置点数",
+        "moreCount": "还有 +{{n}} 项",
+        "countOnlyShort": "仅显示数量 · 过期列表不可用"
+      },
+      "row": {
+        "noResetsAvailable": "无可用重置点数",
+        "available": "可用",
+        "nextIn": "{{duration}} 后到期",
+        "countOnly": "仅显示数量"
+      }
+    },
+    "ledgerRebuild": {
+      "title": "账目记录需要重建",
+      "body": "在从设置中重建本地使用量账本前，历史统计总数将临时使用近期备用数据。"
+    },
+    "usageIndexCoverage": {
+      "failureTitle": "使用量更新失败",
+      "failureBody": "部分使用量数据源无法读取。现有统计总数已保留。{{failures}}",
+      "title": "正在索引使用量历史",
+      "discovering": "正在发现使用量来源。",
+      "progress": "已索引 {{indexed}}/{{required}} 个数据源。",
+      "failures_one": "有 {{count}} 个数据源读取失败，稍后将重试。",
+      "failures_other": "有 {{count}} 个数据源读取失败，稍后将重试。",
+      "body": "索引完成前数据可能不完整。{{progress}}{{failures}}"
+    },
+    "usageIndexHealth": {
+      "recoveredTitle": "使用量历史已恢复",
+      "recoveredBody": "受损数据库已保存，现已激活恢复后的索引。",
+      "unavailableTitle": "使用量历史不可用",
+      "unavailableBody": "无法打开本地索引数据库。仅在能接受丢失这部分不可用历史时，才在设置中执行重置索引。"
+    },
+    "sessions": {
+      "providersTwo": "{{a}} 或 {{b}}",
+      "providersList": "{{list}} 或 {{last}}",
+      "enabledProviderFallback": "已启用的提供商",
+      "stackCount_one": "{{count}} 个{{state}}会话",
+      "stackCount_other": "{{count}} 个{{state}}会话",
+      "latest": "最新",
+      "maxCtx": "最大上下文",
+      "chipOpen": "展开",
+      "chipStack": "堆叠",
+      "filterAll": "全部",
+      "filterActive": "活跃",
+      "commitCount_one": "{{count}} 次提交",
+      "commitCount_other": "{{count}} 次提交",
+      "projectActionsTitle": "项目操作",
+      "hide": "隐藏",
+      "exclude": "排除",
+      "showMore": "显示更多 ({{n}})",
+      "showLess": "收起",
+      "noActive": "暂无活跃的 {{providers}} 会话",
+      "hideIdleSessions_one": "隐藏 {{count}} 个空闲会话",
+      "hideIdleSessions_other": "隐藏 {{count}} 个空闲会话",
+      "showIdleSessions_one": "显示 {{count}} 个空闲会话",
+      "showIdleSessions_other": "显示 {{count}} 个空闲会话",
+      "hiddenProjectsCount_one": "{{count}} 个隐藏项目",
+      "hiddenProjectsCount_other": "{{count}} 个隐藏项目",
+      "show": "显示"
+    },
+    "nav": {
+      "settings": "设置",
+      "alerts": "提醒"
+    },
+    "errorBoundary": {
+      "planUsagePanel": "套餐配额面板",
+      "codeOutputCard": "代码产出卡片",
+      "trendCard": "趋势卡片",
+      "sessionsPanel": "会话面板",
+      "activitySection": "活动分布板块",
+      "modelSection": "模型使用板块",
+      "headerMetrics": "顶部指标栏",
+      "usageLedgerRebuildBanner": "账本重建提示横幅",
+      "usageIndexCoverageBanner": "索引覆盖提示横幅",
+      "usageIndexHealthBanner": "索引健康提示横幅",
+      "historyWarmupBanner": "历史预热提示横幅",
+      "bottomNavigation": "底部导航栏"
+    }
+  },
+  "compactWidgetView": {
+    "refresh": {
+      "default": "刷新",
+      "now": "刚刚",
+      "ageMinutes": "{{n}}分钟",
+      "ageHours": "{{n}}小时",
+      "lastRun": "上次更新 · {{age}}"
+    },
+    "status": {
+      "syncing": "同步中",
+      "waiting": "等待中",
+      "unlimited": "无限制",
+      "unlimitedBadge": "∞",
+      "scanning": "扫描中",
+      "waitBadge": "等待"
+    },
+    "tooltip": {
+      "startupLoading": "启动扫描仍在进行中。",
+      "unlimited": "此限制窗口当前报告为无限制。",
+      "noFiveHourData": "暂无 5 小时重置数据。在检测到本地使用或提供商数据后将出现。",
+      "groupUnavailable": "尚未从提供商配额源获取到 {{group}} 的限制数据。",
+      "timeUntilReset": "距离重置还有: {{resetLabel}}",
+      "used": "已用",
+      "usedElapsed": "已用 / 时间进度"
+    },
+    "header": {
+      "title": "配额节奏 (Quota Pace)",
+      "subtitle": "已用 / 时间进度"
+    },
+    "button": {
+      "refreshNow": "立即刷新",
+      "openDashboard": "打开面板",
+      "hideWidget": "隐藏小部件"
+    },
+    "health": {
+      "sectionTitle": "提供商配额数据健康度",
+      "label": "健康度",
+      "syncing": {
+        "label": "{{provider}} 同步中",
+        "title": "{{provider}} 配额数据正在后台同步中。"
+      },
+      "statusLabel": {
+        "label": "{{provider}} {{statusLabel}}",
+        "title": "{{provider}} 提供商配额状态: {{statusLabel}}。"
+      },
+      "offline": {
+        "label": "{{provider}} 离线",
+        "title": "{{provider}} 提供商配额不可用。"
+      },
+      "log": {
+        "label": "{{provider}} 日志",
+        "title": "{{provider}} 至少有一个限制窗口正在使用本地日志估算。"
+      },
+      "cache": {
+        "label": "{{provider}} 缓存",
+        "title": "{{provider}} 正在使用最近可信的缓存使用量快照。"
+      },
+      "bridge": {
+        "label": "{{provider}} 桥接",
+        "title": "{{provider}} 正在使用本地状态行 (status-line) 桥接数据。"
+      },
+      "waiting": {
+        "label": "{{provider}} 等待中",
+        "title": "{{provider}} 配额数据尚未到达。"
+      },
+      "ok": {
+        "label": "{{provider}} 正常",
+        "title": "{{provider}} 账户限制数据为最新。"
+      }
+    },
+    "hint": {
+      "fiveHourLimits": "首次使用事件触发后将显示 5 小时限制"
+    }
+  },
+  "notificationsView": {
+    "title": "提醒设置",
+    "sections": {
+      "usageAlerts": "使用量提醒",
+      "alertTargets": "提醒目标"
+    },
+    "enableAlerts": {
+      "label": "启用使用量提醒",
+      "description": "当监控的配额限制达到阈值时发送 Windows 桌面通知"
+    },
+    "thresholds": {
+      "heading": "提醒阈值 - 当使用量达到以下数值时提醒:"
+    },
+    "targets": {
+      "claudeFiveHour": {
+        "label": "Claude 5 小时限制",
+        "detail": "当前 5 小时窗口内的 Claude 使用量"
+      },
+      "claudeWeekly": {
+        "label": "Claude 每周限制",
+        "detail": "每周窗口内的 Claude 使用量"
+      },
+      "claudeModelWeekly": {
+        "label": "Claude 特定模型周限制",
+        "detail": "仅在 Claude Code 上报特定模型限制时显示"
+      },
+      "codexFiveHour": {
+        "label": "Codex 5 小时限制",
+        "detail": "Codex 实时用量、缓存或本地日志 5 小时窗口"
+      },
+      "codexWeekly": {
+        "label": "Codex 每周限制",
+        "detail": "Codex 实时用量、缓存或本地日志每周窗口"
+      },
+      "antigravityModelQuotas": {
+        "label": "Antigravity 配额组",
+        "detail": "共享本地 RPC 配额组 (老版本回退至单模型配额)"
+      }
+    },
+    "footerNote": "提醒规则跟随已启用的提供商及配额/模型目标。每 60 秒自动刷新一次，每个提醒有 1 小时冷却期。",
+    "button": {
+      "save": "保存",
+      "saved": "已保存"
+    }
+  },
+  "settingsView": {
+    "title": "设置",
+    "integration": {
+      "heading": "Claude Code 集成",
+      "realtimeLabel": "通过 statusLine 获取实时数据",
+      "description": "将 WhereMyTokens 注册为 Claude Code 插件以获取实时速率限制",
+      "connected": "已连接",
+      "otherStatusLine": "其他 statusLine",
+      "notConfigured": "未配置",
+      "setupButton": "配置",
+      "disableButton": "停用",
+      "settingUp": "正在配置...",
+      "setupDone": "完成。重启 Claude Code 即可生效。",
+      "setupFailed": "失败: {{error}}",
+      "setupError": "错误: {{error}}",
+      "disabling": "正在停用...",
+      "disableDone": "已停用。重启 Claude Code 以停止桥接服务。",
+      "disableFailed": "失败: {{error}}",
+      "disableError": "错误: {{error}}"
+    },
+    "general": {
+      "heading": "常规设置",
+      "language": "界面语言",
+      "languageSystem": "跟随系统 (System default)",
+      "startWithWindows": "开机自动启动",
+      "alwaysOnTop": "控制面板置顶显示",
+      "alwaysOnTopHint": "仅适用于主控制面板窗口",
+      "floatingWidget": "悬浮用量小部件",
+      "floatingWidgetHint": "始终置顶，配额消耗节奏一目了然",
+      "taskbarQuota": "任务栏迷你配额显示",
+      "taskbarQuotaHint": "在受支持时直接在 Windows 任务栏内显示固定的 5h / 1w 配额条",
+      "taskbarMaxBlocks": "任务栏最多显示格数",
+      "taskbarMaxBlocksHint": "限制每个任务栏配额行显示多少个配额块",
+      "blocksOption_one": "{{count}} 格",
+      "blocksOption_other": "{{count}} 格",
+      "waitingAnimation": "等待加载动画",
+      "waitingAnimationHint": "当缺少限制数据时，在悬浮小部件上显示等待进度条动画",
+      "globalShortcut": "全局快捷键",
+      "globalShortcutTitle": "点击后按下快捷键。Esc 取消，Backspace 清除。",
+      "pressShortcut": "请按下快捷键...",
+      "clickToRecord": "点击录制快捷键",
+      "shortcutHint": "建议使用 Ctrl+Shift 或 Ctrl+Alt 组合键"
+    },
+    "providers": {
+      "heading": "提供商 (Providers)",
+      "atLeastOneProvider": "必须保留至少一个已启用的提供商。",
+      "antigravityDetail": "需要 Antigravity IDE 处于运行且登录状态，仅使用本地 RPC。",
+      "antigravityPace": "旧版 Antigravity 配额节奏估算",
+      "antigravityPaceHint": "分组配额优先使用提供商上报的 5h/周周期。对于旧版按模型配额，根据重置时间推算节奏"
+    },
+    "quotaDisplay": {
+      "heading": "配额显示设置",
+      "hint": "文本框可自定义 5h / 1w 目标在任务栏中显示的缩写标签。",
+      "rowsFallback_one": "{{count}} 行",
+      "rowsFallback_other": "{{count}} 行",
+      "abbreviationLabel": "{{label}} 的任务栏缩写",
+      "abbreviationTitle": "默认值: {{abbrev}}",
+      "modeRich": "丰富",
+      "modeSimple": "精简",
+      "modeNone": "不显示",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "resetOrder": "恢复默认顺序"
+    },
+    "data": {
+      "heading": "数据管理",
+      "usageHistory": "使用量历史记录",
+      "usageHistoryHint": "清空已索引的历史记录并从可用的提供商日志中重新构建。不可用的历史记录将会丢失。",
+      "resetButton": "重置索引",
+      "resetting": "正在重置...",
+      "resetComplete": "重置完成。",
+      "resetFailed": "重置失败: {{error}}",
+      "resetConfirmTitle": "确认重置使用量索引？",
+      "resetConfirmBody": "这将清空当前索引并尝试从可用的提供商日志重新构建。",
+      "resetConfirmLoss": "不可用日志中的历史记录将永久丢失。"
+    },
+    "currency": {
+      "heading": "货币与汇率",
+      "label": "显示货币",
+      "usd": "美元 ($)",
+      "krw": "韩元 (₩)",
+      "exchangeRate": "汇率 (对 1 美元)",
+      "cny": "人民币 (¥)"
+    },
+    "tray": {
+      "heading": "托盘图标",
+      "label": "托盘文本标签",
+      "none": "无",
+      "h5pct": "5h 使用率 %",
+      "d7pct": "7天 使用率 %",
+      "tokens": "5h Token 数",
+      "cost": "5h 预估费用"
+    },
+    "mainLayout": {
+      "heading": "主界面卡片布局",
+      "showCardTitle": "显示卡片",
+      "hideCardTitle": "隐藏卡片",
+      "show": "显示",
+      "hide": "隐藏",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "resetOrder": "恢复默认布局",
+      "showAll": "全部显示"
+    },
+    "appearance": {
+      "heading": "外观主题",
+      "theme": "主题风格",
+      "auto": "跟随系统",
+      "light": "浅色明亮",
+      "dark": "深色暗夜"
+    },
+    "save": "保存设置"
+  },
+  "accountingRevision": {
+    "title": "历史统计校正检查",
+    "dismiss": "关闭",
+    "running": "正在检查历史数据: {{count}} / {{total}} 个源。统计总数可能会更新。",
+    "failed": "检查未能完成。已完成的修正已保留，待处理的数据源可重试。",
+    "corrected": "已校正记录: {{count}} 条。预估总费用减少了 ${{amount}} 美元。",
+    "preserved": "有 {{count}} 个数据源无法完全验证；已保留其未经核对的数据。",
+    "details": "查看校正详情",
+    "checked": "已检查 {{count}} 个数据源；其中 {{unchanged}} 个无需校正。",
+    "source": "数据源 {{id}}",
+    "previous": "上一项",
+    "next": "下一项",
+    "backup": "在历史数值变更前已保存可信本地备份。此为 API 等效预估值，非正式账单。",
+    "recheck": "重新检查未解析的历史",
+    "outcomes": {
+      "corrected": "已校正",
+      "partial": "部分校正",
+      "preserved": "保留未核对",
+      "unchanged": "无需修改"
+    },
+    "reasons": {
+      "no-detail": "请求详细信息已不再保留。",
+      "missing-file": "原始源文件不可用。",
+      "rewritten-source": "源已被重写；无法证明原始覆盖范围。",
+      "changed-source": "验证期间源文件或账本发生更改。",
+      "unverified-records": "部分差异与已证实缺陷不符。",
+      "incomplete-buckets": "保留的详情与所有受影响的汇总不一致。",
+      "identity-conflict": "执行身份标识与另一条保留数据重叠。",
+      "invalid-source": "原始源边界无法验证。"
+    }
+  }
+}

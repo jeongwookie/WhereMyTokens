@@ -90,11 +90,55 @@ test('language preference is stored through AppSettings, not renderer localStora
   assert.equal(normalizeSettings({}).language, 'system');
   assert.equal(normalizeSettings({ language: 'en' }).language, 'en');
   assert.equal(normalizeSettings({ language: 'ja' }).language, 'ja');
+  assert.equal(normalizeSettings({ language: 'zh' }).language, 'zh');
   assert.equal(normalizeSettings({ language: 'system' }).language, 'system');
   assert.equal(normalizeSettings({ language: 'ko' }).language, 'system');
   assert.equal(normalizeSettings({ language: true }).language, 'system');
   assert.match(i18nSource, /applyLanguagePreference/);
   assert.doesNotMatch(i18nSource, /localStorage|LANGUAGE_STORAGE_KEY|setItem|getItem/);
+});
+
+test('Simplified Chinese locale covers the English translation keys and placeholders', () => {
+  const en = JSON.parse(fs.readFileSync('src/renderer/i18n/locales/en.json', 'utf8'));
+  const zhCN = JSON.parse(fs.readFileSync('src/renderer/i18n/locales/zh.json', 'utf8'));
+  const missing = [];
+  const placeholderMismatches = [];
+
+  function visit(source, target, key = '') {
+    assert.deepEqual(Object.keys(target).sort(), Object.keys(source).sort(), key);
+    for (const [name, value] of Object.entries(source)) {
+      const path = key ? `${key}.${name}` : name;
+      if (!(name in target)) {
+        missing.push(path);
+        continue;
+      }
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        visit(value, target[name], path);
+        continue;
+      }
+      const placeholders = text => [...text.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)].map(match => match[1]).sort();
+      if (JSON.stringify(placeholders(value)) !== JSON.stringify(placeholders(target[name]))) {
+        placeholderMismatches.push(path);
+      }
+    }
+  }
+
+  visit(en, zhCN);
+  assert.deepEqual(missing, []);
+  assert.deepEqual(placeholderMismatches, []);
+});
+
+test('CNY settings preserve defaults, independent rates, and reject invalid input', () => {
+  assert.equal(DEFAULT_SETTINGS.usdToCny, 7.2);
+  const settings = normalizeSettings({ currency: 'CNY', usdToCny: 7.35, usdToKrw: 1400, language: 'zh' });
+  assert.equal(settings.currency, 'CNY');
+  assert.equal(settings.usdToCny, 7.35);
+  assert.equal(settings.usdToKrw, 1400);
+  assert.equal(normalizeSettings(JSON.parse(JSON.stringify(settings))).usdToCny, 7.35);
+  for (const value of [0, -1, Infinity, NaN, '7.2', null, {}]) {
+    assert.equal(normalizeSettings({ usdToCny: value }).usdToCny, 7.2);
+  }
+  assert.equal(normalizeSettings({ currency: 'invalid' }).currency, 'USD');
 });
 
 test('taskbar quota settings default off and normalize abbreviation overrides', () => {
@@ -197,7 +241,7 @@ test('renderer settings model exposes enabledProviders as editable state', () =>
   assert.match(types, /taskbarQuotaMaxBlocks: number/);
   assert.match(types, /quotaTargetAbbreviations: Partial<Record<string, string>>/);
   assert.match(types, /antigravityQuotaDurationPaceEnabled: boolean/);
-  assert.match(types, /language: 'system' \| 'en' \| 'ja'/);
+  assert.match(types, /language: 'system' \| 'en' \| 'ja' \| 'zh'/);
   assert.doesNotMatch(types, /provider: 'claude' \| 'codex' \| 'both'/);
   assert.match(settingsView, /'enabledProviders'/);
   assert.match(settingsView, /'quotaTargetModes'/);

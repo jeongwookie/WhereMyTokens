@@ -1,19 +1,22 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { isSimplifiedChineseLocale } from '../../shared/language';
 import en from './locales/en.json';
 import ja from './locales/ja.json';
+import zh from './locales/zh.json';
 
-export type SupportedLanguage = 'en' | 'ja';
+export type SupportedLanguage = 'en' | 'ja' | 'zh';
 export type LanguagePreference = 'system' | SupportedLanguage;
 
 // Electron renderer의 navigator.language는 Chromium이 app locale에서 채우므로 IPC 없이 시스템 언어를 추정할 수 있다.
 export function detectSystemLanguage(): SupportedLanguage {
   const navLang = typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en';
+  if (isSimplifiedChineseLocale(navLang)) return 'zh';
   return navLang.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 
 export function normalizeLanguagePreference(value: unknown): LanguagePreference {
-  return value === 'en' || value === 'ja' || value === 'system' ? value : 'system';
+  return value === 'en' || value === 'ja' || value === 'zh' || value === 'system' ? value : 'system';
 }
 
 export function resolveLanguagePreference(preference: LanguagePreference): SupportedLanguage {
@@ -30,6 +33,7 @@ i18n
     resources: {
       en: { translation: en },
       ja: { translation: ja },
+      zh: { translation: zh },
     },
     lng: detectSystemLanguage(),
     fallbackLng: 'en',
@@ -39,7 +43,9 @@ i18n
 
 // CSP상 정적 splash는 bundle 로드 전까지 lang을 못 바꾸므로, i18n 상태와 html lang을 동기화한다.
 function syncDocumentLang(lng: string): void {
-  if (typeof document !== 'undefined') document.documentElement.lang = lng.startsWith('ja') ? 'ja' : 'en';
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = lng.startsWith('zh') ? 'zh-CN' : lng.startsWith('ja') ? 'ja' : 'en';
+  }
 }
 
 syncDocumentLang(i18n.language);
