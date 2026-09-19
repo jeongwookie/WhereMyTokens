@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe"><strong>下载 v1.25.0</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>下载 v1.25.1</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.0: 简体中文界面与 CNY 显示、Codex credits 配额修复、依赖安全更新</em>
+  <em>v1.25.1: 将最小化和退出(X)固定在右上角，长登录或状态文字自动换行，不再遮挡窗口按钮</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | 将最小化和退出(X)固定在右上角，长登录或状态文字自动换行，不再遮挡窗口按钮 |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 新增简体中文界面与 CNY 显示，修复 Codex credits 配额验证并更新存在漏洞的依赖 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | 修复 Codex 过量统计和升级后的自动校正，更新 Astra 价格并改善大型 Git 统计 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | 在 Windows 同时检测当前与 legacy Antigravity language server，优先显示 provider 报告的 shared Gemini、Claude/GPT quota groups，并保留旧 server 的逐模型 quota fallback |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | 通过 Windows 通知和应用内操作提示 Claude 登录过期或被拒绝，打开官方 CLI 登录，并在 credential 变更后自动重试。保留旧 quota 时仍会显示登录问题，且不会刷新或写入 credential |
-| **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 在已有 Claude Code credential 但没有新 statusLine 的 Claude Desktop 使用中恢复 quota；继续优先官方 statusLine，并加入固定 host、auth-bound cache 与 credential 不变测试 |
 
 旧版验证信息不足时，初始索引完成后会自动重试。仅在本地备份后修正已证实的过量统计，无法验证的记录保持不变。可在 Settings → Data 查看结果并重新检查。
 
@@ -95,9 +95,9 @@
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-v1.25.0-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -107,7 +107,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.25.0-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.25.1-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 

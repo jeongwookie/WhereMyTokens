@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe"><strong>v1.25.0 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>v1.25.1 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.0: 簡体字中国語 UI・CNY 表示、Codex クレジット配額の修正、依存関係のセキュリティ更新</em>
+  <em>v1.25.1: 最小化・終了(X)を右上に固定し、長いログイン・状態表示を折り返してボタンが隠れる問題を修正</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | 最小化・終了(X)を右上に固定し、長いログイン・状態表示を折り返してボタンが隠れる問題を修正 |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 簡体字中国語 UI と CNY 表示、Codex クレジット付き配額の修正、脆弱な依存関係の更新 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Codex の過大計上と更新後の自動修正、Astra 料金、大規模 Git 統計を改善 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows で現在と legacy の Antigravity language server を検出し、provider が報告する shared Gemini / Claude・GPT quota group を優先表示。旧 server のモデル別 quota fallback も維持 |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude login の期限切れ・拒否を notification と app 内 action で案内し、公式 CLI login を開いて credential 変更後に自動再試行。以前の quota を保持しても login 問題を隠さず、credential の更新・書き込みは行いません |
-| **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 既存の Claude Code credential はあるが新しい statusLine がない Claude Desktop 利用時の quota を復旧。公式 statusLine 優先、token refresh/write 廃止、Anthropic 固定 host、auth-bound cache、非変更 test を追加 |
 
 旧版の検証情報が不足する場合は初期インデックス完了後に自動再検証します。証明できた過大計上のみバックアップ後に修正し、不明な履歴は保持します。Settings → Data で結果と再検証を確認できます。
 
@@ -96,11 +96,11 @@ USD・KRW・CNY に対応し、為替レートは手動入力です（CNY の初
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語 / 简体中文」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-v1.25.0-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -110,7 +110,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.25.0-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.25.1-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 

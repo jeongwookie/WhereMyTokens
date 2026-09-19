@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe"><strong>v1.25.0 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>v1.25.1 다운로드</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 버전</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.0: 중국어 간체 UI·위안화 표시, Codex 크레딧 quota 수정, 보안 의존성 갱신</em>
+  <em>v1.25.1: 최소화·종료(X)를 오른쪽 위에 고정하고 긴 로그인·상태 문구는 줄바꿈하여 버튼이 가려지는 문제 수정</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | 최소화·종료(X)를 오른쪽 위에 고정하고 긴 로그인·상태 문구는 줄바꿈하여 버튼이 가려지는 문제 수정 |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 중국어 간체 UI·위안화 표시 추가, Codex 크레딧 포함 quota 표시 수정, 취약 의존성 갱신 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Codex 과다 집계·업그레이드 자동 보정 수정, Astra 가격 반영, 대규모 Git 통계 안정화 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows에서 현재·legacy Antigravity language server를 모두 탐지하고, provider가 보고한 shared Gemini 및 Claude/GPT quota group을 우선 표시하며 이전 서버의 모델별 quota fallback을 유지 |
 | **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude 로그인 만료·거절을 알림과 앱 내 액션으로 안내하고 공식 CLI 로그인을 열며, credential 변경 후 자동 재시도합니다. 이전 quota를 유지해도 로그인 문제를 숨기지 않고 credential 갱신·쓰기는 하지 않습니다 |
-| **[v1.24.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.1)** | 8/10 | 기존 Claude Code credential은 있지만 최신 statusLine이 없는 Claude Desktop 사용에서 quota를 복구하고, 공식 statusLine 우선·token refresh/write 제거·Anthropic 고정 호스트·auth-bound cache·무변조 테스트를 적용 |
 
 구버전 검증 정보가 부족하면 초기 인덱싱 완료 후 자동 재검사합니다. 입증된 과다 집계만 로컬 백업 후 보정하고 검증 불가 기록은 보존합니다. Settings → Data에서 결과와 재검사를 확인할 수 있습니다.
 
@@ -96,11 +96,11 @@ USD·KRW·CNY를 지원하며 환율은 수동 입력입니다(CNY 기본값: 1 
 macOS 사용자는 별도 공개 저장소를 사용하세요:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
 > **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語 / 简体中文를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.0/WhereMyTokens-v1.25.0-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -110,7 +110,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.25.0-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.25.1-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
