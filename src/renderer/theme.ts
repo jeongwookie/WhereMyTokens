@@ -264,6 +264,10 @@ export function fmtTokens(n: number): string {
 
 export function fmtCost(usd: number, currency: string, rate: number): string {
   if (currency === 'KRW') return `₩${Math.round(usd * rate).toLocaleString()}`;
+  if (currency === 'TWD') {
+    const twd = usd * rate;
+    return `NT${twd >= 1 ? twd.toFixed(2) : twd.toFixed(4)}`;
+  }
   if (currency === 'CNY') {
     const cny = usd * rate;
     if (cny >= 100) return `¥${cny.toFixed(2)}`;
@@ -282,6 +286,10 @@ export function fmtCostShort(usd: number, currency: string, rate: number): strin
     if (krw >= 1_000_000) return `₩${(krw / 1_000_000).toFixed(1)}M`;
     if (krw >= 10_000)    return `₩${Math.round(krw / 1_000)}K`;
     return `₩${krw.toLocaleString()}`;
+  }
+  if (currency === 'TWD') {
+    const twd = usd * rate;
+    return `NT${twd >= 1 ? twd.toFixed(2) : twd.toFixed(4)}`;
   }
   if (currency === 'CNY') {
     const cny = usd * rate;

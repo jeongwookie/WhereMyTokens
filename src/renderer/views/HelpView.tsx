@@ -5,7 +5,7 @@ import { useTheme } from '../ThemeContext';
 import ViewHeader from '../components/ViewHeader';
 
 interface Props { onBack: () => void }
-type Lang = 'en' | 'ko' | 'ja' | 'zh-CN';
+type Lang = 'en' | 'ko' | 'ja' | 'zh-CN' | 'zh-TW';
 
 function B({ children }: { children: React.ReactNode }) {
   const C = useTheme();
@@ -594,24 +594,102 @@ function ContentZH() {
   );
 }
 
+function ContentZHTW() {
+  return (
+    <>
+      <Section icon={<Signal size={15} />} title="服務供應商追蹤">
+        <div style={{ marginBottom: 6 }}>WhereMyTokens 可追蹤 <B>Claude Code</B>、<B>Codex</B> 與 <B>Antigravity</B>。在「設定 → 服務供應商」中勾選要啟用的項目。</div>
+        <div style={{ marginBottom: 5 }}><B>Claude</B> 讀取本機工作階段 JSONL 以統計 Token 活動，並優先採用官方 statusLine 回報的 5 小時／7 天額度。若沒有最新 statusLine 資料，且本機已有 Claude Code 登入憑證，可能會以限頻方式發送唯讀相容性查詢。</div>
+        <div style={{ marginBottom: 5 }}><B>Codex</B> 優先使用完整的即時額度快照；無法取得時，改用完整快取或本機工作階段紀錄。缺少的額度不會被推定為「無限制」。重置額度另行顯示。</div>
+        <div><B>Antigravity</B> 僅透過本機 <code>127.0.0.1</code> 上執行中的 IDE language server 讀取資料。2.x 使用服務供應商回報的共用額度群組；舊版則依模型顯示。不使用 Google OAuth、Refresh Token 或雲端備援查詢。</div>
+      </Section>
+      <Divider />
+      <Section icon={<Hash size={15} />} title="用量與費用">
+        <div style={{ marginBottom: 6 }}><B>Token</B> 用量包含輸入、輸出、快取建立及快取讀取。不同服務供應商的快取效率採用各自的計算方式。</div>
+        <div style={{ marginBottom: 6 }}><B>費用</B> 依模型 API 定價估算，代表 API 等值費用，不是實際帳單。Max／Pro 等訂閱方案仍按月計費。</div>
+        <UsageTable headers={['位置', '範圍', '統計內容', '費用']} rows={[
+          ['頂部（今日）', '今日 00:00 起', '輸入／輸出／快取、呼叫次數、工作階段', 'API 等值＋快取節省'],
+          ['頂部（累計）', '歷史累計', '輸入／輸出／快取、呼叫次數、工作階段', 'API 等值＋快取節省'],
+          ['方案額度', '目前計費週期', '所有類型', 'API 等值'],
+          ['程式碼產出', '今日／累計', 'Git 統計', '每新增 100 行費用'],
+          ['模型用量', '歷史前 4 個模型', '所有類型', 'API 等值'],
+        ]} />
+        <Note><B>$</B> 為 API 等值估算，不等於實際帳單。Max／Pro 訂閱為固定月費。</Note>
+      </Section>
+      <Divider />
+      <Section icon={<Code size={15} />} title="程式碼產出">
+        <div style={{ marginBottom: 5 }}><B>Commit 次數</B> — 所選期間的 Git 提交次數。</div>
+        <div style={{ marginBottom: 5 }}><B>淨增行數</B> — 新增行數減去刪除行數。</div>
+        <div style={{ marginBottom: 5 }}><B>每新增 100 行費用</B> — 每新增 100 行程式碼的估算費用；「今日」顯示當日數據並與歷史平均比較，「全部」顯示歷史平均。數值越低代表單位產出的估算成本越低。</div>
+        <div style={{ marginBottom: 5 }}><B>統計範圍</B> — 依持續追蹤的本機 Git 儲存庫統計，包含本機分支，不只計算目前 HEAD。作者篩選依據本機 <code>git config user.email</code>。</div>
+      </Section>
+      <Divider />
+      <Section icon={<GitBranch size={15} />} title="工作階段">
+        <div style={{ marginBottom: 5 }}><B>專案 → 分支 → 工作階段</B> — 按 Git 專案與分支分組；Claude 和 Codex 的工作階段可顯示在同一清單。</div>
+        <div style={{ marginBottom: 5 }}><B>合併顯示</B> — 相同服務供應商、來源、模型及狀態的工作階段會合併顯示，展開後可查看個別項目。</div>
+        <div style={{ marginBottom: 5 }}><B>上下文進度</B> — 70% 黃色、85% 橘色、95% 紅色；95–99% 顯示接近上限，100% 顯示已達上限。</div>
+        <div style={{ marginBottom: 7 }}><B>活動明細</B> — 點選工作階段的「詳細資料」。Claude 顯示分類輸出 Token；Codex 則顯示工具事件次數，因為其紀錄包含工具呼叫，而非每項工具的輸出 Token。</div>
+        <CatRow icon="💭" label="思考" color="#2dd4bf">延伸思考內容</CatRow>
+        <CatRow icon="💬" label="回應" color="#94a3b8">最終回答文字</CatRow>
+        <CatRow icon="📄" label="讀取" color="#60a5fa">讀取工具</CatRow>
+        <CatRow icon="✏️" label="編輯／寫入" color="#a78bfa">Edit、Write、MultiEdit、NotebookEdit</CatRow>
+        <CatRow icon="🔍" label="搜尋" color="#38bdf8">Grep、Glob、LS、TodoRead、TodoWrite</CatRow>
+        <CatRow icon="🌿" label="Git" color="#4ade80">以 git 開頭的 Bash 指令</CatRow>
+        <CatRow icon="⚙️" label="建置／測試" color="#fb923c">npm、tsc、jest、cargo、python、go build 等 Bash 指令</CatRow>
+        <CatRow icon="💻" label="終端機" color="#fbbf24">其他 Bash 指令及 mcp__* 工具</CatRow>
+        <CatRow icon="🤖" label="子代理" color="#f472b6">Agent 工具</CatRow>
+        <CatRow icon="🌐" label="網頁" color="#c084fc">WebFetch、WebSearch</CatRow>
+        <Note>歸因方式：依各內容區塊的字元數占比，分配每輪輸出 Token；數值為零的類別不顯示。</Note>
+      </Section>
+      <Divider />
+      <Section icon={<Activity size={15} />} title="活動">
+        <div style={{ marginBottom: 5 }}><B>趨勢</B> — 依日、週或月檢視費用／Token 歷史與 Git 淨增行數。點選區間可查看輸入／輸出、思考／回應／工具用量、快取及 Git 明細。</div>
+        <div style={{ marginBottom: 5 }}><B>7d</B> — 最近 7 天 × 24 小時熱度圖。</div>
+        <div style={{ marginBottom: 5 }}><B>5mo</B> — 類似 GitHub 的近 5 個月日曆；滑鼠移入可查看日期與 Token 數量。</div>
+        <div style={{ marginBottom: 5 }}><B>Hourly／Weekly</B> — 最近 30 天的時段分布，以及近 4 週用量。</div>
+        <div><B>Rhythm</B> — 最近 30 天上午、下午、晚上與深夜的費用分布及尖峰統計，依本機時區顯示。</div>
+      </Section>
+      <Divider />
+      <Section icon={<Signal size={15} />} title="資料來源與設定">
+        <SrcRow badge="1st"><B>本機來源</B> — Claude 與 Codex JSONL 在本機解析；Antigravity 僅透過本機 RPC 讀取執行中的 IDE 服務。</SrcRow>
+        <SrcRow badge="2nd"><B>額度來源</B> — Claude 優先使用 statusLine，其次為唯讀相容性 API，最後才是與目前憑證綁定的快取。Codex 會從即時資料、本機紀錄及快取中選擇一份完整快照，不混用不同來源的計費週期；Antigravity 優先使用共用 RPC 額度群組。</SrcRow>
+        <SrcRow badge="FB"><B>快取值</B> — 即時資料不可用時保留最近可信的快照，並依回報的重置時間或有效期限判定是否過期。</SrcRow>
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <InfoRow label="服務供應商">在「設定 → 服務供應商」中啟用或停用；停用後不執行對應的本機掃描或即時查詢。</InfoRow>
+          <InfoRow label="語言">「設定 → 一般 → 介面語言」預設跟隨系統，也可固定為 English、日本語、簡體中文或繁體中文（台灣）。</InfoRow>
+          <InfoRow label="貨幣">目前支援 USD、KRW、CNY 和 TWD。匯率由使用者手動設定，不會連線自動更新；只改變顯示方式，不變更儲存的美元費用紀錄。</InfoRow>
+          <InfoRow label="視窗按鈕">最小化與關閉（X）固定在右上角；較長的標題會換行，不會遮住按鈕。</InfoRow>
+          <InfoRow label="歷史檢查">升級後會在本機檢查歷史統計並於修正前備份。舊版檢查點會在初始化後重試；無法驗證的歷史將保留。「重設索引」則可能使無法從現有紀錄重建的歷史永久遺失。</InfoRow>
+          <InfoRow label="額度顯示">可為各服務供應商週期或模型目標選擇詳細、精簡或隱藏，並套用至方案額度、浮動小工具和工作列迷你額度。</InfoRow>
+          <InfoRow label="工作列迷你額度">可從頂部工作列按鈕或設定啟用，顯示 5 小時／7 天額度，並可拖曳調整位置。</InfoRow>
+          <InfoRow label="Claude 安全性">優先使用 statusLine；桌面版相容路徑不使用 Refresh Token，不會更新或寫入登入憑證。存取 Token 變更時會丟棄舊快取。</InfoRow>
+          <InfoRow label="Claude 登入">登入過期或遭拒時會顯示通知。WhereMyTokens 可開啟官方 <code>claude auth login</code> 流程，並在憑證檔案變更後重新嘗試追蹤額度。</InfoRow>
+          <InfoRow label="整合">請至「設定 → Claude Code 整合」進行設定。</InfoRow>
+          <InfoRow label="小工具">可在「設定 → 浮動額度小工具」或頂部 PiP 按鈕切換置頂顯示；黃色／紅色代表額度消耗速度可能使額度在重置前用盡。</InfoRow>
+        </div>
+      </Section>
+    </>
+  );
+}
+
 export default function HelpView({ onBack }: Props) {
   const C = useTheme();
   const { t, i18n } = useTranslation();
   // 도움말의 독립 언어 탭은 현재 앱 언어로 시작한다.
-  const [lang, setLang] = useState<Lang>(() => i18n.language.startsWith('ja') ? 'ja' : i18n.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en');
+  const [lang, setLang] = useState<Lang>(() => i18n.language === 'zh-TW' ? 'zh-TW' : i18n.language.startsWith('ja') ? 'ja' : i18n.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg, color: C.text }}>
       <ViewHeader title={t('help.title')} onBack={onBack} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 0', gap: 4, flexShrink: 0 }}>
-        {(['en', 'ko', 'ja', 'zh-CN'] as Lang[]).map(l => (
+        {(['en', 'ko', 'ja', 'zh-CN', 'zh-TW'] as Lang[]).map(l => (
           <button key={l} onClick={() => setLang(l)} style={{
             padding: '2px 8px', fontSize: 11, border: 'none', borderRadius: 10, cursor: 'pointer',
             background: lang === l ? C.accent : C.bgRow,
             color: lang === l ? '#fff' : C.textDim,
             fontWeight: lang === l ? 700 : 400,
           }}>
-            {l === 'zh-CN' ? '简中' : l.toUpperCase()}
+            {l === 'zh-CN' ? '簡中' : l === 'zh-TW' ? '繁中' : l.toUpperCase()}
           </button>
         ))}
       </div>
@@ -620,6 +698,7 @@ export default function HelpView({ onBack }: Props) {
         {lang === 'ko' && <ContentKO />}
         {lang === 'ja' && <ContentJA />}
         {lang === 'zh-CN' && <ContentZH />}
+        {lang === 'zh-TW' && <ContentZHTW />}
       </div>
     </div>
   );

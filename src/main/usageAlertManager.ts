@@ -5,7 +5,7 @@
  */
 import { Notification } from 'electron';
 import { addNotification } from './notificationHistory';
-import { isSimplifiedChineseLocale } from '../shared/language';
+import { resolveSystemLanguage } from '../shared/language';
 import type {
   ProviderId,
   ProviderQuotaSnapshot,
@@ -22,7 +22,7 @@ interface AlertState {
 interface AlertOptions {
   deferCodexLocalLog?: boolean;
   quotaTargetModes?: Partial<Record<string, QuotaDisplayMode>>;
-  language?: 'system' | 'en' | 'ja' | 'zh';
+  language?: 'system' | 'en' | 'ja' | 'zh' | 'zh-TW';
   nowMs?: number;
   emitNotification?: (title: string, body: string) => void;
 }
@@ -56,14 +56,11 @@ function smoothedPct(key: string, rawPct: number): number {
   return history.reduce((sum, value) => sum + value, 0) / history.length;
 }
 
-type AlertLanguage = 'en' | 'ja' | 'zh';
+type AlertLanguage = 'en' | 'ja' | 'zh' | 'zh-TW';
 
 function resolveAlertLanguage(preference: AlertOptions['language'] = 'en'): AlertLanguage {
-  if (preference === 'en' || preference === 'ja' || preference === 'zh') return preference;
-  const systemLanguage = Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
-  if (systemLanguage.startsWith('ja')) return 'ja';
-  if (isSimplifiedChineseLocale(systemLanguage)) return 'zh';
-  return 'en';
+  if (preference === 'en' || preference === 'ja' || preference === 'zh' || preference === 'zh-TW') return preference;
+  return resolveSystemLanguage(Intl.DateTimeFormat().resolvedOptions().locale);
 }
 
 function formatReset(resetMs: number | null, language: AlertLanguage): string {
@@ -71,6 +68,10 @@ function formatReset(resetMs: number | null, language: AlertLanguage): string {
   const minutes = Math.max(1, Math.round(resetMs / 60_000));
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
+  if (language === 'zh-TW') {
+    const duration = hours <= 0 ? `${remainder} 分鐘` : remainder === 0 ? `${hours} 小時` : `${hours} 小時 ${remainder} 分鐘`;
+    return ` · ${duration}後重置`;
+  }
   if (language === 'zh') {
     const duration = hours <= 0 ? `${remainder} 分钟` : remainder === 0 ? `${hours} 小时` : `${hours} 小时 ${remainder} 分钟`;
     return ` · ${duration}后重置`;
@@ -86,16 +87,19 @@ function formatReset(resetMs: number | null, language: AlertLanguage): string {
 
 function formatSource(source: string | undefined, language: AlertLanguage): string {
   if (!source) return '';
-  const labels: Record<string, string> = language === 'zh'
+  const labels: Record<string, string> = language === 'zh-TW'
+    ? { api: 'API', statusLine: 'Bridge', cache: '快取', localLog: '紀錄', localRpc: 'RPC' }
+    : language === 'zh'
     ? { api: 'API', statusLine: 'Bridge', cache: '缓存', localLog: '日志', localRpc: 'RPC' }
     : language === 'ja'
       ? { api: 'API', statusLine: 'Bridge', cache: 'キャッシュ', localLog: 'ログ', localRpc: 'RPC' }
       : { api: 'API', statusLine: 'Bridge', cache: 'Cache', localLog: 'Log', localRpc: 'RPC' };
   const label = labels[source] ?? source;
-  return language === 'zh' ? ` · 来源：${label}` : language === 'ja' ? ` · ソース: ${label}` : ` · source: ${label}`;
+  return language === 'zh-TW' ? ` · 來源：${label}` : language === 'zh' ? ` · 来源：${label}` : language === 'ja' ? ` · ソース: ${label}` : ` · source: ${label}`;
 }
 
 function periodLabel(period: QuotaPeriod | null, language: AlertLanguage): string {
+  if (language === 'zh-TW') return period === '5h' ? '5 小時用量' : period === '7d' ? '每週用量' : '用量';
   if (language === 'zh') return period === '5h' ? '5 小时用量' : period === '7d' ? '周用量' : '用量';
   if (language === 'ja') return period === '5h' ? '5時間使用量' : period === '7d' ? '週間使用量' : '使用量';
   if (period === '5h') return '5h usage';
@@ -199,12 +203,16 @@ export function checkAlerts(
     const alert = triggered[0];
     const reset = formatReset(alert.resetsAt === null ? null : alert.resetsAt - now, language);
     const source = formatSource(alert.source, language);
-    const title = language === 'zh'
+    const title = language === 'zh-TW'
+      ? `用量通知：${alert.label}已達到 ${alert.threshold}%`
+      : language === 'zh'
       ? `用量提醒：${alert.label}已达到 ${alert.threshold}%`
       : language === 'ja'
         ? `使用量アラート: ${alert.label}が${alert.threshold}%に達しました`
         : `Usage alert: ${alert.label} reached ${alert.threshold}%`;
-    const body = language === 'zh'
+    const body = language === 'zh-TW'
+      ? `目前用量 ${Math.round(alert.pct)}%${reset}${source}`
+      : language === 'zh'
       ? `当前用量 ${Math.round(alert.pct)}%${reset}${source}`
       : language === 'ja'
         ? `現在の使用量: ${Math.round(alert.pct)}%${reset}${source}`
@@ -220,13 +228,17 @@ export function checkAlerts(
   const body = triggered.map(alert => {
     const reset = formatReset(alert.resetsAt === null ? null : alert.resetsAt - now, language);
     const source = formatSource(alert.source, language);
-    return language === 'zh'
+    return language === 'zh-TW'
+      ? `${alert.label}已達到 ${alert.threshold}% · 目前用量 ${Math.round(alert.pct)}%${reset}${source}`
+      : language === 'zh'
       ? `${alert.label}已达到 ${alert.threshold}% · 当前用量 ${Math.round(alert.pct)}%${reset}${source}`
       : language === 'ja'
         ? `${alert.label}が${alert.threshold}%に達しました · 現在 ${Math.round(alert.pct)}%${reset}${source}`
         : `${alert.label} reached ${alert.threshold}% · currently ${Math.round(alert.pct)}% usage${reset}${source}`;
   }).join('\n');
-  const title = language === 'zh'
+  const title = language === 'zh-TW'
+    ? `${triggered.length} 項額度已達通知門檻`
+    : language === 'zh'
     ? `${triggered.length} 项限额达到阈值`
     : language === 'ja'
       ? `${triggered.length} 件の上限がしきい値に達しました`

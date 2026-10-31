@@ -18,7 +18,8 @@ import { reconcileUsageAccountingInWorker } from './usageAccountingStartup';
 import type { AccountingRevisionStatus } from '../shared/accountingRevision';
 import { launchClaudeLogin } from './claudeLoginLauncher';
 import type { ClaudeLoginLaunchResult } from '../shared/claudeLogin';
-import { isSimplifiedChineseLocale } from '../shared/language';
+import { resolveSystemLanguage } from '../shared/language';
+import { nativeZhTW } from './nativeZhTW';
 
 if (isDebugInstrumentationEnabled()) {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
@@ -43,19 +44,16 @@ let registeredGlobalHotkey = '';
 let lastPopupFocusAt = 0;
 const readyWidgetWindows = new WeakSet<BrowserWindow>();
 
-type NativeLanguage = 'en' | 'ja' | 'zh';
+type NativeLanguage = 'en' | 'ja' | 'zh' | 'zh-TW';
 function getNativeLanguage(): NativeLanguage {
   const preference = getSettings().language;
-  if (preference === 'en' || preference === 'ja' || preference === 'zh') return preference;
-  const systemLanguage = app.getLocale().toLowerCase();
-  if (systemLanguage.startsWith('ja')) return 'ja';
-  if (isSimplifiedChineseLocale(systemLanguage)) return 'zh';
-  return 'en';
+  if (preference === 'en' || preference === 'ja' || preference === 'zh' || preference === 'zh-TW') return preference;
+  return resolveSystemLanguage(app.getLocale());
 }
 
 function nativeText(en: string, ja: string, zhCN: string): string {
   const language = getNativeLanguage();
-  return language === 'ja' ? ja : language === 'zh' ? zhCN : en;
+  return language === 'ja' ? ja : language === 'zh' ? zhCN : language === 'zh-TW' ? nativeZhTW(en) : en;
 }
 
 type AppView = 'main' | 'settings' | 'notifications' | 'help';
@@ -716,6 +714,8 @@ function buildTrayTitle(state: AppState): string {
         ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
         : settings.currency === 'CNY'
         ? `¥${(c * (settings.usdToCny ?? 7.2)).toFixed(2)}`
+        : settings.currency === 'TWD'
+        ? `NT$${(c * (settings.usdToTwd ?? 32)).toFixed(2)}`
         : `$${c.toFixed(2)}`;
     }
     default: return '';
@@ -732,6 +732,8 @@ function updateTray(state: AppState) {
     ? `₩${Math.round(c * (settings.usdToKrw ?? 1380)).toLocaleString()}`
     : settings.currency === 'CNY'
     ? `¥${(c * (settings.usdToCny ?? 7.2)).toFixed(2)}`
+    : settings.currency === 'TWD'
+    ? `NT$${(c * (settings.usdToTwd ?? 32)).toFixed(2)}`
     : `$${c.toFixed(2)}`;
   const todayLabel = nativeText('Today', '今日', '今日');
   const tooltip = `WhereMyTokens  |  ${todayLabel} ${t.toLocaleString()} tok  ${costStr}`;

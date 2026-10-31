@@ -52,7 +52,7 @@ const DEFAULT_STATE: AppState = {
     enabledProviders: ['claude', 'codex'],
     alertThresholds: [50,80,90], openAtLogin: false,
     alwaysOnTop: true,
-    currency: 'USD', usdToKrw: 1380,
+    currency: 'USD', usdToKrw: 1380, usdToTwd: 32,
     globalHotkey: 'CommandOrControl+Shift+D', enableAlerts: true,
     language: 'system',
     trayDisplay: 'h5pct', theme: 'auto',
