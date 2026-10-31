@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.es.md">Español</a>
+  <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.es.md">Español</a>
 </p>
 
 <p align="center">
@@ -76,9 +76,11 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 ### Chinese UI and Currency
 
-Choose Simplified Chinese in Settings → General → Language. Simplified Chinese Windows is detected automatically; Traditional Chinese locales keep the English fallback. Help, tray menus, login notices, and usage alerts are included. Thanks to [@lizi1997](https://github.com/lizi1997) for [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) and the additional translation patch in #60.
+Choose Simplified Chinese or Traditional Chinese (Taiwan) in Settings → General → Language. Both locale families are detected automatically on supported Windows systems; the UI, Help page, tray menus, login notices, and usage alerts are localized. Thanks to [@lizi1997](https://github.com/lizi1997) for Simplified Chinese in [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) and the additional patch in #60, and [@Small-Danny](https://github.com/Small-Danny) for Traditional Chinese in [PR #64](https://github.com/jeongwookie/WhereMyTokens/pull/64).
 
-Settings → Currency supports USD, KRW, and CNY. Exchange rates are manual (CNY defaults to 7.2 per USD), not live market quotes. Currency changes affect display only, including the tray; stored USD usage is unchanged. This release also fixes Codex incorrectly appearing offline when account credits are present. No re-login or history reset is required for that fix.
+Settings → Currency supports USD, KRW, CNY, and TWD. Exchange rates are manual (CNY defaults to 7.2 and TWD to 32 per USD), not live market quotes. Currency changes affect display only, including the tray; stored USD usage is unchanged. The v1.25.0 release also fixed Codex incorrectly appearing offline when account credits were present, without requiring re-login or a history reset.
+
+> **Release note:** The v1.25.1 downloads linked above predate the Traditional Chinese and TWD additions in PR #64. Those additions are currently available in this contribution branch, not the upstream v1.25.1 binaries.
 
 1. Install with `WhereMyTokens-Setup.exe`, or extract the portable ZIP and run `WhereMyTokens.exe`.
 2. Open the dashboard from the Windows tray.
@@ -107,7 +109,7 @@ After upgrade, historical usage is checked locally. When legacy checkpoints need
 - Claude account limits prefer the official Claude Code `statusLine` 5h/7d fields. When Claude Code is not producing statusLine updates, a read-only compatibility fallback can query the same account windows using the existing Claude Code access token. A model-scoped target such as Fable appears only when one of those provider-reported sources includes it; WhereMyTokens does not infer missing limits.
 - When Claude Code login expires or is rejected, WhereMyTokens shows one Windows notification and an in-app action that opens the official `claude auth login` flow. It watches for the credential change and retries automatically, without refreshing tokens or writing credentials itself.
 - Optional draggable Windows taskbar mini display uses two physical lines for normalized 5h/7d entries. Two represented periods use one line each; a single represented period can use both lines, with configurable 1-3 blocks per line and compact `+N` hidden-target cues.
-- Built-in English, Japanese, and Simplified Chinese UI with a Settings → General → Language selector.
+- Built-in English, Japanese, Simplified Chinese, and Traditional Chinese (Taiwan) UI with a Settings → General → Language selector.
 - Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.
 - Active and recent session tracking from local provider data.
 - Today and all-time token, cost, cache, model, and call summaries.
