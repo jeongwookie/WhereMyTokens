@@ -141,6 +141,19 @@ test('CNY settings preserve defaults, independent rates, and reject invalid inpu
   assert.equal(normalizeSettings({ currency: 'invalid' }).currency, 'USD');
 });
 
+test('TWD settings preserve an independent validated rate and Traditional Chinese preference', () => {
+  const settings = normalizeSettings({ currency: 'TWD', usdToTwd: 33.5, usdToCny: 7.3, usdToKrw: 1400, language: 'zh-TW' });
+  assert.equal(settings.currency, 'TWD');
+  assert.equal(settings.language, 'zh-TW');
+  assert.equal(settings.usdToTwd, 33.5);
+  assert.equal(settings.usdToCny, 7.3);
+  assert.equal(settings.usdToKrw, 1400);
+  assert.equal(normalizeSettings(JSON.parse(JSON.stringify(settings))).usdToTwd, 33.5);
+  for (const value of [0, -1, Infinity, NaN, '32', null, {}]) {
+    assert.equal(normalizeSettings({ usdToTwd: value }).usdToTwd, 32);
+  }
+});
+
 test('taskbar quota settings default off and normalize abbreviation overrides', () => {
   const settings = normalizeSettings({
     taskbarQuotaEnabled: true,

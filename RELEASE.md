@@ -127,6 +127,7 @@ gh release create vX.Y.Z \
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|-----------|
+| v1.26.0 | 2026-11-06 | Traditional Chinese and TWD, Git concurrency budget, persistent right-edge taskbar anchor and double-click, credential-test isolation, Electron 45 and security patches. |
 | v1.25.1 | 2026-09-19 | Fix clipped dashboard minimize/quit controls by reserving a right-hand grid column and wrapping header content; verify login-required state across three languages and four widths. |
 | v1.25.0 | 2026-09-19 | Integrate PR #61 and #60 Simplified Chinese translations, native menus/alerts/help, manual CNY display rates, and #59 Codex credit-key validation fix. Update vulnerable runtime/build dependencies and add regression coverage. |
 | v1.24.6 | 2026-09-11 | Stabilize provider execution accounting and Codex counter origins; correct certified historical overcounts with backups and automatic legacy-bootstrap retry; add dated Astra pricing revisions, quiet incremental indexing, and streamed large Git statistics. Includes unpublished local builds 1.24.4 and 1.24.5. |

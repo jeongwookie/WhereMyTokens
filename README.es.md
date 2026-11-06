@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>Descargar v1.25.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe"><strong>Descargar v1.26.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS Edition</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.1: Mantiene minimizar y salir (X) arriba a la derecha; los avisos largos se ajustan sin ocultar los controles.</em>
+  <em>v1.26.0: Mantiene minimizar y salir (X) arriba a la derecha; los avisos largos se ajustan sin ocultar los controles.</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | Versión | Fecha | Cambios destacados |
 |---------|-------|-------------------|
+| **[v1.26.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.26.0)** | 2026-11-06 | Chino tradicional y TWD, concurrencia Git limitada, anclaje derecho y doble clic en la minibarra, pruebas de credenciales aisladas y dependencias actualizadas. |
 | **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | Mantiene minimizar y salir (X) arriba a la derecha; los avisos largos se ajustan sin ocultar los controles. |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | Interfaz en chino simplificado y CNY; corrección de cuotas Codex con créditos y actualización de dependencias vulnerables |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Corrige sobreconteos de Codex y la verificación tras actualizar; actualiza precios de Astra y estadísticas Git grandes |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 27 ago | Detecta los language servers actuales y legacy de Antigravity en Windows, prioriza los shared quota groups de Gemini y Claude/GPT reportados por el provider y conserva el fallback de quota por modelo para servidores antiguos |
-| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 10 ago | Avisa cuando el login de Claude vence o es rechazado, abre el login oficial por CLI y reintenta tras cambiar las credentials. Mantiene visible el problema aunque conserve la última quota y no renueva ni escribe credentials |
 
 Si faltan datos de verificación antiguos, se reintenta al terminar la indexación inicial. Solo se corrigen sobreconteos demostrados, con copia local; los registros no verificables se conservan. Consulta resultados y vuelve a comprobar en Settings → Data.
 
@@ -88,16 +88,17 @@ Si faltan datos de verificación antiguos, se reintenta al terminar la indexaci�
 
 ### Interfaz China y Moneda
 
-Selecciona chino simplificado en Settings → General → Language. Se detecta automáticamente en Windows en chino simplificado; los locales tradicionales mantienen el inglés. Incluye ayuda, menús de bandeja y avisos de inicio de sesión y uso. Gracias a [@lizi1997](https://github.com/lizi1997) por [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) y el parche de traducción de #60.
+Selecciona chino simplificado o tradicional (Taiwán) en Settings → General → Language. Incluye detección del idioma del sistema, ayuda, menús de bandeja y avisos. Las traducciones proceden de [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) y [PR #64](https://github.com/jeongwookie/WhereMyTokens/pull/64).
 
-Se admiten USD, KRW y CNY con tipos de cambio manuales (valor inicial: 1 USD = 7.2 CNY), sin consultas de mercado. Solo cambia la visualización, incluida la bandeja; el uso guardado en USD no cambia. También se corrige el estado desconectado incorrecto de Codex cuando hay créditos de cuenta, sin reiniciar el historial ni volver a iniciar sesión.
+Se admiten USD, KRW, CNY y TWD con tipos de cambio manuales. Los valores iniciales por USD son 7.2 CNY y 32 TWD. Solo cambia la visualización; el uso guardado en USD no cambia.
+
 
 ¿Buscas macOS? Usa el repositorio público separado:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
+**[⬇ Descargar Instalador (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe)** — descarga y ejecuta, listo
 
-**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — no requiere instalación
+**[⬇ Descargar ZIP portable](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-v1.26.0-win-x64.zip)** — no requiere instalación
 
 Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)](EULA.txt).
 
@@ -107,7 +108,7 @@ Al descargar o instalar, aceptas el [Acuerdo de Licencia de Usuario Final (EULA)
 3. La aplicación se abre automáticamente y se ubica en la bandeja del sistema
 
 **Opción B — ZIP Portable** _(sin instalación)_
-1. Descarga `WhereMyTokens-v1.25.1-win-x64.zip` desde la página de releases
+1. Descarga `WhereMyTokens-v1.26.0-win-x64.zip` desde la página de releases
 2. Extrae el zip en cualquier ubicación
 3. Ejecuta `WhereMyTokens.exe`
 
@@ -293,7 +294,7 @@ Claude reporta input, output, cache creation y cache read. Codex reporta raw inp
 ### Requisitos
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org) 18+
+- [Node.js](https://nodejs.org) 22.12+
 - [Claude Code](https://claude.ai/code) instalado y con sesión iniciada
 
 ### Compilar y Ejecutar
@@ -302,6 +303,7 @@ Claude reporta input, output, cache creation y cache read. Codex reporta raw inp
 git clone https://github.com/jeongwookie/WhereMyTokens.git
 cd WhereMyTokens
 npm install
+npx --no-install install-electron
 npm run build
 npm start
 ```

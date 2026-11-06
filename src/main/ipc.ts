@@ -26,7 +26,7 @@ export interface CompactWidgetBounds {
 }
 
 export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
-export type LanguagePreference = 'system' | 'en' | 'ja' | 'zh';
+export type LanguagePreference = 'system' | 'en' | 'ja' | 'zh' | 'zh-TW';
 
 export interface AppSettings {
   enabledProviders: ProviderId[];
@@ -35,9 +35,10 @@ export interface AppSettings {
   alertThresholds: number[]; // [50, 80, 90]
   openAtLogin: boolean;
   alwaysOnTop: boolean;
-  currency: 'USD' | 'KRW' | 'CNY';
+  currency: 'USD' | 'KRW' | 'CNY' | 'TWD';
   usdToKrw: number;
   usdToCny?: number;
+  usdToTwd?: number;
   globalHotkey: string;
   enableAlerts: boolean;
   language: LanguagePreference;
@@ -128,7 +129,7 @@ function isQuotaDisplayMode(value: unknown): value is QuotaDisplayMode {
 }
 
 function isLanguagePreference(value: unknown): value is LanguagePreference {
-  return value === 'system' || value === 'en' || value === 'ja' || value === 'zh';
+  return value === 'system' || value === 'en' || value === 'ja' || value === 'zh' || value === 'zh-TW';
 }
 
 function isProviderId(value: unknown): value is ProviderId {
@@ -214,11 +215,13 @@ function normalizedSettingsPartial(partial: unknown): Partial<AppSettings> {
   if (alertThresholds) next.alertThresholds = alertThresholds;
   if (typeof record.openAtLogin === 'boolean') next.openAtLogin = record.openAtLogin;
   if (typeof record.alwaysOnTop === 'boolean') next.alwaysOnTop = record.alwaysOnTop;
-  if (record.currency === 'USD' || record.currency === 'KRW' || record.currency === 'CNY') next.currency = record.currency;
+  if (record.currency === 'USD' || record.currency === 'KRW' || record.currency === 'CNY' || record.currency === 'TWD') next.currency = record.currency;
   const usdToKrw = positiveNumber(record.usdToKrw);
   if (usdToKrw != null) next.usdToKrw = usdToKrw;
   const usdToCny = positiveNumber(record.usdToCny);
   if (usdToCny != null) next.usdToCny = usdToCny;
+  const usdToTwd = positiveNumber(record.usdToTwd);
+  if (usdToTwd != null) next.usdToTwd = usdToTwd;
   if (typeof record.globalHotkey === 'string') next.globalHotkey = record.globalHotkey.slice(0, 80);
   if (typeof record.enableAlerts === 'boolean') next.enableAlerts = record.enableAlerts;
   if (isLanguagePreference(record.language)) next.language = record.language;
@@ -287,6 +290,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   currency: 'USD',
   usdToKrw: 1380,
   usdToCny: 7.2,
+  usdToTwd: 32,
   globalHotkey: 'CommandOrControl+Shift+D',
   enableAlerts: true,
   language: 'system',

@@ -4,6 +4,19 @@ import test from 'node:test';
 
 const source = fs.readFileSync('taskbar-helper/Program.cs', 'utf8');
 
+test('native helper preserves the right anchor across content changes and restarts', () => {
+  assert.match(source, /_rightAnchor \?\? saved\?\.Right/);
+  assert.match(source, /right - width/);
+  assert.match(source, /new LayoutState\(bounds.X, bounds.Y, bounds.Right\)/);
+  assert.match(source, /record LayoutState\(int X, int Y, int\? Right = null\)/);
+});
+
+test('native helper opens only on a left double click without a drag', () => {
+  assert.match(source, /control.MouseDoubleClick \+= OnOpenDashboard/);
+  assert.doesNotMatch(source, /control.Click \+= OnOpenDashboard/);
+  assert.match(source, /e.Button != MouseButtons.Left \|\| _movedDuringDrag/);
+});
+
 test('native helper consumes exactly two physical Lines', () => {
   assert.match(source, /TaskbarQuotaDisplayLine\[\] Lines/);
   assert.match(source, /snapshot\.Lines is not \{ Length: 2 \}/);

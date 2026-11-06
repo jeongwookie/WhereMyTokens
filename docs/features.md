@@ -41,10 +41,10 @@ WhereMyTokens is a local-first Windows tray app for AI coding usage observabilit
 ## Customization
 
 - Auto, light, and dark themes.
-- USD or KRW display with configurable exchange rate.
+- USD, KRW, CNY, or TWD display with manually configurable exchange rates; stored USD usage is unchanged.
 - Deterministic tray label modes for 5h usage percentage, 7d usage percentage, 5h token count, or 5h cost. Period percentage modes take the maximum matching-period utilization across enabled providers.
 - Floating Quota Pace widget with always-on-top support.
-- Windows-only draggable self-contained taskbar mini display with two compact physical quota lines, single-period balanced wrapping, a configurable block limit, dynamic visible-column sizing, measured hidden-target suffixes, content-fitted hit bounds, source/status-colored target prefixes, and transparent, sampled-background-aware rendering.
+- Windows-only draggable self-contained taskbar mini display with two compact physical quota lines, single-period balanced wrapping, a configurable block limit, dynamic visible-column sizing, measured hidden-target suffixes, content-fitted hit bounds, source/status-colored target prefixes, and transparent, sampled-background-aware rendering. Its right edge stays fixed as the content grows to the left or shrinks. Drag to reposition it; double-click the text to open the dashboard.
 - Dashboard layout controls for hiding or reordering optional cards.
 - Project hide and exclude controls backed by the same canonical usage query path.
 - Optional start with Windows.

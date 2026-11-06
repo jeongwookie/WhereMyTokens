@@ -685,7 +685,8 @@
       "usd": "USD ($)",
       "krw": "KRW (₩)",
       "exchangeRate": "為替レート (1 USD)",
-      "cny": "人民元 (¥)"
+      "cny": "人民元 (¥)",
+      "twd": "TWD (NT$)"
     },
     "tray": {
       "heading": "トレイ",

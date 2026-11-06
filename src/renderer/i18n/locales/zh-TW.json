@@ -1,0 +1,751 @@
+{
+  "common": {
+    "state": {
+      "active": "執行中",
+      "waiting": "等待中",
+      "idle": "閒置",
+      "compacting": "壓縮中"
+    },
+    "mainSections": {
+      "planUsage": "方案額度",
+      "codeOutput": "程式碼產出",
+      "trend": "使用趨勢",
+      "sessions": "工作階段",
+      "activity": "活動分布",
+      "modelUsage": "模型使用"
+    },
+    "limitSource": {
+      "api": {
+        "title": "帳戶使用量快照。每隔幾分鐘自動重新整理。"
+      },
+      "bridge": {
+        "title": "由 Claude Code statusLine 本機即時上報的最新額度資料。"
+      },
+      "cache": {
+        "title": "最後一次可信的使用量快照，會隨時間自動老化。"
+      },
+      "localLog": {
+        "title": "本機工作階段日誌估算值，可能落後於帳戶級即時限制。"
+      },
+      "localRpc": {
+        "title": "本機服務供應商執行時快照。"
+      }
+    }
+  },
+  "app": {
+    "bootFallback": {
+      "eyebrow": "啟動恢復",
+      "title": "WhereMyTokens 仍在載入中。",
+      "retry": "重試",
+      "minimize": "最小化",
+      "quit": "退出",
+      "messageInitial": "仍在等待初始工作階段與使用量資料。",
+      "messageEmptyState": "應用回傳了空的啟動狀態，請嘗試重新整理一次。",
+      "messageGetStateFailed": "主行程未回傳啟動資料，請嘗試重新整理或重新開啟系統匣視窗。",
+      "messageTimeout": "背景仍在繼續載入最近的工作階段與使用量資料，目前顯示恢復檢視。"
+    }
+  },
+  "help": {
+    "title": "幫助"
+  },
+  "activityBreakdown": {
+    "categories": {
+      "read": "讀取",
+      "editWrite": "編輯 / 寫入",
+      "search": "搜尋",
+      "git": "Git",
+      "buildTest": "構建 / 測試",
+      "terminal": "終端",
+      "subagents": "子代理",
+      "thinking": "思考 (Thinking)",
+      "response": "回覆",
+      "web": "網頁檢索"
+    },
+    "categoryTooltip": "{{label}}: {{pct}}%",
+    "totalLabel": {
+      "events": "本工作階段工具呼叫事件",
+      "tokens": "本工作階段輸出 Token"
+    }
+  },
+  "activityChart": {
+    "noData": "尚無資料",
+    "noTokens": "無",
+    "tokensValue": "{{value}} tok",
+    "captions": {
+      "fiveMonth": "近 5 個月活動",
+      "hourly30d": "按小時分佈 (30天)",
+      "weekly4w": "按周分佈 (4周)"
+    },
+    "legend": {
+      "less": "少",
+      "more": "多"
+    },
+    "weekly": {
+      "current": "本週",
+      "weeksAgo": "{{count}}周前",
+      "fourWeekTotal": "4周總計",
+      "peak": "峰值"
+    },
+    "tod": {
+      "morning": "上午",
+      "afternoon": "下午",
+      "evening": "晚上",
+      "night": "深夜",
+      "peakLabel": "峰值:",
+      "rangeTotal": "30天 · 共計 {{cost}}",
+      "pctOfTotal": "佔總計 {{pct}}%",
+      "columns": {
+        "tokens": "Tokens",
+        "cost": "費用",
+        "requests": "請求數"
+      }
+    }
+  },
+  "codeOutputCard": {
+    "period": {
+      "today": "今日",
+      "all": "全部"
+    },
+    "kpi": {
+      "commits": "提交數 (Commits)",
+      "netLines": "淨增行數",
+      "costPerHundredAdded": "每新增百行花費"
+    },
+    "totalLines": "{{value}} 行",
+    "avgCost": "均價 {{cost}}",
+    "commitsSub": {
+      "totalCount": "共 {{count}} 次",
+      "allTime": "歷史累計"
+    },
+    "scanningGitHistory": "正在掃描 Git 歷史",
+    "loadingHint": "原生程式碼倉庫統計完成後將顯示程式碼產出資料。",
+    "outputGrowth": {
+      "title": "產出增長",
+      "caption": "過去 7 天對比歷史基線",
+      "totalNetSuffix": "累計淨增",
+      "totalSuffix": "總計",
+      "daySuffix": "天"
+    },
+    "summary": {
+      "commits_one": "{{count}} 次提交",
+      "commits_other": "{{count}} 次提交",
+      "netLines": "淨增 {{value}} 行",
+      "costPerHundred": "每新增百行花費 {{cost}}"
+    }
+  },
+  "extraUsageCard": {
+    "title": {
+      "overCap": "Claude 超額用量已超出月度上限",
+      "nearCap": "Claude 超額用量接近月度上限",
+      "monthly": "Claude 超額用量 - 按月統計"
+    }
+  },
+  "modelBreakdown": {
+    "top4AllTime": "Top 4 - 歷史累計",
+    "otherProvider": "其他"
+  },
+  "renderErrorBoundary": {
+    "rendererError": "渲染錯誤",
+    "renderingFailed": "{{label}} 渲染失敗。",
+    "reload": "重新載入",
+    "minimize": "最小化",
+    "quit": "退出"
+  },
+  "sessionRow": {
+    "hideBreakdown": "收起明細",
+    "showBreakdown": "檢視明細",
+    "hideSessionBreakdown": "收起工作階段明細",
+    "showSessionBreakdown": "檢視工作階段明細",
+    "hide": "隱藏",
+    "details": "詳情",
+    "context": "上下文 {{pct}}%",
+    "atLimit": "已達上限",
+    "nearLimit": "接近上限",
+    "compactSoon": "即將壓縮",
+    "tokensLeft": "剩餘 {{tokens}}"
+  },
+  "tokenStatsCard": {
+    "syncing": "同步中",
+    "waiting": "等待中",
+    "unlimited": "無限制",
+    "syncingTooltip": "額度限制資料正在背景同步中。",
+    "waitingTooltip": "正在等待服務供應商回傳額度限制資料。",
+    "unlimitedTooltip": "服務供應商目前報告此限制視窗為無限制。",
+    "unlimitedReset": "無重置視窗",
+    "cachedSuffix": "(快取)",
+    "usageWindowCost": "目前視窗估算費用",
+    "resets": "{{day}} 重置",
+    "timeElapsed": "時間已過去",
+    "windowElapsedTooltip": "本 {{period}} 視窗的時間已過去 {{pct}}%",
+    "providerCacheMetric": "服務供應商快取指標"
+  },
+  "trendBreakdownCard": {
+    "unavailable": "明細不可用",
+    "loading": "正在載入明細...",
+    "breakdownSince": "明細資料起始於 {{date}}",
+    "tokenPanorama": "Token 全景",
+    "inputOutputNoCache": "輸入 + 輸出 · 未命中快取",
+    "noTokenData": "尚無 Token 資料",
+    "toolUsage": "工具使用情況",
+    "toolUsageAllProviders": "工具使用情況 · 所有服務供應商",
+    "callsApproxTok": "呼叫次數 · 約消耗 Token",
+    "netLinesCommitted": "淨提交程式碼行數",
+    "gitLines": "Git · 行數",
+    "noCommits": "該週期內無提交",
+    "input": "輸入",
+    "output": "輸出",
+    "thinking": "思考",
+    "response": "回覆",
+    "showMore": "展開更多 ({{count}})",
+    "collapse": "收起",
+    "noToolData": "尚無工具資料",
+    "callsCount": "{{count}} 次呼叫",
+    "toolCallsApprox": "工具呼叫 · 約 {{tokens}} tok",
+    "callsApproxTokValue": "{{count}} 次呼叫 · 約 {{tokens}} tok",
+    "addedRemoved": "新增 {{added}} / 刪除 {{removed}}",
+    "netPrefix": "淨增:{{value}}",
+    "tools": {
+      "read": "讀取",
+      "editWrite": "編輯 / 寫入",
+      "search": "搜尋",
+      "git": "Git",
+      "buildTest": "構建 / 測試",
+      "terminal": "終端",
+      "subagents": "子智慧體",
+      "web": "網頁檢索"
+    },
+    "paths": {
+      "product_code": "生產程式碼",
+      "test_code": "測試程式碼",
+      "docs_spec": "文件 / 規範",
+      "config_build": "配置 / 構建",
+      "schema_migration": "模型 / 遷移指令碼",
+      "vendor": "第三方依賴",
+      "asset": "靜態資源"
+    }
+  },
+  "trendCard": {
+    "trend": "趨勢",
+    "noTrendDataYet": "尚無趨勢資料",
+    "noTrendDataYetSvg": "尚無趨勢資料",
+    "usagePending": "使用量待同步",
+    "outputPending": "產出資料待同步",
+    "netSuffix": "淨增",
+    "metricLabel": "指標",
+    "cacheLabel": "快取",
+    "rangeLabel": "時間跨度",
+    "metric": {
+      "cost": "費用",
+      "tokens": "Token"
+    },
+    "cacheView": {
+      "work": "工作量 (Work)",
+      "billing": "計費 (Billing)"
+    },
+    "grain": {
+      "day": "日",
+      "week": "周",
+      "month": "月"
+    },
+    "selectBucketAriaLabel": "選擇一個趨勢資料塊以檢視明細",
+    "netLines": "淨增程式碼行",
+    "requestsCount_one": "{{count}} 個請求",
+    "requestsCount_other": "{{count}} 個請求",
+    "weekPrefix": "第 {{label}} 周"
+  },
+  "mainView": {
+    "refresh": {
+      "label": "重新整理",
+      "justNow": "剛剛",
+      "secondsAgo": "{{n}} 秒前",
+      "minutesAgo": "{{n}} 分鐘前",
+      "hoursAgo": "{{n}} 小時前",
+      "lastRun": "上次更新 · {{age}}",
+      "refreshing": "正在重新整理...",
+      "scan": "掃描預計 {{eta}}"
+    },
+    "warmup": {
+      "queued": "排隊中",
+      "syncing": "正在同步...",
+      "inMinutesSeconds": "{{minutes}}分{{seconds}}秒後",
+      "inSeconds": "{{seconds}}秒後",
+      "statusQueued": "正在排隊",
+      "statusSyncing": "正在同步中",
+      "statusStarts": "{{eta}} 後開始",
+      "bannerTitle": "歷史資料載入中",
+      "bannerBody": "已優先展示目前工作階段與最新使用量。完整歷史記錄{{status}}。在此提示消失前，趨勢和統計總數可能會有變動。"
+    },
+    "cacheMetric": {
+      "singleSimple": "{{provider}}: 快取讀取 / 提示詞 Token",
+      "singleClaude": "{{provider}}: 快取讀取 / (快取讀取 + 快取寫入)",
+      "combined": "聚合檢視: 各服務供應商的快取指標已彙總"
+    },
+    "status": {
+      "claude": {
+        "localLabel": "Claude 快取",
+        "waitingLabel": "Claude 等待中",
+        "localTitle": "目前顯示已快取的 Claude 額度 ({{status}}){{errorSuffix}}",
+        "localOnlyTitleDefault": "Claude 額度正在等待 statusLine 資料或可用的 Claude Code 憑證。",
+        "loginLabel": "Claude 登入",
+        "loginTitle": "開啟官方 Claude Code 登入以恢復額度跟蹤。",
+        "loginHeading": "需要登入 Claude Code",
+        "loginDetail": "請在官方 Claude Code 中完成登入，WhereMyTokens 將自動重新嘗試。",
+        "loginAction": "開啟 Claude Code"
+      },
+      "codex": {
+        "limitedLabel": "Codex 受限",
+        "limitedTitleDefault": "Codex 使用量介面回傳了 HTTP 429 (頻率超限)。",
+        "schemaLabel": "Codex 資料格式",
+        "schemaTitleDefault": "Codex 使用量響應資料結構發生變化。",
+        "endpointLabel": "Codex 節點",
+        "endpointTitleDefault": "自訂的 Codex 基礎 URL 未納入 Token 安全監控範圍。",
+        "localLabel": "Codex 本機",
+        "localTitleDefault": "未找到 Codex 憑證，目前僅顯示本機日誌估算資料。",
+        "authLabel": "Codex 認證",
+        "authTitleDefault": "Codex Token 已失效或被拒絕。",
+        "blockedLabel": "Codex 拒絕訪問",
+        "blockedTitleDefault": "目前帳號已被拒絕訪問 Codex 使用量服務。",
+        "timeoutLabel": "Codex 超時",
+        "timeoutTitleDefault": "請求 Codex 使用量介面超時。",
+        "offlineLabel": "Codex 離線",
+        "offlineTitleDefault": "請求 Codex 使用量介面失敗。",
+        "cacheLabel": "Codex 快取",
+        "logLabel": "Codex 日誌",
+        "fallbackSourceCache": "最近快取的使用量快照",
+        "fallbackSourceLog": "本機日誌估算",
+        "fallbackTitle": "Codex 即時使用量不可用；目前採用{{source}}。",
+        "offlineNoDetail": "Codex 即時使用量不可用。"
+      },
+      "provider": {
+        "unavailable": "不可用",
+        "startAntigravity": "啟動 Antigravity",
+        "offCompact": "{{label}} 關閉",
+        "offlineCompact": "{{label}} 離線",
+        "genericCompact": "{{label}} {{status}}",
+        "genericTitle": "{{label}} 服務供應商狀態: {{status}}。"
+      }
+    },
+    "header": {
+      "estimatedCost": "預估費用",
+      "periodToday": "今日",
+      "periodAll": "全部",
+      "hideCompactWidget": "隱藏懸浮額度小工具",
+      "showCompactWidget": "顯示懸浮額度小工具",
+      "hideTaskbarQuota": "隱藏工作列迷你額度顯示",
+      "showTaskbarQuota": "顯示工作列迷你額度顯示",
+      "minimize": "最小化",
+      "quit": "退出",
+      "allTimeCost": "歷史總費用",
+      "todayCost": "今日費用",
+      "claudePlanTooltip": "Claude 訂閱套餐: {{plan}}",
+      "codexTierTooltip": "Codex 服務級別: {{tier}}",
+      "calls": "次呼叫",
+      "sessions": "個工作階段",
+      "avgCacheEfficiency": "平均快取效率",
+      "cacheEfficiency": "快取效率",
+      "savedTotal": "累計節省 + {{saved}}",
+      "savedToday": "今日節省 + {{saved}}"
+    },
+    "quota": {
+      "waitingReset": "等待中",
+      "syncingLabel": "同步中",
+      "unlimitedLabel": "無限制",
+      "unlimitedReset": "無重置",
+      "estimatedDuration": "根據服務供應商重置時間推算的預估時長",
+      "usedTooltip": "已用",
+      "usedElapsedTooltip": "已用 / 時間進度",
+      "tokenBadgeSingle": "該額度目標的 Token 總量",
+      "tokenBadgeMulti": "該額度目標最大時間視窗的 Token 計數",
+      "tokenBadgeSuffix": "{{tokens}} tok",
+      "pendingLabel": "同步中"
+    },
+    "resetCredits": {
+      "heading": "Codex 重置額度點數",
+      "cardHeading": "CODEX 重置點數",
+      "rowHeading": "Codex 重置點數",
+      "detailsAriaLabel": "Codex 重置額度點數詳情",
+      "badge": {
+        "error": "錯誤",
+        "limited": "受限",
+        "stale": "已過期",
+        "usage": "即時用量",
+        "partial": "部分",
+        "api": "API",
+        "cache": "快取",
+        "fromApi": "來自 API",
+        "fromCache": "來自快取資料",
+        "usageOnlyTitle": "僅根據即時用量統計；過期列表不可用",
+        "partialOnlyTitle": "僅有點數數量；過期列表不可用",
+        "degradedTitle": "重置點數 {{sourceDesc}}；狀態: {{code}}",
+        "okTitle": "重置點數 {{sourceDesc}}"
+      },
+      "status": {
+        "unsupported": "重置介面不支援",
+        "loginRequired": "需要登入 Codex",
+        "loginExpired": "Codex 登入已過期",
+        "accessDenied": "Codex 訪問被拒絕",
+        "limited": "重置檢查受限",
+        "changed": "重置檢查格式變動",
+        "offline": "重置檢查離線",
+        "unavailable": "重置資料不可用"
+      },
+      "tooltip": {
+        "unknown": "未知",
+        "listUnavailable": "列表不可用",
+        "statusLabel": "狀態",
+        "lastUpdate": "上次更新",
+        "sourceLabel": "來源",
+        "countOnlyNote": "僅提供數量可用性；過期列表不可用。",
+        "available": "可用",
+        "nextExpires": "下一次過期",
+        "earned": "已取得",
+        "expiresIn": "{{duration}} 內過期",
+        "updatedFooter": "更新時間: {{date}}",
+        "sourceFooter": "來源: {{source}}"
+      },
+      "card": {
+        "available": "可用",
+        "nextExpiresLabel": "下次過期",
+        "noResets": "無可用重置點數",
+        "moreCount": "還有 +{{n}} 項",
+        "countOnlyShort": "僅顯示數量 · 過期列表不可用"
+      },
+      "row": {
+        "noResetsAvailable": "無可用重置點數",
+        "available": "可用",
+        "nextIn": "{{duration}} 後到期",
+        "countOnly": "僅顯示數量"
+      }
+    },
+    "ledgerRebuild": {
+      "title": "帳目記錄需要重建",
+      "body": "在從設定中重建本機使用量帳本前，歷史統計總數將臨時使用近期備用資料。"
+    },
+    "usageIndexCoverage": {
+      "failureTitle": "使用量更新失敗",
+      "failureBody": "部分使用量資料來源無法讀取。現有統計總數已保留。{{failures}}",
+      "title": "正在索引使用量歷史",
+      "discovering": "正在發現使用量來源。",
+      "progress": "已索引 {{indexed}}/{{required}} 個資料來源。",
+      "failures_one": "有 {{count}} 個資料來源讀取失敗，稍後將重試。",
+      "failures_other": "有 {{count}} 個資料來源讀取失敗，稍後將重試。",
+      "body": "索引完成前資料可能不完整。{{progress}}{{failures}}"
+    },
+    "usageIndexHealth": {
+      "recoveredTitle": "使用量歷史已恢復",
+      "recoveredBody": "受損資料庫已儲存，現已啟用恢復後的索引。",
+      "unavailableTitle": "使用量歷史不可用",
+      "unavailableBody": "無法開啟本機索引資料庫。僅在能接受丟失這部分不可用歷史時，才在設定中執行重置索引。"
+    },
+    "sessions": {
+      "providersTwo": "{{a}} 或 {{b}}",
+      "providersList": "{{list}} 或 {{last}}",
+      "enabledProviderFallback": "已啟用的服務供應商",
+      "stackCount_one": "{{count}} 個{{state}}工作階段",
+      "stackCount_other": "{{count}} 個{{state}}工作階段",
+      "latest": "最新",
+      "maxCtx": "最大上下文",
+      "chipOpen": "展開",
+      "chipStack": "堆疊",
+      "filterAll": "全部",
+      "filterActive": "活躍",
+      "commitCount_one": "{{count}} 次提交",
+      "commitCount_other": "{{count}} 次提交",
+      "projectActionsTitle": "專案操作",
+      "hide": "隱藏",
+      "exclude": "排除",
+      "showMore": "顯示更多 ({{n}})",
+      "showLess": "收起",
+      "noActive": "尚無活躍的 {{providers}} 工作階段",
+      "hideIdleSessions_one": "隱藏 {{count}} 個空閒工作階段",
+      "hideIdleSessions_other": "隱藏 {{count}} 個空閒工作階段",
+      "showIdleSessions_one": "顯示 {{count}} 個空閒工作階段",
+      "showIdleSessions_other": "顯示 {{count}} 個空閒工作階段",
+      "hiddenProjectsCount_one": "{{count}} 個隱藏專案",
+      "hiddenProjectsCount_other": "{{count}} 個隱藏專案",
+      "show": "顯示"
+    },
+    "nav": {
+      "settings": "設定",
+      "alerts": "通知"
+    },
+    "errorBoundary": {
+      "planUsagePanel": "套餐額度面板",
+      "codeOutputCard": "程式碼產出卡片",
+      "trendCard": "趨勢卡片",
+      "sessionsPanel": "工作階段面板",
+      "activitySection": "活動分佈板塊",
+      "modelSection": "模型使用板塊",
+      "headerMetrics": "頂部指標欄",
+      "usageLedgerRebuildBanner": "帳本重建提示橫幅",
+      "usageIndexCoverageBanner": "索引覆蓋提示橫幅",
+      "usageIndexHealthBanner": "索引健康提示橫幅",
+      "historyWarmupBanner": "歷史預熱提示橫幅",
+      "bottomNavigation": "底部導航欄"
+    }
+  },
+  "compactWidgetView": {
+    "refresh": {
+      "default": "重新整理",
+      "now": "剛剛",
+      "ageMinutes": "{{n}}分鐘",
+      "ageHours": "{{n}}小時",
+      "lastRun": "上次更新 · {{age}}"
+    },
+    "status": {
+      "syncing": "同步中",
+      "waiting": "等待中",
+      "unlimited": "無限制",
+      "unlimitedBadge": "∞",
+      "scanning": "掃描中",
+      "waitBadge": "等待"
+    },
+    "tooltip": {
+      "startupLoading": "啟動掃描仍在進行中。",
+      "unlimited": "此限制視窗目前報告為無限制。",
+      "noFiveHourData": "尚無 5 小時重置資料。在檢測到本機使用或服務供應商資料後將出現。",
+      "groupUnavailable": "尚未從服務供應商額度來源取得 {{group}} 的限制資料。",
+      "timeUntilReset": "距離重置還有: {{resetLabel}}",
+      "used": "已用",
+      "usedElapsed": "已用 / 時間進度"
+    },
+    "header": {
+      "title": "額度節奏 (Quota Pace)",
+      "subtitle": "已用 / 時間進度"
+    },
+    "button": {
+      "refreshNow": "立即重新整理",
+      "openDashboard": "開啟面板",
+      "hideWidget": "隱藏小工具"
+    },
+    "health": {
+      "sectionTitle": "服務供應商額度資料健康度",
+      "label": "健康度",
+      "syncing": {
+        "label": "{{provider}} 同步中",
+        "title": "{{provider}} 額度資料正在背景同步中。"
+      },
+      "statusLabel": {
+        "label": "{{provider}} {{statusLabel}}",
+        "title": "{{provider}} 服務供應商額度狀態: {{statusLabel}}。"
+      },
+      "offline": {
+        "label": "{{provider}} 離線",
+        "title": "{{provider}} 服務供應商額度不可用。"
+      },
+      "log": {
+        "label": "{{provider}} 日誌",
+        "title": "{{provider}} 至少有一個限制視窗正在使用本機日誌估算。"
+      },
+      "cache": {
+        "label": "{{provider}} 快取",
+        "title": "{{provider}} 正在使用最近可信的快取使用量快照。"
+      },
+      "bridge": {
+        "label": "{{provider}} 橋接",
+        "title": "{{provider}} 正在使用本機狀態行 (status-line) 橋接資料。"
+      },
+      "waiting": {
+        "label": "{{provider}} 等待中",
+        "title": "{{provider}} 額度資料尚未到達。"
+      },
+      "ok": {
+        "label": "{{provider}} 正常",
+        "title": "{{provider}} 帳戶限制資料為最新。"
+      }
+    },
+    "hint": {
+      "fiveHourLimits": "首次使用事件觸發後將顯示 5 小時限制"
+    }
+  },
+  "notificationsView": {
+    "title": "通知設定",
+    "sections": {
+      "usageAlerts": "使用量通知",
+      "alertTargets": "提醒目標"
+    },
+    "enableAlerts": {
+      "label": "啟用使用量提醒",
+      "description": "當監控的額度限制達到閾值時傳送 Windows 桌面通知"
+    },
+    "thresholds": {
+      "heading": "提醒閾值 - 當使用量達到以下數值時提醒:"
+    },
+    "targets": {
+      "claudeFiveHour": {
+        "label": "Claude 5 小時限制",
+        "detail": "目前 5 小時視窗內的 Claude 使用量"
+      },
+      "claudeWeekly": {
+        "label": "Claude 每週限制",
+        "detail": "每週視窗內的 Claude 使用量"
+      },
+      "claudeModelWeekly": {
+        "label": "Claude 特定模型周限制",
+        "detail": "僅在 Claude Code 上報特定模型限制時顯示"
+      },
+      "codexFiveHour": {
+        "label": "Codex 5 小時限制",
+        "detail": "Codex 即時用量、快取或本機日誌 5 小時視窗"
+      },
+      "codexWeekly": {
+        "label": "Codex 每週限制",
+        "detail": "Codex 即時用量、快取或本機日誌每週視窗"
+      },
+      "antigravityModelQuotas": {
+        "label": "Antigravity 額度組",
+        "detail": "共享本機 RPC 額度組 (舊版回退至單模型額度)"
+      }
+    },
+    "footerNote": "提醒規則跟隨已啟用的服務供應商及額度/模型目標。每 60 秒自動重新整理一次，每個提醒有 1 小時冷卻期。",
+    "button": {
+      "save": "儲存",
+      "saved": "已儲存"
+    }
+  },
+  "settingsView": {
+    "title": "設定",
+    "integration": {
+      "heading": "Claude Code 整合",
+      "realtimeLabel": "通過 statusLine 取得即時資料",
+      "description": "將 WhereMyTokens 註冊為 Claude Code 外掛以取得即時速率限制",
+      "connected": "已連線",
+      "otherStatusLine": "其他 statusLine",
+      "notConfigured": "未配置",
+      "setupButton": "配置",
+      "disableButton": "停用",
+      "settingUp": "正在配置...",
+      "setupDone": "完成。重啟 Claude Code 即可生效。",
+      "setupFailed": "失敗: {{error}}",
+      "setupError": "錯誤: {{error}}",
+      "disabling": "正在停用...",
+      "disableDone": "已停用。重啟 Claude Code 以停止橋接服務。",
+      "disableFailed": "失敗: {{error}}",
+      "disableError": "錯誤: {{error}}"
+    },
+    "general": {
+      "heading": "一般設定",
+      "language": "介面語言",
+      "languageSystem": "跟隨系統（預設）",
+      "startWithWindows": "開機時自動啟動",
+      "alwaysOnTop": "控制面板置頂顯示",
+      "alwaysOnTopHint": "僅適用於主控制面板視窗",
+      "floatingWidget": "懸浮用量小工具",
+      "floatingWidgetHint": "始終置頂，額度消耗節奏一目瞭然",
+      "taskbarQuota": "工作列迷你額度顯示",
+      "taskbarQuotaHint": "在支援時直接在 Windows 工作列內顯示固定的 5h / 1w 額度條",
+      "taskbarMaxBlocks": "工作列最多顯示格數",
+      "taskbarMaxBlocksHint": "限制每個工作列額度行顯示多少個額度區塊",
+      "blocksOption_one": "{{count}} 格",
+      "blocksOption_other": "{{count}} 格",
+      "waitingAnimation": "等待載入動畫",
+      "waitingAnimationHint": "當缺少限制資料時，在懸浮小工具上顯示等待進度條動畫",
+      "globalShortcut": "全域快捷鍵",
+      "globalShortcutTitle": "點選後按下快捷鍵。Esc 取消，Backspace 清除。",
+      "pressShortcut": "請按下快捷鍵...",
+      "clickToRecord": "點選錄製快捷鍵",
+      "shortcutHint": "建議使用 Ctrl+Shift 或 Ctrl+Alt 組合鍵"
+    },
+    "providers": {
+      "heading": "服務供應商（Providers）",
+      "atLeastOneProvider": "必須保留至少一個已啟用的服務供應商。",
+      "antigravityDetail": "需要 Antigravity IDE 處於執行且登入狀態，僅使用本機 RPC。",
+      "antigravityPace": "舊版 Antigravity 額度節奏估算",
+      "antigravityPaceHint": "分組額度優先使用服務供應商上報的 5h/週週期。對於舊版按模型額度，根據重置時間推算節奏"
+    },
+    "quotaDisplay": {
+      "heading": "額度顯示設定",
+      "hint": "文字輸入框可自訂 5h / 1w 目標在工作列中顯示的縮寫標籤。",
+      "rowsFallback_one": "{{count}} 行",
+      "rowsFallback_other": "{{count}} 行",
+      "abbreviationLabel": "{{label}} 的工作列縮寫",
+      "abbreviationTitle": "預設值: {{abbrev}}",
+      "modeRich": "豐富",
+      "modeSimple": "精簡",
+      "modeNone": "不顯示",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "resetOrder": "恢復預設順序"
+    },
+    "data": {
+      "heading": "資料管理",
+      "usageHistory": "使用量歷史記錄",
+      "usageHistoryHint": "清空已索引的歷史記錄並從可用的服務供應商日誌中重建。不可用的歷史記錄將會丟失。",
+      "resetButton": "重置索引",
+      "resetting": "正在重置...",
+      "resetComplete": "重置完成。",
+      "resetFailed": "重置失敗: {{error}}",
+      "resetConfirmTitle": "確認重置使用量索引？",
+      "resetConfirmBody": "這將清空目前索引並嘗試從可用的服務供應商日誌重建。",
+      "resetConfirmLoss": "不可用日誌中的歷史記錄將永久丟失。"
+    },
+    "currency": {
+      "heading": "貨幣與匯率",
+      "label": "顯示貨幣",
+      "usd": "美元 ($)",
+      "krw": "韓元 (₩)",
+      "exchangeRate": "匯率 (對 1 美元)",
+      "cny": "人民幣 (¥)",
+      "twd": "新臺幣 (NT$)"
+    },
+    "tray": {
+      "heading": "系統匣圖示",
+      "label": "系統匣文字標籤",
+      "none": "無",
+      "h5pct": "5h 使用率 %",
+      "d7pct": "7天 使用率 %",
+      "tokens": "5h Token 數",
+      "cost": "5h 預估費用"
+    },
+    "mainLayout": {
+      "heading": "主介面卡片佈局",
+      "showCardTitle": "顯示卡片",
+      "hideCardTitle": "隱藏卡片",
+      "show": "顯示",
+      "hide": "隱藏",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "resetOrder": "恢復預設佈局",
+      "showAll": "全部顯示"
+    },
+    "appearance": {
+      "heading": "外觀主題",
+      "theme": "主題風格",
+      "auto": "跟隨系統",
+      "light": "淺色明亮",
+      "dark": "深色暗夜"
+    },
+    "save": "儲存設定"
+  },
+  "accountingRevision": {
+    "title": "歷史統計校正檢查",
+    "dismiss": "關閉",
+    "running": "正在檢查歷史資料: {{count}} / {{total}} 個源。統計總數可能會更新。",
+    "failed": "檢查未能完成。已完成的修正已保留，待處理的資料來源可重試。",
+    "corrected": "已校正記錄: {{count}} 條。預估總費用減少了 ${{amount}} 美元。",
+    "preserved": "有 {{count}} 個資料來源無法完全驗證；已保留其未經核對的資料。",
+    "details": "檢視校正詳情",
+    "checked": "已檢查 {{count}} 個資料來源；其中 {{unchanged}} 個無需校正。",
+    "source": "資料來源 {{id}}",
+    "previous": "上一項",
+    "next": "下一項",
+    "backup": "在歷史數值變更前已儲存可信本機備份。此為 API 等效預估值，非正式帳單。",
+    "recheck": "重新檢查未解析的歷史",
+    "outcomes": {
+      "corrected": "已校正",
+      "partial": "部分校正",
+      "preserved": "保留未核對",
+      "unchanged": "無需修改"
+    },
+    "reasons": {
+      "no-detail": "請求詳細資訊已不再保留。",
+      "missing-file": "原始原始檔不可用。",
+      "rewritten-source": "源已被重寫；無法證明原始覆蓋範圍。",
+      "changed-source": "驗證期間原始檔或帳本發生更改。",
+      "unverified-records": "部分差異與已證實缺陷不符。",
+      "incomplete-buckets": "保留的詳情與所有受影響的彙總不一致。",
+      "identity-conflict": "執行身份標識與另一條保留資料重疊。",
+      "invalid-source": "原始源邊界無法驗證。"
+    }
+  }
+}

@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>下载 v1.25.1</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe"><strong>下载 v1.26.0</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.1: 将最小化和退出(X)固定在右上角，长登录或状态文字自动换行，不再遮挡窗口按钮</em>
+  <em>v1.26.0: 将最小化和退出(X)固定在右上角，长登录或状态文字自动换行，不再遮挡窗口按钮</em>
 </p>
 
 <p align="center">
@@ -72,11 +72,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|--------|
+| **[v1.26.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.26.0)** | 2026-11-06 | 繁体中文与 TWD 支持，限制 Git 统计并发，任务栏右侧锚定和双击打开，隔离认证测试并更新安全依赖 |
 | **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | 将最小化和退出(X)固定在右上角，长登录或状态文字自动换行，不再遮挡窗口按钮 |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 新增简体中文界面与 CNY 显示，修复 Codex credits 配额验证并更新存在漏洞的依赖 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | 修复 Codex 过量统计和升级后的自动校正，更新 Astra 价格并改善大型 Git 统计 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | 在 Windows 同时检测当前与 legacy Antigravity language server，优先显示 provider 报告的 shared Gemini、Claude/GPT quota groups，并保留旧 server 的逐模型 quota fallback |
-| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | 通过 Windows 通知和应用内操作提示 Claude 登录过期或被拒绝，打开官方 CLI 登录，并在 credential 变更后自动重试。保留旧 quota 时仍会显示登录问题，且不会刷新或写入 credential |
 
 旧版验证信息不足时，初始索引完成后会自动重试。仅在本地备份后修正已证实的过量统计，无法验证的记录保持不变。可在 Settings → Data 查看结果并重新检查。
 
@@ -88,16 +88,17 @@
 
 ### 简体中文界面与货币
 
-在“设置 → 常规 → 语言”中选择简体中文。简体中文 Windows 会自动匹配，繁体中文环境保持英文回退。帮助、托盘菜单、登录通知和用量提醒也已适配。感谢 [@lizi1997](https://github.com/lizi1997) 提供 [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) 和 #60 中的补充翻译。
+在“设置 → 常规 → 语言”中选择简体中文或繁体中文（台湾），也可自动匹配系统语言。帮助、托盘菜单、登录通知和用量提醒均已适配。简体翻译来自 [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61)，繁体翻译来自 [PR #64](https://github.com/jeongwookie/WhereMyTokens/pull/64)。
 
-支持 USD、KRW 和 CNY，汇率需手动输入（默认 1 USD = 7.2 CNY），不会联网获取实时汇率。转换仅影响界面和托盘显示，不修改保存的美元用量。本版本也修复了账户含有 credits 时 Codex 被错误显示为离线的问题，无需重新登录或重置历史记录。
+支持 USD、KRW、CNY 和 TWD。汇率需手动输入，1 USD 的默认汇率为 CNY 7.2、TWD 32。不会联网获取实时汇率，仅改变界面和托盘显示，不修改保存的美元用量。
+
 
 macOS 用户请使用单独的公开仓库:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**。
 
-**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
+**[⬇ 下载安装程序 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe)** — 下载后直接运行即可
 
-**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — 无需安装
+**[⬇ 下载便携 ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-v1.26.0-win-x64.zip)** — 无需安装
 
 下载或安装即表示您同意[最终用户许可协议 (EULA)](EULA.txt)。
 
@@ -107,7 +108,7 @@ macOS 用户请使用单独的公开仓库:
 3. 应用自动打开并驻留在系统托盘中
 
 **方式 B — 便携 ZIP** _(无需安装)_
-1. 在发布页面下载 `WhereMyTokens-v1.25.1-win-x64.zip`
+1. 在发布页面下载 `WhereMyTokens-v1.26.0-win-x64.zip`
 2. 解压到任意位置
 3. 运行 `WhereMyTokens.exe`
 
@@ -125,7 +126,7 @@ macOS 用户请使用单独的公开仓库:
 
 ### 速率限制与提醒
 - **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都会把 provider 报告的 limit 转成 `providerQuotas` 中的 canonical Quota Entry；Claude 优先使用官方 `statusLine`，没有新值时通过现有 Claude Code access token 的只读 Desktop compatibility request 获取 5h/7d 与实际报告的 model-scoped entry。Codex 使用 live usage snapshot 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用运行中 IDE 的 127.0.0.1 local RPC model quota entry。未报告的 limit 不再合成为 `Unlimited`，而是保持缺席状态
-- **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。Codex Resets target 仅用于 Plan Usage
+- **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。指标数量变化时固定右边缘，向左扩展或收缩；拖动可调整位置，双击文字可打开主界面。Codex Resets target 仅用于 Plan Usage
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示使用节奏快于重置窗口
 - **Claude Code 桥接** — 优先通过 `statusLine` 接收官方本地数据；没有新值且存在 Claude Code credential 时由受限的只读 compatibility request 补充
 - **Claude 重新登录提示** — 登录过期或被拒绝时显示一次 Windows 通知和应用内操作，并打开官方 `claude auth login` 流程。credential 变更后自动重试；WMT 本身不会刷新 token 或写入 credential
@@ -307,7 +308,7 @@ Claude 提供 input、output、cache creation 与 cache read。Codex 提供 raw 
 ### 环境要求
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org) 18+
+- [Node.js](https://nodejs.org) 22.12+
 - [Claude Code](https://claude.ai/code) 已安装并登录
 
 ### 构建与运行
@@ -316,6 +317,7 @@ Claude 提供 input、output、cache creation 与 cache read。Codex 提供 raw 
 git clone https://github.com/jeongwookie/WhereMyTokens.git
 cd WhereMyTokens
 npm install
+npx --no-install install-electron
 npm run build
 npm start
 ```

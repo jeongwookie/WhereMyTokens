@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>v1.25.1 다운로드</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe"><strong>v1.26.0 다운로드</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 버전</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.1: 최소화·종료(X)를 오른쪽 위에 고정하고 긴 로그인·상태 문구는 줄바꿈하여 버튼이 가려지는 문제 수정</em>
+  <em>v1.26.0: 최소화·종료(X)를 오른쪽 위에 고정하고 긴 로그인·상태 문구는 줄바꿈하여 버튼이 가려지는 문제 수정</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |------|------|---------|
+| **[v1.26.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.26.0)** | 2026-11-06 | 대만 번체와 TWD 지원, Git 통계 동시 실행 제한, 작업표시줄 오른쪽 고정과 더블클릭 열기, 인증 테스트 격리와 보안 의존성 업데이트 |
 | **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | 최소화·종료(X)를 오른쪽 위에 고정하고 긴 로그인·상태 문구는 줄바꿈하여 버튼이 가려지는 문제 수정 |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 중국어 간체 UI·위안화 표시 추가, Codex 크레딧 포함 quota 표시 수정, 취약 의존성 갱신 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Codex 과다 집계·업그레이드 자동 보정 수정, Astra 가격 반영, 대규모 Git 통계 안정화 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows에서 현재·legacy Antigravity language server를 모두 탐지하고, provider가 보고한 shared Gemini 및 Claude/GPT quota group을 우선 표시하며 이전 서버의 모델별 quota fallback을 유지 |
-| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude 로그인 만료·거절을 알림과 앱 내 액션으로 안내하고 공식 CLI 로그인을 열며, credential 변경 후 자동 재시도합니다. 이전 quota를 유지해도 로그인 문제를 숨기지 않고 credential 갱신·쓰기는 하지 않습니다 |
 
 구버전 검증 정보가 부족하면 초기 인덱싱 완료 후 자동 재검사합니다. 입증된 과다 집계만 로컬 백업 후 보정하고 검증 불가 기록은 보존합니다. Settings → Data에서 결과와 재검사를 확인할 수 있습니다.
 
@@ -89,18 +89,19 @@
 
 ### 중국어 UI와 통화
 
-Settings → General → Language에서 简体中文을 선택할 수 있습니다. 간체 중국어 Windows는 자동 감지하며 번체 환경은 영어로 유지합니다. 도움말·트레이 메뉴·로그인 알림·사용량 알림을 포함합니다. [@lizi1997](https://github.com/lizi1997) 님의 [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) 및 #60 번역 패치를 통합했습니다.
+Settings → General → Language에서 간체 중국어와 대만 번체 중국어를 선택할 수 있습니다. 시스템 언어 자동 감지, 도움말, 트레이 메뉴, 로그인 알림, 사용량 알림을 지원합니다. 간체 번역은 [@lizi1997](https://github.com/lizi1997)의 [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61), 번체 번역은 [@Small-Danny](https://github.com/Small-Danny)의 [PR #64](https://github.com/jeongwookie/WhereMyTokens/pull/64)를 반영했습니다.
 
-USD·KRW·CNY를 지원하며 환율은 수동 입력입니다(CNY 기본값: 1 USD = 7.2 CNY). 실시간 환율 조회는 하지 않고 저장된 USD 사용량을 바꾸지 않으며 화면과 트레이 표시만 변환합니다. 계정 크레딧이 있을 때 Codex가 잘못 오프라인으로 보이던 문제도 수정했습니다. 이 수정에 재로그인이나 기록 초기화는 필요하지 않습니다.
+USD, KRW, CNY, TWD를 지원하며 환율은 수동 입력입니다. 1 USD 기준 기본값은 CNY 7.2, TWD 32입니다. 실시간 환율 조회 없이 화면과 트레이 표시만 변환하며 저장된 USD 사용량은 유지합니다.
+
 
 macOS 사용자는 별도 공개 저장소를 사용하세요:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
+**[⬇ 인스톨러 다운로드 (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe)** — 받아서 실행하면 끝
 
 > **일본어 UI 포함:** 일본어 Windows에서는 자동으로 일본어 UI가 열리고, Settings → 일반 → 언어에서 System / English / 日本語 / 简体中文를 직접 선택할 수 있습니다. 일본어화는 [@restructure-git](https://github.com/restructure-git) 님의 번역과 키 구조 제안([PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37))을 참고해 통합했습니다.
 
-**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — 설치 없이 실행
+**[⬇ 포터블 ZIP 다운로드](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-v1.26.0-win-x64.zip)** — 설치 없이 실행
 
 다운로드 또는 설치 시 [최종 사용자 라이선스 계약 (EULA)](EULA.ko.txt)에 동의하는 것으로 간주됩니다.
 
@@ -110,7 +111,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 3. 앱이 자동으로 열리고 시스템 트레이에 상주합니다
 
 **옵션 B — 포터블 ZIP** _(설치 불필요)_
-1. 릴리즈 페이지에서 `WhereMyTokens-v1.25.1-win-x64.zip` 다운로드
+1. 릴리즈 페이지에서 `WhereMyTokens-v1.26.0-win-x64.zip` 다운로드
 2. 원하는 위치에 압축 해제
 3. `WhereMyTokens.exe` 실행
 
@@ -337,7 +338,7 @@ Claude는 input, output, cache creation, cache read를 제공합니다. Codex는
 ### 요구 사항
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org) 18+
+- [Node.js](https://nodejs.org) 22.12+
 - [Claude Code](https://claude.ai/code) 설치 및 로그인 상태
 
 ### 빌드 & 실행
@@ -346,6 +347,7 @@ Claude는 input, output, cache creation, cache read를 제공합니다. Codex는
 git clone https://github.com/jeongwookie/WhereMyTokens.git
 cd WhereMyTokens
 npm install
+npx --no-install install-electron
 npm run build
 npm start
 ```

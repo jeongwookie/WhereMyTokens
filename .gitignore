@@ -3,6 +3,8 @@ dist/
 release/
 taskbar-helper/bin/
 taskbar-helper/obj/
+scripts/test-support/taskbar-layout/bin/
+scripts/test-support/taskbar-layout/obj/
 assets/screenshot.png
 assets/icon.png
 assets/icon-128.png
