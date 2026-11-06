@@ -18,12 +18,12 @@
 
 <p align="center">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%2F11-0078d4?style=for-the-badge">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1"><img alt="Release v1.25.1" src="https://img.shields.io/badge/release-v1.25.1-2563eb?style=for-the-badge"></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.26.0"><img alt="Release v1.26.0" src="https://img.shields.io/badge/release-v1.26.0-2563eb?style=for-the-badge"></a>
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-16a34a?style=for-the-badge">
 </p>
 
 <p align="center">
-  <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.es.md">Español</a>
+  <a href="README.ko.md">한국어</a> · <a href="README.ja.md">日本語</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.es.md">Español</a>
 </p>
 
 <p align="center">
@@ -61,9 +61,9 @@ WhereMyTokens is a local-first desktop app for monitoring AI coding usage: quota
 
 | Platform | Download | Best For |
 |----------|----------|----------|
-| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
-| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
-| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** | No installer, keep it anywhere |
+| Windows 10/11 | **[Installer (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe)** | Normal installation, auto-start from the tray |
+| Windows 10/11 — 日本語 UI | **[Japanese UI installer](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe)** | Same installer; Japanese Windows opens in Japanese automatically, or choose Settings → General → Language |
+| Windows 10/11 | **[Portable ZIP](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-v1.26.0-win-x64.zip)** | No installer, keep it anywhere |
 | macOS Apple Silicon | **[macOS Edition](https://github.com/jeongwookie/WhereMyTokens-mac/releases/tag/mac-v1.1.1)** | Menu bar app with DMG/ZIP packaging |
 
 Looking for the menu bar version? See the separate [WhereMyTokens for macOS repository](https://github.com/jeongwookie/WhereMyTokens-mac), which has its own `mac-vX.Y.Z` release track and DMG/ZIP downloads.
@@ -76,9 +76,10 @@ Japanese UI is built into the Windows app. It follows your system language by de
 
 ### Chinese UI and Currency
 
-Choose Simplified Chinese in Settings → General → Language. Simplified Chinese Windows is detected automatically; Traditional Chinese locales keep the English fallback. Help, tray menus, login notices, and usage alerts are included. Thanks to [@lizi1997](https://github.com/lizi1997) for [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) and the additional translation patch in #60.
+Choose Simplified Chinese or Traditional Chinese (Taiwan) in Settings → General → Language. Both locale families are detected automatically on supported Windows systems; the UI, Help page, tray menus, login notices, and usage alerts are localized. Thanks to [@lizi1997](https://github.com/lizi1997) for Simplified Chinese in [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) and the additional patch in #60, and [@Small-Danny](https://github.com/Small-Danny) for Traditional Chinese in [PR #64](https://github.com/jeongwookie/WhereMyTokens/pull/64).
 
-Settings → Currency supports USD, KRW, and CNY. Exchange rates are manual (CNY defaults to 7.2 per USD), not live market quotes. Currency changes affect display only, including the tray; stored USD usage is unchanged. This release also fixes Codex incorrectly appearing offline when account credits are present. No re-login or history reset is required for that fix.
+Settings → Currency supports USD, KRW, CNY, and TWD. Exchange rates are manual (CNY defaults to 7.2 and TWD to 32 per USD), not live market quotes. Currency changes affect display only, including the tray; stored USD usage is unchanged. The v1.25.0 release also fixed Codex incorrectly appearing offline when account credits were present, without requiring re-login or a history reset.
+
 
 1. Install with `WhereMyTokens-Setup.exe`, or extract the portable ZIP and run `WhereMyTokens.exe`.
 2. Open the dashboard from the Windows tray.
@@ -89,11 +90,11 @@ Settings → Currency supports USD, KRW, and CNY. Exchange rates are manual (CNY
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **[v1.26.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.26.0)** | 2026-11-06 | Traditional Chinese and TWD support; bounded Git statistics concurrency; right-anchored taskbar mini with double-click opening; isolated credential tests and dependency security updates. |
 | **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | Keep minimize and quit (X) visible at the top right; long status/login labels wrap without pushing window controls out of view. |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | Add Simplified Chinese UI and CNY display; fix Codex credit-bearing quotas and update vulnerable dependencies. |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Fix Codex counter overcounts, safely correct verified history after upgrade, update Astra pricing, and preserve large Git statistics. |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | Aug 27 | Restore Antigravity 2.x detection on Windows and show provider-reported shared Gemini and Claude/GPT quota groups with safe legacy per-model fallback |
-| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | Aug 10 | Add actionable Claude login recovery with a one-time Windows notification, the official CLI login flow, credential-change auto-retry, and stale-quota preservation without refreshing or writing credentials |
 
 After upgrade, historical usage is checked locally. When legacy checkpoints need rebuilding, verification retries automatically after initial indexing completes. Only proven overcounts are corrected, with a local backup; unverified history remains unchanged. See Settings → Data for results and rechecking.
 
@@ -107,7 +108,7 @@ After upgrade, historical usage is checked locally. When legacy checkpoints need
 - Claude account limits prefer the official Claude Code `statusLine` 5h/7d fields. When Claude Code is not producing statusLine updates, a read-only compatibility fallback can query the same account windows using the existing Claude Code access token. A model-scoped target such as Fable appears only when one of those provider-reported sources includes it; WhereMyTokens does not infer missing limits.
 - When Claude Code login expires or is rejected, WhereMyTokens shows one Windows notification and an in-app action that opens the official `claude auth login` flow. It watches for the credential change and retries automatically, without refreshing tokens or writing credentials itself.
 - Optional draggable Windows taskbar mini display uses two physical lines for normalized 5h/7d entries. Two represented periods use one line each; a single represented period can use both lines, with configurable 1-3 blocks per line and compact `+N` hidden-target cues.
-- Built-in English, Japanese, and Simplified Chinese UI with a Settings → General → Language selector.
+- Built-in English, Japanese, Simplified Chinese, and Traditional Chinese (Taiwan) UI with a Settings → General → Language selector.
 - Codex reset-credit availability can appear as a separate Plan Usage target, with Rich, Simple, or hidden display modes in Settings.
 - Active and recent session tracking from local provider data.
 - Today and all-time token, cost, cache, model, and call summaries.

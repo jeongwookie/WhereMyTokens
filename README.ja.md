@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe"><strong>v1.25.1 をダウンロード</strong></a>
+  <a href="https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe"><strong>v1.26.0 をダウンロード</strong></a>
   ·
   <a href="https://github.com/jeongwookie/WhereMyTokens-mac">macOS 版</a>
   ·
@@ -43,7 +43,7 @@
 </p>
 
 <p align="center">
-  <em>v1.25.1: 最小化・終了(X)を右上に固定し、長いログイン・状態表示を折り返してボタンが隠れる問題を修正</em>
+  <em>v1.26.0: 最小化・終了(X)を右上に固定し、長いログイン・状態表示を折り返してボタンが隠れる問題を修正</em>
 </p>
 
 <p align="center">
@@ -73,11 +73,11 @@
 
 | バージョン | 日付 | 主な変更 |
 |-----------|------|--------|
+| **[v1.26.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.26.0)** | 2026-11-06 | 繁体字中国語と TWD、Git 統計の同時実行制限、タスクバー右端固定とダブルクリック、認証テスト分離と依存関係の更新 |
 | **[v1.25.1](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.1)** | 2026-09-19 | 最小化・終了(X)を右上に固定し、長いログイン・状態表示を折り返してボタンが隠れる問題を修正 |
 | **[v1.25.0](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.25.0)** | 2026-09-19 | 簡体字中国語 UI と CNY 表示、Codex クレジット付き配額の修正、脆弱な依存関係の更新 |
 | **[v1.24.6](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.6)** | 2026-09-11 | Codex の過大計上と更新後の自動修正、Astra 料金、大規模 Git 統計を改善 |
 | **[v1.24.3](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.3)** | 8/27 | Windows で現在と legacy の Antigravity language server を検出し、provider が報告する shared Gemini / Claude・GPT quota group を優先表示。旧 server のモデル別 quota fallback も維持 |
-| **[v1.24.2](https://github.com/jeongwookie/WhereMyTokens/releases/tag/v1.24.2)** | 8/10 | Claude login の期限切れ・拒否を notification と app 内 action で案内し、公式 CLI login を開いて credential 変更後に自動再試行。以前の quota を保持しても login 問題を隠さず、credential の更新・書き込みは行いません |
 
 旧版の検証情報が不足する場合は初期インデックス完了後に自動再検証します。証明できた過大計上のみバックアップ後に修正し、不明な履歴は保持します。Settings → Data で結果と再検証を確認できます。
 
@@ -89,18 +89,19 @@
 
 ### 簡体字中国語 UI と通貨
 
-Settings → 一般 → 言語で简体中文を選択できます。簡体字中国語の Windows は自動検出し、繁体字環境では英語を維持します。ヘルプ、トレイメニュー、ログイン通知、使用量アラートも対応。[PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61) と #60 の翻訳パッチを提供した [@lizi1997](https://github.com/lizi1997) さんに感謝します。
+Settings → 一般 → 言語で簡体字中国語と繁体字中国語（台湾）を選択できます。システム言語の自動検出、ヘルプ、トレイメニュー、ログイン通知、使用量アラートに対応します。簡体字は [PR #61](https://github.com/jeongwookie/WhereMyTokens/pull/61)、繁体字は [PR #64](https://github.com/jeongwookie/WhereMyTokens/pull/64) の貢献を反映しています。
 
-USD・KRW・CNY に対応し、為替レートは手動入力です（CNY の初期値は 1 USD = 7.2 CNY）。オンライン取得はせず、保存済み USD 使用量を変えずに画面とトレイ表示だけを変換します。アカウントクレジットがあると Codex がオフライン表示になる問題も修正しました。この修正に再ログインや履歴リセットは不要です。
+USD、KRW、CNY、TWD に対応します。為替レートは手動入力で、1 USD あたりの初期値は CNY 7.2、TWD 32 です。保存済み USD 使用量を変更せず、画面とトレイ表示だけを変換します。
+
 
 macOS ユーザーは別の公開リポジトリを使用してください:
 **[WhereMyTokens for macOS](https://github.com/jeongwookie/WhereMyTokens-mac)**.
 
-**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-Setup.exe)** — 実行するだけで完了
+**[⬇ インストーラーをダウンロード (.exe)](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-Setup.exe)** — 実行するだけで完了
 
 > **日本語 UI 内蔵:** Windows の表示言語が日本語なら自動で日本語 UI になります。あとから **Settings → 一般 → 言語** で「システム設定 / English / 日本語 / 简体中文」を切り替えられます。日本語化は [@restructure-git](https://github.com/restructure-git) さんの翻訳とキー構造の提案（[PR #37](https://github.com/jeongwookie/WhereMyTokens/pull/37)）を参考に統合しました。ありがとうございます。
 
-**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.25.1/WhereMyTokens-v1.25.1-win-x64.zip)** — インストール不要
+**[⬇ ポータブル ZIP をダウンロード](https://github.com/jeongwookie/WhereMyTokens/releases/download/v1.26.0/WhereMyTokens-v1.26.0-win-x64.zip)** — インストール不要
 
 ダウンロードまたはインストールにより、[エンドユーザーライセンス契約 (EULA)](EULA.txt) に同意したものとみなされます。
 
@@ -110,7 +111,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 3. アプリが自動で開き、システムトレイに常駐します
 
 **オプション B — ポータブル ZIP** _(インストール不要)_
-1. リリースページから `WhereMyTokens-v1.25.1-win-x64.zip` をダウンロード
+1. リリースページから `WhereMyTokens-v1.26.0-win-x64.zip` をダウンロード
 2. 任意の場所に展開
 3. `WhereMyTokens.exe` を実行
 
@@ -338,7 +339,7 @@ Claude は input、output、cache creation、cache read を提供します。Cod
 ### 動作要件
 
 - Windows 10 / 11
-- [Node.js](https://nodejs.org) 18+
+- [Node.js](https://nodejs.org) 22.12+
 - [Claude Code](https://claude.ai/code) インストール済みでログイン状態
 
 ### ビルド & 実行
@@ -347,6 +348,7 @@ Claude は input、output、cache creation、cache read を提供します。Cod
 git clone https://github.com/jeongwookie/WhereMyTokens.git
 cd WhereMyTokens
 npm install
+npx --no-install install-electron
 npm run build
 npm start
 ```

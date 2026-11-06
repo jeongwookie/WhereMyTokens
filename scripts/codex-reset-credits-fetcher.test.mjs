@@ -92,7 +92,8 @@ function restoreMocks() {
 }
 
 function ensureTempCodexAuth() {
-  if (!process.env.CODEX_HOME || !fs.existsSync(path.join(process.env.CODEX_HOME, 'auth.json'))) {
+  // 외부에서 상속한 인증 경로는 읽거나 덮어쓰지 않는다.
+  if (!tempDirs.includes(process.env.CODEX_HOME) || !fs.existsSync(path.join(process.env.CODEX_HOME, 'auth.json'))) {
     makeTempCodexHome({ tokens: { access_token: 'test-access-token', account_id: 'acct_test' } });
   }
   return {
@@ -101,8 +102,30 @@ function ensureTempCodexAuth() {
   };
 }
 
+test.beforeEach(() => {
+  // 인증이 필요 없는 테스트도 실제 사용자 경로로 폴백하지 않는다.
+  makeTempCodexHome();
+});
+
 test.afterEach(() => {
   restoreMocks();
+});
+
+test('inherited auth remains unchanged when temporary auth is requested', () => {
+  const inherited = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-inherited-auth-'));
+  const authPath = path.join(inherited, 'auth.json');
+  const original = JSON.stringify({ tokens: { access_token: 'fixture-only', account_id: 'fixture' } });
+  try {
+    fs.writeFileSync(authPath, original);
+    process.env.CODEX_HOME = inherited;
+    ensureTempCodexAuth();
+    assert.notEqual(process.env.CODEX_HOME, inherited);
+    assert.ok(tempDirs.includes(process.env.CODEX_HOME));
+    fs.writeFileSync(path.join(process.env.CODEX_HOME, 'auth.json'), '{}');
+    assert.equal(fs.readFileSync(authPath, 'utf8'), original);
+  } finally {
+    fs.rmSync(inherited, { recursive: true, force: true });
+  }
 });
 
 test('reset-credits URL follows the wham path style', () => {

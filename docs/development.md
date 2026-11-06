@@ -3,7 +3,8 @@
 ## Requirements
 
 - Windows 10 or 11.
-- Node.js 18 or newer.
+- Node.js 22.12 or newer (Electron 45 tooling requirement).
+- .NET 10 SDK for the Windows taskbar helper.
 - Claude Code, Codex, or Antigravity installed if you want live local data during manual testing.
 
 ## Build And Run
@@ -12,6 +13,7 @@
 git clone https://github.com/jeongwookie/WhereMyTokens.git
 cd WhereMyTokens
 npm install
+npx --no-install install-electron
 npm run build
 npm start
 ```
@@ -21,6 +23,22 @@ npm start
 ```bash
 npm test
 ```
+
+Credential fixtures must only use temporary directories created by the test itself. Never reuse an inherited `CODEX_HOME` for mutable fixtures. For untrusted contributions, inspect source and lifecycle scripts before installation, use `npm ci --ignore-scripts`, and run tests with disposable profile directories and synthetic credentials. Environment overrides are not a security sandbox; use an isolated Windows VM for untrusted runtime execution.
+
+Windows taskbar layout and mouse-event regression checks (without showing or attaching a window):
+
+```bash
+dotnet run --project scripts/test-support/taskbar-layout/TaskbarLayoutTests.csproj
+```
+
+### Dependency Security
+
+The integration branch uses Electron 45.2.3 and patched transitive packages, including fast-uri 3.1.9, shell-quote 1.12.0, follow-redirects 1.16.2, and undici 6.29.1/7.30.2. Electron is a development dependency in npm but is the shipped runtime and must always be audited.
+
+As of 2026-11-06, `npm audit` reports no high or critical findings, and `npm audit --omit=dev` reports no findings. Ten moderate package-level findings remain in two development-only chains: Jimp/file-type (malformed ASF parsing) and electron-builder/minimatch (glob amplification). The icon script reads the repository's PNG, not user-supplied ASF files; packaging uses maintainer-controlled glob patterns. These findings are not a claim of zero risk. Do not process untrusted media or packaging configuration with these tools. Jimp 1.6.1 was evaluated but not adopted because its Zod dependency introduces a high-severity advisory. Recheck all advisories before each release.
+
+References: [file-type](https://github.com/advisories/GHSA-5v7r-6r5c-r473), [minimatch](https://github.com/advisories/GHSA-g3hv-75wg-m249), [Zod](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
 
 ## Build Installer
 
@@ -49,6 +67,10 @@ WhereMyTokens is an Electron tray app. The renderer never reads local files or c
 | React renderer | Shows the tray dashboard, settings, notifications, activity charts, and compact quota widget. |
 | `statusLine` bridge | Receives Claude Code JSON on stdin and writes a local bridge snapshot for the main process. |
 | Claude compatibility fetcher | Uses a fresh statusLine first; otherwise reads the existing Claude Code access token in the main process and sends a throttled, fixed-host quota request without refresh or credential writes. |
+
+### Git statistics
+
+Git statistics share a FIFO limit of two active Git commands across repositories and refresh callers, including buffered commands and streamed history. A command holds its slot until it finishes; queue time does not consume its execution timeout.
 
 ### Usage history
 

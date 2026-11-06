@@ -29,18 +29,34 @@ test('renderer automatic language and document language stay in sync', async () 
   const doc = Object.getOwnPropertyDescriptor(globalThis, 'document');
   try {
     Object.defineProperty(globalThis, 'document', { configurable: true, value: { documentElement: { lang: '' } } });
-    for (const [locale, expected] of [['zh-CN', 'zh'], ['zh-TW', 'en'], ['zh-Hant', 'en'], ['ja-JP', 'ja'], ['ko-KR', 'en']]) {
+    for (const [locale, expected] of [['zh-CN', 'zh'], ['zh-TW', 'zh-TW'], ['zh-Hant', 'zh-TW'], ['ja-JP', 'ja'], ['ko-KR', 'en']]) {
       Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { language: locale } });
       assert.equal(ui.detectSystemLanguage(), expected);
       await ui.i18n.changeLanguage(expected);
       assert.equal(document.documentElement.lang, expected === 'zh' ? 'zh-CN' : expected);
     }
     assert.equal(ui.normalizeLanguagePreference('zh'), 'zh');
+    assert.equal(ui.normalizeLanguagePreference('zh-TW'), 'zh-TW');
     assert.equal(ui.normalizeLanguagePreference('<script>'), 'system');
   } finally {
     if (nav) Object.defineProperty(globalThis, 'navigator', nav); else delete globalThis.navigator;
     if (doc) Object.defineProperty(globalThis, 'document', doc); else delete globalThis.document;
   }
+});
+
+test('Traditional Chinese help and settings render the chosen TWD rate', async () => {
+  await ui.i18n.changeLanguage('zh-TW');
+  const help = renderToStaticMarkup(React.createElement(ui.Help, { onBack() {} }));
+  assert.match(help, /服務供應商追蹤/);
+  assert.match(help, /TWD/);
+  const settings = renderToStaticMarkup(React.createElement(ui.Settings, {
+    settings: { ...ipc.DEFAULT_SETTINGS, language: 'zh-TW', currency: 'TWD', usdToTwd: 33.5 },
+    providerQuotas: {}, onSave() {}, onBack() {},
+  }));
+  assert.match(settings, /value="zh-TW" selected/);
+  assert.match(settings, /value="TWD" selected/);
+  assert.match(settings, /value="33.5"/);
+  assert.doesNotMatch(settings, /settingsView\./);
 });
 
 test('CNY formatting uses the chosen rate while USD and KRW retain their conventions', () => {

@@ -185,12 +185,13 @@ export interface AppSettings {
   alertThresholds: number[];
   openAtLogin: boolean;
   alwaysOnTop: boolean;
-  currency: 'USD' | 'KRW' | 'CNY';
+  currency: 'USD' | 'KRW' | 'CNY' | 'TWD';
   usdToKrw: number;
   usdToCny?: number;
+  usdToTwd?: number;
   globalHotkey: string;
   enableAlerts: boolean;
-  language: 'system' | 'en' | 'ja' | 'zh';
+  language: 'system' | 'en' | 'ja' | 'zh' | 'zh-TW';
   trayDisplay: 'none' | 'h5pct' | 'd7pct' | 'tokens' | 'cost';
   mainSectionOrder: MainSectionId[];
   hiddenMainSections: MainSectionId[];
