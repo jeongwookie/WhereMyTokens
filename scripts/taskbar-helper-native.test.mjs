@@ -4,11 +4,10 @@ import test from 'node:test';
 
 const source = fs.readFileSync('taskbar-helper/Program.cs', 'utf8');
 
-test('native helper preserves the right anchor across content changes and restarts', () => {
-  assert.match(source, /_rightAnchor \?\? saved\?\.Right/);
-  assert.match(source, /right - width/);
-  assert.match(source, /new LayoutState\(bounds.X, bounds.Y, bounds.Right\)/);
-  assert.match(source, /record LayoutState\(int X, int Y, int\? Right = null\)/);
+test('native helper requires logical edge insets in persisted positions', () => {
+  assert.match(source, /\[property: JsonRequired\] double RightInsetDip/);
+  assert.match(source, /\[property: JsonRequired\] double BottomInsetDip/);
+  assert.doesNotMatch(source, /record LayoutState\(int X/);
 });
 
 test('native helper opens only on a left double click without a drag', () => {

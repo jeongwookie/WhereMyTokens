@@ -93,6 +93,10 @@ The automatic counter-origin revision runs in a worker serialized with normal sc
 
 Known reset time supports a countdown; elapsed-window percentage additionally requires a known or explicitly inferred duration. Optional `usageBinding` controls local token/cost attribution independently. The canonical normalized periods are `5h`, `7d`, or null; other or unknown periods remain dashboard-visible without being forced into fixed-period tray/taskbar projections. The taskbar's two physical lines distribute the represented periods; `1w` is a display label for `7d`, not another protocol value.
 
+When both periods are represented, taskbar blocks use a shared target order before applying the column limit. A null block reserves that target's column when the line has no matching period. Hidden counts include only omitted quota entries, not empty cells. A single represented period still balances contiguous blocks across both lines. Antigravity summary targets use word initials such as `GM` and `G4A`; the native helper measures the actual displayed prefix using the current font.
+
+The helper stores `RightInsetDip` and `BottomInsetDip` in 96-DPI logical units. Display and DPI notifications reapply the latest snapshot with current taskbar metrics and pixel-sized fonts. The previous absolute-pixel position format is rejected and starts at the default position. Native regression checks cover resolution changes, clipping and restoration, and repeated DPI transitions while the drawing surface remains at 96 DPI.
+
 Current provider acquisition and credential boundaries are described in [privacy and security](privacy-security.md). Historical OAuth or fixed-window implementation plans do not override that contract.
 
 ## Project Structure

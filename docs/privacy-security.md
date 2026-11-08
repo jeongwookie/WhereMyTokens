@@ -19,7 +19,7 @@ WhereMyTokens is local-first. There is no cloud sync and no telemetry.
 | Antigravity language server on `127.0.0.1` | Local cascade sessions, shared quota groups or legacy model quotas, reset times, and token metadata. | Loopback only |
 | `%APPDATA%\WhereMyTokens` | App settings, local caches, ledgers, notification history, bridge state, and auth-bound Codex reset-credit cache. | No |
 | Taskbar mini helper stdin | Optional summarized quota snapshot containing two physical Display Lines derived from normalized `5h` and `7d` Quota Period Groups, hidden-target counts, per-block source/status tone for target-prefix coloring, plus current light/dark display theme fallback. | No |
-| `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Optional taskbar-relative helper position. | No |
+| `%LOCALAPPDATA%\WhereMyTokens\TaskbarHelper\layout.json` | Optional helper distances from the taskbar’s right and bottom edges, in 96-DPI logical units. | No |
 
 ## Credential Handling
 

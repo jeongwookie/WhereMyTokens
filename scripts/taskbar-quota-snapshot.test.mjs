@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import taskbar from '../dist/main/taskbarQuotaSnapshot.js';
+import antigravityQuota from '../dist/main/providers/antigravity/quota.js';
 
 const { buildTaskbarQuotaSnapshot, resolveQuotaAbbreviation } = taskbar;
 const NOW = Date.parse('2026-07-18T00:00:00Z');
@@ -56,7 +57,75 @@ test('both periods allocate one physical line each with canonical block state', 
   assert.equal(result.theme, 'light');
   assert.deepEqual(result.lines.map(line => [line.period, line.label]), [['5h', '5h'], ['7d', '1w']]);
   assert.deepEqual(result.lines[0].blocks.map(block => block.usedPct), [0, 20]);
-  assert.ok(result.lines.flatMap(line => line.blocks).every(block => block.state === 'limited'));
+  assert.ok(result.lines.flatMap(line => line.blocks).filter(Boolean).every(block => block.state === 'limited'));
+});
+
+test('mixed periods align each source by target id and preserve empty cells', () => {
+  const gemini = target('antigravity.group.summary.gemini-models', 'Gemini Models', 100, 'GM');
+  const agent = target('antigravity.group.summary.gemini-4-agent', 'Gemini 4 Agent', 101, 'G4A');
+  const result = buildTaskbarQuotaSnapshot(state({
+    codex: snapshot('codex', [limited('codex.account.7d', codex, '7d', 45)]),
+    antigravity: snapshot('antigravity', [
+      limited('gemini.weekly', gemini, '7d', 0),
+      limited('agent.weekly', agent, '7d', 0),
+      limited('gemini.session', gemini, '5h', 0),
+    ]),
+  }, { taskbarQuotaMaxBlocks: 3 }));
+  assert.deepEqual(result.lines.map(line => line.blocks.map(block => block?.targetId ?? null)), [
+    [null, gemini.id, null],
+    [codex.id, gemini.id, agent.id],
+  ]);
+  assert.deepEqual(result.lines.map(line => line.hiddenCount), [0, 0]);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)).lines[0].blocks, [null, result.lines[0].blocks[1], null]);
+});
+
+test('mixed-period column limits follow configured order and count only omitted entries', () => {
+  const quotas = {
+    claude: snapshot('claude', [
+      limited('claude.account.5h', claude, '5h', 10),
+      limited('claude.account.7d', claude, '7d', 20),
+      limited('claude.fable.5h', fable, '5h', 30),
+    ]),
+    codex: snapshot('codex', [limited('codex.account.7d', codex, '7d', 40)]),
+  };
+  for (const cap of [1, 2, 3]) {
+    const result = buildTaskbarQuotaSnapshot(state(quotas, {
+      taskbarQuotaMaxBlocks: cap,
+      quotaTargetOrder: [codex.id, fable.id, claude.id],
+      quotaTargetAbbreviations: { [codex.id]: 'G', [fable.id]: 'G', [claude.id]: 'G' },
+    }));
+    assert.deepEqual(result.lines.map(line => line.blocks.map(block => block?.targetId ?? null)), [
+      [null, fable.id, claude.id].slice(0, cap),
+      [codex.id, null, claude.id].slice(0, cap),
+    ]);
+    assert.deepEqual(result.lines.map(line => line.hiddenCount), [
+      2 - result.lines[0].blocks.filter(Boolean).length,
+      2 - result.lines[1].blocks.filter(Boolean).length,
+    ]);
+  }
+});
+
+test('multiple entries for a target retain their slots and overflow counts', () => {
+  const result = buildTaskbarQuotaSnapshot(state({
+    claude: snapshot('claude', [
+      limited('claude.account.5h.a', claude, '5h', 10),
+      limited('claude.account.5h.b', claude, '5h', 20),
+      limited('claude.account.7d', claude, '7d', 30),
+      limited('claude.fable.7d', fable, '7d', 40),
+    ]),
+  }));
+  assert.deepEqual(result.lines.map(line => line.blocks.map(block => block?.usedPct ?? null)), [[10, 20], [30, null]]);
+  assert.deepEqual(result.lines.map(line => line.hiddenCount), [0, 1]);
+});
+
+test('Antigravity summary abbreviations stay distinct through the taskbar snapshot', () => {
+  const entries = antigravityQuota.parseAntigravityQuotaSummary({ groups: [
+    { displayName: 'Gemini Models', buckets: [{ bucketId: 'session', remainingFraction: 1 }] },
+    { displayName: 'Gemini 4 Agent', buckets: [{ bucketId: 'weekly', remainingFraction: 1 }] },
+  ] });
+  const result = buildTaskbarQuotaSnapshot(state({ antigravity: snapshot('antigravity', entries) }));
+  assert.equal(result.lines[0].blocks[0].abbreviation, 'GM');
+  assert.equal(result.lines[1].blocks[1].abbreviation, 'G4A');
 });
 
 test('single 7d period repeats label and balances contiguously across two lines', () => {

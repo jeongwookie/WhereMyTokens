@@ -77,6 +77,7 @@ test('grouped quota summary creates one target per family and one entry per buck
     ['Claude and GPT models', '7d', 0],
   ]);
   assert.equal(entries[0].target.id, entries[1].target.id);
+  assert.deepEqual(entries.map(entry => entry.target.taskbarAbbreviation), ['GM', 'GM', 'CG']);
   assert.notEqual(entries[0].target.id, entries[2].target.id);
   assert.ok(entries.every(entry => entry.durationInferred === false));
   assert.ok(entries.every(entry => entry.usageBinding === undefined));

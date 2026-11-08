@@ -73,9 +73,9 @@ function summaryBucketDurationMs(bucket: AntigravityQuotaSummaryBucket): number 
 
 function summaryTargetAbbreviation(label: string): string {
   if (/claude|gpt/i.test(label)) return 'CG';
-  if (/gemini/i.test(label)) return 'G';
-  const initials = label.match(/[A-Za-z0-9]/g)?.slice(0, 2).join('').toUpperCase();
-  return initials || 'A';
+  const words = label.toUpperCase().match(/[A-Z0-9]+/g) ?? [];
+  const initials = words.map(word => word[0]).join('');
+  return (initials.length >= 2 ? initials : words.join('')).slice(0, 3) || 'A';
 }
 
 export function parseAntigravityQuotaSummary(response: AntigravityQuotaSummaryResponse): QuotaEntry[] {
