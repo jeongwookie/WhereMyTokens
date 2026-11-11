@@ -182,31 +182,12 @@ test('Antigravity GM helpers replace a matching call with richer token data', ()
   assert.equal(merged[0].cacheReadTokens, 50);
 });
 
-test('Antigravity GM helpers request enrichment for placeholder and large cascades', () => {
-  const parsedCall = {
-    cascadeId: 'c1',
-    executionId: 'exec-1',
-    stepIndices: [1],
-    timestampMs: Date.parse('2026-06-01T10:00:00.000Z'),
-    model: 'antigravity',
-    rawModel: 'antigravity',
-    inputTokens: 1,
-    outputTokens: 1,
-    cacheCreationTokens: 0,
-    cacheReadTokens: 0,
-    thinkingTokens: 0,
-    responseTokens: 1,
-    toolNames: [],
-  };
-
-  assert.equal(gmParser.shouldEnrichForTokens({
-    stepCount: 10,
-    rawGm: [{ chatModel: {} }],
-    calls: [parsedCall],
-  }), true);
-  assert.equal(gmParser.shouldEnrichForTokens({
-    stepCount: 350,
-    rawGm: [{ chatModel: { responseModel: 'MODEL_GEMINI_3_PRO' } }],
-    calls: [parsedCall],
-  }), true);
+test('Antigravity timestamps distinguish provider evidence from estimates', () => {
+  const gm = { chatModel: { usage: { inputTokens: 10 } } };
+  const fallback = Date.parse('2026-11-10T12:00:00Z');
+  const estimated = parseAntigravityGmEntry('sample', gm, fallback);
+  assert.equal(estimated.timestampSource, 'estimated');
+  const actual = parseAntigravityGmEntry('sample', { ...gm, createdAt: '2026-11-11T01:00:00Z' }, fallback);
+  assert.equal(actual.timestampSource, 'provider');
+  assert.equal(actual.timestampMs, Date.parse('2026-11-11T01:00:00Z'));
 });

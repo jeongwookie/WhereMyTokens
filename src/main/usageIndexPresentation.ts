@@ -231,11 +231,13 @@ export function computeUsageFromUsageIndex(
     }
 
     const entries = projection.recentEntryData;
+    const entryTargetsByModel = entries.models.map(model => usageTargets.entries.filter(target => (
+      target.provider === projection.provider && usageBindingAcceptsModel(target.binding, model)
+    )));
     for (let index = 0; index < entries.count; index += 1) {
       const metrics = metricsFromProjectionEntry(entries, index);
       const timestampMs = entries.timestampMs[index];
       const provider = entries.providers[entries.providerIndexes[index]] ?? projection.provider;
-      const model = entries.models[entries.modelIndexes[index]] ?? '';
       if (timestampMs >= todayStart) {
         todayTokens += metrics.totalTokens;
         todayCost += metrics.costUSD;
@@ -254,10 +256,11 @@ export function computeUsageFromUsageIndex(
         usage.periods[target.period] ??= emptyWindow();
         addMetrics(usage.periods[target.period]!, metrics);
       }
-      for (const target of usageTargets.entries) {
+      for (const target of entryTargetsByModel[entries.modelIndexes[index]] ?? []) {
         if (target.provider !== provider
           || timestampMs < target.startMs
-          || !usageBindingAcceptsModel(target.binding, model)) continue;
+          || timestampMs >= target.endMs
+          || timestampMs > nowMs) continue;
         const stats = entryStats.get(target.entryKey) ?? emptyWindow();
         addMetrics(stats, metrics);
         entryStats.set(target.entryKey, stats);

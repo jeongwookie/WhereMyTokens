@@ -32,7 +32,7 @@ import {
 } from './types';
 import { UsageEntryProjectionBuilder } from './entryProjection';
 import { usageRetentionCutoffs } from './retention';
-import { canonicalSessionProjection, executionFingerprint, identityAccepts, reviseClaudePayload, sameExecutionOrigin, validUsageRevision, type ExecutionIdentity } from './executionIdentity';
+import { antigravityTimeRevision, canonicalSessionProjection, executionFingerprint, identityAccepts, reviseClaudePayload, sameExecutionOrigin, validUsageRevision, type ExecutionIdentity } from './executionIdentity';
 import {
   addUsageBreakdown,
   addUsageMetrics,
@@ -42,7 +42,7 @@ import {
   type UsageBucketKind,
 } from './usageBucketAggregation';
 
-const USAGE_INDEX_SCHEMA_VERSION = 6;
+const USAGE_INDEX_SCHEMA_VERSION = 7;
 const EXECUTION_TABLES_SQL = `
   CREATE TABLE usage_identity (
     provider TEXT NOT NULL, identity_key TEXT NOT NULL, source_id TEXT NOT NULL,
@@ -95,6 +95,7 @@ interface EntryRow {
   source_id: string;
   request_id: string;
   timestamp_ms: number;
+  timestamp_source: UsageEntry['timestampSource'] | null;
   provider: string;
   model: string;
   input_tokens: number;
@@ -200,6 +201,7 @@ function entryFromRow(row: EntryRow): UsageEntry {
   return {
     requestId: row.request_id,
     timestampMs: row.timestamp_ms,
+    ...(row.timestamp_source ? { timestampSource: row.timestamp_source } : {}),
     provider: row.provider,
     model: row.model,
     inputTokens: row.input_tokens,
@@ -438,18 +440,25 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
           } else identityIssues.add('cross-source-execution-conflict');
           return false;
         }
+        const previousRow = known ? this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(known.sourceId, known.requestId) as EntryRow | undefined : undefined;
+        const previous = previousRow ? entryFromRow(previousRow) : undefined;
+        const oldCheckpoint = storedSource ? JSON.parse(storedSource.checkpoint_json) : {};
+        const timeRevision = previous && known ? antigravityTimeRevision(entry, previous, known, oldCheckpoint.fallbackTimestampMs) : undefined;
         if (known) {
           for (const key of keys) register.run(entry.provider, key, known.sourceId, known.requestId, known.timestampMs, known.originId, known.fingerprint);
           if (!known.requestId.startsWith('protected:')) entry.requestId = known.requestId;
-          entry.timestampMs = known.timestampMs;
+          if (timeRevision) Object.assign(entry, timeRevision);
+          else {
+            entry.timestampMs = known.timestampMs;
+            if (previous?.timestampSource) entry.timestampSource = previous.timestampSource;
+            else delete entry.timestampSource;
+          }
         }
         if (!identityAccepts(entry, commit.source.sourceId, known)) return false;
         if (known) {
-          const previousRow = this.database.prepare('SELECT * FROM usage_entry WHERE source_id=? AND request_id=?').get(known.sourceId, known.requestId) as EntryRow | undefined;
-          if (!previousRow || known.fingerprint === executionFingerprint(entry)) return false;
-          const oldCheckpoint = storedSource ? JSON.parse(storedSource.checkpoint_json) : {};
+          if (!previous || !timeRevision && known.fingerprint === executionFingerprint(entry)) return false;
           const oldPayload = oldCheckpoint.resumeState ? JSON.parse(oldCheckpoint.resumeState).payload ?? {} : {};
-          if (!validUsageRevision(entry, entryFromRow(previousRow), known, oldPayload, commit.batch.sessionProjection?.payload)) {
+          if (!timeRevision && !validUsageRevision(entry, previous, known, oldPayload, commit.batch.sessionProjection?.payload)) {
             identityIssues.add('identity-conflict'); return false;
           }
         }
@@ -524,10 +533,11 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
         INSERT INTO usage_entry (
           source_id, request_id, timestamp_ms, provider, model,
           input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-          cost_usd, cache_savings_usd, breakdown_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          cost_usd, cache_savings_usd, breakdown_json, timestamp_source
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(source_id, request_id) DO UPDATE SET
           timestamp_ms = excluded.timestamp_ms,
+          timestamp_source = excluded.timestamp_source,
           provider = excluded.provider,
           model = excluded.model,
           input_tokens = excluded.input_tokens,
@@ -559,6 +569,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
           entry.costUSD,
           entry.cacheSavingsUSD,
           entry.breakdown ? JSON.stringify(entry.breakdown) : null,
+          entry.timestampSource ?? null,
         );
       }
 
@@ -572,7 +583,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
       collectUsageBucketDeltas(bucketDeltas, commit.source.sourceId, entriesToCommit, 1);
       for (const update of crossUpdates) {
         const e = update.entry;
-        insertEntry.run(update.known.sourceId, e.requestId, e.timestampMs, e.provider, e.model, e.inputTokens, e.outputTokens, e.cacheCreationTokens, e.cacheReadTokens, e.costUSD, e.cacheSavingsUSD, e.breakdown ? JSON.stringify(e.breakdown) : null);
+        insertEntry.run(update.known.sourceId, e.requestId, e.timestampMs, e.provider, e.model, e.inputTokens, e.outputTokens, e.cacheCreationTokens, e.cacheReadTokens, e.costUSD, e.cacheSavingsUSD, e.breakdown ? JSON.stringify(e.breakdown) : null, e.timestampSource ?? null);
         collectUsageBucketDeltas(bucketDeltas, update.known.sourceId, [update.previous], -1);
         collectUsageBucketDeltas(bucketDeltas, update.known.sourceId, [e], 1);
         this.database.prepare('UPDATE usage_identity SET fingerprint=? WHERE provider=? AND source_id=? AND request_id=?').run(executionFingerprint(e), e.provider, update.known.sourceId, e.requestId);
@@ -592,7 +603,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
           if (revised) this.database.prepare('UPDATE usage_session_hot SET payload_json=? WHERE source_id=?').run(JSON.stringify(revised), update.known.sourceId);
         }
       }
-      for (const e of entriesToCommit) this.database.prepare('UPDATE usage_identity SET fingerprint=?, origin_id=? WHERE provider=? AND source_id=? AND request_id=?').run(executionFingerprint(e), e.identityOrigin ?? '', e.provider, commit.source.sourceId, e.requestId);
+      for (const e of entriesToCommit) this.database.prepare('UPDATE usage_identity SET fingerprint=?, origin_id=?, timestamp_ms=? WHERE provider=? AND source_id=? AND request_id=?').run(executionFingerprint(e), e.identityOrigin ?? '', e.timestampMs, e.provider, commit.source.sourceId, e.requestId);
       this.applyBucketDeltas(bucketDeltas.values());
 
       if (commit.batch.sessionProjection === null
@@ -790,6 +801,13 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
     const row = this.database.prepare('PRAGMA user_version').get() as { user_version: number };
     let version = row.user_version;
     if (version === USAGE_INDEX_SCHEMA_VERSION) return;
+    if (version === 6) {
+      this.transaction(() => {
+        this.database.exec('ALTER TABLE usage_entry ADD COLUMN timestamp_source TEXT CHECK (timestamp_source IN (\'provider\',\'step\',\'estimated\'))');
+        this.database.exec('PRAGMA user_version = 7');
+      });
+      return;
+    }
     if (version === 4 || version === 5) {
       this.transaction(() => {
         if (version === 4) this.database.exec(EXECUTION_TABLES_SQL);
@@ -816,6 +834,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
         this.database.exec('DROP TABLE IF EXISTS usage_history_guard; DROP TABLE IF EXISTS usage_repair_receipt;');
         this.database.exec('PRAGMA user_version = 6');
       });
+      this.initializeSchema();
       return;
     }
 
@@ -844,6 +863,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
 
     if (version === 3) {
       this.migrateProviderConstraints();
+      this.initializeSchema();
       return;
     }
 
@@ -885,6 +905,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
           cost_usd REAL NOT NULL,
           cache_savings_usd REAL NOT NULL,
           breakdown_json TEXT,
+          timestamp_source TEXT CHECK (timestamp_source IN ('provider','step','estimated')),
           PRIMARY KEY (source_id, request_id)
         ) STRICT;
 
@@ -980,7 +1001,7 @@ export class SqliteUsageIndexStorage implements UsageIndexStorage {
         DROP TABLE usage_source_v3;
 
         ${EXECUTION_TABLES_SQL}
-        PRAGMA user_version = ${USAGE_INDEX_SCHEMA_VERSION};
+        PRAGMA user_version = 6;
       `);
     });
   }

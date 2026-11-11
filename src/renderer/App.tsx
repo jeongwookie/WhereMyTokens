@@ -187,7 +187,7 @@ function normalizeQuotaTargetAbbreviations(value: unknown): AppState['settings']
 
 function normalizeTaskbarQuotaMaxBlocks(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 2;
-  return Math.max(1, Math.min(3, Math.round(value)));
+  return Math.max(1, Math.min(5, Math.round(value)));
 }
 
 function normalizeStateFreshness(value: unknown, initialRefreshComplete: boolean): AppState['stateFreshness'] {

@@ -109,7 +109,7 @@ const NON_COST_HASH_QUERIES = [
     FROM usage_source ORDER BY source_id`,
   `SELECT source_id, project_key FROM usage_source_project ORDER BY source_id, project_key`,
   `SELECT source_id, request_id, timestamp_ms, provider, model, input_tokens, output_tokens,
-      cache_creation_tokens, cache_read_tokens, breakdown_json
+      cache_creation_tokens, cache_read_tokens, breakdown_json, timestamp_source
     FROM usage_entry ORDER BY source_id, request_id`,
   `SELECT source_id, provider, model, bucket_kind, bucket_start_ms, request_count,
       input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens,
@@ -127,7 +127,7 @@ const FULL_STATE_HASH_QUERIES = [
     FROM usage_source ORDER BY source_id`,
   `SELECT source_id, project_key FROM usage_source_project ORDER BY source_id, project_key`,
   `SELECT source_id, request_id, timestamp_ms, provider, model, input_tokens, output_tokens,
-      cache_creation_tokens, cache_read_tokens, cost_usd, cache_savings_usd, breakdown_json
+      cache_creation_tokens, cache_read_tokens, cost_usd, cache_savings_usd, breakdown_json, timestamp_source
     FROM usage_entry ORDER BY source_id, request_id`,
   `SELECT source_id, provider, model, bucket_kind, bucket_start_ms, request_count,
       input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, total_tokens,

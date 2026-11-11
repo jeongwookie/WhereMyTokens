@@ -190,7 +190,7 @@ function normalizeQuotaTargetAbbreviations(value: unknown): Partial<Record<strin
 function normalizeTaskbarQuotaMaxBlocks(value: unknown): number | null {
   const numberValue = finiteNumber(value);
   if (numberValue == null) return null;
-  return Math.max(1, Math.min(3, Math.round(numberValue)));
+  return Math.max(1, Math.min(5, Math.round(numberValue)));
 }
 
 function legacyProviderToEnabledProviders(value: unknown): ProviderId[] | null {

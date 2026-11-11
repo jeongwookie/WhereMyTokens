@@ -1,16 +1,9 @@
 import { compositionToDelta, splitOutput } from '../../outputSplitter';
 import { emptyToolOutput, TOOL_CATEGORY_KEYS } from '../../../shared/breakdownTypes';
-import type { UsageEntry, UsageSourceBatch, UsageSourceScanner } from '../../usageIndex';
-import { emptySessionSnapshot } from '../../jsonlTypes';
+import type { UsageEntry, UsageSourceBatch, UsageSourceScanner, UsageSourceScanPlan } from '../../usageIndex';
+import { emptySessionSnapshot, type SessionSnapshot } from '../../jsonlTypes';
 import { AntigravityLsClient } from './lsClient';
-import {
-  activityBreakdownFromCalls,
-  classifyAntigravityToolName,
-  mergeAntigravityCalls,
-  parseAntigravityGmEntries,
-  shouldEnrichForTokens,
-  type AntigravityUsageCall,
-} from './gmParser';
+import { activityBreakdownFromCalls, classifyAntigravityToolName, parseAntigravityGmEntry } from './gmParser';
 import { antigravityUsageEntryFromCall } from './summary';
 import type { AntigravityServerInfo } from './types';
 
@@ -23,100 +16,160 @@ export interface AntigravityUsageScannerInput {
   stopAt: number;
 }
 
+interface Cursor {
+  metadataOffset: number;
+  stepOffset: number;
+  snapshot: SessionSnapshot;
+  updatedAt: number;
+  lastTimestampMs: number;
+}
+interface ScanState extends Cursor { replay?: Cursor }
+interface StepTime { timestampMs?: number; status?: string }
+
 function remainingTimeoutMs(stopAt: number): number {
   return Math.max(1, Math.min(8_000, stopAt - Date.now()));
 }
 
-function breakdownFromCall(call: AntigravityUsageCall) {
+class StepTimes {
+  private iterator?: ReturnType<AntigravityLsClient['streamSteps']>;
+  private cache = new Map<number, StepTime>();
+  private nextIndex: number;
+  error?: string;
+
+  constructor(private client: AntigravityLsClient, private input: AntigravityUsageScannerInput, offset: number) {
+    this.nextIndex = offset;
+  }
+
+  async get(indices: number[]): Promise<StepTime[]> {
+    if (!indices.length || this.error) return [];
+    try {
+      const missing = indices.filter(i => !this.cache.has(i));
+      const found = new Map(indices.filter(i => this.cache.has(i)).map(i => [i, this.cache.get(i)!]));
+      const wanted = new Set(indices);
+      if (missing.some(i => i < this.nextIndex)) {
+        const offset = Math.min(...missing);
+        const stream = this.client.streamSteps(this.input.cascadeId, offset, remainingTimeoutMs(this.input.stopAt));
+        for await (const row of stream) {
+          this.remember(offset + row.index, row.value);
+          if (wanted.has(offset + row.index)) found.set(offset + row.index, this.cache.get(offset + row.index)!);
+          if (offset + row.index >= Math.max(...missing)) break;
+        }
+      } else if (missing.length) {
+        if (!this.iterator) this.iterator = this.client.streamSteps(this.input.cascadeId, this.nextIndex, remainingTimeoutMs(this.input.stopAt));
+        while (this.nextIndex <= Math.max(...missing)) {
+          const row = await this.iterator.next();
+          if (row.done) break;
+          this.remember(this.nextIndex, row.value.value);
+          if (wanted.has(this.nextIndex)) found.set(this.nextIndex, this.cache.get(this.nextIndex)!);
+          this.nextIndex += 1;
+        }
+      }
+      return indices.map(i => found.get(i) ?? {});
+    } catch (error) {
+      this.error = `Antigravity step times: ${error instanceof Error ? error.message : String(error)}`;
+      return [];
+    }
+  }
+
+  async close(): Promise<void> { await this.iterator?.return(undefined); }
+
+  private remember(index: number, value: Record<string, any>): void {
+    const timestamp = typeof value.metadata?.createdAt === 'string' ? Date.parse(value.metadata.createdAt) : NaN;
+    this.cache.set(index, { ...(Number.isFinite(timestamp) && timestamp >= 0 ? { timestampMs: timestamp } : {}), status: value.status });
+    if (this.cache.size > 1024) this.cache.delete(this.cache.keys().next().value!);
+  }
+}
+
+function breakdownFromCall(call: NonNullable<ReturnType<typeof parseAntigravityGmEntry>>) {
   const counts = activityBreakdownFromCalls([call]);
   const toolWeights = emptyToolOutput();
-  for (const name of call.toolNames) {
-    toolWeights[classifyAntigravityToolName(name)] += 1;
-  }
-  const composition = splitOutput({
-    thinkingChars: 0,
-    responseChars: call.responseTokens > 0 ? call.responseTokens : 1,
-    toolChars: toolWeights,
-  }, call.outputTokens, call.thinkingTokens);
-  const delta = compositionToDelta(composition);
+  for (const name of call.toolNames) toolWeights[classifyAntigravityToolName(name)] += 1;
+  const delta = compositionToDelta(splitOutput({ thinkingChars: 0,
+    responseChars: call.responseTokens > 0 ? call.responseTokens : 1, toolChars: toolWeights,
+  }, call.outputTokens, call.thinkingTokens));
   for (const category of TOOL_CATEGORY_KEYS) delta[category] = counts[category];
   return delta;
 }
 
-function sessionSnapshot(calls: readonly AntigravityUsageCall[]) {
-  const snapshot = emptySessionSnapshot('tokens');
-  const latest = calls[calls.length - 1];
-  if (latest) {
-    snapshot.modelName = latest.model;
-    snapshot.rawModel = latest.rawModel;
-    snapshot.latestInputTokens = latest.inputTokens;
-    snapshot.latestCacheCreationTokens = latest.cacheCreationTokens;
-    snapshot.latestCacheReadTokens = latest.cacheReadTokens;
-    if (latest.contextMax) snapshot.contextMax = latest.contextMax;
-  }
-  for (const call of calls) {
-    for (const tool of call.toolNames) snapshot.toolCounts[tool] = (snapshot.toolCounts[tool] ?? 0) + 1;
-  }
-  snapshot.activityBreakdown = activityBreakdownFromCalls([...calls]);
-  return snapshot;
-}
-
-async function fetchCalls(input: AntigravityUsageScannerInput): Promise<AntigravityUsageCall[]> {
-  if (Date.now() >= input.stopAt) throw new Error(`Antigravity usage scan deadline reached before ${input.cascadeId}`);
+async function* scanBatches(input: AntigravityUsageScannerInput, plan: UsageSourceScanPlan): AsyncIterable<UsageSourceBatch> {
+  const candidate = plan.checkpoint?.fallbackTimestampMs ?? input.lastModifiedMs;
+  const fallbackTimestampMs = Number.isFinite(candidate) && candidate >= 0 ? candidate : Date.now();
+  const initial: ScanState = plan.checkpoint?.resumeState ? JSON.parse(plan.checkpoint.resumeState) : {
+    metadataOffset: 0, stepOffset: 0, snapshot: emptySessionSnapshot('tokens'), updatedAt: 0, lastTimestampMs: fallbackTimestampMs,
+  };
+  const state: ScanState = structuredClone(initial);
   const client = new AntigravityLsClient(input.server);
-  const lightweight = await client.getCascadeTrajectoryGeneratorMetadata(
-    input.cascadeId,
-    remainingTimeoutMs(input.stopAt),
-  );
-  const rawGm = Array.isArray(lightweight.generatorMetadata) ? lightweight.generatorMetadata : [];
-  let calls = parseAntigravityGmEntries(input.cascadeId, rawGm, input.lastModifiedMs, input.modelLabels);
-  if (shouldEnrichForTokens({ stepCount: input.stepCount, rawGm, calls }) && Date.now() < input.stopAt) {
-    const full = await client.getCascadeTrajectory(input.cascadeId, remainingTimeoutMs(input.stopAt));
-    const embeddedCalls = parseAntigravityGmEntries(
-      input.cascadeId,
-      Array.isArray(full.trajectory?.generatorMetadata) ? full.trajectory.generatorMetadata : [],
-      input.lastModifiedMs,
-      input.modelLabels,
-    );
-    calls = mergeAntigravityCalls(calls, embeddedCalls);
+  const times = new StepTimes(client, input, state.stepOffset);
+  let entries: UsageEntry[] = [];
+  let rows = 0;
+  let lastBefore: Cursor | undefined;
+  let stopped = Date.now() >= input.stopAt;
+  const batch = (pending: boolean, cursor: ScanState): UsageSourceBatch => ({
+    entries,
+    pending,
+    checkpoint: { cursor: plan.source.version.token, fallbackTimestampMs, resumeState: JSON.stringify(cursor) },
+    ...(plan.mode === 'rebuild' ? { rebuildCoverage: entries.length ? { kind: 'range' as const,
+      fromMs: Math.min(...entries.map(e => e.timestampMs)), toMs: Math.max(...entries.map(e => e.timestampMs)) + 1,
+    } : { kind: 'none' as const } } : {}),
+    ...(times.error ? { failure: times.error, providerMetadata: { collectionError: times.error } } : {}),
+    sessionProjection: { sourceId: plan.source.sourceId, provider: 'antigravity',
+      updatedAt: state.updatedAt || fallbackTimestampMs, byteSize: state.metadataOffset,
+      payload: { sessionSnapshot: structuredClone(state.snapshot) } },
+  });
+  try {
+    if (!stopped) {
+      const offset = state.metadataOffset;
+      for await (const row of client.streamGeneratorMetadata(input.cascadeId, offset, remainingTimeoutMs(input.stopAt))) {
+        if (Date.now() >= input.stopAt) { stopped = true; break; }
+        const index = offset + row.index;
+        const gm = row.value;
+        const indices: number[] = Array.isArray(gm.stepIndices) ? [...new Set<number>(gm.stepIndices.filter((i: unknown): i is number =>
+          typeof i === 'number' && Number.isSafeInteger(i) && i >= 0))].sort((a, b) => a - b) : [];
+        lastBefore = { metadataOffset: index, stepOffset: indices.length ? Math.min(...indices) : state.stepOffset,
+          snapshot: structuredClone(state.snapshot), updatedAt: state.updatedAt, lastTimestampMs: state.lastTimestampMs };
+        const call = parseAntigravityGmEntry(input.cascadeId, gm, state.lastTimestampMs, input.modelLabels, index);
+        const stepTimes = call?.timestampSource === 'provider' ? [] : await times.get(indices);
+        const actualTime = stepTimes.map(s => s.timestampMs).find((t): t is number => t !== undefined);
+        if (call && actualTime !== undefined && call.timestampSource === 'estimated') {
+          call.timestampMs = actualTime;
+          call.timestampSource = 'step';
+        }
+        const unfinished = stepTimes.some(s => s.status && !/_(DONE|ERROR|CANCELED|CANCELLED|SKIPPED)$/.test(s.status))
+          || !call && !gm.error;
+        if (!state.replay && (unfinished || times.error || call?.timestampSource === 'estimated')) state.replay = lastBefore;
+        if (call) {
+          const entry = antigravityUsageEntryFromCall(call);
+          entries.push({ ...entry, timestampSource: call.timestampSource,
+            ...(call.timestampSource === 'step' ? { estimatedTimestampMs: fallbackTimestampMs } : {}),
+            identityKey: `${plan.source.sourceId}:${entry.requestId}`, identityOrigin: 'antigravity:observation:' + entry.requestId,
+            breakdown: breakdownFromCall(call) });
+          const snapshot = state.snapshot;
+          snapshot.modelName = call.model; snapshot.rawModel = call.rawModel;
+          snapshot.latestInputTokens = call.inputTokens; snapshot.latestCacheCreationTokens = call.cacheCreationTokens;
+          snapshot.latestCacheReadTokens = call.cacheReadTokens;
+          if (call.contextMax) snapshot.contextMax = call.contextMax;
+          else delete snapshot.contextMax;
+          for (const name of call.toolNames) snapshot.toolCounts[name] = (snapshot.toolCounts[name] ?? 0) + 1;
+          const activity = activityBreakdownFromCalls([call]);
+          for (const key of Object.keys(activity) as Array<keyof typeof activity>) snapshot.activityBreakdown[key] += activity[key];
+          state.updatedAt = Math.max(state.updatedAt, call.timestampMs);
+          if (call.timestampSource !== 'estimated') state.lastTimestampMs = call.timestampMs;
+        }
+        state.metadataOffset = index + 1;
+        state.stepOffset = indices.length ? Math.min(...indices) : state.stepOffset;
+        rows += 1;
+        if (rows % 128 === 0) {
+          yield batch(true, state);
+          entries = [];
+        }
+      }
+    }
+    yield batch(stopped || !!times.error || !!initial.replay, stopped ? state : state.replay ?? lastBefore ?? state);
+  } finally {
+    await times.close();
   }
-  return calls.sort((a, b) => a.timestampMs - b.timestampMs);
 }
 
 export function createAntigravityUsageIndexScanner(input: AntigravityUsageScannerInput): UsageSourceScanner {
-  return {
-    async scan(plan): Promise<UsageSourceBatch> {
-      const candidateTimestamp = plan.checkpoint?.fallbackTimestampMs ?? input.lastModifiedMs;
-      const fallbackTimestampMs = Number.isFinite(candidateTimestamp) && candidateTimestamp >= 0 ? candidateTimestamp : Date.now();
-      const calls = await fetchCalls({ ...input, lastModifiedMs: fallbackTimestampMs });
-      const entries: UsageEntry[] = calls.map(call => ({
-        ...antigravityUsageEntryFromCall(call),
-        identityKey: `${plan.source.sourceId}:${antigravityUsageEntryFromCall(call).requestId}`,
-        identityOrigin: 'antigravity:observation:' + antigravityUsageEntryFromCall(call).requestId,
-        breakdown: breakdownFromCall(call),
-      }));
-      const rebuildCoverage = entries.length > 0
-        ? {
-          kind: 'range' as const,
-          fromMs: Math.min(...entries.map(entry => entry.timestampMs)),
-          toMs: Math.max(...entries.map(entry => entry.timestampMs)) + 1,
-        }
-        : { kind: 'none' as const };
-      const updatedAt = entries.length > 0
-        ? Math.max(...entries.map(entry => entry.timestampMs))
-        : fallbackTimestampMs;
-      return {
-        checkpoint: { cursor: plan.source.version.token, fallbackTimestampMs },
-        entries,
-        ...(plan.mode === 'rebuild' ? { rebuildCoverage } : {}),
-        sessionProjection: {
-          sourceId: plan.source.sourceId,
-          provider: 'antigravity',
-          updatedAt,
-          byteSize: entries.length,
-          payload: { sessionSnapshot: sessionSnapshot(calls) },
-        },
-      };
-    },
-  };
+  return { scanBatches: plan => scanBatches(input, plan) };
 }

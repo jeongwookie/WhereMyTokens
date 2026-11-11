@@ -8,6 +8,7 @@ export interface AntigravityUsageCall {
   executionId: string;
   stepIndices: number[];
   timestampMs: number;
+  timestampSource: 'provider' | 'step' | 'estimated';
   model: string;
   rawModel: string;
   inputTokens: number;
@@ -33,7 +34,7 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function callTimestampMs(gm: Record<string, unknown>, fallbackMs: number): number {
+export function antigravityCallTimestampMs(gm: Record<string, unknown>): number | undefined {
   const cm = (gm.chatModel || {}) as Record<string, unknown>;
   const csm = (cm.chatStartMetadata || {}) as Record<string, unknown>;
   for (const candidate of [csm.createdAt, csm.startTime, gm.createdAt, gm.timestamp]) {
@@ -41,7 +42,7 @@ function callTimestampMs(gm: Record<string, unknown>, fallbackMs: number): numbe
     const ts = new Date(candidate).getTime();
     if (Number.isFinite(ts) && ts >= 0) return ts;
   }
-  return fallbackMs;
+  return undefined;
 }
 
 function extractToolNames(cm: Record<string, unknown>): string[] {
@@ -104,7 +105,8 @@ export function parseAntigravityGmEntry(
   const stepIndices = Array.isArray(gm.stepIndices)
     ? [...new Set(gm.stepIndices.filter((item): item is number => typeof item === 'number' && Number.isSafeInteger(item) && item >= 0))].sort((a, b) => a - b)
     : [observationIndex];
-  const timestampMs = callTimestampMs(gm, fallbackMs);
+  const providerTimestamp = antigravityCallTimestampMs(gm);
+  const timestampMs = providerTimestamp ?? fallbackMs;
   const executionId = stringValue(gm.executionId) || 'row:' + observationIndex;
 
   return {
@@ -112,6 +114,7 @@ export function parseAntigravityGmEntry(
     executionId,
     stepIndices,
     timestampMs,
+    timestampSource: providerTimestamp === undefined ? 'estimated' : 'provider',
     model: normalizeAntigravityModel(modelIdentity, labelMap),
     rawModel,
     inputTokens,
@@ -152,22 +155,6 @@ export function antigravityCallFingerprint(call: AntigravityUsageCall): string {
     call.contextMax ?? 0,
     call.toolNames.join(','),
   ].join('|');
-}
-
-export function shouldEnrichForTokens(params: {
-  stepCount: number;
-  rawGm: unknown[];
-  calls: AntigravityUsageCall[];
-}): boolean {
-  if (params.rawGm.length === 0) return true;
-  if (params.calls.length === 0 && params.stepCount > 0) return true;
-  if (params.stepCount >= 350) return true;
-  if (params.rawGm.some(gm => {
-    if (!gm || typeof gm !== 'object' || Array.isArray(gm)) return true;
-    const cm = ((gm as Record<string, unknown>).chatModel || {}) as Record<string, unknown>;
-    return !cm.responseModel;
-  })) return true;
-  return params.calls.some(call => totalAntigravityCallTokens(call) === 0);
 }
 
 export function parseAntigravityGmEntries(

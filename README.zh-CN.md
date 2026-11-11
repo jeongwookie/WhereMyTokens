@@ -126,7 +126,7 @@ macOS 用户请使用单独的公开仓库:
 
 ### 速率限制与提醒
 - **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都会把 provider 报告的 limit 转成 `providerQuotas` 中的 canonical Quota Entry；Claude 优先使用官方 `statusLine`，没有新值时通过现有 Claude Code access token 的只读 Desktop compatibility request 获取 5h/7d 与实际报告的 model-scoped entry。Codex 使用 live usage snapshot 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用运行中 IDE 的 127.0.0.1 local RPC model quota entry。未报告的 limit 不再合成为 `Unlimited`，而是保持缺席状态
-- **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。指标数量变化时固定右边缘，向左扩展或收缩；拖动可调整位置，双击文字可打开主界面。Codex Resets target 仅用于 Plan Usage
+- **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-5 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。指标数量变化时固定右边缘，向左扩展或收缩；拖动可调整位置，双击文字可打开主界面。Codex Resets target 仅用于 Plan Usage
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示使用节奏快于重置窗口
 - **Claude Code 桥接** — 优先通过 `statusLine` 接收官方本地数据；没有新值且存在 Claude Code credential 时由受限的只读 compatibility request 补充
 - **Claude 重新登录提示** — 登录过期或被拒绝时显示一次 Windows 通知和应用内操作，并打开官方 `claude auth login` 流程。credential 变更后自动重试；WMT 本身不会刷新 token 或写入 credential
@@ -285,8 +285,8 @@ WhereMyTokens 可以通过 `127.0.0.1` 上运行中的 Antigravity IDE local lan
 
 **Antigravity 追踪包含：**
 - 与 Claude、Codex 共用 provider/session UI 的 cascade 会话分组
-- 优先读取 `RetrieveUserQuotaSummary` 返回的 `Gemini Models`、`Claude and GPT models` shared quota groups 及其 5h/weekly buckets；旧版 server 回退到 `GetUserStatus` 的逐模型 quota
-- 来自 `GetCascadeTrajectoryGeneratorMetadata` 的 token metadata，并带有有界 full-trajectory fallback
+- 优先读取 `RetrieveUserQuotaSummary` 返回的 Gemini、Claude/GPT、Argon 等配额组及其 5h/weekly buckets；按本机模型与组的唯一重置时间对应关系统计用量，避免独立 Argon 配额重复计入 Gemini。展示沿用 Codex 样式：Rich 显示各周期的 In / Out / Cache，Simple 只显示一个 Token 汇总，多周期有用量时取最大窗口值。旧版 server 使用 `GetUserStatus` 的逐模型 quota
+- 增量读取 token metadata 和对应步骤的执行时间，按调用统计跨天用量；首次历史流式回填，不加载完整对话
 - 对可识别的本地模型 metadata 显示 API 等价费用估算；未定价模型保持为 0 或隐藏
 
 Windows 会同时检测 Antigravity 2.x 的 `language_server.exe` 与 legacy 可执行文件名。Grouped quota 使用 provider 报告的 period；只有 legacy 逐模型 quota 会在 Settings 启用 **Legacy Antigravity quota pace estimate** 后根据 reset time 估算 5h/7d pacing。

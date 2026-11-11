@@ -2636,6 +2636,7 @@ export class StateManager {
             if (pendingIds.has(source.descriptor.sourceId)) {
               const refreshed = await this.usageIndex.refreshSource(source.descriptor, source.scanner);
               if (refreshed.status !== 'unchanged') scannedFiles += 1;
+              if (refreshed.status === 'partial') partial = true;
             }
             const [projection] = await this.usageIndex.readSessionProjections([source.descriptor.sourceId]);
             if (projection) {

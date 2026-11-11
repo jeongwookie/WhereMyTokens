@@ -140,7 +140,7 @@ function publicBlock(block: CandidateBlock): TaskbarQuotaBlock {
 function maxBlocks(settings: AppSettings): number {
   const value = settings.taskbarQuotaMaxBlocks;
   return typeof value === 'number' && Number.isFinite(value)
-    ? Math.max(1, Math.min(3, Math.round(value)))
+    ? Math.max(1, Math.min(5, Math.round(value)))
     : 2;
 }
 

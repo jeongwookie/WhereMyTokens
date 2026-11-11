@@ -70,6 +70,7 @@ internal static class LayoutTests
         }
         finally { Console.SetOut(original); }
         CheckQuotaColumns();
+        CheckFiveColumns();
         CheckDpiTransitions();
         Console.WriteLine($"Taskbar layout checks passed: {_checks}");
     }
@@ -120,7 +121,7 @@ internal static class LayoutTests
             var content = Rectangle.Inflate(canvas.ClientRectangle, -(int)(4 * scale), -(int)(2 * scale));
             var layout = compute.Invoke(canvas, [graphics, content, snapshot])!;
             var columns = (Rectangle[])layout.GetType().GetProperty("Columns")!.GetValue(layout)!;
-            Check(columns.Skip(1).All(cell => cell.Width > 0) && columns[3].Right <= content.Right, $"three aligned columns fit at {scale} DPI scale");
+            Check(columns.Skip(1).Take(3).All(cell => cell.Width > 0) && columns[3].Right <= content.Right, $"three aligned columns fit at {scale} DPI scale");
             canvas.Render(snapshot, false);
             paint.Invoke(canvas, [new PaintEventArgs(graphics, canvas.ClientRectangle)]);
             var rowHeight = (int)type.GetProperty("RowHeight", PrivateInstance)!.GetValue(canvas)!;
@@ -135,11 +136,62 @@ internal static class LayoutTests
             Check(!HasText(Cell(1, 0)) && HasText(Cell(1, 1)), $"weekly-only source leaves an empty short-period cell at {scale} DPI scale");
             Check(HasText(Cell(2, 0)) && HasText(Cell(2, 1)), $"shared source draws in the same column at {scale} DPI scale");
             var overflow = snapshot with { Lines = [new("5h", "5h", [null, gemini, null], 12), snapshot.Lines[1]] };
-            var overflowWidth = (int)column.Invoke(canvas, [graphics, overflow, 2, canvas.Width])!;
+            var overflowWidth = (int)column.Invoke(canvas, [graphics, overflow, 3, canvas.Width])!;
             Check(overflowWidth > 0, $"overflow in an empty final cell is measured at {scale} DPI scale");
             canvas.Render(overflow, false);
             paint.Invoke(canvas, [new PaintEventArgs(graphics, canvas.ClientRectangle)]);
-            Check(HasText(Cell(3, 0)), $"overflow draws in an empty final cell at {scale} DPI scale");
+            var overflowLayout = compute.Invoke(canvas, [graphics, content, overflow])!;
+            columns = (Rectangle[])overflowLayout.GetType().GetProperty("Columns")!.GetValue(overflowLayout)!;
+            Check(HasText(Cell(4, 0)), $"overflow draws in an empty final cell at {scale} DPI scale");
+        }
+    }
+
+    private static void CheckFiveColumns()
+    {
+        var blocks = new[] { "C", "X", "GM", "CG", "G4A" }.Select((prefix, i) =>
+            new TaskbarQuotaBlock($"target-{i}", "antigravity", prefix, prefix, "limited", 25, 50, false, "2h", "normal", "normal")).ToArray();
+        var snapshot = new TaskbarQuotaSnapshot(1, "dark", [
+            new("5h", "5h", [blocks[0], blocks[1], blocks[2], blocks[3], null]),
+            new("7d", "1w", blocks),
+        ]);
+        var validate = typeof(Program).GetMethod("IsValidSnapshot", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Check((bool)validate.Invoke(null, [snapshot])!, "five blocks pass protocol validation");
+        var oversized = snapshot with { Lines = [new("5h", "5h", [.. blocks, blocks[0]]), snapshot.Lines[1]] };
+        Check(!(bool)validate.Invoke(null, [oversized])!, "six blocks are rejected");
+        using var canvas = new TaskbarQuotaCanvas();
+        var type = typeof(TaskbarQuotaCanvas);
+        var compute = type.GetMethod("ComputeColumns", PrivateInstance)!;
+        var paint = type.GetMethod("OnPaint", PrivateInstance)!;
+        foreach (var scale in new[] { 1f, 1.5f, 2f })
+        foreach (var width in new[] { 1100, 600, 280 })
+        {
+            canvas.SetDpi((uint)(96 * scale));
+            canvas.Size = new Size((int)(width * scale), (int)(56 * scale));
+            using var bitmap = new Bitmap(canvas.Width, canvas.Height);
+            bitmap.SetResolution(96 * scale, 96 * scale);
+            using var graphics = Graphics.FromImage(bitmap);
+            var content = Rectangle.Inflate(canvas.ClientRectangle, -(int)(4 * scale), -(int)(2 * scale));
+            var layout = compute.Invoke(canvas, [graphics, content, snapshot])!;
+            var columns = (Rectangle[])layout.GetType().GetProperty("Columns")!.GetValue(layout)!;
+            Check(columns.Skip(1).All(cell => cell.Width > 0) && columns[5].Right <= content.Right, $"five columns fit width {width} at {scale} DPI scale");
+            Check(Enumerable.Range(1, 4).All(i => columns[i].Right < columns[i + 1].Left), $"five columns never overlap at width {width} and {scale} DPI scale");
+            canvas.Render(snapshot, false);
+            paint.Invoke(canvas, [new PaintEventArgs(graphics, canvas.ClientRectangle)]);
+            var rowHeight = (int)type.GetProperty("RowHeight", PrivateInstance)!.GetValue(canvas)!;
+            Rectangle Cell(int column, int row) => new(columns[column].Left, content.Top + row * rowHeight, columns[column].Width, rowHeight);
+            bool HasText(Rectangle bounds)
+            {
+                for (var y = bounds.Top; y < Math.Min(bitmap.Height, bounds.Bottom); y++)
+                    for (var x = bounds.Left; x < Math.Min(bitmap.Width, bounds.Right); x++)
+                        if (bitmap.GetPixel(x, y).ToArgb() != canvas.TransparentKey.ToArgb()) return true;
+                return false;
+            }
+            Check(HasText(Cell(4, 0)) && HasText(Cell(4, 1)), $"fourth column draws both periods at width {width} and {scale} DPI scale");
+            Check(!HasText(Cell(5, 0)) && HasText(Cell(5, 1)), $"fifth column keeps its missing-period cell empty at width {width} and {scale} DPI scale");
+            var overflow = snapshot with { Lines = [snapshot.Lines[0], snapshot.Lines[1] with { HiddenCount = 12 }] };
+            canvas.Render(overflow, false);
+            paint.Invoke(canvas, [new PaintEventArgs(graphics, canvas.ClientRectangle)]);
+            Check(HasText(Cell(5, 1)), $"five-column overflow draws at width {width} and {scale} DPI scale");
         }
     }
     private static void CheckDpiTransitions()

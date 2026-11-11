@@ -17,6 +17,7 @@ import type {
   UsageSourceDescriptor,
   UsageSourceRefreshResult,
   UsageSourceScanner,
+  UsageSourceScanPlan,
 } from './types';
 import type { ProviderId } from '../../shared/quotaTypes';
 
@@ -216,6 +217,11 @@ function selectScanMode(stored: StoredUsageSource | null, _source: UsageSourceDe
   return stored ? 'tail' : 'rebuild';
 }
 
+async function* scanUsageSource(scanner: UsageSourceScanner, plan: UsageSourceScanPlan): AsyncIterable<UsageSourceBatch> {
+  if ('scanBatches' in scanner) yield* scanner.scanBatches(plan);
+  else yield await scanner.scan(plan);
+}
+
 export class DefaultUsageIndex implements UsageIndex {
   private closed = false;
   private resetEpoch = 0;
@@ -282,7 +288,7 @@ export class DefaultUsageIndex implements UsageIndex {
     assertDescriptor(normalizedSource);
     this.markCoverageSource(normalizedSource, 'scanning');
     try {
-      const stored = await this.storage.getSource(normalizedSource.sourceId);
+      let stored = await this.storage.getSource(normalizedSource.sourceId);
       this.assertRefreshCurrent(refreshEpoch);
       if (stored && (stored.descriptor.provider !== normalizedSource.provider || stored.descriptor.kind !== normalizedSource.kind)) {
         throw new Error(`Usage source ${normalizedSource.sourceId} changed provider or source kind`);
@@ -311,32 +317,40 @@ export class DefaultUsageIndex implements UsageIndex {
         return { sourceId: normalizedSource.sourceId, status: 'unchanged', scannedEntries: 0 };
       }
 
-      const mode = selectScanMode(stored, normalizedSource);
-      const batch = await scanner.scan({
-        mode,
+      const initialMode = selectScanMode(stored, normalizedSource);
+      const batches = scanUsageSource(scanner, {
+        mode: initialMode,
         identitySource: key => this.storage.identitySource(normalizedSource.provider, key),
         source: normalizedSource,
-        checkpoint: mode === 'tail' ? stored?.checkpoint ?? null : null,
-        previousSessionProjection: mode === 'tail' ? stored?.sessionProjection ?? null : null,
+        checkpoint: initialMode === 'tail' ? stored?.checkpoint ?? null : null,
+        previousSessionProjection: initialMode === 'tail' ? stored?.sessionProjection ?? null : null,
       });
-      this.assertRefreshCurrent(refreshEpoch);
-      assertBatch(normalizedSource, stored, mode, batch);
-      const committedSource: UsageSourceDescriptor = {
-        ...normalizedSource,
-        projectKeys: normalizeProjectKeys(
-          batch.projectKeys
-            ?? normalizedSource.projectKeys
-            ?? stored?.descriptor.projectKeys
-            ?? [],
-        ),
-      };
-      await this.storage.commitSource({ mode, source: committedSource, batch });
-      this.assertRefreshCurrent(refreshEpoch);
-      this.markCoverageSource(normalizedSource, 'indexed');
+      let scannedEntries = 0;
+      let pending = true;
+      let failure: string | undefined;
+      let mode = initialMode;
+      for await (const batch of batches) {
+        this.assertRefreshCurrent(refreshEpoch);
+        assertBatch(normalizedSource, stored, mode, batch);
+        const committedSource: UsageSourceDescriptor = {
+          ...normalizedSource,
+          ...(batch.pending ? { version: { ...normalizedSource.version, token: normalizedSource.version.token + ':pending' } } : {}),
+          projectKeys: normalizeProjectKeys(batch.projectKeys ?? normalizedSource.projectKeys ?? stored?.descriptor.projectKeys ?? []),
+        };
+        await this.storage.commitSource({ mode, source: committedSource, batch });
+        this.assertRefreshCurrent(refreshEpoch);
+        stored = { descriptor: committedSource, checkpoint: batch.checkpoint,
+          sessionProjection: batch.sessionProjection ?? undefined, providerMetadata: batch.providerMetadata };
+        scannedEntries += batch.entries.length;
+        pending = batch.pending === true;
+        failure = batch.failure;
+        mode = 'tail';
+      }
+      this.markCoverageSource(normalizedSource, pending ? failure ? 'failed' : 'queued' : 'indexed');
       return {
         sourceId: normalizedSource.sourceId,
-        status: mode === 'tail' ? 'tailed' : 'rebuilt',
-        scannedEntries: batch.entries.length,
+        status: pending ? 'partial' : initialMode === 'tail' ? 'tailed' : 'rebuilt',
+        scannedEntries,
       };
     } catch (error) {
       if (refreshEpoch === this.resetEpoch) this.markCoverageSource(normalizedSource, 'failed');

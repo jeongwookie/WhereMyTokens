@@ -114,7 +114,7 @@ export async function scanAntigravityUsageFromServers(
           sourceId,
           provider: 'antigravity' as const,
           kind: 'remote' as const,
-          parserVersion: 3,
+          parserVersion: 4,
           version: {
             token: `${stepCount}:${lastModifiedMs}:${runStatus}${isRunningStatus(runStatus) ? `:live:${ctx.nowMs}` : ''}`,
             mtimeMs: lastModifiedMs,

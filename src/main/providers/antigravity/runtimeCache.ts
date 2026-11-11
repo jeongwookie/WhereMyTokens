@@ -18,7 +18,7 @@ const userStatusCache = new Map<string, { at: number; value: AntigravityUserStat
 const quotaSummaryCache = new Map<string, { at: number; value: AntigravityQuotaSummaryResponse | null }>();
 
 function serverKey(server: AntigravityServerInfo): string {
-  return `${server.pid}:${server.port}:${server.workspaceId ?? ''}`;
+  return `${server.pid}:${server.port}:${server.protocol}:${server.workspaceId ?? ''}`;
 }
 
 export async function findAntigravityServersCached(nowMs = Date.now(), timeoutMs = 15_000): Promise<AntigravityServerInfo[]> {

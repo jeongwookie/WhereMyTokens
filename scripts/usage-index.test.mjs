@@ -13,6 +13,8 @@ import codexScannerModule from '../dist/main/providers/codex/usageIndexScanner.j
 import claudeSourcesModule from '../dist/main/providers/claude/sources.js';
 import codexSourcesModule from '../dist/main/providers/codex/sources.js';
 import sessionMetadataModule from '../dist/main/sessionMetadata.js';
+import { parseAntigravityQuotaSummary } from '../dist/main/providers/antigravity/quota.js';
+import { antigravityQuotaFixture, QUOTA_NOW, HOUR_MS, DAY_MS } from './test-support/antigravity-quota.mjs';
 
 const {
   DefaultUsageIndex,
@@ -550,6 +552,62 @@ test('compact projection preserves dynamic window calculations across storage ad
         assert.equal(usage.fixedPeriodByProvider.codex.periods['5h'].totalTokens, 50, `${adapter.name} fixed h5 window`);
         assert.equal(usage.entryStats['codex.account.5h'].totalTokens, 50, `${adapter.name} account h5 entry`);
         assert.equal(usage.entryStats['codex.account.7d'].totalTokens, 150, `${adapter.name} account 7d entry`);
+      } finally {
+        await index.close();
+      }
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Antigravity group windows preserve cross-day components and count each execution once', async () => {
+  const now = QUOTA_NOW;
+  const { response, configs } = antigravityQuotaFixture();
+  const quotas = { antigravity: { entries: parseAntigravityQuotaSummary(response, configs) } };
+  const rows = [
+    ['MODEL_PLACEHOLDER_M319', now - 3 * HOUR_MS, 1],
+    ['Gemini 3.8 Flash (Medium)', now - 3 * HOUR_MS - 1, 2],
+    ['Gemini 3.8 Flash (Medium)', now - DAY_MS, 4],
+    ['Gemini 3.8 Flash (Medium)', now - DAY_MS - 1, 8],
+    ['Claude Opus 5.5 (High)', now - HOUR_MS, 16],
+    ['GPT-OSS 120B (Medium)', now - 2 * HOUR_MS, 32],
+    ['MODEL_PLACEHOLDER_M405', now - 4 * DAY_MS, 64],
+    ['Gemini 4 Argon (High)', now - HOUR_MS, 128],
+    ['gemini-4-argon-medium', now - 2 * DAY_MS, 256],
+    ['Gemini 4 Argon (Medium)', now - 2 * DAY_MS - 1, 512],
+    ['Gemini 4 Carbon', now, 1024],
+    ['Gemini 3.8 Flash (High)', now + 1, 2048],
+  ].map(([model, timestamp, units], i) => entry(`ag-${i}`, timestamp, units, {
+    provider: 'antigravity', model, outputTokens: units * 2, cacheCreationTokens: units * 3, cacheReadTokens: units * 4,
+  }));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-ag-group-windows-'));
+  try {
+    for (const storage of [new InMemoryUsageIndexStorage(), new SqliteUsageIndexStorage(path.join(tempDir, 'index.sqlite'))]) {
+      const index = new DefaultUsageIndex(storage, () => now);
+      try {
+        const descriptor = { ...source('antigravity:groups', 'v1', rows.length), provider: 'antigravity', kind: 'remote' };
+        await index.refreshSource(descriptor, { scan: async () => batch(rows.length, rows) });
+        await index.refreshSource(descriptor, { scan: async () => assert.fail('unchanged source must not be scanned') });
+        await index.refreshSource(source('codex:groups', 'v1', 1), {
+          scan: async () => batch(1, [entry('foreign-provider', now - HOUR_MS, 999, { model: 'Claude Opus 5.5 (High)' })]),
+        });
+        const projections = await Promise.all(['antigravity', 'codex'].map(provider => loadUsageIndexProjection(index, provider, [], now)));
+        const usage = computeUsageFromUsageIndex(projections, now, undefined, quotas);
+        assert.equal(usage.allTimeRequestCount, rows.length + 1);
+        const unitsByEntry = [7, 1, 112, 48, 384];
+        quotas.antigravity.entries.forEach((quota, i) => {
+          const stats = usage.entryStats[quota.key];
+          const units = unitsByEntry[i];
+          assert.deepEqual([stats.inputTokens, stats.outputTokens, stats.cacheCreationTokens, stats.cacheReadTokens, stats.totalTokens],
+            [units, units * 2, units * 3, units * 4, units * 10], quota.key);
+        });
+        const short = quotas.antigravity.entries[1];
+        const staleQuotas = { antigravity: { entries: [{ ...short, resetsAt: now - 3 * HOUR_MS }] } };
+        const stale = computeUsageFromUsageIndex(projections, now, undefined, staleQuotas);
+        assert.equal(stale.entryStats[short.key].inputTokens, 2, 'reset boundary is exclusive');
+        const hidden = computeUsageFromUsageIndex(projections, now, { providerScopes: new Set(['codex']) }, quotas);
+        assert.deepEqual(hidden.entryStats, {});
       } finally {
         await index.close();
       }
@@ -1254,11 +1312,11 @@ test('SQLite schema v1 migrates in place and backfills aggregate buckets', () =>
   database.close();
 
   const storage = new SqliteUsageIndexStorage(dbPath);
-  assert.equal(usageIndexSchemaVersion(), 6);
+  assert.equal(usageIndexSchemaVersion(), 7);
   storage.close();
 
   const migrated = new DatabaseSync(dbPath);
-  assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 6);
+  assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 7);
   const providerTables = migrated.prepare(`
     SELECT sql FROM sqlite_master
     WHERE type = 'table' AND name IN ('usage_source', 'usage_entry', 'usage_bucket', 'usage_session_hot')

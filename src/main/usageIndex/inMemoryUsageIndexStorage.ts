@@ -22,7 +22,7 @@ import {
 } from './types';
 import { UsageEntryProjectionBuilder } from './entryProjection';
 import { usageRetentionCutoffs } from './retention';
-import { canonicalSessionProjection, executionFingerprint, identityAccepts, reviseClaudePayload, sameExecutionOrigin, validUsageRevision, type ExecutionIdentity } from './executionIdentity';
+import { antigravityTimeRevision, canonicalSessionProjection, executionFingerprint, identityAccepts, reviseClaudePayload, sameExecutionOrigin, validUsageRevision, type ExecutionIdentity } from './executionIdentity';
 import {
   addUsageBreakdown,
   addUsageMetrics,
@@ -40,8 +40,9 @@ function cloneDescriptor(source: UsageSourceDescriptor): UsageSourceDescriptor {
 }
 
 function cloneEntry(entry: UsageEntry): UsageEntry {
+  const { estimatedTimestampMs: _evidence, ...stored } = entry;
   return {
-    ...entry,
+    ...stored,
     ...(entry.breakdown ? { breakdown: { ...entry.breakdown } } : {}),
   };
 }
@@ -205,17 +206,23 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
         else identityIssues.add('cross-source-execution-conflict');
         return false;
       }
+      const previous = known ? existingEntries.get(known.requestId) : undefined;
+      const timeRevision = previous && known ? antigravityTimeRevision(entry, previous, known, storedSource?.checkpoint.fallbackTimestampMs) : undefined;
       if (known) {
         for (const key of keys) if (!owner(key)) nextIdentities.set(keyFor(key), known);
         if (!known.requestId.startsWith('protected:')) entry.requestId = known.requestId;
-        entry.timestampMs = known.timestampMs;
+        if (timeRevision) Object.assign(entry, timeRevision);
+        else {
+          entry.timestampMs = known.timestampMs;
+          if (previous?.timestampSource) entry.timestampSource = previous.timestampSource;
+          else delete entry.timestampSource;
+        }
       }
       if (!identityAccepts(entry, commit.source.sourceId, known)) return false;
       if (known) {
-        const previous = existingEntries.get(known.requestId);
-        if (!previous || known.fingerprint === executionFingerprint(entry)) return false;
+        if (!previous || !timeRevision && known.fingerprint === executionFingerprint(entry)) return false;
         const oldPayload = storedSource?.checkpoint.resumeState ? JSON.parse(storedSource.checkpoint.resumeState).payload ?? {} : {};
-        if (!validUsageRevision(entry, previous, known, oldPayload, commit.batch.sessionProjection?.payload)) {
+        if (!timeRevision && !validUsageRevision(entry, previous, known, oldPayload, commit.batch.sessionProjection?.payload)) {
           identityIssues.add('identity-conflict'); return false;
         }
       }
@@ -265,7 +272,7 @@ export class InMemoryUsageIndexStorage implements UsageIndexStorage {
     for (const update of crossUpdates) identityUpdates.set(update.known.sourceId + '\0' + update.entry.requestId, update.entry);
     for (const [key, known] of nextIdentities) {
       const e = identityUpdates.get(known.sourceId + '\0' + known.requestId);
-      if (e) nextIdentities.set(key, { ...known, originId: e.identityOrigin ?? '', fingerprint: executionFingerprint(e) });
+      if (e) nextIdentities.set(key, { ...known, timestampMs: e.timestampMs, originId: e.identityOrigin ?? '', fingerprint: executionFingerprint(e) });
     }
     for (const [key, delta] of bucketDeltas) {
       const bucket = nextBuckets.get(key) ?? {

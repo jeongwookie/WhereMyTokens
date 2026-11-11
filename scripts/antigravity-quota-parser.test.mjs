@@ -6,6 +6,8 @@ import {
   parseAntigravityQuotaSummary,
 } from '../dist/main/providers/antigravity/quota.js';
 import quotaDomain from '../dist/shared/quotaDomain.js';
+import { usageBindingAcceptsModel } from '../dist/main/quotaUsageTargets.js';
+import { antigravityQuotaFixture } from './test-support/antigravity-quota.mjs';
 
 const { validateProviderQuotaSnapshot } = quotaDomain;
 
@@ -68,7 +70,7 @@ test('grouped quota summary creates one target per family and one entry per buck
         },
       ],
     },
-  });
+  }, []);
 
   assert.equal(entries.length, 3);
   assert.deepEqual(entries.map(entry => [entry.target.label, entry.period, entry.usedPct]), [
@@ -92,7 +94,7 @@ test('grouped quota summary drops malformed buckets without inventing limits', (
         { bucketId: 'invalid-fraction', remainingFraction: Number.NaN },
       ],
     }],
-  });
+  }, []);
   assert.deepEqual(entries, []);
 });
 
@@ -109,7 +111,7 @@ test('grouped quota summary keeps colliding labels canonical and bounded', () =>
         { displayName: 'A B', buckets: [{ bucketId: 'weekly', remainingFraction: 0.25 }] },
       ],
     },
-  });
+  }, []);
 
   assert.equal(entries.length, 33);
   assert.notEqual(entries[0].target.id, entries[32].target.id);
@@ -120,4 +122,64 @@ test('grouped quota summary keeps colliding labels canonical and bounded', () =>
     capturedAt: Date.now(),
     entries,
   }));
+});
+
+test('summary binds exact current model identities to disjoint quota groups', () => {
+  const { response, configs } = antigravityQuotaFixture();
+  const entries = parseAntigravityQuotaSummary(response, configs);
+  assert.equal(entries.length, 5);
+  assert.ok(entries.every(entry => entry.usageBinding?.kind === 'models'));
+  for (const config of configs.filter(config => config.quotaInfo.resetTime)) {
+    const expected = config.label.startsWith('Gemini 4 Argon') ? 'Gemini 4 Argon'
+      : config.label.startsWith('Gemini') ? 'Gemini Models' : 'Claude and GPT models';
+    for (const model of [config.label, config.modelOrAlias.model, config.modelId.toUpperCase()]) {
+      const matched = entries.filter(entry => usageBindingAcceptsModel(entry.usageBinding, model));
+      assert.deepEqual([...new Set(matched.map(entry => entry.target.label))], [expected], model);
+      assert.equal(new Set(matched.map(entry => entry.period)).size, matched.length, model);
+    }
+  }
+  for (const model of ['Gemini 4 Carbon', 'Gemini unknown', 'Claude Opus 5.5 (High) extra']) {
+    assert.equal(entries.some(entry => usageBindingAcceptsModel(entry.usageBinding, model)), false, model);
+  }
+  assert.ok(validateProviderQuotaSnapshot({ provider: 'antigravity', source: 'localRpc', capturedAt: Date.now(), entries }));
+});
+
+test('summary follows shared Argon quota membership when the account groups it with Gemini', () => {
+  const { response, configs } = antigravityQuotaFixture();
+  response.response.groups.pop();
+  const geminiReset = configs[0].quotaInfo.resetTime;
+  for (const config of configs.filter(config => config.label.startsWith('Gemini 4 Argon'))) {
+    config.quotaInfo.resetTime = geminiReset;
+  }
+  const entries = parseAntigravityQuotaSummary(response, configs);
+  assert.deepEqual(entries.filter(entry => usageBindingAcceptsModel(entry.usageBinding, 'Gemini 4 Argon (High)'))
+    .map(entry => [entry.target.label, entry.period]), [['Gemini Models', '7d'], ['Gemini Models', '5h']]);
+});
+
+test('summary leaves ambiguous reset membership and conflicting model names unbound', () => {
+  const { response, configs } = antigravityQuotaFixture();
+  response.response.groups[2].buckets[0].resetTime = configs[0].quotaInfo.resetTime;
+  configs[5].quotaInfo.resetTime = configs[0].quotaInfo.resetTime;
+  configs[6].quotaInfo.resetTime = 'invalid';
+  configs[2].label = 'shared label';
+  configs.push({ label: 'SHARED LABEL', modelOrAlias: { model: 'unknown' }, quotaInfo: {} });
+  const entries = parseAntigravityQuotaSummary(response, configs);
+  assert.ok(entries.filter(entry => entry.target.label !== 'Claude and GPT models').every(entry => !entry.usageBinding));
+  const binding = entries.find(entry => entry.target.label === 'Claude and GPT models').usageBinding;
+  assert.equal(usageBindingAcceptsModel(binding, 'shared label'), false);
+  assert.equal(usageBindingAcceptsModel(binding, 'MODEL_PLACEHOLDER_M402'), true);
+});
+
+test('summary window metadata takes precedence and unknown periods cannot claim local usage', () => {
+  const { response, configs } = antigravityQuotaFixture();
+  const bucket = response.response.groups[0].buckets[0];
+  bucket.bucketId = 'opaque-5h';
+  bucket.displayName = 'Five Hour';
+  let entries = parseAntigravityQuotaSummary(response, configs);
+  assert.equal(entries[0].durationMs, WEEK_MS);
+  assert.equal(entries[0].durationInferred, false);
+  bucket.window = 'monthly';
+  entries = parseAntigravityQuotaSummary(response, configs);
+  assert.equal(entries[0].durationMs, null);
+  assert.equal(entries[0].usageBinding, undefined);
 });

@@ -122,7 +122,7 @@ test('Antigravity summary abbreviations stay distinct through the taskbar snapsh
   const entries = antigravityQuota.parseAntigravityQuotaSummary({ groups: [
     { displayName: 'Gemini Models', buckets: [{ bucketId: 'session', remainingFraction: 1 }] },
     { displayName: 'Gemini 4 Agent', buckets: [{ bucketId: 'weekly', remainingFraction: 1 }] },
-  ] });
+  ] }, []);
   const result = buildTaskbarQuotaSnapshot(state({ antigravity: snapshot('antigravity', entries) }));
   assert.equal(result.lines[0].blocks[0].abbreviation, 'GM');
   assert.equal(result.lines[1].blocks[1].abbreviation, 'G4A');
@@ -155,6 +155,30 @@ test('single-period cap selects at most 2x cap and reports overflow only on line
   const result = buildTaskbarQuotaSnapshot(state({ claude: snapshot('claude', entries) }, { taskbarQuotaMaxBlocks: 2 }));
   assert.deepEqual(result.lines.map(line => line.blocks.length), [2, 2]);
   assert.deepEqual(result.lines.map(line => line.hiddenCount), [0, 2]);
+});
+
+test('five-column cap preserves aligned periods and counts only omitted entries', () => {
+  const targets = Array.from({ length: 6 }, (_, i) => target(`antigravity.group.t${i}`, `T${i}`, i));
+  const entries = targets.flatMap((target, i) => [
+    limited(`${target.id}.7d`, target, '7d', i * 10),
+    ...(i % 2 === 0 ? [limited(`${target.id}.5h`, target, '5h', i * 10)] : []),
+  ]);
+  for (const cap of [4, 5, 99]) {
+    const result = buildTaskbarQuotaSnapshot(state({ antigravity: snapshot('antigravity', entries) }, { taskbarQuotaMaxBlocks: cap }));
+    const count = Math.min(5, cap);
+    assert.deepEqual(result.lines.map(line => line.blocks.length), [count, count]);
+    assert.deepEqual(result.lines[1].blocks.map(block => block.targetId), targets.slice(0, count).map(target => target.id));
+    assert.deepEqual(result.lines[0].blocks.map(block => block?.targetId ?? null), targets.slice(0, count).map((target, i) => i % 2 === 0 ? target.id : null));
+    assert.deepEqual(result.lines.map(line => line.hiddenCount), [count === 4 ? 1 : 0, 6 - count]);
+  }
+});
+
+test('single-period five-block limit balances ten entries with remaining overflow on line two', () => {
+  const entries = Array.from({ length: 12 }, (_, i) => limited(`claude.t${i}.7d`, target(`claude.group.t${i}`, `T${i}`, i), '7d', 10));
+  const result = buildTaskbarQuotaSnapshot(state({ claude: snapshot('claude', entries) }, { taskbarQuotaMaxBlocks: 5 }));
+  assert.deepEqual(result.lines.map(line => line.blocks.length), [5, 5]);
+  assert.deepEqual(result.lines.map(line => line.hiddenCount), [0, 2]);
+  assert.equal(new Set(result.lines.flatMap(line => line.blocks).map(block => block.targetId)).size, 10);
 });
 
 test('configured/default ordering is stable and severity never reorders targets', () => {

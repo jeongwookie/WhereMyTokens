@@ -79,7 +79,7 @@ test('Schema 4 upgrade bootstraps real response ownership without changing prote
   db.prepare('UPDATE usage_entry SET request_id=? WHERE request_id=?').run('codex:response:a', f.first.requestId);
   db.prepare('UPDATE usage_entry SET request_id=? WHERE request_id=?').run('codex:response:b', 'codex:counter:broken');
   db.prepare('UPDATE usage_source SET checkpoint_json=?').run(JSON.stringify({ byteOffset: cp.byteOffset, rawModel: 'gpt-6-astra' }));
-  db.exec('DROP TABLE usage_identity; PRAGMA user_version=4');
+  db.exec('DROP TABLE usage_identity; ALTER TABLE usage_entry DROP COLUMN timestamp_source; PRAGMA user_version=4');
   const before = metrics(db);
   db.close();
 

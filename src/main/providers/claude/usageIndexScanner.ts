@@ -22,7 +22,7 @@ import type {
   UsageSessionProjection,
   UsageSourceBatch,
   UsageSourceScanPlan,
-  UsageSourceScanner,
+  SingleBatchUsageSourceScanner,
 } from '../../usageIndex';
 
 export const CLAUDE_RECENT_REQUESTS = 128;
@@ -88,7 +88,7 @@ function applyRequest(snapshot: SessionSnapshot, request: AppliedClaudeRequest, 
 export function createClaudeUsageIndexScanner(
   filePath: string,
   options: ClaudeUsageIndexScannerOptions = {},
-): UsageSourceScanner {
+): SingleBatchUsageSourceScanner {
   return {
     async scan(plan: UsageSourceScanPlan): Promise<UsageSourceBatch> {
       if (plan.source.provider !== 'claude' || plan.source.kind !== 'file') {

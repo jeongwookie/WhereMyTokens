@@ -174,7 +174,11 @@ test('taskbar quota settings default off and normalize abbreviation overrides', 
   assert.equal(DEFAULT_SETTINGS.taskbarQuotaMaxBlocks, 2);
   assert.deepEqual(DEFAULT_SETTINGS.quotaTargetAbbreviations, {});
   assert.equal(settings.taskbarQuotaEnabled, true);
-  assert.equal(settings.taskbarQuotaMaxBlocks, 3);
+  assert.equal(settings.taskbarQuotaMaxBlocks, 5);
+  for (const value of [1, 2, 3, 4, 5]) {
+    assert.equal(normalizeSettings({ taskbarQuotaMaxBlocks: value }).taskbarQuotaMaxBlocks, value);
+  }
+  assert.equal(normalizeSettings({ taskbarQuotaMaxBlocks: -1 }).taskbarQuotaMaxBlocks, 1);
   assert.deepEqual(settings.quotaTargetAbbreviations, {
     'claude.group.account': 'C',
     'codex.group.account': 'X1',
@@ -228,17 +232,17 @@ test('settings:set persists taskbar quota settings through the explicit allowlis
 
   saved = setSettings(null, { taskbarQuotaEnabled: false, taskbarQuotaMaxBlocks: 99, language: 'bogus' });
   assert.equal(saved.taskbarQuotaEnabled, false);
-  assert.equal(saved.taskbarQuotaMaxBlocks, 3);
+  assert.equal(saved.taskbarQuotaMaxBlocks, 5);
   assert.equal(saved.language, 'ja');
   assert.equal(store.store.taskbarQuotaEnabled, false);
-  assert.equal(store.store.taskbarQuotaMaxBlocks, 3);
+  assert.equal(store.store.taskbarQuotaMaxBlocks, 5);
   assert.equal(store.store.language, 'ja');
 
   saved = setSettings(null, { taskbarQuotaEnabled: 'true', taskbarQuotaMaxBlocks: '2' });
   assert.equal(saved.taskbarQuotaEnabled, false);
-  assert.equal(saved.taskbarQuotaMaxBlocks, 3);
+  assert.equal(saved.taskbarQuotaMaxBlocks, 5);
   assert.equal(store.store.taskbarQuotaEnabled, false);
-  assert.equal(store.store.taskbarQuotaMaxBlocks, 3);
+  assert.equal(store.store.taskbarQuotaMaxBlocks, 5);
 });
 
 test('renderer settings model exposes enabledProviders as editable state', () => {
