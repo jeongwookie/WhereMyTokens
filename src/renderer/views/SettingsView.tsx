@@ -118,7 +118,7 @@ function normalizeSettingsDraft(settings: AppSettings): AppSettings {
     quotaTargetModes: settings.quotaTargetModes ?? {},
     quotaTargetOrder: settings.quotaTargetOrder ?? [],
     taskbarQuotaEnabled: settings.taskbarQuotaEnabled === true,
-    taskbarQuotaMaxBlocks: Math.max(1, Math.min(3, Math.round(settings.taskbarQuotaMaxBlocks || 2))),
+    taskbarQuotaMaxBlocks: Math.max(1, Math.min(5, Math.round(settings.taskbarQuotaMaxBlocks || 2))),
     quotaTargetAbbreviations: settings.quotaTargetAbbreviations ?? {},
     antigravityQuotaDurationPaceEnabled: settings.antigravityQuotaDurationPaceEnabled === true,
     language: normalizeLanguagePreference(settings.language),
@@ -504,6 +504,8 @@ export default function SettingsView({ settings, providerQuotas, onSave, onBack 
               <option value={1}>{t('settingsView.general.blocksOption', { count: 1 })}</option>
               <option value={2}>{t('settingsView.general.blocksOption', { count: 2 })}</option>
               <option value={3}>{t('settingsView.general.blocksOption', { count: 3 })}</option>
+              <option value={4}>{t('settingsView.general.blocksOption', { count: 4 })}</option>
+              <option value={5}>{t('settingsView.general.blocksOption', { count: 5 })}</option>
             </select>
           </div>
         )}

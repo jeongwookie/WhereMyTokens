@@ -1,7 +1,7 @@
 import type {
   ProviderContext,
 } from '../types';
-import type { ProviderQuotaSnapshot, QuotaEntry } from '../../../shared/quotaTypes';
+import type { ProviderQuotaSnapshot, QuotaEntry, QuotaUsageBinding } from '../../../shared/quotaTypes';
 import { normalizeQuotaPeriod } from '../../../shared/quotaDomain';
 import { defaultQuotaModeForModel, normalizeAntigravityModel } from './models';
 import { maskEmail, parseTimestampMs } from './pathUtils';
@@ -15,6 +15,7 @@ import {
 import type {
   AntigravityModelConfig,
   AntigravityQuotaSummaryBucket,
+  AntigravityQuotaSummaryGroup,
   AntigravityQuotaSummaryResponse,
   AntigravityServerInfo,
   AntigravityTrajectorySummariesResponse,
@@ -63,6 +64,14 @@ function stableModelId(model: string): string {
 }
 
 function summaryBucketDurationMs(bucket: AntigravityQuotaSummaryBucket): number | null {
+  if (bucket.window) {
+    switch (bucket.window.toLowerCase()) {
+      case 'weekly':
+      case '7d': return WEEK_MS;
+      case '5h': return FIVE_HOURS_MS;
+      default: return null;
+    }
+  }
   const text = `${bucket.bucketId ?? ''} ${bucket.displayName ?? ''}`.toLowerCase();
   if (text.includes('weekly') || text.includes('week') || text.includes('7d')) return WEEK_MS;
   if (text.includes('five hour') || text.includes('five-hour') || text.includes('5h') || text.includes('session')) {
@@ -73,19 +82,67 @@ function summaryBucketDurationMs(bucket: AntigravityQuotaSummaryBucket): number 
 
 function summaryTargetAbbreviation(label: string): string {
   if (/claude|gpt/i.test(label)) return 'CG';
-  if (/gemini/i.test(label)) return 'G';
-  const initials = label.match(/[A-Za-z0-9]/g)?.slice(0, 2).join('').toUpperCase();
-  return initials || 'A';
+  const words = label.toUpperCase().match(/[A-Z0-9]+/g) ?? [];
+  const initials = words.map(word => word[0]).join('');
+  return (initials.length >= 2 ? initials : words.join('')).slice(0, 3) || 'A';
 }
 
-export function parseAntigravityQuotaSummary(response: AntigravityQuotaSummaryResponse): QuotaEntry[] {
+function summaryUsageBindings(
+  groups: AntigravityQuotaSummaryGroup[],
+  configs: AntigravityModelConfig[],
+): Map<number, QuotaUsageBinding> {
+  const resetGroups = new Map<number, Set<number>>();
+  groups.forEach((group, groupIndex) => {
+    for (const bucket of Array.isArray(group?.buckets) ? group.buckets.slice(0, MAX_QUOTA_SUMMARY_BUCKETS) : []) {
+      if (!bucket || remainingPctFromFraction(bucket.remainingFraction) == null) continue;
+      const reset = resetAtFromValue(bucket.resetTime);
+      if (reset == null) continue;
+      const owners = resetGroups.get(reset) ?? new Set<number>();
+      owners.add(groupIndex);
+      resetGroups.set(reset, owners);
+    }
+  });
+  const modelGroups = new Map<string, { value: string; owners: Set<number | null> }>();
+  for (const config of configs) {
+    const reset = resetAtFromValue(config.quotaInfo?.resetTime);
+    const owners = reset == null ? undefined : resetGroups.get(reset);
+    const groupIndex = owners?.size === 1 ? owners.values().next().value! : null;
+    for (const value of [config.label, config.modelOrAlias?.model, config.modelId]) {
+      if (typeof value !== 'string' || !value.trim()) continue;
+      const key = value.trim().toLowerCase();
+      const model = modelGroups.get(key) ?? { value: value.trim(), owners: new Set<number | null>() };
+      model.owners.add(groupIndex);
+      modelGroups.set(key, model);
+    }
+  }
+  const bindings = new Map<number, QuotaUsageBinding>();
+  for (const { value, owners } of modelGroups.values()) {
+    if (owners.size !== 1) continue;
+    const groupIndex = owners.values().next().value;
+    if (groupIndex == null) continue;
+    let binding = bindings.get(groupIndex);
+    if (!binding || binding.kind !== 'models') {
+      binding = { kind: 'models', matchers: [] };
+      bindings.set(groupIndex, binding);
+    }
+    binding.matchers.push({ kind: 'exact', value });
+  }
+  return bindings;
+}
+
+export function parseAntigravityQuotaSummary(
+  response: AntigravityQuotaSummaryResponse,
+  configs: AntigravityModelConfig[],
+): QuotaEntry[] {
   const groups = Array.isArray(response.response?.groups)
     ? response.response.groups
     : Array.isArray(response.groups) ? response.groups : [];
+  const boundedGroups = groups.slice(0, MAX_QUOTA_SUMMARY_GROUPS);
+  const bindings = summaryUsageBindings(boundedGroups, configs);
   const entries: QuotaEntry[] = [];
   const seenGroupIds = new Set<string>();
 
-  groups.slice(0, MAX_QUOTA_SUMMARY_GROUPS).forEach((group, groupIndex) => {
+  boundedGroups.forEach((group, groupIndex) => {
     if (!group || typeof group !== 'object' || Array.isArray(group)) return;
     const label = typeof group.displayName === 'string' && group.displayName.trim()
       ? group.displayName.trim()
@@ -118,16 +175,19 @@ export function parseAntigravityQuotaSummary(response: AntigravityQuotaSummaryRe
       const bucketId = seenBucketIds.has(baseBucketId) ? `${baseBucketId}-${bucketIndex + 1}` : baseBucketId;
       seenBucketIds.add(bucketId);
       const durationMs = summaryBucketDurationMs(bucket);
+      const resetsAt = resetAtFromValue(bucket.resetTime);
+      const usageBinding = bindings.get(groupIndex);
       entries.push({
         key: `antigravity.summary.${groupId}.${bucketId}`,
         target,
         scope: { kind: 'model', label },
         state: 'limited',
         usedPct: clampPercent(100 - remainingPct),
-        resetsAt: resetAtFromValue(bucket.resetTime),
+        resetsAt,
         durationMs,
         durationInferred: false,
         period: normalizeQuotaPeriod(durationMs),
+        ...(durationMs != null && resetsAt != null && usageBinding ? { usageBinding } : {}),
       });
     });
   });
@@ -202,16 +262,20 @@ function candidateScore(candidate: CandidateQuota): number {
   return score;
 }
 
+function modelConfigsFromStatus(response: AntigravityUserStatusResponse): AntigravityModelConfig[] {
+  const configs = response.userStatus?.cascadeModelConfigData?.clientModelConfigs;
+  return Array.isArray(configs)
+    ? configs.filter((config): config is AntigravityModelConfig => !!config && typeof config === 'object' && !Array.isArray(config))
+    : [];
+}
+
 function snapshotFromStatus(
   response: AntigravityUserStatusResponse,
   nowMs: number,
   options: AntigravityQuotaParseOptions = {},
 ): ProviderQuotaSnapshot {
   const userStatus = response.userStatus;
-  const rawConfigs = userStatus?.cascadeModelConfigData?.clientModelConfigs;
-  const configs = Array.isArray(rawConfigs)
-    ? rawConfigs.filter((config): config is AntigravityModelConfig => !!config && typeof config === 'object' && !Array.isArray(config))
-    : [];
+  const configs = modelConfigsFromStatus(response);
   const accountEmail = typeof userStatus?.email === 'string' && userStatus.email.trim().length > 0
     ? userStatus.email.trim()
     : undefined;
@@ -276,7 +340,7 @@ export async function fetchAntigravityQuotaFromServers(
       const summary = pastDeadline()
         ? null
         : await getQuotaSummaryCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));
-      const summaryEntries = summary ? parseAntigravityQuotaSummary(summary) : [];
+      const summaryEntries = summary ? parseAntigravityQuotaSummary(summary, modelConfigsFromStatus(status)) : [];
       const trajectories = pastDeadline()
         ? null
         : await getTrajectorySummariesCached(server, ctx.nowMs, remainingTimeoutMs(stopAt));

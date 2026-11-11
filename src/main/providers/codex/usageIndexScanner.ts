@@ -14,7 +14,7 @@ import type {
   UsageSessionProjection,
   UsageSourceBatch,
   UsageSourceScanPlan,
-  UsageSourceScanner,
+  SingleBatchUsageSourceScanner,
 } from '../../usageIndex';
 import { codexQuotaEntries } from './quota';
 import { codexUsageDecision, newCodexAccountingState, type CodexAccountingState } from './accounting';
@@ -122,7 +122,7 @@ function assistantResponseChars(payload: Record<string, unknown>): number {
 export function createCodexUsageIndexScanner(
   filePath: string,
   options: CodexUsageIndexScannerOptions = {},
-): UsageSourceScanner {
+): SingleBatchUsageSourceScanner {
   return {
     async scan(plan: UsageSourceScanPlan): Promise<UsageSourceBatch> {
       if (plan.source.provider !== 'codex' || plan.source.kind !== 'file') {

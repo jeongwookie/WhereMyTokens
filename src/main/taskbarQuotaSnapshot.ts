@@ -21,7 +21,7 @@ export interface TaskbarQuotaSnapshot {
 export interface TaskbarQuotaDisplayLine {
   period: QuotaPeriod;
   label: '5h' | '1w';
-  blocks: TaskbarQuotaBlock[];
+  blocks: Array<TaskbarQuotaBlock | null>;
   hiddenCount: number;
 }
 
@@ -140,15 +140,15 @@ function publicBlock(block: CandidateBlock): TaskbarQuotaBlock {
 function maxBlocks(settings: AppSettings): number {
   const value = settings.taskbarQuotaMaxBlocks;
   return typeof value === 'number' && Number.isFinite(value)
-    ? Math.max(1, Math.min(3, Math.round(value)))
+    ? Math.max(1, Math.min(5, Math.round(value)))
     : 2;
 }
 
-function line(period: QuotaPeriod, blocks: CandidateBlock[], hiddenCount = 0): TaskbarQuotaDisplayLine {
+function line(period: QuotaPeriod, blocks: Array<CandidateBlock | null>, hiddenCount = 0): TaskbarQuotaDisplayLine {
   return {
     period,
     label: period === '5h' ? '5h' : '1w',
-    blocks: blocks.map(publicBlock),
+    blocks: blocks.map(block => block === null ? null : publicBlock(block)),
     hiddenCount,
   };
 }
@@ -176,7 +176,22 @@ export function buildTaskbarQuotaSnapshot(
   if (periods.length === 2) {
     const h5 = sortBlocks(byPeriod['5h']);
     const d7 = sortBlocks(byPeriod['7d']);
-    lines = [line('5h', h5.slice(0, cap), Math.max(0, h5.length - cap)), line('7d', d7.slice(0, cap), Math.max(0, d7.length - cap))];
+    const targetIds = [...new Set(sortBlocks([...h5, ...d7]).map(block => block.targetId))];
+    const aligned: Record<QuotaPeriod, Array<CandidateBlock | null>> = { '5h': [], '7d': [] };
+    for (const targetId of targetIds) {
+      const shortBlocks = h5.filter(block => block.targetId === targetId);
+      const weeklyBlocks = d7.filter(block => block.targetId === targetId);
+      for (let index = 0; index < Math.max(shortBlocks.length, weeklyBlocks.length); index++) {
+        aligned['5h'].push(shortBlocks[index] ?? null);
+        aligned['7d'].push(weeklyBlocks[index] ?? null);
+      }
+    }
+    const shortBlocks = aligned['5h'].slice(0, cap);
+    const weeklyBlocks = aligned['7d'].slice(0, cap);
+    lines = [
+      line('5h', shortBlocks, h5.length - shortBlocks.filter(block => block !== null).length),
+      line('7d', weeklyBlocks, d7.length - weeklyBlocks.filter(block => block !== null).length),
+    ];
   } else {
     const period = periods[0];
     const sorted = sortBlocks(byPeriod[period]);

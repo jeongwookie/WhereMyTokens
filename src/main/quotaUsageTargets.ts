@@ -11,6 +11,7 @@ export interface EntryUsageTarget {
   provider: ProviderId;
   entryKey: string;
   startMs: number;
+  endMs: number;
   binding: QuotaUsageBinding;
 }
 
@@ -36,7 +37,7 @@ export function buildQuotaUsageTargets(
     for (const entry of snapshot?.entries ?? []) {
       const startMs = entryStart(entry);
       if (startMs == null || !entry.usageBinding) continue;
-      entries.push({ provider, entryKey: entry.key, startMs, binding: entry.usageBinding });
+      entries.push({ provider, entryKey: entry.key, startMs, endMs: entry.resetsAt!, binding: entry.usageBinding });
     }
   }
   return { fixed, entries };

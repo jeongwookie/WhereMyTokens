@@ -3,7 +3,7 @@ import type { ProviderId } from '../../shared/quotaTypes';
 
 export type UsageSourceKind = 'file' | 'remote';
 export type UsageScanMode = 'tail' | 'rebuild';
-export type UsageRefreshStatus = 'unchanged' | 'tailed' | 'rebuilt';
+export type UsageRefreshStatus = 'unchanged' | 'tailed' | 'rebuilt' | 'partial';
 
 export interface UsageMetrics {
   requestCount: number;
@@ -50,6 +50,8 @@ export interface UsageEntry {
   identityOrigin?: string;
   requestId: string;
   timestampMs: number;
+  timestampSource?: 'provider' | 'step' | 'estimated';
+  estimatedTimestampMs?: number;
   provider: ProviderId;
   model: string;
   inputTokens: number;
@@ -90,6 +92,8 @@ export type UsageRebuildCoverage =
   | { kind: 'none' };
 
 export interface UsageSourceBatch {
+  pending?: boolean;
+  failure?: string;
   /** A late provider identity names an observation already counted; this adds no quantity. */
   identityLinks?: readonly { alias: string; target: string }[];
   /** A changed physical file established a new checkpoint without replacing existing usage. */
@@ -114,9 +118,13 @@ export interface UsageSourceScanPlan {
   previousSessionProjection: UsageSessionProjection | null;
 }
 
-export interface UsageSourceScanner {
+export interface SingleBatchUsageSourceScanner {
   scan(plan: UsageSourceScanPlan): Promise<UsageSourceBatch>;
 }
+
+export type UsageSourceScanner =
+  | SingleBatchUsageSourceScanner
+  | { scanBatches(plan: UsageSourceScanPlan): AsyncIterable<UsageSourceBatch> };
 
 export interface UsageSourceRefreshResult {
   sourceId: string;

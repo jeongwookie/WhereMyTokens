@@ -6,6 +6,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import esbuild from 'esbuild';
 import { tCallRegex } from './test-support/i18n.mjs';
+import { parseAntigravityQuotaSummary } from '../dist/main/providers/antigravity/quota.js';
+import { antigravityQuotaFixture } from './test-support/antigravity-quota.mjs';
 
 async function loadModels() {
   const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'wmt-reset-'));
@@ -193,7 +195,7 @@ async function loadRendererBundle() {
   const entry = path.join(outdir, 'entry.mjs');
   fs.writeFileSync(entry, [
     `export { ThemeProvider } from '../src/renderer/ThemeContext';`,
-    `export { DARK } from '../src/renderer/theme';`,
+    `export { DARK, fmtTokens } from '../src/renderer/theme';`,
     `export * from '../src/renderer/views/MainView';`,
     `export { default as SettingsView } from '../src/renderer/views/SettingsView';`,
     `export { default as i18n } from '../src/renderer/i18n';`,
@@ -366,6 +368,62 @@ test('error-state tooltip shows status code + detail + last-successful-update ti
   assert.match(tip, /2026/);
 });
 
+test('Codex and Antigravity keep Rich breakdowns and one Simple token summary per target', async () => {
+  const mod = await mainView();
+  const { response, configs } = antigravityQuotaFixture();
+  const fixtures = {
+    codex: resetSnapshot({ resetCredits: null }),
+    antigravity: { provider: 'antigravity', source: 'localRpc', entries: parseAntigravityQuotaSummary(response, configs) },
+  };
+  for (const [provider, snapshot] of Object.entries(fixtures)) {
+    const entries = snapshot.entries;
+    const entryStats = Object.fromEntries(entries.map((entry, i) => {
+      const units = 1 + i * 4;
+      return [entry.key, {
+        inputTokens: 100 * units, outputTokens: 200 * units, cacheCreationTokens: 300 * units, cacheReadTokens: 400 * units,
+        totalTokens: 1000 * units, requestCount: 2, costUSD: 1, cacheSavingsUSD: 0, cacheEfficiency: 80,
+      }];
+    }));
+    for (const mode of ['simple', 'rich']) {
+      for (const targetId of new Set(entries.map(entry => entry.target.id))) {
+        const groupEntries = entries.filter(entry => entry.target.id === targetId);
+        const props = {
+          usage: { entryStats },
+          providerQuotas: { [provider]: { ...snapshot, entries: groupEntries } },
+          settings: { enabledProviders: [provider], quotaTargetModes: { [targetId]: mode }, quotaTargetOrder: [], currency: 'USD', usdToKrw: 1300 },
+          historyWarmupPending: false, historyWarmupStartsAt: null,
+        };
+        const render = () => renderToStaticMarkup(React.createElement(mod.PlanUsagePanel, props));
+        const html = render();
+        if (mode === 'rich') {
+          assert.equal((html.match(/>In /g) ?? []).length, groupEntries.length, `${provider} ${targetId}`);
+          assert.equal((html.match(/>Out /g) ?? []).length, groupEntries.length);
+          assert.equal((html.match(/>Cache [\d.]+[KM]?<\/span>/g) ?? []).length, groupEntries.length);
+          for (const entry of groupEntries) {
+            const stats = entryStats[entry.key];
+            assert.ok(html.includes(`In ${mod.fmtTokens(stats.inputTokens)}`));
+            assert.ok(html.includes(`Out ${mod.fmtTokens(stats.outputTokens)}`));
+            assert.ok(html.includes(`Cache ${mod.fmtTokens(stats.cacheReadTokens + stats.cacheCreationTokens)}`));
+          }
+        } else {
+          assert.doesNotMatch(html, />(?:In |Out |Cache [\d.])/);
+          assert.equal((html.match(/ tok<\/span>/g) ?? []).length, 1, `${provider} ${targetId}`);
+          const totals = groupEntries.map(entry => entryStats[entry.key].totalTokens);
+          assert.ok(html.includes(`>${mod.fmtTokens(Math.max(...totals))} tok</span>`));
+          if (totals.length > 1) assert.ok(!html.includes(`>${mod.fmtTokens(totals.reduce((sum, value) => sum + value, 0))} tok</span>`));
+        }
+        props.usage.entryStats = {};
+        const zero = render();
+        assert.doesNotMatch(zero, />(?:In |Out |Cache [\d.])| tok<\/span>/);
+        props.usage.entryStats = entryStats;
+        props.providerQuotas[provider].entries = groupEntries.map(({ usageBinding, ...entry }) => entry);
+        const unknown = render();
+        assert.doesNotMatch(unknown, />(?:In |Out |Cache [\d.])| tok<\/span>/);
+      }
+    }
+  }
+});
+
 test('PlanUsagePanel renders CODEX RESETS as a sibling row AFTER 5H/1W, not nested (F6/R2-5)', async () => {
   const mod = await mainView();
   const groupId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
@@ -535,7 +593,7 @@ test('SettingsView DOM lists canonical quota targets plus the reset credits row'
   const SettingsView = mod.SettingsView;
   assert.ok(SettingsView, 'SettingsView exported from the bundle');
   const props = {
-    settings: { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [] },
+    settings: { enabledProviders: ['codex'], quotaTargetModes: {}, quotaTargetOrder: [], taskbarQuotaEnabled: true, taskbarQuotaMaxBlocks: 99 },
     providerQuotas: { codex: resetSnapshot() },
     onSave: () => {}, onBack: () => {},
   };
@@ -545,6 +603,9 @@ test('SettingsView DOM lists canonical quota targets plus the reset credits row'
   assert.match(html, />Rich<\/button>/);
   assert.match(html, />Simple<\/button>/);
   assert.match(html, />None<\/button>/);
+  for (const count of [1, 2, 3, 4, 5]) assert.match(html, new RegExp(`<option value="${count}"`));
+  assert.match(html, /<option value="5" selected=""/);
+  assert.doesNotMatch(html, /<option value="6"/);
 });
 
 // --- Closing-gate fixes: G1 (errored card shown, not hidden) + G2 (non-ok status visible) ---

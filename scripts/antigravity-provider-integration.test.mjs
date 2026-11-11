@@ -52,16 +52,24 @@ async function materialize(discovery, index = new DefaultUsageIndex(new InMemory
 }
 
 async function withAntigravityServer(handler, run) {
-  const server = http.createServer(handler);
+  const server = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    req.rpcBody = JSON.parse(body || '{}');
+    handler(req, res);
+  });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    return await run({ pid: 1, port: server.address().port, csrfToken: 'csrf' });
+    return await run({ pid: 1, port: server.address().port, protocol: 'http', csrfToken: 'csrf' });
   } finally {
     await new Promise(resolve => server.close(resolve));
   }
 }
 
 function sendJson(res, payload) {
+  if (res.req.url.endsWith('/GetCascadeTrajectoryGeneratorMetadata') && payload.generatorMetadata) {
+    payload = { ...payload, generatorMetadata: payload.generatorMetadata.slice(res.req.rpcBody.generatorMetadataOffset ?? 0) };
+  }
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
 }
@@ -175,11 +183,12 @@ test('Antigravity provider prefers grouped quota families and preserves account 
           email: 'person@example.com',
           planStatus: { planInfo: { planName: 'Pro' } },
           cascadeModelConfigData: {
-            clientModelConfigs: [{
-              label: 'Legacy model row',
-              modelOrAlias: { model: 'legacy-model' },
-              quotaInfo: { remainingFraction: 0.1 },
-            }],
+            clientModelConfigs: [
+              { label: 'Gemini Flash', modelOrAlias: { model: 'gemini-flash' },
+                quotaInfo: { remainingFraction: 0.3, resetTime: nowMs + 604_800_000 } },
+              { label: 'Claude Opus', modelOrAlias: { model: 'claude-opus' },
+                quotaInfo: { remainingFraction: 0.6, resetTime: nowMs + 18_000_000 } },
+            ],
           },
         },
       });
@@ -225,7 +234,10 @@ test('Antigravity provider prefers grouped quota families and preserves account 
       ['Gemini Models', '7d', 20],
       ['Claude and GPT models', '5h', 50],
     ]);
-    assert.equal(quota.entries.some(entry => entry.target.label === 'Legacy model row'), false);
+    assert.deepEqual(quota.entries.map(entry => entry.usageBinding), [
+      { kind: 'models', matchers: [{ kind: 'exact', value: 'Gemini Flash' }, { kind: 'exact', value: 'gemini-flash' }] },
+      { kind: 'models', matchers: [{ kind: 'exact', value: 'Claude Opus' }, { kind: 'exact', value: 'claude-opus' }] },
+    ]);
   });
 });
 
@@ -506,7 +518,7 @@ test('Antigravity usage scan falls back to now when cascade and GM timestamps ar
   });
 });
 
-test('Antigravity usage scan enriches non-empty lightweight GM with full trajectory metadata', async () => {
+test('Antigravity usage scan uses lightweight metadata without fetching the full trajectory', async () => {
   const nowMs = Date.parse('2026-06-01T12:00:00.000Z');
   await withAntigravityServer((req, res) => {
     if (req.url.endsWith('/GetUserStatus')) {
@@ -540,28 +552,7 @@ test('Antigravity usage scan enriches non-empty lightweight GM with full traject
       return;
     }
     if (req.url.endsWith('/GetCascadeTrajectory')) {
-      sendJson(res, {
-        trajectory: {
-          generatorMetadata: [
-            {
-              executionId: 'same-exec',
-              stepIndices: [1],
-              chatModel: {
-                responseModel: 'MODEL_GEMINI_3_PRO',
-                usage: { inputTokens: 100, outputTokens: 7, cacheReadTokens: 50 },
-              },
-            },
-            {
-              executionId: 'full-only',
-              stepIndices: [2],
-              chatModel: {
-                responseModel: 'MODEL_GEMINI_3_PRO',
-                usage: { inputTokens: 20, outputTokens: 2 },
-              },
-            },
-          ],
-        },
-      });
+      assert.fail('usage collection must not request full conversation payloads');
       return;
     }
     sendJson(res, {});
@@ -570,10 +561,10 @@ test('Antigravity usage scan enriches non-empty lightweight GM with full traject
     const indexed = await materialize(usage);
     const row = indexed.usage.aggregate;
 
-    assert.equal(row.requestCount, 2);
-    assert.equal(row.inputTokens, 120);
-    assert.equal(row.outputTokens, 9);
-    assert.equal(row.cacheReadTokens, 50);
+    assert.equal(row.requestCount, 1);
+    assert.equal(row.inputTokens, 10);
+    assert.equal(row.outputTokens, 1);
+    assert.equal(row.cacheReadTokens, 0);
   });
 });
 

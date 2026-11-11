@@ -74,7 +74,7 @@ Git statistics share a FIFO limit of two active Git commands across repositories
 
 ### Usage history
 
-The [usage accounting contract](usage-accounting.md) defines the current schema 6 quantities, identities, migrations, and scan states. Provider discovery and scanners feed the same UsageIndex; the in-memory and SQLite adapters implement its storage contract. Session projections accelerate display and do not form another historical authority.
+The [usage accounting contract](usage-accounting.md) defines the current schema 7 quantities, identities, migrations, and scan states. Provider discovery and scanners feed the same UsageIndex; the in-memory and SQLite adapters implement its storage contract. Session projections accelerate display and do not form another historical authority.
 
 - Source checkpoints and contribution changes commit together. An unchanged source does not invoke its scanner; evicting hot detail does not remove the durable checkpoint or historical totals.
 - Canonical buckets retain source, provider, and model attribution. Project exclusion filters sources before aggregation and remains reversible.
@@ -92,6 +92,12 @@ The automatic counter-origin revision runs in a worker serialized with normal sc
 `ProviderQuotaSnapshot.entries` is the shared quota contract. An entry key identifies one limit and its alert/reset state; `target.id` identifies the related settings and display target. Only reported limits produce entries. Provider snapshots are selected as a whole rather than assembled from windows from different observations.
 
 Known reset time supports a countdown; elapsed-window percentage additionally requires a known or explicitly inferred duration. Optional `usageBinding` controls local token/cost attribution independently. The canonical normalized periods are `5h`, `7d`, or null; other or unknown periods remain dashboard-visible without being forced into fixed-period tray/taskbar projections. The taskbar's two physical lines distribute the represented periods; `1w` is a display label for `7d`, not another protocol value.
+
+Antigravity summary entries bind current model labels, enum values, and model IDs through a unique match between the model's reported reset and one summary group's bucket resets. Exact identities belong to at most one group; ambiguous resets or conflicting identities remain unbound. This follows account-specific shared or separate Argon quotas without matching every Gemini model to both groups. Dashboard display follows the Codex layout: Rich shows each period's In / Out / Cache; Simple shows one token summary per target, using the largest window count when multiple windows have usage rather than adding overlapping windows. Model matches are resolved once per projection model dictionary, using retained index facts rather than rescanning conversations.
+
+When both periods are represented, taskbar blocks use a shared target order before applying the configurable 1–5 column limit (default 2). A null block reserves that target's column when the line has no matching period. Hidden counts include only omitted quota entries, not empty cells. A single represented period still balances contiguous blocks across both lines. Antigravity summary targets use word initials such as `GM` and `G4A`; the native helper measures the actual displayed prefix using the current font.
+
+The helper stores `RightInsetDip` and `BottomInsetDip` in 96-DPI logical units. Display and DPI notifications reapply the latest snapshot with current taskbar metrics and pixel-sized fonts. The previous absolute-pixel position format is rejected and starts at the default position. Native regression checks cover resolution changes, clipping and restoration, and repeated DPI transitions while the drawing surface remains at 96 DPI.
 
 Current provider acquisition and credential boundaries are described in [privacy and security](privacy-security.md). Historical OAuth or fixed-window implementation plans do not override that contract.
 

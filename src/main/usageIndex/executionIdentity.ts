@@ -62,3 +62,20 @@ export function canonicalSessionProjection(
 export function identityAccepts(entry: UsageEntry, sourceId: string, known: ExecutionIdentity | undefined): boolean {
   return !known || (known.sourceId === sourceId && known.requestId === entry.requestId);
 }
+
+export function antigravityTimeRevision(entry: UsageEntry, previous: UsageEntry, known: ExecutionIdentity, fallbackTimestampMs?: number): UsageEntry | undefined {
+  if (entry.provider !== 'antigravity' || previous.provider !== 'antigravity' || entry.model !== previous.model
+    || entry.identityOrigin && known.originId && entry.identityOrigin !== known.originId
+    || entry.timestampSource !== 'step' && entry.timestampSource !== 'provider') return undefined;
+  const estimated = previous.timestampSource === 'estimated'
+    || previous.timestampSource === undefined && entry.timestampSource === 'step'
+      && entry.estimatedTimestampMs === previous.timestampMs && fallbackTimestampMs === previous.timestampMs;
+  if (!estimated) return undefined;
+  const fields = ['inputTokens', 'outputTokens', 'cacheCreationTokens', 'cacheReadTokens'] as const;
+  if (fields.some(key => entry[key] < previous[key])) return undefined;
+  if (fields.every(key => entry[key] === previous[key])) {
+    return { ...previous, identityKey: entry.identityKey, identityAliases: entry.identityAliases,
+      identityOrigin: entry.identityOrigin, timestampMs: entry.timestampMs, timestampSource: entry.timestampSource };
+  }
+  return entry;
+}

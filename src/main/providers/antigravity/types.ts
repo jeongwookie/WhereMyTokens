@@ -1,6 +1,7 @@
 export interface AntigravityServerInfo {
   pid: number;
   port: number;
+  protocol: 'http' | 'https';
   csrfToken: string;
   workspaceId?: string;
   processStartedAtMs?: number;
@@ -8,6 +9,7 @@ export interface AntigravityServerInfo {
 
 export interface AntigravityModelConfig {
   label?: string;
+  modelId?: string;
   modelOrAlias?: {
     model?: string;
   };
@@ -36,6 +38,7 @@ export interface AntigravityUserStatusResponse {
 export interface AntigravityQuotaSummaryBucket {
   bucketId?: string;
   displayName?: string;
+  window?: string;
   remainingFraction?: number;
   resetTime?: string | number;
 }
@@ -67,15 +70,4 @@ export interface AntigravityTrajectorySummary {
 
 export interface AntigravityTrajectorySummariesResponse {
   trajectorySummaries?: Record<string, AntigravityTrajectorySummary>;
-}
-
-export interface AntigravityTrajectoryResponse {
-  trajectory?: {
-    steps?: unknown[];
-    generatorMetadata?: Record<string, unknown>[];
-  };
-}
-
-export interface AntigravityGeneratorMetadataResponse {
-  generatorMetadata?: Record<string, unknown>[];
 }

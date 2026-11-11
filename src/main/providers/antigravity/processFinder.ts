@@ -196,7 +196,7 @@ async function testPortWithProtocol(port: number, csrfToken: string, protocol: '
   });
 }
 
-async function findWorkingPort(candidate: ProcessCandidate, stopAt: number): Promise<number | null> {
+async function findWorkingPort(candidate: ProcessCandidate, stopAt: number): Promise<Pick<AntigravityServerInfo, 'port' | 'protocol'> | null> {
   const ports = [
     candidate.extensionPort,
     candidate.serverPort,
@@ -205,9 +205,9 @@ async function findWorkingPort(candidate: ProcessCandidate, stopAt: number): Pro
 
   for (const port of ports) {
     if (Date.now() >= stopAt) return null;
-    if (await testPortWithProtocol(port, candidate.csrfToken, 'http', remainingTimeoutMs(stopAt, 3_000))) return port;
+    if (await testPortWithProtocol(port, candidate.csrfToken, 'http', remainingTimeoutMs(stopAt, 3_000))) return { port, protocol: 'http' };
     if (Date.now() >= stopAt) return null;
-    if (await testPortWithProtocol(port, candidate.csrfToken, 'https', remainingTimeoutMs(stopAt, 3_000))) return port;
+    if (await testPortWithProtocol(port, candidate.csrfToken, 'https', remainingTimeoutMs(stopAt, 3_000))) return { port, protocol: 'https' };
   }
   return null;
 }
@@ -219,11 +219,11 @@ export async function findAntigravityServersUncached(timeoutMs = 15_000): Promis
 
   for (const candidate of candidates) {
     if (Date.now() >= stopAt) break;
-    const port = await findWorkingPort(candidate, stopAt);
-    if (!port) continue;
+    const connection = await findWorkingPort(candidate, stopAt);
+    if (!connection) continue;
     servers.push({
       pid: candidate.pid,
-      port,
+      ...connection,
       csrfToken: candidate.csrfToken,
       workspaceId: candidate.workspaceId,
       processStartedAtMs: candidate.processStartedAtMs,

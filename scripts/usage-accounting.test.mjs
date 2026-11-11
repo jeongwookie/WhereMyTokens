@@ -318,6 +318,7 @@ test('Schema 4 and 5 upgrade preserve history and bootstrap independently of rep
     if (version === 4) db.exec('DROP TABLE usage_identity');
     else db.exec('CREATE TABLE usage_history_guard (provider TEXT PRIMARY KEY, before_ms INTEGER); CREATE TABLE usage_repair_receipt (repair_id TEXT PRIMARY KEY, report_json TEXT);');
     db.prepare('UPDATE usage_source SET parser_version=1, checkpoint_json=?').run(JSON.stringify({ byteOffset: fs.statSync(f.file).size }));
+    db.exec('ALTER TABLE usage_entry DROP COLUMN timestamp_source');
     db.exec('PRAGMA user_version=' + version); db.close();
     await f.restart();
     assert.equal((await f.metrics()).totalTokens, 100);
