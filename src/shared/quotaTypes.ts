@@ -1,6 +1,6 @@
 export type ProviderId = 'claude' | 'codex' | 'antigravity';
 
-export type ProviderQuotaSource = 'api' | 'statusLine' | 'localLog' | 'localRpc' | 'cache';
+export type ProviderQuotaSource = 'api' | 'statusLine' | 'localLog' | 'localRpc' | 'localCli' | 'cache';
 export type QuotaDisplayMode = 'rich' | 'simple' | 'none';
 export type QuotaPeriod = '5h' | '7d';
 

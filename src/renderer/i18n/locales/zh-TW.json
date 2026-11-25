@@ -27,6 +27,9 @@
       "localLog": {
         "title": "本機工作階段日誌估算值，可能落後於帳戶級即時限制。"
       },
+      "localCli": {
+        "title": "官方 agy CLI 額度快照。"
+      },
       "localRpc": {
         "title": "本機服務供應商執行時快照。"
       }
@@ -594,7 +597,7 @@
       },
       "antigravityModelQuotas": {
         "label": "Antigravity 額度組",
-        "detail": "共享本機 RPC 額度組 (舊版回退至單模型額度)"
+        "detail": "CLI 或本機 RPC 共用額度群組 (舊版回退至單模型額度)"
       }
     },
     "footerNote": "提醒規則跟隨已啟用的服務供應商及額度/模型目標。每 60 秒自動重新整理一次，每個提醒有 1 小時冷卻期。",
@@ -649,7 +652,7 @@
     "providers": {
       "heading": "服務供應商（Providers）",
       "atLeastOneProvider": "必須保留至少一個已啟用的服務供應商。",
-      "antigravityDetail": "需要 Antigravity IDE 處於執行且登入狀態，僅使用本機 RPC。",
+      "antigravityDetail": "優先使用已登入的 agy CLI 讀取額度，舊版 IDE 可回退至本機 RPC。",
       "antigravityPace": "舊版 Antigravity 額度節奏估算",
       "antigravityPaceHint": "分組額度優先使用服務供應商上報的 5h/週週期。對於舊版按模型額度，根據重置時間推算節奏"
     },

@@ -121,7 +121,7 @@ Claude 配額優先從本機 Claude Code `statusLine` 取得。缺少最新的�
 
 啟用 Codex 時，即時用量與 Reset Credits 會使用 `~/.codex/auth.json`，直接向 OpenAI／ChatGPT 發出請求。重置額度快取只保留數量、到期時間、取得狀態、來源標籤、雜湊驗證標記與授權檔案修改時間。
 
-Antigravity 僅透過本機 RPC 取得資訊，不使用 Google OAuth、refresh token、Google 雲端用量端點或離線資料庫回退。
+Windows 上的 Antigravity 額度優先透過已登入的官方 `agy -p "/usage" --output-format json` 讀取，並保留本機 RPC 備援；工作階段與 Token 用量仍使用本機 RPC。CLI 自行處理驗證與網路活動，WhereMyTokens 不直接使用 Google OAuth、refresh token、Google 雲端用量端點或離線資料庫回退。
 
 詳細來源清單請參閱[隱私與安全文件](docs/privacy-security.md)。
 

@@ -227,6 +227,7 @@ function sourceBadge(source: ProviderQuotaSource): ProviderQuotaDisplayBadge {
     cache: 'Cache',
     localLog: 'Log',
     localRpc: 'RPC',
+    localCli: 'CLI',
   };
   return {
     key: `source.${source}`,

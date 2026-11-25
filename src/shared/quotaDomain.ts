@@ -22,7 +22,7 @@ export const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 export const QUOTA_CACHE_WITHOUT_RESET_TTL_MS = 30 * 60 * 1000;
 
 const PROVIDERS = new Set<ProviderId>(['claude', 'codex', 'antigravity']);
-const SOURCES = new Set<ProviderQuotaSource>(['api', 'statusLine', 'localLog', 'localRpc', 'cache']);
+const SOURCES = new Set<ProviderQuotaSource>(['api', 'statusLine', 'localLog', 'localRpc', 'localCli', 'cache']);
 const MODES = new Set<QuotaDisplayMode>(['rich', 'simple', 'none']);
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]*$/;
 const ABBREVIATION = /^[A-Z0-9]{1,3}$/;

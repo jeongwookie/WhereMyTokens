@@ -125,7 +125,7 @@ macOS 用户请使用单独的公开仓库:
 - **工具使用条** — 比例颜色条 + 工具标签（Bash、Edit、Read 等）
 
 ### 速率限制与提醒
-- **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都会把 provider 报告的 limit 转成 `providerQuotas` 中的 canonical Quota Entry；Claude 优先使用官方 `statusLine`，没有新值时通过现有 Claude Code access token 的只读 Desktop compatibility request 获取 5h/7d 与实际报告的 model-scoped entry。Codex 使用 live usage snapshot 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 使用运行中 IDE 的 127.0.0.1 local RPC model quota entry。未报告的 limit 不再合成为 `Unlimited`，而是保持缺席状态
+- **Provider quota 条** — Claude、Codex、Antigravity 以及后续 provider 都会把 provider 报告的 limit 转成 `providerQuotas` 中的 canonical Quota Entry；Claude 优先使用官方 `statusLine`，没有新值时通过现有 Claude Code access token 的只读 Desktop compatibility request 获取 5h/7d 与实际报告的 model-scoped entry。Codex 使用 live usage snapshot 与 local-log fallback、reset-credit endpoint 与 auth-bound cache，Antigravity 配额优先使用 Windows 上已登录的官方 agy CLI，回退至运行中 IDE 的 127.0.0.1 local RPC。未报告的 limit 不再合成为 `Unlimited`，而是保持缺席状态
 - **按 target 配置 quota 展示** — 每个 canonical quota target 都可以在 Settings 中设为 Rich、Simple 或隐藏；设置会影响 Plan Usage、悬浮小部件和 taskbar mini 的显示顺序与可见性。Taskbar mini 将规范化的 5h/7d entry 放入两条 physical line，可配置每条 line 1-3 个块，并用 `+N` 标示隐藏 target；前缀颜色表示 live/cache/log 等数据 source/status，而不是 quota severity。指标数量变化时固定右边缘，向左扩展或收缩；拖动可调整位置，双击文字可打开主界面。Codex Resets target 仅用于 Plan Usage
 - **Quota Pace 视图** — 对比已用额度 % 与已过时间 %，黄色/红色表示使用节奏快于重置窗口
 - **Claude Code 桥接** — 优先通过 `statusLine` 接收官方本地数据；没有新值且存在 Claude Code credential 时由受限的只读 compatibility request 补充
@@ -203,11 +203,12 @@ WhereMyTokens 是 local-first 的 Electron 托盘应用。renderer 不会直接�
 | Claude Desktop compatibility quota | `~/.claude/.credentials.json` 中的 access token 与 plan metadata；忽略 refresh-token property | 5h/7d 与 provider 报告的 model-scoped quota | 是，启动时可请求一次，同次运行内对 `api.anthropic.com` 最短间隔 15 分钟 |
 | Codex 会话 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner 写入 UsageIndex，并发布 session projection | 否 |
 | Codex quota snapshot 和 reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint 和 reset-credit endpoint | 是，直接请求 OpenAI/ChatGPT |
+| Antigravity CLI 配额 | 已登录的 agy CLI | `agy -p "/usage" --output-format json` | CLI 自行处理网络请求 |
 | Antigravity 会话、模型 quota 和使用 metadata | `127.0.0.1` 上运行中的 Antigravity language server | main process local RPC client，然后进入 renderer state | 无外部网络 |
 | 聚合使用索引 | 本地 provider 用量来源 | `%APPDATA%\WhereMyTokens\usage-index.sqlite` | 否 |
 | Git 产出账本 | 本地 git 扫描 | `%APPDATA%\WhereMyTokens\git-output-ledger.json` | 否 |
 
-速率限制优先级按 provider 区分，并统一组装进 `AppState.providerQuotas`：Claude 首先使用最新 `statusLine` bridge snapshot；没有新值且存在 Claude Code credential 时，只读使用 access token 从 `api.anthropic.com` 获取 account quota。启动时可请求一次，同次运行内后续请求至少间隔 15 分钟；忽略 refresh-token property，也不会刷新或写入 credential 文件。两者都不可用时，只显示绑定当前 access token 的 cache，并保留到报告的 reset 时间和 30 分钟上限中较早的时点。Codex 的 5h/7d quota entry 优先使用 live usage，并可回退到 cache 与 JSONL 日志中的本地 `rate_limits` 事件；未报告的 Codex limit 不再合成为 `Unlimited`；Codex reset credit 优先使用 reset-credit endpoint，仅可回退到 auth-bound cache 或 live usage payload 中的 count-only 值；Antigravity 使用运行中 IDE language server 的 local RPC model quota 数据。API/Bridge/Cache/Log/Local RPC 标签由 renderer 根据 snapshot 的 `source` 派生。Settings 将 provider 启用状态与 target 展示模式分开保存。
+速率限制优先级按 provider 区分，并统一组装进 `AppState.providerQuotas`：Claude 首先使用最新 `statusLine` bridge snapshot；没有新值且存在 Claude Code credential 时，只读使用 access token 从 `api.anthropic.com` 获取 account quota。启动时可请求一次，同次运行内后续请求至少间隔 15 分钟；忽略 refresh-token property，也不会刷新或写入 credential 文件。两者都不可用时，只显示绑定当前 access token 的 cache，并保留到报告的 reset 时间和 30 分钟上限中较早的时点。Codex 的 5h/7d quota entry 优先使用 live usage，并可回退到 cache 与 JSONL 日志中的本地 `rate_limits` 事件；未报告的 Codex limit 不再合成为 `Unlimited`；Codex reset credit 优先使用 reset-credit endpoint，仅可回退到 auth-bound cache 或 live usage payload 中的 count-only 值；Antigravity 配额优先使用官方 agy CLI，回退至运行中 IDE language server 的 local RPC 数据。API/Bridge/Cache/Log/CLI/Local RPC 标签由 renderer 根据 snapshot 的 `source` 派生。Settings 将 provider 启用状态与 target 展示模式分开保存。
 
 ---
 
@@ -235,7 +236,7 @@ WhereMyTokens 会读取本地文件，并在启用时仅直接请求您自己账
 
 WhereMyTokens 不要求粘贴 API key，也不保存单独的 credential 备份。Claude Desktop compatibility request 会加载现有 Claude Code credential 文件，提取 access token 与 plan metadata，并忽略 refresh-token property；不会刷新 credential 或写入文件。compatibility cache 绑定单向 token marker，登录变化后会被丢弃。Codex live usage 功能也会读取官方本地 Codex credential 文件。
 
-Claude quota monitoring 优先使用本地 `statusLine`。仅在需要 Desktop compatibility request 时将 access token 发送到 Anthropic 固定 HTTPS host。启动时可请求一次，同次运行内应用 15 分钟 throttle、timeout、响应大小限制和 429 backoff，且不会重试被拒绝的同一 access token；不会发送 session log 或完整 statusLine payload。Codex live usage 与 reset-credit 查询使用 HTTPS-only request、timeout、响应大小限制、cache 和独立 backoff。Antigravity 只使用 loopback local RPC；不会使用 Google OAuth、refresh token、Google cloud usage endpoint 或离线数据库 fallback。
+Claude quota monitoring 优先使用本地 `statusLine`。仅在需要 Desktop compatibility request 时将 access token 发送到 Anthropic 固定 HTTPS host。启动时可请求一次，同次运行内应用 15 分钟 throttle、timeout、响应大小限制和 429 backoff，且不会重试被拒绝的同一 access token；不会发送 session log 或完整 statusLine payload。Codex live usage 与 reset-credit 查询使用 HTTPS-only request、timeout、响应大小限制、cache 和独立 backoff。Antigravity 配额优先使用已登录的官方 `agy -p "/usage" --output-format json`，保留 loopback local RPC 回退；会话和用量仍使用 RPC。CLI 自行处理认证与网络请求；WhereMyTokens 不会使用 Google OAuth、refresh token、Google cloud usage endpoint 或离线数据库 fallback。
 
 要禁用 Claude Code bridge，请打开 **Settings -> Claude Code Integration -> Disable**。应用只会在 `statusLine` entry 属于 WhereMyTokens bridge command 时移除它；不会覆盖或删除其他 custom `statusLine`。也可以手动删除 `~/.claude/settings.json` 中的 WhereMyTokens `statusLine` entry，然后重启 Claude Code。
 
@@ -291,7 +292,7 @@ WhereMyTokens 可以通过 `127.0.0.1` 上运行中的 Antigravity IDE local lan
 
 Windows 会同时检测 Antigravity 2.x 的 `language_server.exe` 与 legacy 可执行文件名。Grouped quota 使用 provider 报告的 period；只有 legacy 逐模型 quota 会在 Settings 启用 **Legacy Antigravity quota pace estimate** 后根据 reset time 估算 5h/7d pacing。
 
-Antigravity 支持保持 local-only。它不会读取 Google OAuth credential、refresh token、Google cloud usage endpoint、credits 或离线 `state.vscdb` 数据。
+Windows 上的 Antigravity 配额优先使用官方 agy CLI，CLI 自行处理认证与网络请求。WhereMyTokens 不直接读取 Google OAuth credential、refresh token、Google cloud usage endpoint、credits 或离线 `state.vscdb` 数据。
 
 ---
 

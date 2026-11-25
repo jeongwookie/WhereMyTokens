@@ -12,7 +12,7 @@ function listFiles(dir) {
   });
 }
 
-test('Antigravity provider stays local-only and does not add OAuth, cloud, credits, or credential logging paths', () => {
+test('Antigravity quota delegates to the CLI without direct OAuth, cloud, credits, or credential logging paths', () => {
   const providerFiles = listFiles(path.join('src', 'main', 'providers', 'antigravity'));
   const providerSource = providerFiles
     .map(filePath => `\nFILE ${filePath}\n${fs.readFileSync(filePath, 'utf8')}`)
@@ -28,17 +28,17 @@ test('Antigravity provider stays local-only and does not add OAuth, cloud, credi
 
   const settingsView = fs.readFileSync('src/renderer/views/SettingsView.tsx', 'utf8');
   assert.match(settingsView, tCallRegex('settingsView.providers.antigravityDetail'));
-  // The disclosure wording itself is privacy-relevant (users are told Antigravity is
-  // local-RPC-only, no cloud/credits), so pin its English content, not just the key.
-  assert.equal(enText('settingsView.providers.antigravityDetail'), 'Requires Antigravity IDE running and signed in. Uses local RPC only.');
+  // Keep the user-facing CLI/RPC disclosure in sync with the provider.
+  assert.equal(enText('settingsView.providers.antigravityDetail'), 'Quota uses the signed-in agy CLI when available, with local RPC fallback for older IDEs.');
   assert.doesNotMatch(settingsView, /Antigravity[\s\S]{0,240}credits?/i);
 });
 
-test('public help and README document Antigravity as local RPC only', () => {
+test('public help and README document the Antigravity CLI and local RPC', () => {
   const helpView = fs.readFileSync('src/renderer/views/HelpView.tsx', 'utf8');
   const readmes = [
     'README.md',
     'README.zh-CN.md',
+    'README.zh-TW.md',
     'README.ko.md',
     'README.ja.md',
     'README.es.md',
@@ -46,7 +46,8 @@ test('public help and README document Antigravity as local RPC only', () => {
 
   for (const source of [helpView, ...readmes.map(([, source]) => source)]) {
     assert.match(source, /Antigravity/);
-    assert.match(source, /local RPC/i);
+    assert.match(source, /(?:local RPC|本機 RPC)/i);
+    assert.match(source, /agy/);
   }
 
   for (const [filePath, source] of readmes) {

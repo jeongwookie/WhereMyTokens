@@ -6,6 +6,7 @@ import { normalizeQuotaPeriod } from '../../../shared/quotaDomain';
 import { defaultQuotaModeForModel, normalizeAntigravityModel } from './models';
 import { maskEmail, parseTimestampMs } from './pathUtils';
 import { resolveAntigravityPriceForModel } from './pricing';
+import { readAntigravityCliQuota } from './cliQuota';
 import {
   findAntigravityServersCached,
   getQuotaSummaryCached,
@@ -63,6 +64,8 @@ function stableModelId(model: string): string {
 }
 
 function summaryBucketDurationMs(bucket: AntigravityQuotaSummaryBucket): number | null {
+  if (bucket.window === '5h') return FIVE_HOURS_MS;
+  if (bucket.window === 'weekly' || bucket.window === '7d') return WEEK_MS;
   const text = `${bucket.bucketId ?? ''} ${bucket.displayName ?? ''}`.toLowerCase();
   if (text.includes('weekly') || text.includes('week') || text.includes('7d')) return WEEK_MS;
   if (text.includes('five hour') || text.includes('five-hour') || text.includes('5h') || text.includes('session')) {
@@ -305,6 +308,20 @@ export async function fetchAntigravityQuotaFromServers(
 }
 
 export async function fetchAntigravityQuota(ctx: ProviderContext): Promise<ProviderQuotaSnapshot | null> {
+  // The CLI can take longer than a local RPC scan to start and report quota.
+  const cliResult = await readAntigravityCliQuota(ctx.force, 25_000);
+  const cliEntries = cliResult ? parseAntigravityQuotaSummary(cliResult.summary) : [];
+  if (cliResult && cliEntries.length > 0) {
+    return {
+      provider: 'antigravity',
+      source: cliResult.fromCache ? 'cache' : 'localCli',
+      capturedAt: cliResult.capturedAt,
+      entries: cliEntries,
+      status: cliResult.refreshFailed
+        ? { connected: false, code: 'cached', label: 'Cached', detail: 'CLI quota refresh failed; showing the recent snapshot.', severity: 'warning' }
+        : { connected: true, code: cliResult.fromCache ? 'cached' : 'connected', label: cliResult.fromCache ? 'Cached' : 'Connected', severity: 'ok' },
+    };
+  }
   const stopAt = deadlineMs(ctx);
   const servers = await findAntigravityServersCached(ctx.nowMs, remainingTimeoutMs(stopAt));
   return fetchAntigravityQuotaFromServers(ctx, servers, stopAt);

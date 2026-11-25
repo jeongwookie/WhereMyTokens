@@ -79,7 +79,7 @@ function statusTone(snapshot: ProviderQuotaSnapshot): ProviderStatusTone {
     return 'danger';
   }
   if (snapshot.source === 'localLog') return 'warning';
-  if (snapshot.source === 'api' || snapshot.source === 'localRpc' || snapshot.source === 'statusLine' || snapshot.source === 'cache') return 'normal';
+  if (snapshot.source === 'api' || snapshot.source === 'localRpc' || snapshot.source === 'localCli' || snapshot.source === 'statusLine' || snapshot.source === 'cache') return 'normal';
   return 'unknown';
 }
 
