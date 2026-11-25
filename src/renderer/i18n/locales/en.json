@@ -27,6 +27,9 @@
       "localLog": {
         "title": "Local session-log estimate. It can lag account-level limits."
       },
+      "localCli": {
+        "title": "Official agy CLI quota snapshot."
+      },
       "localRpc": {
         "title": "Local provider runtime snapshot."
       }
@@ -594,7 +597,7 @@
       },
       "antigravityModelQuotas": {
         "label": "Antigravity quota groups",
-        "detail": "Shared local RPC quota groups with per-model fallback for older versions"
+        "detail": "Shared CLI or local RPC quota groups with legacy per-model fallback"
       }
     },
     "footerNote": "Alerts follow enabled providers and quota/model targets. Auto-refreshed every 60s, 1-hour cooldown per alert.",
@@ -649,7 +652,7 @@
     "providers": {
       "heading": "Providers",
       "atLeastOneProvider": "At least one provider must stay enabled.",
-      "antigravityDetail": "Requires Antigravity IDE running and signed in. Uses local RPC only.",
+      "antigravityDetail": "Quota uses the signed-in agy CLI when available, with local RPC fallback for older IDEs.",
       "antigravityPace": "Legacy Antigravity quota pace estimate",
       "antigravityPaceHint": "Grouped quotas use provider-reported 5h/weekly periods. For older per-model quotas, estimate pacing from reset times"
     },

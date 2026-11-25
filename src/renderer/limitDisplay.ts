@@ -29,6 +29,8 @@ export function limitSourceDisplay(source: ProviderQuotaSource | undefined): Lim
       return { label: 'Cache', title: i18n.t('common.limitSource.cache.title'), tone: 'neutral' };
     case 'localLog':
       return { label: 'Log', title: i18n.t('common.limitSource.localLog.title'), tone: 'warning' };
+    case 'localCli':
+      return { label: 'CLI', title: i18n.t('common.limitSource.localCli.title'), tone: 'neutral' };
     case 'localRpc':
       return { label: 'RPC', title: i18n.t('common.limitSource.localRpc.title'), tone: 'neutral' };
     default:

@@ -88,12 +88,12 @@ function formatReset(resetMs: number | null, language: AlertLanguage): string {
 function formatSource(source: string | undefined, language: AlertLanguage): string {
   if (!source) return '';
   const labels: Record<string, string> = language === 'zh-TW'
-    ? { api: 'API', statusLine: 'Bridge', cache: '快取', localLog: '紀錄', localRpc: 'RPC' }
+    ? { api: 'API', statusLine: 'Bridge', cache: '快取', localLog: '紀錄', localRpc: 'RPC', localCli: 'CLI' }
     : language === 'zh'
-    ? { api: 'API', statusLine: 'Bridge', cache: '缓存', localLog: '日志', localRpc: 'RPC' }
+    ? { api: 'API', statusLine: 'Bridge', cache: '缓存', localLog: '日志', localRpc: 'RPC', localCli: 'CLI' }
     : language === 'ja'
-      ? { api: 'API', statusLine: 'Bridge', cache: 'キャッシュ', localLog: 'ログ', localRpc: 'RPC' }
-      : { api: 'API', statusLine: 'Bridge', cache: 'Cache', localLog: 'Log', localRpc: 'RPC' };
+      ? { api: 'API', statusLine: 'Bridge', cache: 'キャッシュ', localLog: 'ログ', localRpc: 'RPC', localCli: 'CLI' }
+      : { api: 'API', statusLine: 'Bridge', cache: 'Cache', localLog: 'Log', localRpc: 'RPC', localCli: 'CLI' };
   const label = labels[source] ?? source;
   return language === 'zh-TW' ? ` · 來源：${label}` : language === 'zh' ? ` · 来源：${label}` : language === 'ja' ? ` · ソース: ${label}` : ` · source: ${label}`;
 }

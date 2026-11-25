@@ -125,7 +125,7 @@ Claude quota monitoring prefers the local Claude Code `statusLine`. When no fres
 
 Codex live usage and reset-credit checks use `~/.codex/auth.json` only for direct OpenAI/ChatGPT requests when Codex is enabled. Reset-credit cache stores counts, expiry times, fetch status, source labels, a hashed auth marker, and the auth file modified time.
 
-Antigravity uses local RPC only. It does not use Google OAuth, refresh tokens, Google cloud usage endpoints, or offline database fallback.
+Antigravity quota prefers the signed-in official `agy -p "/usage" --output-format json` command on Windows, with local RPC fallback. Session and token metadata still use local RPC. The CLI manages its own authentication and network activity; WhereMyTokens does not use Google OAuth, refresh tokens, Google cloud usage endpoints, or offline database fallback directly.
 
 See [Privacy and Security](docs/privacy-security.md) for the full data-source list.
 

@@ -128,7 +128,7 @@ macOS 사용자는 별도 공개 저장소를 사용하세요:
 - **툴 사용 바** — 비례 색상 바 + 툴 칩 (Bash, Edit, Read 등)
 
 ### 속도 제한 & 알림
-- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 보고한 limit을 `providerQuotas`의 canonical Quota Entry로 게시합니다. Claude는 공식 `statusLine`을 우선하고, 최신 statusLine이 없으면 기존 Claude Code access token을 읽기 전용으로 사용하는 Desktop 호환 조회로 5h/7d와 실제 보고된 model-scoped entry를 가져옵니다. Codex는 live usage snapshot과 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity는 IDE 실행 중 127.0.0.1 local RPC의 모델 quota entry를 사용합니다. 보고되지 않은 limit은 `Unlimited`로 합성하지 않고 부재 상태로 둡니다
+- **Provider quota 바** — Claude, Codex, Antigravity와 이후 provider가 보고한 limit을 `providerQuotas`의 canonical Quota Entry로 게시합니다. Claude는 공식 `statusLine`을 우선하고, 최신 statusLine이 없으면 기존 Claude Code access token을 읽기 전용으로 사용하는 Desktop 호환 조회로 5h/7d와 실제 보고된 model-scoped entry를 가져옵니다. Codex는 live usage snapshot과 local-log fallback, reset-credit endpoint와 auth-bound cache, Antigravity quota는 Windows에서 공식 agy CLI를 우선 사용하고 127.0.0.1 local RPC로 폴백합니다. 보고되지 않은 limit은 `Unlimited`로 합성하지 않고 부재 상태로 둡니다
 - **Target별 quota 표시** — 각 canonical quota target을 Settings에서 Rich, Simple, 숨김으로 설정할 수 있고 Plan Usage, Floating widget, taskbar mini 표시 순서와 노출에 반영됩니다. Taskbar mini는 정규화된 5h/7d entry를 두 개의 물리적 line에 배치하고, line당 1-3개 블록 제한과 숨김 target `+N` 표시를 지원합니다. prefix 색상은 quota severity가 아니라 live/cache/log 같은 데이터 source/status를 나타냅니다. Codex Resets target은 Plan Usage 전용입니다
 - **Quota Pace 보기** — 사용한 한도 %와 경과 시간 %를 비교해, 노랑/빨강으로 리셋 전 사용 속도가 빠른 상태를 알려줌
 - **Claude Code 브리지** — `statusLine` 플러그인으로 공식 로컬 데이터를 우선 수신하고, 최신 값이 없으며 Claude Code credential이 있을 때 제한된 읽기 전용 호환 조회로 보완
@@ -204,9 +204,10 @@ WhereMyTokens는 local-first Electron 트레이 앱입니다. renderer는 로컬
 | Claude Desktop 호환 한도 | `~/.claude/.credentials.json`의 access token 및 plan metadata; refresh-token 속성은 무시 | 5h/7d 및 provider가 보고한 model-scoped quota | 예, 시작 시 1회 가능하며 같은 실행 중에는 `api.anthropic.com`으로 15분 최소 간격 요청 |
 | Codex 세션 | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner가 UsageIndex에 기록하고 session projection 게시 | 없음 |
 | Codex 사용량 한도 및 reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage 및 reset-credit endpoint | 있음, OpenAI/ChatGPT 직접 호출 |
+| Antigravity CLI quota | 로그인된 agy CLI | `agy -p "/usage" --output-format json` | CLI 자체 네트워크 활동 |
 | Antigravity 세션/quota | 실행 중인 Antigravity language server | 127.0.0.1 local RPC, 이후 renderer state | 없음 |
 
-Quota 우선순위는 provider별로 다릅니다. Claude는 최신 `statusLine` bridge snapshot을 최우선으로 사용하고, 최신 값이 없으며 Claude Code credential이 있으면 access token을 읽기 전용으로 사용해 `api.anthropic.com`에서 account quota를 조회합니다. 시작 시 한 번 조회될 수 있고 같은 실행 중 이후 요청은 15분 이상 간격을 두며, refresh-token 속성을 무시하고 credential 파일을 갱신·수정하지 않습니다. 둘 다 사용할 수 없으면 현재 access token에 묶인 마지막 신뢰 cache를 보고된 reset 시각과 30분 상한 중 먼저 오는 시점까지 표시합니다. Codex 5h/7d quota entry는 live usage를 우선 사용하고 cache/JSONL 로그의 로컬 `rate_limits` 이벤트로 폴백할 수 있습니다. 보고되지 않은 Codex limit은 `Unlimited`로 합성하지 않습니다. Codex reset credit은 reset-credit endpoint를 우선 사용하며 auth-bound cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 실행 중인 IDE의 127.0.0.1 local RPC만 사용합니다.
+Quota 우선순위는 provider별로 다릅니다. Claude는 최신 `statusLine` bridge snapshot을 최우선으로 사용하고, 최신 값이 없으며 Claude Code credential이 있으면 access token을 읽기 전용으로 사용해 `api.anthropic.com`에서 account quota를 조회합니다. 시작 시 한 번 조회될 수 있고 같은 실행 중 이후 요청은 15분 이상 간격을 두며, refresh-token 속성을 무시하고 credential 파일을 갱신·수정하지 않습니다. 둘 다 사용할 수 없으면 현재 access token에 묶인 마지막 신뢰 cache를 보고된 reset 시각과 30분 상한 중 먼저 오는 시점까지 표시합니다. Codex 5h/7d quota entry는 live usage를 우선 사용하고 cache/JSONL 로그의 로컬 `rate_limits` 이벤트로 폴백할 수 있습니다. 보고되지 않은 Codex limit은 `Unlimited`로 합성하지 않습니다. Codex reset credit은 reset-credit endpoint를 우선 사용하며 auth-bound cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity quota는 공식 agy CLI를 우선 사용하고 실행 중인 IDE의 127.0.0.1 local RPC로 폴백합니다.
 
 ---
 
@@ -233,7 +234,7 @@ WhereMyTokens는 로컬 파일을 읽고, 활성화된 경우 본인 계정의 p
 
 WhereMyTokens는 API key를 직접 입력받지 않고 별도 credential 백업도 저장하지 않습니다. Claude Desktop 호환 조회는 기존 Claude Code credential 파일을 불러와 access token과 plan metadata를 추출하고 refresh-token 속성은 무시합니다. credential을 갱신하거나 파일을 쓰지 않으며, 호환 cache는 단방향 token marker에 묶어 로그인 변경 시 폐기합니다. Codex live usage 기능도 공식 로컬 Codex credential 파일을 읽습니다.
 
-Claude quota 모니터링은 로컬 `statusLine`을 우선합니다. Desktop 호환 조회가 필요할 때만 access token을 Anthropic 고정 HTTPS 호스트로 보냅니다. 시작 시 한 번 조회될 수 있고 같은 실행 중에는 15분 throttle, timeout, 응답 크기 제한, 429 backoff를 적용하며, 거부된 동일 access token은 다시 시도하지 않습니다. 세션 로그나 전체 statusLine payload는 전송하지 않습니다. Codex live usage와 reset-credit 조회도 HTTPS-only 요청, timeout, 응답 크기 제한, cache, 별도 backoff를 적용합니다. Antigravity 추적은 127.0.0.1 local RPC만 사용하며 Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback을 사용하지 않습니다.
+Claude quota 모니터링은 로컬 `statusLine`을 우선합니다. Desktop 호환 조회가 필요할 때만 access token을 Anthropic 고정 HTTPS 호스트로 보냅니다. 시작 시 한 번 조회될 수 있고 같은 실행 중에는 15분 throttle, timeout, 응답 크기 제한, 429 backoff를 적용하며, 거부된 동일 access token은 다시 시도하지 않습니다. 세션 로그나 전체 statusLine payload는 전송하지 않습니다. Codex live usage와 reset-credit 조회도 HTTPS-only 요청, timeout, 응답 크기 제한, cache, 별도 backoff를 적용합니다. Antigravity 세션과 사용량은 127.0.0.1 local RPC를 사용합니다. Quota는 공식 agy CLI를 우선하며 CLI가 자체 인증과 네트워크 활동을 처리합니다. WhereMyTokens는 직접 Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback을 사용하지 않습니다.
 
 Claude Code bridge를 끄려면 **Settings -> Claude Code Integration -> Disable**을 누릅니다. 앱은 WhereMyTokens bridge command가 소유한 `statusLine` entry만 제거하며, 다른 custom `statusLine`은 덮어쓰거나 삭제하지 않습니다. 수동으로는 `~/.claude/settings.json`에서 WhereMyTokens `statusLine` entry를 삭제한 뒤 Claude Code를 재시작하면 됩니다.
 
@@ -267,7 +268,7 @@ WhereMyTokens는 Codex의 로컬 JSONL 로그(`~/.codex/sessions/**/*.jsonl`, `~
 
 ### Antigravity 추적
 
-Antigravity 추적은 실행 중인 Antigravity IDE의 language server에 127.0.0.1 local RPC로만 연결합니다. Windows에서는 Antigravity 2.x의 `language_server.exe`와 legacy 실행 파일명을 모두 탐지합니다. 세션 cascade, quota, generator metadata를 읽어 providerQuotas와 source-attributed UsageIndex에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
+Antigravity 세션과 사용량은 실행 중인 IDE의 127.0.0.1 local RPC를 사용하며 quota는 공식 agy CLI를 우선합니다. Windows에서는 Antigravity 2.x의 `language_server.exe`와 legacy 실행 파일명을 모두 탐지합니다. 세션 cascade, quota, generator metadata를 읽어 providerQuotas와 source-attributed UsageIndex에 반영하며, Google OAuth, refresh token, Google cloud usage endpoint, 오프라인 DB fallback은 사용하지 않습니다.
 
 Antigravity 2.x에서는 provider가 보고한 `Gemini Models`, `Claude and GPT models` shared quota group과 각 5h/weekly bucket을 우선 표시합니다. Grouped RPC를 지원하지 않는 이전 서버는 기존 모델별 quota로 폴백합니다. Grouped quota는 provider가 보고한 period를 사용하고, legacy 모델 quota는 Settings의 **Legacy Antigravity quota pace estimate**를 켰을 때만 reset time으로 5h/7d pacing을 추정합니다.
 

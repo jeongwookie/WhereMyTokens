@@ -27,6 +27,9 @@
       "localLog": {
         "title": "ローカルセッションログによる推定値です。アカウントレベルの制限より遅れる場合があります。"
       },
+      "localCli": {
+        "title": "公式 agy CLI のクォータスナップショット。"
+      },
       "localRpc": {
         "title": "ローカル provider ランタイムのスナップショットです。"
       }
@@ -594,7 +597,7 @@
       },
       "antigravityModelQuotas": {
         "label": "Antigravity クォータグループ",
-        "detail": "共有 local RPC クォータグループ。旧バージョンではモデル別表示にフォールバック"
+        "detail": "CLI またはローカル RPC の共有クォータグループ、旧版はモデル別にフォールバック"
       }
     },
     "footerNote": "アラートは有効になっているプロバイダーおよび割り当て/モデル対象に従います。60秒ごとに自動更新され、アラートごとに1時間のクールダウンがあります。",
@@ -649,7 +652,7 @@
     "providers": {
       "heading": "プロバイダー",
       "atLeastOneProvider": "少なくとも1つのプロバイダーを有効にする必要があります。",
-      "antigravityDetail": "Antigravity IDEが起動してサインインしている必要があります。ローカルRPCのみを使用します。",
+      "antigravityDetail": "サインイン済みの agy CLI でクォータを取得し、利用できない場合は旧 IDE のローカル RPC にフォールバックします。",
       "antigravityPace": "旧 Antigravity クォータのペース推定",
       "antigravityPaceHint": "グループクォータは provider が報告する5時間/週の期間を使います。旧モデル別クォータでは reset time から pacing を推定します"
     },

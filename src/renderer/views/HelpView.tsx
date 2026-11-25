@@ -142,7 +142,7 @@ function ContentEN() {
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> reads local session/JSONL files for token activity and prefers the official statusLine input for provider-reported 5h/7d quota entries. Without a fresh statusLine, a throttled read-only Desktop compatibility request can run when Claude Code credentials are available. If either source supplies a <code>model_scoped</code> entry such as Fable, it remains an independent target.</div>
         <div><B>Codex</B> prefers one complete live quota snapshot and can fall back to one complete auth-bound cache or newest local rate-limit event from <code>~/.codex/sessions/**/*.jsonl</code>, <code>~/.codex/archived_sessions/**/*.jsonl</code>, and <code>~/.codex/session-cleanup-archive/**/*.jsonl</code>. A missing limit is absent, not synthesized as <B>Unlimited</B>; only an explicit provider unlimited state renders that way. Reset credits remain a separate sibling card with auth-bound cache or count-only live fallback. Local logs still power model usage, token counts, cached input, tool events, and reset events.</div>
-        <div style={{ marginTop: 5 }}><B>Antigravity</B> reads only the running Antigravity IDE language server on <code>127.0.0.1</code>. Antigravity 2.x uses provider-reported shared quota groups; older servers fall back to per-model quota rows. Windows discovery supports both the current and legacy language server executable names. No Google OAuth, refresh token, or cloud fallback request is used.</div>
+        <div style={{ marginTop: 5 }}><B>Antigravity</B> prefers the signed-in official agy CLI for quota on Windows, with local RPC fallback to the running IDE language server on <code>127.0.0.1</code>. The CLI handles its own authentication and network activity. Antigravity 2.x uses provider-reported shared quota groups; older servers fall back to per-model quota rows. Windows discovery supports both the current and legacy language server executable names. No Google OAuth, refresh token, or cloud fallback request is used.</div>
       </Section>
 
       <Divider />
@@ -236,10 +236,10 @@ function ContentEN() {
 
       <Section icon={<Signal size={15} />} title="Data Sources">
         <SrcRow badge="1st">
-          <B>Local sources</B> — Enabled Claude JSONL and Codex JSONL providers are parsed locally. Antigravity reads the running IDE language server over local RPC only.
+          <B>Local sources</B> — Enabled Claude JSONL and Codex JSONL providers are parsed locally. Antigravity reads sessions and usage over local RPC; quota prefers the official agy CLI.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>Limit sources</B> — Claude selects one whole fresh statusLine Bridge snapshot first, then a whole read-only compatibility API snapshot, then its auth-bound Cache snapshot. The compatibility path loads the Claude Code credential file, extracts the access token and plan metadata, ignores the refresh-token property, and sends only the access token to <code>api.anthropic.com</code>. One request may run at launch; later requests in that run are at least 15 minutes apart. Codex selects one whole live, newest local-log, or Cache snapshot; sources are never combined by period, and omitted limits stay absent. Reset credits fall back only to auth-bound Cache or count-only live usage payloads. Antigravity prefers shared local RPC quota groups and falls back to legacy per-model rows.
+          <B>Limit sources</B> — Claude selects one whole fresh statusLine Bridge snapshot first, then a whole read-only compatibility API snapshot, then its auth-bound Cache snapshot. The compatibility path loads the Claude Code credential file, extracts the access token and plan metadata, ignores the refresh-token property, and sends only the access token to <code>api.anthropic.com</code>. One request may run at launch; later requests in that run are at least 15 minutes apart. Codex selects one whole live, newest local-log, or Cache snapshot; sources are never combined by period, and omitted limits stay absent. Reset credits fall back only to auth-bound Cache or count-only live usage payloads. Antigravity prefers agy CLI quota groups, then shared local RPC quota groups and falls back to legacy per-model rows.
         </SrcRow>
         <SrcRow badge="FB">
           <B>Last cached value</B> — kept when live limit data is unavailable. Claude compatibility cache is tied to a one-way marker for the current access token; Claude statusLine and compatibility windows expire at the earlier of their reported reset times and a 30-minute cache cap. Codex reset-credit cache is tied to the current Codex auth file and stores counts, expiry times, fetch status, source labels, a hashed auth marker, and the auth file modified time.
@@ -271,7 +271,7 @@ function ContentKO() {
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B>는 토큰 활동을 위해 로컬 세션/JSONL 파일을 읽고, provider가 보고한 5h/7d quota entry는 공식 statusLine 입력을 우선합니다. 최신 statusLine이 없고 Claude Code credential이 있으면 제한된 읽기 전용 Desktop 호환 조회로 보완합니다. 어느 소스든 Fable 같은 <code>model_scoped</code> entry를 제공하면 독립 target으로 유지합니다.</div>
         <div><B>Codex</B>는 하나의 완전한 live quota snapshot을 우선 사용하고, auth-bound cache 하나 또는 로컬 <code>~/.codex/sessions/**/*.jsonl</code>, <code>~/.codex/archived_sessions/**/*.jsonl</code>, <code>~/.codex/session-cleanup-archive/**/*.jsonl</code> 중 가장 최신의 완전한 rate-limit 이벤트 하나로 폴백합니다. 누락된 limit은 없는 것으로 취급하며 <B>Unlimited</B>를 합성하지 않습니다. provider가 명시한 unlimited entry만 그렇게 표시됩니다. Reset credit은 별도 sibling card로 유지되며 auth-bound cache 또는 live usage의 count-only 값만 폴백으로 사용합니다.</div>
-        <div style={{ marginTop: 5 }}><B>Antigravity</B>는 실행 중인 Antigravity IDE language server를 <code>127.0.0.1</code> local RPC로만 읽습니다. Antigravity 2.x는 provider가 보고한 shared quota group을 사용하고, 이전 서버는 모델별 quota row로 폴백합니다. Windows에서는 현재 및 legacy language server 실행 파일명을 모두 탐지합니다. Google OAuth, refresh token, cloud fallback 요청은 사용하지 않습니다.</div>
+        <div style={{ marginTop: 5 }}><B>Antigravity</B>는 Windows에서 공식 agy CLI로 quota를 우선 조회하고, IDE의 <code>127.0.0.1</code> local RPC로 폴백합니다. CLI는 자체 인증과 네트워크 활동을 처리합니다. Antigravity 2.x는 provider가 보고한 shared quota group을 사용하고, 이전 서버는 모델별 quota row로 폴백합니다. Windows에서는 현재 및 legacy language server 실행 파일명을 모두 탐지합니다. Google OAuth, refresh token, cloud fallback 요청은 사용하지 않습니다.</div>
       </Section>
 
       <Divider />
@@ -363,10 +363,10 @@ function ContentKO() {
 
       <Section icon={<Signal size={15} />} title="데이터 소스">
         <SrcRow badge="1st">
-          <B>로컬 소스</B> — 켜진 Claude JSONL과 Codex JSONL provider는 로컬에서 파싱합니다. Antigravity는 실행 중인 IDE language server를 local RPC로만 읽습니다.
+          <B>로컬 소스</B> — 켜진 Claude JSONL과 Codex JSONL provider는 로컬에서 파싱합니다. Antigravity는 세션과 사용량을 local RPC로 읽고 quota는 공식 agy CLI를 우선합니다.
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>한도 소스</B> — Claude는 하나의 최신 statusLine Bridge snapshot, 읽기 전용 compatibility API snapshot, 현재 access token에 묶인 Cache snapshot 순으로 선택합니다. Compatibility path는 Claude Code credential 파일에서 access token과 plan metadata를 추출하고 refresh-token 속성은 무시하며, access token만 <code>api.anthropic.com</code>으로 보냅니다. 앱 시작 시 한 번 조회될 수 있고 같은 실행 중 이후 요청은 15분 이상 간격을 둡니다. Codex도 live, 최신 local-log, Cache 중 하나의 완전한 snapshot만 선택하며 period별로 source를 섞지 않습니다. 누락된 limit은 그대로 absent입니다. Reset credit은 auth-bound Cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 shared local RPC quota group을 우선하고 legacy 모델별 row로 폴백합니다.
+          <B>한도 소스</B> — Claude는 하나의 최신 statusLine Bridge snapshot, 읽기 전용 compatibility API snapshot, 현재 access token에 묶인 Cache snapshot 순으로 선택합니다. Compatibility path는 Claude Code credential 파일에서 access token과 plan metadata를 추출하고 refresh-token 속성은 무시하며, access token만 <code>api.anthropic.com</code>으로 보냅니다. 앱 시작 시 한 번 조회될 수 있고 같은 실행 중 이후 요청은 15분 이상 간격을 둡니다. Codex도 live, 최신 local-log, Cache 중 하나의 완전한 snapshot만 선택하며 period별로 source를 섞지 않습니다. 누락된 limit은 그대로 absent입니다. Reset credit은 auth-bound Cache 또는 live usage payload의 count-only 값으로만 폴백합니다. Antigravity는 공식 agy CLI quota group을 우선하고 shared local RPC 및 legacy 모델별 row로 폴백합니다.
         </SrcRow>
         <SrcRow badge="FB">
           <B>마지막 캐시값</B> — 실시간 한도 데이터를 사용할 수 없을 때 직전 값을 유지합니다. Claude compatibility cache는 현재 access token의 단방향 marker에 묶이며, statusLine과 compatibility window는 보고된 reset 시각과 30분 cache 상한 중 먼저 오는 시점에 만료됩니다. Codex reset-credit 캐시는 현재 Codex auth file에 묶이며 count, 만료 시각, fetch 상태, source label, hashed auth marker, auth file modified time만 저장합니다.
@@ -398,7 +398,7 @@ function ContentJA() {
         </div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> は token activity のためにローカル session/JSONL を読み取り、provider が報告する 5h/7d quota entry は公式 statusLine 入力を優先します。新しい statusLine がなく Claude Code credential が利用可能な場合は、制限付き read-only Desktop compatibility request で補完します。どちらかが Fable などの <code>model_scoped</code> entry を提供した場合は独立 target として保持します。</div>
         <div><B>Codex</B> は完全な live quota snapshot を優先し、auth-bound cache ひとつ、またはローカルの <code>~/.codex/sessions/**/*.jsonl</code>、<code>~/.codex/archived_sessions/**/*.jsonl</code>、<code>~/.codex/session-cleanup-archive/**/*.jsonl</code> にある最新の完全な rate-limit event ひとつへフォールバックします。欠落した limit は absent であり、<B>Unlimited</B> を合成しません。provider が明示した unlimited entry だけがそのように表示されます。Reset credit は独立した sibling card です。</div>
-        <div style={{ marginTop: 5 }}><B>Antigravity</B> は実行中の Antigravity IDE language server を <code>127.0.0.1</code> local RPC でのみ読み取ります。Antigravity 2.x では provider が報告する shared quota group を使い、旧 server ではモデル別 quota row にフォールバックします。Windows では現在と legacy の language server 実行ファイル名を両方検出します。Google OAuth、refresh token、cloud fallback request は使いません。</div>
+        <div style={{ marginTop: 5 }}><B>Antigravity</B> は Windows で公式 agy CLI による quota を優先し、IDE の <code>127.0.0.1</code> local RPC にフォールバックします。CLI 自身が認証と通信を処理します。Antigravity 2.x では provider が報告する shared quota group を使い、旧 server ではモデル別 quota row にフォールバックします。Windows では現在と legacy の language server 実行ファイル名を両方検出します。Google OAuth、refresh token、cloud fallback request は使いません。</div>
       </Section>
 
       <Divider />
@@ -490,10 +490,10 @@ function ContentJA() {
 
       <Section icon={<Signal size={15} />} title="データソース">
         <SrcRow badge="1st">
-          <B>ローカルソース</B> — 有効な Claude JSONL と Codex JSONL provider はローカルで解析します。Antigravity は実行中の IDE language server を local RPC でのみ読み取ります。
+          <B>ローカルソース</B> — 有効な Claude JSONL と Codex JSONL provider はローカルで解析します。Antigravity はセッションと使用量を local RPC で読み取り、quota は公式 agy CLI を優先します。
         </SrcRow>
         <SrcRow badge="2nd">
-          <B>制限ソース</B> — Claude は最新の statusLine Bridge snapshot、read-only compatibility API snapshot、現在の access token に紐づく Cache snapshot の順でひとつを選びます。Compatibility path は Claude Code credential file から access token と plan metadata を抽出し、refresh-token property を無視して access token だけを <code>api.anthropic.com</code> に送ります。起動時に一度取得する場合があり、同じ実行中の以後の request は 15 分以上空けます。Codex も live、最新 local-log、Cache から完全な snapshot をひとつだけ選び、period ごとに source を混ぜません。欠落した limit は absent のままです。Reset credit は auth-bound Cache または live usage payload の count-only 値だけへフォールバックします。Antigravity は shared local RPC quota group を優先し、legacy のモデル別 row にフォールバックします。
+          <B>制限ソース</B> — Claude は最新の statusLine Bridge snapshot、read-only compatibility API snapshot、現在の access token に紐づく Cache snapshot の順でひとつを選びます。Compatibility path は Claude Code credential file から access token と plan metadata を抽出し、refresh-token property を無視して access token だけを <code>api.anthropic.com</code> に送ります。起動時に一度取得する場合があり、同じ実行中の以後の request は 15 分以上空けます。Codex も live、最新 local-log、Cache から完全な snapshot をひとつだけ選び、period ごとに source を混ぜません。欠落した limit は absent のままです。Reset credit は auth-bound Cache または live usage payload の count-only 値だけへフォールバックします。Antigravity は公式 agy CLI の quota group を優先し、shared local RPC とlegacy のモデル別 row にフォールバックします。
         </SrcRow>
         <SrcRow badge="FB">
           <B>最後のキャッシュ値</B> — ライブ制限データが利用できない場合に直近の値を保持。Claude compatibility cache は現在の access token の一方向 marker に紐づき、statusLine と compatibility window は報告された reset 時刻と 30 分の cache 上限のうち早い時点で期限切れになります。Codex reset-credit cache は現在の Codex auth file に紐づき、count、有効期限、fetch status、source label、hashed auth marker、auth file modified time だけを保存します。
@@ -523,7 +523,7 @@ function ContentZH() {
         <div style={{ marginBottom: 6 }}>WhereMyTokens 可跟踪 <B>Claude Code</B>、<B>Codex</B> 和 <B>Antigravity</B>。在“设置 → 服务商”中勾选要启用的服务商。</div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> 在本地读取会话 JSONL 以统计 token 活动，并优先使用官方 statusLine 报告 5 小时 / 7 天配额。statusLine 数据不可用时，在存在 Claude Code 凭据的情况下，可能会限频发起只读兼容请求。</div>
         <div style={{ marginBottom: 5 }}><B>Codex</B> 优先使用完整的实时配额快照；不可用时回退到完整缓存或本地会话日志估算。缺失的限额保持缺失，不会被推断为“无限”。重置额度单独显示。</div>
-        <div><B>Antigravity</B> 仅通过本机 <code>127.0.0.1</code> 上运行中的 IDE language server 读取数据。2.x 使用服务商报告的共享配额组；旧版本回退到按模型显示。不会使用 Google OAuth、刷新令牌或云端备用请求。</div>
+        <div><B>Antigravity</B> 在 Windows 上优先通过官方 agy CLI 读取配额，并回退至本机 <code>127.0.0.1</code> 上运行中的 IDE language server。CLI 自行处理认证与网络请求。2.x 使用服务商报告的共享配额组；旧版本回退到按模型显示。不会使用 Google OAuth、刷新令牌或云端备用请求。</div>
       </Section>
       <Divider />
       <Section icon={<Hash size={15} />} title="用量与费用">
@@ -573,8 +573,8 @@ function ContentZH() {
       </Section>
       <Divider />
       <Section icon={<Signal size={15} />} title="数据来源与设置">
-        <SrcRow badge="1st"><B>本地来源</B> — Claude 和 Codex JSONL 在本地解析；Antigravity 仅通过本地 RPC 读取正在运行的 IDE 服务。</SrcRow>
-        <SrcRow badge="2nd"><B>限额来源</B> — Claude 优先使用 statusLine，其次只读兼容 API，再使用与当前凭据绑定的缓存。Codex 在实时数据、本地日志和缓存中选择一份完整快照，不会混合不同来源的周期。Antigravity 优先使用共享 RPC 配额组。</SrcRow>
+        <SrcRow badge="1st"><B>本地来源</B> — Claude 和 Codex JSONL 在本地解析；Antigravity 通过本地 RPC 读取会话和用量，配额优先使用官方 agy CLI。</SrcRow>
+        <SrcRow badge="2nd"><B>限额来源</B> — Claude 优先使用 statusLine，其次只读兼容 API，再使用与当前凭据绑定的缓存。Codex 在实时数据、本地日志和缓存中选择一份完整快照，不会混合不同来源的周期。Antigravity 优先使用官方 agy CLI 配额组，再回退至共享 RPC 配额组。</SrcRow>
         <SrcRow badge="FB"><B>缓存值</B> — 实时数据不可用时保留最近可信的快照；缓存会随报告的重置时间或有效期自动过期。</SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="服务商">在“设置 → 服务商”中启用或停用。已停用的服务商不会进行本地扫描或实时请求。</InfoRow>
@@ -601,7 +601,7 @@ function ContentZHTW() {
         <div style={{ marginBottom: 6 }}>WhereMyTokens 可追蹤 <B>Claude Code</B>、<B>Codex</B> 與 <B>Antigravity</B>。在「設定 → 服務供應商」中勾選要啟用的項目。</div>
         <div style={{ marginBottom: 5 }}><B>Claude</B> 讀取本機工作階段 JSONL 以統計 Token 活動，並優先採用官方 statusLine 回報的 5 小時／7 天額度。若沒有最新 statusLine 資料，且本機已有 Claude Code 登入憑證，可能會以限頻方式發送唯讀相容性查詢。</div>
         <div style={{ marginBottom: 5 }}><B>Codex</B> 優先使用完整的即時額度快照；無法取得時，改用完整快取或本機工作階段紀錄。缺少的額度不會被推定為「無限制」。重置額度另行顯示。</div>
-        <div><B>Antigravity</B> 僅透過本機 <code>127.0.0.1</code> 上執行中的 IDE language server 讀取資料。2.x 使用服務供應商回報的共用額度群組；舊版則依模型顯示。不使用 Google OAuth、Refresh Token 或雲端備援查詢。</div>
+        <div><B>Antigravity</B> 在 Windows 上優先透過官方 agy CLI 讀取額度，並回退至本機 <code>127.0.0.1</code> 上執行中的 IDE language server。CLI 自行處理驗證與網路活動。2.x 使用服務供應商回報的共用額度群組；舊版則依模型顯示。不使用 Google OAuth、Refresh Token 或雲端備援查詢。</div>
       </Section>
       <Divider />
       <Section icon={<Hash size={15} />} title="用量與費用">
@@ -651,8 +651,8 @@ function ContentZHTW() {
       </Section>
       <Divider />
       <Section icon={<Signal size={15} />} title="資料來源與設定">
-        <SrcRow badge="1st"><B>本機來源</B> — Claude 與 Codex JSONL 在本機解析；Antigravity 僅透過本機 RPC 讀取執行中的 IDE 服務。</SrcRow>
-        <SrcRow badge="2nd"><B>額度來源</B> — Claude 優先使用 statusLine，其次為唯讀相容性 API，最後才是與目前憑證綁定的快取。Codex 會從即時資料、本機紀錄及快取中選擇一份完整快照，不混用不同來源的計費週期；Antigravity 優先使用共用 RPC 額度群組。</SrcRow>
+        <SrcRow badge="1st"><B>本機來源</B> — Claude 與 Codex JSONL 在本機解析；Antigravity 透過本機 RPC 讀取工作階段與用量，額度優先使用官方 agy CLI。</SrcRow>
+        <SrcRow badge="2nd"><B>額度來源</B> — Claude 優先使用 statusLine，其次為唯讀相容性 API，最後才是與目前憑證綁定的快取。Codex 會從即時資料、本機紀錄及快取中選擇一份完整快照，不混用不同來源的計費週期；Antigravity 優先使用官方 agy CLI 額度群組，再回退至共用 RPC 額度群組。</SrcRow>
         <SrcRow badge="FB"><B>快取值</B> — 即時資料不可用時保留最近可信的快照，並依回報的重置時間或有效期限判定是否過期。</SrcRow>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
           <InfoRow label="服務供應商">在「設定 → 服務供應商」中啟用或停用；停用後不執行對應的本機掃描或即時查詢。</InfoRow>

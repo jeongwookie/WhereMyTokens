@@ -128,7 +128,7 @@ macOS ユーザーは別の公開リポジトリを使用してください:
 - **ツール使用バー** — 比例色分けバー + ツールチップ（Bash、Edit、Read など）
 
 ### レート制限 & アラート
-- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は公式 `statusLine` を優先し、最新値がない場合は既存の Claude Code access token を read-only で使う Desktop compatibility request から 5h/7d と実際に報告された model-scoped entry を取得します。Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity は IDE 実行中の 127.0.0.1 local RPC のモデル quota entry を使います。報告されない limit は `Unlimited` として合成せず、未存在として扱います
+- **Provider quota バー** — Claude、Codex、Antigravity、および今後の provider は、provider が報告した limit を `providerQuotas` の canonical Quota Entry として公開します。Claude は公式 `statusLine` を優先し、最新値がない場合は既存の Claude Code access token を read-only で使う Desktop compatibility request から 5h/7d と実際に報告された model-scoped entry を取得します。Codex は live usage snapshot と local-log fallback、reset-credit endpoint と auth-bound cache、Antigravity の quota は Windows の公式 agy CLI を優先し、127.0.0.1 local RPC にフォールバックします。報告されない limit は `Unlimited` として合成せず、未存在として扱います
 - **Target 別 quota 表示** — 各 canonical quota target は Settings で Rich、Simple、非表示にでき、Plan Usage、Floating widget、taskbar mini の表示順と表示対象に反映されます。Taskbar mini は正規化された 5h/7d entry を 2 本の physical line に配置し、line ごとに 1-3 個のブロック制限と非表示 target の `+N` 表示をサポートします。prefix の色は quota severity ではなく live/cache/log などのデータ source/status を表します。Codex Resets target は Plan Usage 専用です
 - **Quota Pace 表示** — 使用済み % と経過時間 % を比較し、黄色/赤でリセット前に消費ペースが速い状態を知らせます
 - **Claude Code ブリッジ** — `statusLine` で公式ローカルデータを優先し、新しい値がなく Claude Code credential が利用可能な場合は制限付き read-only compatibility request で補完
@@ -205,9 +205,10 @@ WhereMyTokens は local-first の Electron トレイアプリです。renderer �
 | Claude Desktop compatibility quota | `~/.claude/.credentials.json` の access token と plan metadata。refresh-token property は無視 | 5h/7d と provider が報告する model-scoped quota | あり、起動時に 1 回、その後は同じ実行中に `api.anthropic.com` へ最短 15 分間隔 |
 | Codex セッション | `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl`, `~/.codex/session-cleanup-archive/**/*.jsonl` | main process scanner が UsageIndex に書き込み、session projection を公開 | なし |
 | Codex 使用量制限と reset credit | `~/.codex/auth.json` OAuth token | ChatGPT/Codex usage endpoint と reset-credit endpoint | あり、OpenAI/ChatGPT へ直接 |
+| Antigravity CLI quota | サインイン済みの agy CLI | `agy -p "/usage" --output-format json` | CLI 自身の通信 |
 | Antigravity セッション/quota | 実行中の Antigravity language server | 127.0.0.1 local RPC、その後 renderer state | なし |
 
-Quota の優先順位は provider ごとに異なります。Claude は最新の `statusLine` bridge snapshot を最優先し、新しい値がなく Claude Code credential がある場合は access token を read-only で使用して `api.anthropic.com` から account quota を取得します。起動時に一度取得する場合があり、同じ実行中の以後の request は 15 分以上空けます。refresh-token property は無視し、credential file の更新・書き込みを行いません。どちらも利用できない場合は、現在の access token に紐づく cache を報告された reset 時刻と 30 分上限のうち早い時点まで表示します。Codex の 5h/7d quota entry は live usage を優先し、cache/JSONL ログ内のローカル `rate_limits` イベントへフォールバックできます。報告されない Codex limit は `Unlimited` として合成しません。Codex reset credit は reset-credit endpoint を優先し、auth-bound cache または live usage payload の count-only 値にだけフォールバックします。Antigravity は実行中の IDE の 127.0.0.1 local RPC だけを使います。
+Quota の優先順位は provider ごとに異なります。Claude は最新の `statusLine` bridge snapshot を最優先し、新しい値がなく Claude Code credential がある場合は access token を read-only で使用して `api.anthropic.com` から account quota を取得します。起動時に一度取得する場合があり、同じ実行中の以後の request は 15 分以上空けます。refresh-token property は無視し、credential file の更新・書き込みを行いません。どちらも利用できない場合は、現在の access token に紐づく cache を報告された reset 時刻と 30 分上限のうち早い時点まで表示します。Codex の 5h/7d quota entry は live usage を優先し、cache/JSONL ログ内のローカル `rate_limits` イベントへフォールバックできます。報告されない Codex limit は `Unlimited` として合成しません。Codex reset credit は reset-credit endpoint を優先し、auth-bound cache または live usage payload の count-only 値にだけフォールバックします。Antigravity の quota は公式 agy CLI を優先し、実行中の IDE の 127.0.0.1 local RPC にフォールバックします。
 
 ---
 
@@ -234,7 +235,7 @@ WhereMyTokens はローカルファイルを読み取り、有効な場合は自
 
 WhereMyTokens は API key の貼り付けを求めず、別の credential バックアップも保存しません。Claude Desktop compatibility request は既存の Claude Code credential file を読み込み、access token と plan metadata を抽出し、refresh-token property は無視します。credential の更新や file write は行わず、compatibility cache は一方向 token marker に紐づけて login 変更時に破棄します。Codex live usage 機能も公式のローカル Codex credential file を読み取ります。
 
-Claude quota monitoring はローカル `statusLine` を優先します。Desktop compatibility request が必要な場合のみ access token を Anthropic の固定 HTTPS host に送ります。起動時に一度取得する場合があり、同じ実行中は 15 分 throttle、timeout、response-size limit、429 backoff を適用し、拒否された同じ access token は再試行しません。session log や statusLine payload 全体は送信しません。Codex live usage と reset-credit check も HTTPS-only request、timeout、レスポンスサイズ制限、cache、個別 backoff を適用します。Antigravity 追跡は 127.0.0.1 local RPC だけを使い、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
+Claude quota monitoring はローカル `statusLine` を優先します。Desktop compatibility request が必要な場合のみ access token を Anthropic の固定 HTTPS host に送ります。起動時に一度取得する場合があり、同じ実行中は 15 分 throttle、timeout、response-size limit、429 backoff を適用し、拒否された同じ access token は再試行しません。session log や statusLine payload 全体は送信しません。Codex live usage と reset-credit check も HTTPS-only request、timeout、レスポンスサイズ制限、cache、個別 backoff を適用します。Antigravity のセッションと使用量は 127.0.0.1 local RPC を使います。Quota は公式 agy CLI を優先し、CLI 自身が認証と通信を処理します。WhereMyTokens は直接Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
 
 Claude Code bridge を無効化するには **Settings -> Claude Code Integration -> Disable** を押します。アプリは WhereMyTokens bridge command が所有する `statusLine` entry だけを削除し、他の custom `statusLine` を上書きまたは削除しません。手動では `~/.claude/settings.json` から WhereMyTokens の `statusLine` entry を削除し、Claude Code を再起動してください。
 
@@ -268,7 +269,7 @@ WhereMyTokens は Codex のローカル JSONL ログ（`~/.codex/sessions/**/*.j
 
 ### Antigravity 追跡
 
-Antigravity 追跡は、実行中の Antigravity IDE の language server に 127.0.0.1 local RPC でのみ接続します。Windows では Antigravity 2.x の `language_server.exe` と legacy 実行ファイル名を両方検出します。セッション cascade、quota、generator metadata を providerQuotas と source-attributed UsageIndex に反映し、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
+Antigravity のセッションと使用量は実行中の IDE の 127.0.0.1 local RPC を使い、quota は公式 agy CLI を優先します。Windows では Antigravity 2.x の `language_server.exe` と legacy 実行ファイル名を両方検出します。セッション cascade、quota、generator metadata を providerQuotas と source-attributed UsageIndex に反映し、Google OAuth、refresh token、Google cloud usage endpoint、オフライン DB fallback は使いません。
 
 Antigravity 2.x では provider が報告する `Gemini Models` と `Claude and GPT models` の shared quota group、および各 5h/weekly bucket を優先表示します。Grouped RPC を利用できない旧 server では従来のモデル別 quota にフォールバックします。Grouped quota は provider が報告する period を使い、legacy モデル quota は Settings の **旧 Antigravity クォータのペース推定**を有効にした場合だけ reset time から 5h/7d pacing を推定します。
 

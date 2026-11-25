@@ -35,6 +35,7 @@ export interface AntigravityUserStatusResponse {
 
 export interface AntigravityQuotaSummaryBucket {
   bucketId?: string;
+  window?: string;
   displayName?: string;
   remainingFraction?: number;
   resetTime?: string | number;
