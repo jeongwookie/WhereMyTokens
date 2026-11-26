@@ -25,6 +25,8 @@ import { limitDataState, limitSourceDisplay } from '../limitDisplay';
 import {
 buildQuotaDisplayModels,
 buildRichCardRows,
+CODEX_RESETS_TARGET_ID,
+placeResetsTarget,
 creditUrgencyBucket,
   formatCreditDuration,
   CreditUrgency,
@@ -1500,9 +1502,12 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
   const claudeLoginRequired = settings.enabledProviders.includes('claude')
     && CLAUDE_LOGIN_STATUS_CODES.has(claudeQuota?.status?.code ?? '');
   const visibleTargetIds = new Set([...richGroups.map(group => group.id), ...simpleGroups.map(group => group.id)]);
-  const orderedTargetIds = targets
-    .filter(group => visibleTargetIds.has(group.id))
-    .map(group => group.id);
+  const targetItems = targets.map(group => ({ id: group.id }));
+  const orderedTargetIds = (resetCredits
+    ? placeResetsTarget(targetItems, { id: CODEX_RESETS_TARGET_ID }, settings.quotaTargetOrder)
+    : targetItems)
+    .filter(item => item.id === CODEX_RESETS_TARGET_ID || visibleTargetIds.has(item.id))
+    .map(item => item.id);
   const richGroupById = new Map(richGroups.map(group => [group.id, group]));
   const simpleGroupById = new Map(simpleGroups.map(group => [group.id, group]));
   const richRows = buildRichCardRows(richGroups);
@@ -1574,6 +1579,12 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     }
   };
   for (const targetId of orderedTargetIds) {
+    if (targetId === CODEX_RESETS_TARGET_ID) {
+      flushRichCards();
+      const resetEntry = renderResetEntry('codex-reset-credits');
+      if (resetEntry) orderedPlanEntries.push(resetEntry);
+      continue;
+    }
     const richGroup = richGroupById.get(targetId);
     if (richGroup) {
       pendingRichCards.push(...(richCardsByGroupId.get(richGroup.id) ?? []));
@@ -1590,8 +1601,6 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
     }
   }
   flushRichCards();
-  const resetEntry = renderResetEntry('codex-reset-credits');
-  if (resetEntry) orderedPlanEntries.push(resetEntry);
   return (
     <div style={{ margin: '10px 8px 0', background: C.bgCard, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '6px 14px 5px 12px', background: C.bgRow, borderBottom: `1px solid ${C.border}` }}>
