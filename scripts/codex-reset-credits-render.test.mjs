@@ -520,6 +520,44 @@ test('settings quota list synthesizes the reset credits row when reset data is p
   assert.equal(withoutResets.find(o => o.label === 'Codex Resets'), undefined, 'no reset data, no settings row');
 });
 
+test('placeResetsTarget puts resets last without a saved position and at the saved position otherwise', async () => {
+  const M = await loadModels();
+  const ids = list => list.map(item => item.id);
+  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  const resets = { id: 'r' };
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, [])), ['a', 'b', 'c', 'r'], 'no saved order: last');
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, ['a', 'b', 'c'])), ['a', 'b', 'c', 'r'], 'resets absent from a saved order: last');
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, ['r', 'a', 'b', 'c'])), ['r', 'a', 'b', 'c'], 'first');
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, ['a', 'r', 'b', 'c'])), ['a', 'r', 'b', 'c'], 'middle');
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, ['a', 'b', 'c', 'r'])), ['a', 'b', 'c', 'r'], 'last, saved');
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, ['a', 'r'])), ['a', 'r', 'b', 'c'], 'partial order: before unconfigured targets');
+  assert.deepEqual(ids(M.placeResetsTarget(items, resets, ['a', 'gone', 'r', 'c'])), ['a', 'r', 'b', 'c'], 'stale ids in the saved order are ignored');
+  assert.deepEqual(items.map(item => item.id), ['a', 'b', 'c'], 'input is not mutated');
+});
+
+test('settings quota list places the reset credits row by saved order and defaults it to last', async () => {
+  const M = await loadModels();
+  const claude = {
+    provider: 'claude', source: 'api', capturedAt: Date.now(),
+    entries: [{
+      key: 'claude.account.5h',
+      target: { id: 'claude.group.account', label: 'Claude', defaultMode: 'rich', defaultOrder: 0, taskbarAbbreviation: 'C' },
+      scope: { kind: 'account' }, state: 'limited', usedPct: 11, resetsAt: Date.now() + 3_600_000, durationMs: 18_000_000,
+      durationInferred: false, period: '5h', usageBinding: { kind: 'all-provider-models' },
+    }],
+    status: { connected: true, code: 'ok' },
+  };
+  const providerQuotas = { claude, codex: resetSnapshot() };
+  const resetsId = M.quotaGroupId('codex', 'resets');
+  const labelsFor = quotaTargetOrder => M.buildQuotaTargetSettingsOptions(
+    { enabledProviders: ['claude', 'codex'], quotaTargetModes: {}, quotaTargetOrder },
+    providerQuotas,
+  ).map(option => option.label);
+  assert.deepEqual(labelsFor([]), ['Claude', 'Codex', 'Codex Resets'], 'default: last');
+  assert.deepEqual(labelsFor(['claude.group.account', resetsId, 'codex.group.account']), ['Claude', 'Codex Resets', 'Codex']);
+  assert.deepEqual(labelsFor([resetsId, 'claude.group.account', 'codex.group.account']), ['Codex Resets', 'Claude', 'Codex']);
+});
+
 test('retained reset mode none hides the sibling reset card without creating a settings target', async () => {
   const M = await loadModels();
   const groupId = M.quotaGroupId('codex', 'resets');

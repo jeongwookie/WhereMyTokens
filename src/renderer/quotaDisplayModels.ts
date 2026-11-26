@@ -379,9 +379,9 @@ export function buildQuotaTargetSettingsOptions(
 }
 
 // Reset credits are not a quota entry, so they are placed here rather than by
-// the group sort. A configured position wins; otherwise they follow the last
-// Codex target. Settings and Plan Usage must both use this to stay in sync.
-export function placeResetsTarget<T extends { id: string; provider: string }>(
+// the group sort. A configured position wins; otherwise they go last.
+// Settings and Plan Usage must both use this to stay in sync.
+export function placeResetsTarget<T extends { id: string }>(
   items: readonly T[],
   resets: T,
   order: readonly string[],
@@ -389,8 +389,7 @@ export function placeResetsTarget<T extends { id: string; provider: string }>(
   const result = [...items];
   const resetIndex = order.indexOf(resets.id);
   if (resetIndex === -1) {
-    const lastCodex = result.map(item => item.provider).lastIndexOf('codex');
-    result.splice(lastCodex === -1 ? result.length : lastCodex + 1, 0, resets);
+    result.push(resets);
     return result;
   }
   const insertAt = result.findIndex(item => {
