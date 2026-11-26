@@ -1502,13 +1502,10 @@ export const PlanUsagePanel = React.memo(function PlanUsagePanel({
   const claudeLoginRequired = settings.enabledProviders.includes('claude')
     && CLAUDE_LOGIN_STATUS_CODES.has(claudeQuota?.status?.code ?? '');
   const visibleTargetIds = new Set([...richGroups.map(group => group.id), ...simpleGroups.map(group => group.id)]);
+  const targetItems = targets.map(group => ({ id: group.id, provider: group.provider }));
   const orderedTargetIds = (resetCredits
-    ? placeResetsTarget(
-        targets.map(group => ({ id: group.id, provider: group.provider as string })),
-        { id: CODEX_RESETS_TARGET_ID, provider: 'codex' },
-        settings.quotaTargetOrder,
-      )
-    : targets.map(group => ({ id: group.id })))
+    ? placeResetsTarget(targetItems, { id: CODEX_RESETS_TARGET_ID, provider: 'codex' }, settings.quotaTargetOrder)
+    : targetItems)
     .filter(item => item.id === CODEX_RESETS_TARGET_ID || visibleTargetIds.has(item.id))
     .map(item => item.id);
   const richGroupById = new Map(richGroups.map(group => [group.id, group]));
