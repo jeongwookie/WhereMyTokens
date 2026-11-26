@@ -639,7 +639,7 @@ test('reset simple row anchors to the Codex simple group when Codex has no rich 
   assert.match(html.slice(bodyStart), /data-testid="reset-simple-line"/, 'reset simple line still rendered when Codex account is simple');
 });
 
-test('PlanUsagePanel keeps reset credits outside quota target ordering', async () => {
+test('PlanUsagePanel places reset credits at their configured order position', async () => {
   const mod = await mainView();
   const accountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
   const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
@@ -653,10 +653,10 @@ test('PlanUsagePanel keeps reset credits outside quota target ordering', async (
   const bodyStart = html.indexOf('data-testid="plan-usage-body"');
   const resetStart = html.indexOf('data-testid="reset-simple-line"', bodyStart);
   const richStart = html.indexOf('data-testid="plan-usage-rich-row"', bodyStart);
-  assert.ok(resetStart !== -1 && richStart !== -1 && richStart < resetStart, 'sibling reset row follows dynamic quota targets');
+  assert.ok(resetStart !== -1 && richStart !== -1 && resetStart < richStart, 'reset row precedes the account target when ordered first');
 });
 
-test('PlanUsagePanel appends reset credits after mixed dynamic quota targets', async () => {
+test('PlanUsagePanel keeps reset credits between mixed dynamic quota targets as ordered', async () => {
   const mod = await mainView();
   const codexAccountId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'account') : 'codex.group.account';
   const resetsId = mod.quotaGroupId ? mod.quotaGroupId('codex', 'resets') : 'codex.group.resets';
@@ -692,5 +692,5 @@ test('PlanUsagePanel appends reset credits after mixed dynamic quota targets', a
   const resetStart = html.indexOf('data-testid="reset-simple-line"', bodyStart);
   const richStart = html.indexOf('data-testid="plan-usage-rich-row"', bodyStart);
   assert.ok(simpleStart !== -1 && resetStart !== -1 && richStart !== -1);
-  assert.ok(simpleStart < richStart && richStart < resetStart, 'dynamic targets retain order and reset stays a trailing sibling');
+  assert.ok(simpleStart < resetStart && resetStart < richStart, 'panel follows the configured order: codex, resets, claude');
 });

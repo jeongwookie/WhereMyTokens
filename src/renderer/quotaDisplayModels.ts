@@ -373,10 +373,32 @@ export function buildQuotaTargetSettingsOptions(
       badges: [],
       rowCount: 0,
     };
-    const lastCodex = options.map(option => option.provider).lastIndexOf('codex');
-    options.splice(lastCodex === -1 ? options.length : lastCodex + 1, 0, resetOption);
+    return placeResetsTarget(options, resetOption, settings.quotaTargetOrder);
   }
   return options;
+}
+
+// Reset credits are not a quota entry, so they are placed here rather than by
+// the group sort. A configured position wins; otherwise they follow the last
+// Codex target. Settings and Plan Usage must both use this to stay in sync.
+export function placeResetsTarget<T extends { id: string; provider: string }>(
+  items: readonly T[],
+  resets: T,
+  order: readonly string[],
+): T[] {
+  const result = [...items];
+  const resetIndex = order.indexOf(resets.id);
+  if (resetIndex === -1) {
+    const lastCodex = result.map(item => item.provider).lastIndexOf('codex');
+    result.splice(lastCodex === -1 ? result.length : lastCodex + 1, 0, resets);
+    return result;
+  }
+  const insertAt = result.findIndex(item => {
+    const itemIndex = order.indexOf(item.id);
+    return itemIndex === -1 || itemIndex > resetIndex;
+  });
+  result.splice(insertAt === -1 ? result.length : insertAt, 0, resets);
+  return result;
 }
 
 export function buildQuotaDisplayModels(options: BuildQuotaDisplayModelsOptions): QuotaDisplayModels {
